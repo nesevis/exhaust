@@ -296,7 +296,11 @@ package final class FuzzRunner<Output> {
 
         var finalTermination = termination ?? terminationDue() ?? .budgetExhausted
         // A run that evaluated the property and never recorded an edge searched nothing, whichever condition ended it. The attempt threshold in terminationDue() only decides how early such a run is cut short; it must not let a short budget turn zero coverage into a green test.
-        if source.reportsLiveCoverage, sawAnyEdge == false, counts.evaluatedSearchCases > 0 {
+        if forcedTermination == nil,
+           source.reportsLiveCoverage,
+           sawAnyEdge == false,
+           counts.evaluatedSearchCases > 0
+        {
             finalTermination = .coverageUnreachable
         }
 
@@ -335,6 +339,7 @@ package final class FuzzRunner<Output> {
             edgeTripletonCount: incidence.tripletons,
             edgeQuadrupletonCount: incidence.quadrupletons,
             incidenceTotal: corpus.incidenceTotal,
+            incidenceSampleCount: corpus.incidenceSampleCount,
             termination: finalTermination,
             clusterDiscriminations: discriminations,
             startNanoseconds: reportEpochNanoseconds,
@@ -470,7 +475,7 @@ package final class FuzzRunner<Output> {
     ///
     /// The estimator is denominated in incidences; the mean edges an attempt covers converts it to the per-attempt figure the threshold and the report both speak in.
     private func isSaturated() -> Bool {
-        let attempts = counts.evaluatedSearchCases
+        let attempts = corpus.incidenceSampleCount
         let incidenceTotal = corpus.incidenceTotal
         guard attempts > 0, incidenceTotal > 0 else {
             return false
@@ -913,7 +918,9 @@ package final class FuzzRunner<Output> {
         // An inconclusive evaluation stops here. Its hits describe a stalled execution, so offering them would admit the shape of a timeout as a mutation parent, mark the attempt as discovery, and reset the plateau window on it.
         if verdict.isInconclusive {
             counts.inconclusiveAttempts += 1
-            return .rejectedInconclusive
+            let admission = CorpusAdmission.rejectedInconclusive
+            noteAdmission(admission)
+            return admission
         }
 
         // Value path: no prune hook, so the candidate offered and the candidate dispatched are both the original. Offering it directly skips the two generic carrier structs below, whose construction and teardown retained and released every field of the output type on every attempt.

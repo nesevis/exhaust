@@ -140,14 +140,14 @@ extension __ExhaustRuntime {
                 guard report.coveredEdgeCount > 0 else {
                     return nil
                 }
-                guard report.evaluatedSearchCases > 0, report.incidenceTotal > 0 else {
+                guard report.incidenceSampleCount > 0, report.incidenceTotal > 0 else {
                     return nil
                 }
                 let idle = TimeSpan(
                     nanoseconds: report.elapsed.nanoseconds - min(report.lastDiscovery.nanoseconds, report.elapsed.nanoseconds)
                 )
                 // The same estimate the saturation stop reads, so "still reaching new code" and "would have stopped early" cannot both be true of one run. The idle duration stays in the sentence because it is what a reader can picture; it no longer decides the verdict, because time since the last discovery is not a consistent estimator of anything.
-                let edgesPerAttempt = Double(report.incidenceTotal) / Double(report.evaluatedSearchCases)
+                let edgesPerAttempt = Double(report.incidenceTotal) / Double(report.incidenceSampleCount)
                 let newEdgeProbability = report.estimatedNextEdgeProbability * edgesPerAttempt
                 if newEdgeProbability >= FuzzTunables.saturationNextEdgeProbability {
                     return "Used the whole budget and was still reaching new code \(renderDuration(idle)) before the end; a longer run may find more."
@@ -197,11 +197,11 @@ extension __ExhaustRuntime {
     ///
     /// The estimator is denominated in incidences, because one attempt covers many edges. Readers think in attempts, so the rate is converted back by the mean edges an attempt covers before it reaches the page.
     private static func renderEstimatorLines(_ report: FuzzReport) -> [String] {
-        guard report.evaluatedSearchCases > 0, report.coveredEdgeCount > 0 else {
+        guard report.incidenceSampleCount > 0, report.coveredEdgeCount > 0 else {
             return []
         }
         var lines: [String] = []
-        let edgesPerCase = Double(report.incidenceTotal) / Double(report.evaluatedSearchCases)
+        let edgesPerCase = Double(report.incidenceTotal) / Double(report.incidenceSampleCount)
         let newEdgesPerCase = report.estimatedNextEdgeProbability * edgesPerCase
         if newEdgesPerCase > 0 {
             let attemptsPerEdge = Int((1 / newEdgesPerCase).rounded())
@@ -210,7 +210,7 @@ extension __ExhaustRuntime {
             )
         } else {
             lines.append(
-                "No edge was hit by only a single evaluated case, so the estimated chance of a new edge on the next evaluated case is below 1 in \(report.evaluatedSearchCases)."
+                "No edge was hit by only a single incidence sample, so the estimated chance of a new edge on the next sampled case is below 1 in \(report.incidenceSampleCount)."
             )
         }
         // With no doubleton the Chao2 ratio never runs and the estimate degenerates to the covered count or the singleton fallback: a number that looks like a verdict and is not one.

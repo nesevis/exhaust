@@ -44,21 +44,28 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Work that ignores cancellation is reported as still running")
-    func blockingAwaitReportsUncancellableWorkAsEscaped() async {
-        // A synchronous sleep inside the task body has no suspension point for cancellation to land on, so the cancellation drain finds nothing and the work is still executing when this returns. That is the case a caller must be able to tell from a clean bail.
+    @Test("Work that ignores cancellation is reported as still running and handed off for cleanup", .timeLimit(.minutes(1)))
+    func blockingAwaitReportsUncancellableWorkAsEscaped() async throws {
+        let suspendedWork = CancellationIgnoringSystemUnderTest()
+        let reference = WeakReference<BridgeLifetimeToken>()
         let outcome = await __ExhaustRuntime.dispatchToGCD {
             __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: 20) {
-                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                    DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(400)) {
-                        continuation.resume()
-                    }
-                }
+                let token = BridgeLifetimeToken()
+                reference.value = token
+                await suspendedWork.wait()
+                withExtendedLifetime(token) {}
                 return true
             }
         }
         #expect(outcome.value == nil)
         #expect(outcome.disposition == .timedOutEscaped)
+
+        try #require(reference.value != nil)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            reference.value?.onDeinit = { continuation.resume() }
+            suspendedWork.resume()
+        }
+        #expect(reference.value == nil)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -373,6 +380,17 @@ final class CancellationIgnoringSystemUnderTest: @unchecked Sendable {
         for continuation in pending {
             continuation.resume()
         }
+    }
+}
+
+/// Signals when the escaped bridge task releases its capture.
+///
+/// The callback is assigned while the task is suspended and read only during deinitialization after that suspension resumes, so its unsynchronized access cannot overlap.
+private final class BridgeLifetimeToken: @unchecked Sendable {
+    nonisolated(unsafe) var onDeinit: (@Sendable () -> Void)?
+
+    deinit {
+        onDeinit?()
     }
 }
 

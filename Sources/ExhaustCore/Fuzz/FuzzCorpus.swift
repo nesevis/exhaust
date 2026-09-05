@@ -146,6 +146,9 @@ package final class FuzzCorpus {
     /// The denominator of the Bernoulli-product discovery probability. One input covers many edges, so the number of attempts is the wrong denominator for incidence data; `V` is the right one and aggregates online without ever materializing the matrix.
     private var incidenceTotalCount: Int = 0
 
+    /// Counts incidence-matrix rows. A conclusive, nonduplicate offer contributes one row even when it hits no edge; inconclusive attempts never reach ``offer`` and duplicate sequences return before the row is counted.
+    private var incidenceSampleCountStorage: Int = 0
+
     /// Edge → indices of parent-eligible entries covering it, for O(affected) score invalidation on admission. Entries that can never be picked as parents are not indexed, because their cached score is never read.
     private var coveringEntries: [[Int]]
 
@@ -243,6 +246,10 @@ package final class FuzzCorpus {
         incidenceTotalCount
     }
 
+    package var incidenceSampleCount: Int {
+        incidenceSampleCountStorage
+    }
+
     /// The number of edges any corpus entry has covered. Cumulative across the whole run: a novelty reset clears the admission masks, not this tally.
     package var coveredEdgeCount: Int {
         var total = 0
@@ -262,6 +269,7 @@ package final class FuzzCorpus {
             edgeIncidenceCounts[index] = 0
         }
         incidenceTotalCount = 0
+        incidenceSampleCountStorage = 0
     }
 
     /// Clears the admission-novelty baseline while keeping every entry, statistic, and report tally.
@@ -338,6 +346,7 @@ package final class FuzzCorpus {
         guard seenHashes.contains(hash) == false else {
             return .rejectedDuplicate
         }
+        incidenceSampleCountStorage += 1
 
         var introducedEdges: [Int] = []
         var hasNovelBucket = false

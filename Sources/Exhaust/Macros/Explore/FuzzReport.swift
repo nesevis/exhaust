@@ -177,9 +177,9 @@ public struct FuzzReport: Sendable {
     /// Screening rows rejected while building or materializing their candidate before property entry.
     public let screeningRejectedAttempts: Int
 
-    /// Search attempts that reached the property and produced an attributed coverage sample.
+    /// Counts search attempts that reached the property, including inconclusive evaluations whose stalled coverage is deliberately excluded from the corpus and estimators.
     ///
-    /// This is the denominator for the edge estimators and ``attemptsPerSecond``. Use ``totalAttempts`` to count opened search opportunities, including pre-property rejections.
+    /// This is the denominator for ``attemptsPerSecond``. Use ``incidenceSampleCount`` for the edge estimators and ``totalAttempts`` to count opened search opportunities, including pre-property rejections.
     public let evaluatedSearchCases: Int
 
     /// Property invocations used to re-evaluate candidates after state-machine pruning.
@@ -263,26 +263,31 @@ public struct FuzzReport: Sendable {
     /// Total instrumented edges across all loaded instrumented modules. A denominator for module size, not for exploration progress, because the count includes code the property never calls.
     public let instrumentedEdgeCount: Int
 
-    /// Edges hit by exactly one evaluated search case across the whole run. The raw singleton count (Q₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
+    /// Counts edges hit by exactly one incidence sample across the whole run. This is the raw singleton count (Q₁) behind the discovery-probability and reachability estimates.
     public let edgeSingletonCount: Int
 
-    /// Edges hit by exactly two evaluated search cases across the whole run: the doubleton count (Q₂) behind ``estimatedReachableEdgeCount``.
+    /// Counts edges hit by exactly two incidence samples across the whole run: the doubleton count (Q₂) behind ``estimatedReachableEdgeCount``.
     public let edgeDoubletonCount: Int
 
-    /// Edges hit by exactly three evaluated search cases (Q₃), one of the two counts iChao2 adds over Chao2.
+    /// Counts edges hit by exactly three incidence samples (Q₃), one of the two counts iChao2 adds over Chao2.
     public let edgeTripletonCount: Int
 
-    /// Edges hit by exactly four evaluated search cases (Q₄). When this is zero, ``estimatedReachableEdgeCount`` falls back to plain Chao2.
+    /// Counts edges hit by exactly four incidence samples (Q₄). When this is zero, ``estimatedReachableEdgeCount`` falls back to plain Chao2.
     public let edgeQuadrupletonCount: Int
 
-    /// Every (search case, edge) pair counted once: the incidence-matrix sum `V`.
+    /// Counts every (search case, edge) pair once: the incidence-matrix sum `V`.
     ///
-    /// One search case covers many edges, so this is far larger than ``evaluatedSearchCases`` and is the correct denominator for ``estimatedNextEdgeProbability``. Its ratio to the case count is the mean edges an attempt covers.
+    /// One search case covers many edges, so this is far larger than ``incidenceSampleCount`` and is the correct denominator for ``estimatedNextEdgeProbability``. Its ratio to the sample count is the mean edges an attempt covers.
     public let incidenceTotal: Int
+
+    /// Counts conclusive, nonduplicate search cases represented as rows in the incidence matrix.
+    ///
+    /// This can be smaller than ``evaluatedSearchCases`` because a stalled evaluation supplies no verdict and a repeated choice sequence supplies no new independent row. It is the attempt denominator for the incidence estimators.
+    public let incidenceSampleCount: Int
 
     /// The estimated probability that the next incidence covers an edge nothing has reached yet.
     ///
-    /// Denominated in incidences, not search cases: a single case covers thousands of edges, so this is a per-edge-observation probability rather than a per-case one. To express it per case, multiply by ``incidenceTotal`` divided by ``evaluatedSearchCases``.
+    /// Denominated in incidences, not search cases: a single case covers thousands of edges, so this is a per-edge-observation probability rather than a per-case one. To express it per case, multiply by ``incidenceTotal`` divided by ``incidenceSampleCount``.
     ///
     /// Scoped to what this generator and property can reach, and consistent as the sample grows — unlike time-since-last-discovery, which swings orders of magnitude minute to minute.
     public var estimatedNextEdgeProbability: Double {
@@ -290,7 +295,7 @@ public struct FuzzReport: Sendable {
             singletons: edgeSingletonCount,
             incidenceTotal: incidenceTotal,
             undiscovered: estimatedReachableEdgeCount - Double(coveredEdgeCount),
-            attempts: evaluatedSearchCases
+            attempts: incidenceSampleCount
         )
     }
 
@@ -306,7 +311,7 @@ public struct FuzzReport: Sendable {
             doubletons: edgeDoubletonCount,
             tripletons: edgeTripletonCount,
             quadrupletons: edgeQuadrupletonCount,
-            attempts: evaluatedSearchCases
+            attempts: incidenceSampleCount
         )
     }
 
@@ -498,6 +503,7 @@ package extension FuzzReport {
         edgeTripletonCount = result.edgeTripletonCount
         edgeQuadrupletonCount = result.edgeQuadrupletonCount
         incidenceTotal = result.incidenceTotal
+        incidenceSampleCount = result.incidenceSampleCount
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = TimeSpan(nanoseconds: result.elapsedNanoseconds)
@@ -564,6 +570,7 @@ package extension FuzzReport {
             edgeTripletonCount: 0,
             edgeQuadrupletonCount: 0,
             incidenceTotal: 0,
+            incidenceSampleCount: 0,
             termination: termination,
             elapsed: .zero,
             lastDiscovery: .zero,

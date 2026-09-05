@@ -111,7 +111,15 @@ extension __ExhaustRuntime {
             executor: executor,
             idleTimeoutMilliseconds: boundedAwaitCancellationDrainMilliseconds
         )
-        return cancellationOutcome == .completed ? .quiesced : .escaped
+        if cancellationOutcome == .completed {
+            return .quiesced
+        }
+
+        // The caller no longer drains this queue after returning `.escaped`. Abandonment schedules queued and future jobs on the fallback executor, allowing the task to finish and release its captures.
+        for (_, job) in runQueue.abandon() {
+            executor.runAfterAbandonment(job)
+        }
+        return .escaped
     }
 
     /// Runs the task's continuations on the calling thread via a single-lane ``RunQueue`` and ``LaneExecutor``, avoiding the cooperative pool entirely. The unbounded form: it waits for the work and cannot bail, so the bounded caller uses ``_blockingAwaitDrainLoopBounded(idleTimeoutMilliseconds:_:)`` instead, which can cancel.

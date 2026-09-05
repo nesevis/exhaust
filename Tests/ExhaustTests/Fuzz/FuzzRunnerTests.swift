@@ -267,6 +267,39 @@ struct FuzzRunnerTests {
         #expect(result.edgeDoubletonCount == 0)
     }
 
+    @Test("Coverage estimates use only cases represented in the incidence matrix")
+    func coverageEstimatesExcludeInconclusiveCases() {
+        let source = SyntheticCoverageSource<Int>(edgeCount: 1024, edges: { value in
+            [abs(value) % 1024]
+        })
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 100_000 as ClosedRange<Int>),
+            property: { value in value.isMultiple(of: 2) ? .pass : .inconclusive },
+            source: source,
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 17,
+                skipScreening: true,
+                attemptLimit: 80
+            )
+        )
+        let result = runner.run()
+        let report = FuzzReport(result: result)
+
+        #expect(result.counts.inconclusiveAttempts > 0)
+        #expect(result.incidenceSampleCount > 0)
+        #expect(result.incidenceSampleCount < result.counts.evaluatedSearchCases)
+        #expect(report.incidenceSampleCount == result.incidenceSampleCount)
+        #expect(report.estimatedReachableEdgeCount == CoverageEstimators.iChao2ReachableEdges(
+            covered: result.coveredEdgeCount,
+            singletons: result.edgeSingletonCount,
+            doubletons: result.edgeDoubletonCount,
+            tripletons: result.edgeTripletonCount,
+            quadrupletons: result.edgeQuadrupletonCount,
+            attempts: result.incidenceSampleCount
+        ))
+    }
+
     @Test("Path defaults produce identical output across refactors")
     func pathRegressionGuard() {
         let property: @Sendable (Int) -> FuzzVerdict = { value in

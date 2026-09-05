@@ -51,7 +51,11 @@ struct InconclusiveAttemptTests {
         let runner = FuzzRunner(
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             property: { _ in .escaped },
-            source: SyntheticCoverageSource<Int>(edgeCount: 16, edges: { [abs($0) % 16] }),
+            source: SyntheticCoverageSource<Int>(
+                edgeCount: 16,
+                reportsLiveCoverage: true,
+                edges: { _ in [] }
+            ),
             configuration: FuzzRunnerConfiguration(
                 budgetNanoseconds: 60_000_000_000,
                 seed: 3,
@@ -65,6 +69,7 @@ struct InconclusiveAttemptTests {
         #expect(result.counts.evaluatedSearchCases == 1)
         #expect(result.counts.inconclusiveAttempts == 1)
         #expect(result.corpusEntryCount == 0)
+        #expect(result.incidenceSampleCount == 0)
     }
 
     @Test("An inconclusive verdict is counted and never offered to the corpus")
@@ -87,6 +92,8 @@ struct InconclusiveAttemptTests {
         #expect(result.counts.inconclusiveAttempts == result.counts.evaluatedSearchCases)
         #expect(result.corpusEntryCount == 0)
         #expect(result.clusters.isEmpty)
+        #expect(result.incidenceSampleCount == 0)
+        #expect(runner.attemptsSinceAdmission == result.counts.inconclusiveAttempts)
     }
 
     @Test("A passing run with the same generator does fill the corpus")

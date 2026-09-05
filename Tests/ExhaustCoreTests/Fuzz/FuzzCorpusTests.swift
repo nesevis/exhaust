@@ -69,6 +69,35 @@ struct FuzzCorpusTests {
             phase: .sampling
         )
         #expect(second == .rejectedDuplicate)
+        #expect(corpus.incidenceSampleCount == 1, "the duplicate did not add an incidence row")
+    }
+
+    @Test("Every nonduplicate offer contributes one incidence row, including an empty signature")
+    func incidenceSampleCountTracksMatrixRows() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        _ = corpus.offer(
+            sequence: sequence(length: 1),
+            tree: .just,
+            hits: [],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+        _ = corpus.offer(
+            sequence: sequence(length: 2),
+            tree: .just,
+            hits: [(edge: 3, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+
+        #expect(corpus.incidenceSampleCount == 2)
+        #expect(corpus.incidenceTotal == 1)
+
+        corpus.resetIncidenceStatistics()
+        #expect(corpus.incidenceSampleCount == 0)
+        #expect(corpus.incidenceTotal == 0)
     }
 
     @Test("Precomputed sequence hash preserves duplicate detection")

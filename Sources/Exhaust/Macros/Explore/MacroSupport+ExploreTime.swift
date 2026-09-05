@@ -731,7 +731,7 @@ public extension __ExhaustRuntime {
                 break
         }
 
-        if report.evaluatedSearchCases == 0 {
+        if report.evaluatedSearchCases == 0, report.termination != .uncontainedAsyncWork {
             if report.resumedFromCrash {
                 // A resumed run can arrive with its declared budget already consumed by crashed predecessors. The pointless-run error below would misdirect the reader toward the generator and budget, both fine, so the resume gets its own message and the restored inventory still reports.
                 reportError(

@@ -256,6 +256,8 @@ package struct FuzzRunResult: Sendable {
     package var edgeQuadrupletonCount: Int = 0
     /// `V`, the incidence-matrix sum: the discovery-probability denominator for incidence data.
     package var incidenceTotal: Int = 0
+    /// Counts conclusive, nonduplicate search cases represented as rows in the incidence matrix.
+    package var incidenceSampleCount: Int = 0
     package var termination: FuzzTermination
     /// Report-time discrimination results, parallel to `clusters` by position.
     package var clusterDiscriminations: [ClusterDiscrimination]
