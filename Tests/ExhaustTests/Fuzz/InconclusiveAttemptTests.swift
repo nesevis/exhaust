@@ -27,8 +27,8 @@ struct InconclusiveAttemptTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Work that ignores cancellation forces the run to end")
-    func escapedWorkForcesTermination() throws {
+    @Test("Work that ignores cancellation reports as escaped, not merely inconclusive")
+    func escapedWorkReportsAsEscaped() throws {
         let telemetry = __ExhaustRuntime.TasksRunTelemetry()
         let adapter = try #require(__ExhaustRuntime.buildTasksSpecAdapter(
             StallingSpec.self,
@@ -38,9 +38,33 @@ struct InconclusiveAttemptTests {
         ))
         // `parkForever` suspends on a continuation nothing resumes, so cancellation has no suspension point to land on and the command is still running when the probe returns.
         let tagged: [(ScheduleMarker, StallingSpec.Command)] = [(ScheduleMarker(rawValue: 1), .parkForever)]
-        _ = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
 
-        #expect(telemetry.forcedTermination == .uncontainedAsyncWork)
+        #expect(verdict.isEscaped)
+        #expect(verdict.isInconclusive, "an escape is still no verdict on the input")
+        #expect(telemetry.stalledSearches == 1)
+    }
+
+    @Test("An escaped verdict ends the run and keeps the attempt out of the corpus")
+    func escapedVerdictEndsTheRun() {
+        // Everything after an escape would be measured against work that is still running, so one escaped attempt is the last attempt the run makes.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+            property: { _ in .escaped },
+            source: SyntheticCoverageSource<Int>(edgeCount: 16, edges: { [abs($0) % 16] }),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 3,
+                skipScreening: true,
+                attemptLimit: 40
+            )
+        )
+        let result = runner.run()
+
+        #expect(result.termination == .uncontainedAsyncWork)
+        #expect(result.counts.evaluatedSearchCases == 1)
+        #expect(result.counts.inconclusiveAttempts == 1)
+        #expect(result.corpusEntryCount == 0)
     }
 
     @Test("An inconclusive verdict is counted and never offered to the corpus")

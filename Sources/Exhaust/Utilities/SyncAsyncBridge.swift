@@ -24,10 +24,9 @@ package extension __ExhaustRuntime {
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
-            // A nil idle timeout never bails, so the force-unwrap is safe: the loop only returns once the work completes.
-            return _blockingAwaitDrainLoop(idleTimeoutMilliseconds: nil, work)!
+            return _blockingAwaitDrainLoop(work)
         } else {
-            return _blockingAwaitSemaphore(timeoutMilliseconds: nil, work)!
+            return _blockingAwaitSemaphore(work)
         }
     }
 
@@ -118,9 +117,8 @@ package extension __ExhaustRuntime {
     /// Runs the task's continuations on the calling thread via a single-lane ``RunQueue`` and ``LaneExecutor``, avoiding the cooperative pool entirely. The unbounded form: it waits for the work and cannot bail, so the bounded caller uses ``_blockingAwaitDrainLoopBounded(idleTimeoutMilliseconds:_:)`` instead, which can cancel.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     private static func _blockingAwaitDrainLoop<Result>(
-        idleTimeoutMilliseconds: Int?,
         _ work: @Sendable @escaping () async -> Result
-    ) -> Result? {
+    ) -> Result {
         let lane = LaneID(index: 0)
         let runQueue = RunQueue(laneCount: 1)
         let executor = LaneExecutor(lane: lane, runQueue: runQueue)
@@ -132,16 +130,14 @@ package extension __ExhaustRuntime {
             done.value = true
         }
 
-        // On timeout, the continuation has suspended onto another executor and will not return to this lane; bail rather than spin forever. The orphaned Task retains `box`/`done`, so its later resumption only writes to boxes we no longer read.
-        guard ScheduleDrain.drainUntilDone(
+        // No idle bound, so the drain returns only once `done` is set, and the box holds the result by then.
+        _ = ScheduleDrain.drainUntilDone(
             done,
             runQueue: runQueue,
             executor: executor,
-            idleTimeoutMilliseconds: idleTimeoutMilliseconds
-        ) == .completed else {
-            return nil
-        }
-        return box.value
+            idleTimeoutMilliseconds: nil
+        )
+        return box.value!
     }
 
     /// The bounded semaphore fallback: retains its task so a timeout can cancel it, then waits briefly to see whether the cancellation took.
@@ -172,25 +168,18 @@ package extension __ExhaustRuntime {
         return .quiesced
     }
 
-    /// Creates a cooperative-pool task and sleeps the calling thread until it completes. Returns `nil` when `timeoutMilliseconds` is non-nil and the work does not complete within it.
+    /// Creates a cooperative-pool task and sleeps the calling thread until it completes. The unbounded form; ``_blockingAwaitSemaphoreBounded(timeoutMilliseconds:_:)`` is the one that can give up.
     static func _blockingAwaitSemaphore<Result>(
-        timeoutMilliseconds: Int?,
         _ work: @Sendable @escaping () async -> Result
-    ) -> Result? {
+    ) -> Result {
         let box = UnsafeSendableBox<Result?>(nil)
         let semaphore = DispatchSemaphore(value: 0)
         Task { @Sendable in
             box.value = await work()
             semaphore.signal()
         }
-        if let timeoutMilliseconds {
-            if semaphore.wait(timeout: .now() + .milliseconds(timeoutMilliseconds)) == .timedOut {
-                return nil
-            }
-        } else {
-            semaphore.wait()
-        }
-        return box.value
+        semaphore.wait()
+        return box.value!
     }
 
     /// Dispatches a synchronous closure onto a GCD thread and returns the result asynchronously.

@@ -10,18 +10,30 @@ package enum FuzzVerdict: Sendable {
     case discard
     /// The evaluation did not reach a verdict, so nothing was learned about the input. Distinct from ``discard``, which is a judgement the property made: an inconclusive attempt produced coverage that describes a stalled execution rather than the input's behaviour, so it is counted and then dropped. Offering it would seed the corpus with the shape of a timeout.
     case inconclusive
+    /// The evaluation reached no verdict and its work is still running: the property's asynchronous work outlived cancellation and was abandoned. Inconclusive for the input in the same way as ``inconclusive``, and fatal for the run: the escaped work keeps executing the system under test and keeps recording coverage, so every later evaluation would measure some of it. The runner ends the run with ``FuzzTermination/uncontainedAsyncWork`` on seeing it.
+    case escaped
 
     package var isFailure: Bool {
         switch self {
-            case .pass, .discard, .inconclusive:
+            case .pass, .discard, .inconclusive, .escaped:
                 false
             case .fail:
                 true
         }
     }
 
+    /// Whether the evaluation reached no verdict, whichever way: ``inconclusive`` or ``escaped``.
     package var isInconclusive: Bool {
-        if case .inconclusive = self {
+        switch self {
+            case .inconclusive, .escaped:
+                true
+            case .pass, .fail, .discard:
+                false
+        }
+    }
+
+    package var isEscaped: Bool {
+        if case .escaped = self {
             return true
         }
         return false

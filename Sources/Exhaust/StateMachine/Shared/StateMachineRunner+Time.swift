@@ -414,9 +414,9 @@ extension __ExhaustRuntime {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension __ExhaustRuntime {
-    /// What a `.tasks` run's probes observe and cannot return.
+    /// What a `.tasks` run's probes count and cannot return.
     ///
-    /// A verdict or reduction probe reaches the runner only through its return value, so the counts a stall produces and the termination an escape forces travel on one reference the closures capture. One object rather than a box each: the next counter is a field, not another parameter threaded through the adapter.
+    /// A verdict or reduction probe reaches the runner only through its return value, which carries the outcome for the input and nothing about the run, so the counts a stall produces travel on one reference the closures capture. One object rather than a box each: the next counter is a field, not another parameter threaded through the adapter.
     ///
     /// @unchecked: every write happens inside a probe on the fuzz loop's own lane, and the run reads it after the loop returns.
     final class TasksRunTelemetry: @unchecked Sendable {
@@ -426,9 +426,6 @@ extension __ExhaustRuntime {
         /// Probes whose drain timed out, either disposition.
         var stalledSearches = 0
 
-        /// Set when a probe's work escaped cancellation. ``FuzzRunner`` checks it ahead of every limit.
-        var forcedTermination: FuzzTermination?
-
         init() {}
     }
 
@@ -436,12 +433,12 @@ extension __ExhaustRuntime {
     ///
     /// Unlike the sequential adapters, the generator draws a lane-assigning schedule marker as a choice ahead of each command (``zipScheduleMarker(onto:concurrencyLevel:)``), so the interleaving is searchable input: the byte mutators that move commands between lanes and reorder the schedule are the same ones that mutate command arguments, and reduction minimizes markers toward the sequential prefix. The property drains each sequence through the cooperative scheduler at the marker-directed interleaving.
     ///
-    /// A timed-out drain is inconclusive, not a counterexample, and how it is inconclusive matters. A probe whose cancellation drain completed left nothing running: the attempt is counted and dropped, and the corpus never sees it, because its coverage describes the stall rather than the input. A probe whose work escaped cancellation is still executing the system under test and still recording coverage, so it forces the run to terminate — everything after it would measure some of the escaped attempt. Reduction aborts on either, so a counterexample never reduces toward a hang.
+    /// A timed-out drain is inconclusive, not a counterexample, and how it is inconclusive matters. A probe whose cancellation drain completed left nothing running: the attempt is counted and dropped, and the corpus never sees it, because its coverage describes the stall rather than the input. A probe whose work escaped cancellation is still executing the system under test and still recording coverage, so its verdict is ``FuzzVerdict/escaped`` and the runner ends the run on it — everything after it would measure some of the escaped attempt. Reduction aborts on either, so a counterexample never reduces toward a hang; an escape there comes back on ``FuzzReductionResult/escaped``.
     ///
     /// - Returns: Nil when the spec's command generator is not a top-level pick, which schedule-marker tagging requires.
     /// - Parameters:
     ///   - idleTimeoutMilliseconds: The drain loop's stall bound. Defaults to the plain-`#execute` default; tests lower it so stall-path assertions do not wait out two seconds per evaluation.
-    ///   - telemetry: What the probes observe but cannot return. A verdict closure's only channel to the runner is its return value, so counts and the forced termination travel here.
+    ///   - telemetry: What the probes count but cannot return. A verdict closure's only channel to the runner is its return value, which describes the input, so run-level counts travel here.
     static func buildTasksSpecAdapter<Spec: AsyncStateMachineSpec>(
         _: Spec.Type,
         commandLimit: Int? = nil,
@@ -486,8 +483,7 @@ extension __ExhaustRuntime {
                     return .inconclusive
                 case .timedOutEscaped:
                     telemetry.stalledSearches += 1
-                    telemetry.forcedTermination = .uncontainedAsyncWork
-                    return .inconclusive
+                    return .escaped
             }
             if result.passed {
                 return .pass
@@ -511,6 +507,8 @@ extension __ExhaustRuntime {
 
         // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction. Unlike the plain-#execute machine, `time:` mode reduces the whole candidate in one tree, so setup values minimize alongside the commands here rather than in a separate pass.
         let reduceStrategy: @Sendable (ChoiceTree, SpecCandidateValue<Spec>, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<SpecCandidateValue<Spec>> = { tree, value, _, probeBracket in
+            // The reducer's probe verdict has no escape case, so the probe leaves it here for the result to carry.
+            let escaped = UnsafeSendableBox(false)
             let probeProperty: @Sendable (SpecCandidateValue<Spec>) -> StateMachineProbeVerdict<Void> = { candidate in
                 let result = drainAndJudge(
                     taggedCommands: candidate.taggedCommands,
@@ -530,7 +528,7 @@ extension __ExhaustRuntime {
                     case .timedOutEscaped:
                         // Work that escaped cancellation contaminates the run whichever probe leaked it: it keeps executing the system under test and keeps recording coverage against every later attempt. Reduction aborts as above, and the run ends for the same reason a search-phase escape ends it.
                         ExhaustLog.notice(category: .reducer, event: "spec_time_reduction_timeout")
-                        telemetry.forcedTermination = .uncontainedAsyncWork
+                        escaped.value = true
                         return .abort
                 }
                 return result.passed ? .pass : .fail(())
@@ -548,18 +546,15 @@ extension __ExhaustRuntime {
                 tree: result.tree,
                 value: result.value,
                 propertyInvocations: result.stats.reductionProbesWherePropertyPassed
-                    + result.stats.reductionProbesWherePropertyFailed
+                    + result.stats.reductionProbesWherePropertyFailed,
+                escaped: escaped.value
             )
         }
 
         return SpecFuzzAdapter(
             generator: candidateGen,
             property: verdictProperty,
-            hooks: FuzzHooks(
-                prune: pruneHook,
-                reduceStrategy: reduceStrategy,
-                forcedTermination: { telemetry.forcedTermination }
-            )
+            hooks: FuzzHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
         )
     }
 }

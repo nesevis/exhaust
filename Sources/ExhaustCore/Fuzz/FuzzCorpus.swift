@@ -203,29 +203,9 @@ package final class FuzzCorpus {
         entries.filter { $0.propertyFailed == false && $0.propertyDiscarded == false }.map { $0.signature }
     }
 
-    /// Edges hit by exactly one non-duplicate attempt (Q₁), for the STADS estimators.
-    package var edgeSingletonCount: Int {
-        edgeIncidenceCounts.count(where: { $0 == 1 })
-    }
-
-    /// Edges hit by exactly two non-duplicate attempts (Q₂), for the STADS estimators.
-    package var edgeDoubletonCount: Int {
-        edgeIncidenceCounts.count(where: { $0 == 2 })
-    }
-
-    /// Edges hit by exactly three non-duplicate attempts (Q₃), for iChao2.
-    package var edgeTripletonCount: Int {
-        edgeIncidenceCounts.count(where: { $0 == 3 })
-    }
-
-    /// Edges hit by exactly four non-duplicate attempts (Q₄), for iChao2.
-    package var edgeQuadrupletonCount: Int {
-        edgeIncidenceCounts.count(where: { $0 == 4 })
-    }
-
     /// The covered-edge tally and the Q1 through Q4 incidence classes, from one pass over the edge domain.
     ///
-    /// The individual properties each walk the whole domain, and the saturation check reads all five: at the instrumented edge counts a real build carries, five passes is five times the work for one answer.
+    /// One pass rather than one per tally: the saturation check reads all five on every plateau probe, and at the instrumented edge counts a real build carries, five walks of the domain is five times the work for one answer.
     package var edgeIncidenceProfile: EdgeIncidenceProfile {
         var covered = 0
         var singletons = 0

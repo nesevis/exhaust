@@ -29,19 +29,12 @@ package struct FuzzHooks<Output> {
     /// The fourth argument is the bracket every reduction probe's property invocation must run inside; a strategy that drops it leaves its probes unmarked, and an abnormal termination in one of them is then attributed to the last search candidate.
     package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>
 
-    /// A termination the property observed but cannot express through its verdict, checked before every limit.
-    ///
-    /// The `.tasks` adapter is the caller that needs it: a probe whose work escaped cancellation is still executing the system under test, so the fact that later attempts are unmeasurable has to leave the verdict closure some other way.
-    package let forcedTermination: @Sendable () -> FuzzTermination?
-
     package init(
         prune: @escaping @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree),
-        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>,
-        forcedTermination: @escaping @Sendable () -> FuzzTermination? = { nil }
+        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>
     ) {
         self.prune = prune
         self.reduceStrategy = reduceStrategy
-        self.forcedTermination = forcedTermination
     }
 }
 
@@ -51,17 +44,21 @@ package struct FuzzReductionResult<Output> {
     package let tree: ChoiceTree
     package let value: Output
     package let propertyInvocations: Int
+    /// Whether a probe's asynchronous work escaped cancellation during the reduction. The reduced form is still the best the reduction reached, and the run ends on it: the escaped work keeps executing the system under test, so nothing after it can be measured.
+    package let escaped: Bool
 
     package init(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         value: Output,
-        propertyInvocations: Int
+        propertyInvocations: Int,
+        escaped: Bool = false
     ) {
         self.sequence = sequence
         self.tree = tree
         self.value = value
         self.propertyInvocations = propertyInvocations
+        self.escaped = escaped
     }
 }
 
@@ -79,7 +76,9 @@ package final class FuzzRunner<Output> {
     private let prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))?
     /// The reduction the failure dispatch runs. The value path's default is ``propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)``; the spec path injects its backend reducer through ``FuzzHooks``.
     private let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>
-    let forcedTermination: @Sendable () -> FuzzTermination?
+
+    /// Set when a property invocation reports that its asynchronous work escaped cancellation, and checked ahead of every limit. Every evaluation after that point would measure the escaped work as well as its own input, so the run stops rather than continuing to record.
+    var forcedTermination: FuzzTermination?
 
     /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
     package let corpus: FuzzCorpus
@@ -148,8 +147,6 @@ package final class FuzzRunner<Output> {
     /// Set when a new cluster classifies so the next checkpoint fires immediately — discovered clusters must reach disk without waiting out the interval.
     var forceCheckpoint = false
 
-    /// Set while ``restore(from:)`` is rebuilding predecessor state. Restored failures reduce, and reduction submits checkpoints, so without this a half-restored corpus would overwrite the document still being read.
-    var isRestoring = false
     /// Run time consumed by crashed predecessors, so checkpoint accounting and report timestamps continue one logical timeline across resumes.
     var priorConsumedNanoseconds: UInt64 = 0
     /// Attempts crashed predecessors opened, so cluster discovery indices continue one logical timeline across resumes the way timestamps do. Not folded into `counts`: the attempt limit and the report's attempt tallies describe this process's own search.
@@ -185,9 +182,6 @@ package final class FuzzRunner<Output> {
         self.graftReflective = graftReflective
         self.renderValue = renderValue
         prune = hooks?.prune
-        // Typed local rather than a closure literal in the `??`: the optional chain returns an optional of a function returning an optional, and inference fails on the literal there.
-        let noForcedTermination: @Sendable () -> FuzzTermination? = { nil }
-        forcedTermination = hooks?.forcedTermination ?? noForcedTermination
         reduceStrategy = hooks?.reduceStrategy ?? Self.propertyOnlyReduceStrategy(
             gen: gen,
             property: property,
@@ -219,7 +213,15 @@ package final class FuzzRunner<Output> {
         reducerConfiguration: Interpreters.ReducerConfiguration
     ) -> @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output> {
         { tree, value, _, probeBracket in
-            let boolProperty: (Output) -> Bool = { property($0).isFailure == false }
+            // The reducer speaks Bool, so an escape has to leave the probe some other way; the runner reads it from the result.
+            let escaped = UnsafeSendableBox(false)
+            let boolProperty: (Output) -> Bool = { value in
+                let verdict = property(value)
+                if verdict.isEscaped {
+                    escaped.value = true
+                }
+                return verdict.isFailure == false
+            }
             var configuration = reducerConfiguration
             configuration.probeBracket = probeBracket
             let result = try? Interpreters.choiceGraphReduceCollectingStats(
@@ -237,14 +239,16 @@ package final class FuzzRunner<Output> {
                         sequence: sequence,
                         tree: reducedTree,
                         value: output,
-                        propertyInvocations: propertyInvocations
+                        propertyInvocations: propertyInvocations,
+                        escaped: escaped.value
                     )
                 case .failure, nil:
                     return FuzzReductionResult(
                         sequence: ChoiceSequence.flatten(tree),
                         tree: tree,
                         value: value,
-                        propertyInvocations: propertyInvocations
+                        propertyInvocations: propertyInvocations,
+                        escaped: escaped.value
                     )
             }
         }
@@ -252,12 +256,12 @@ package final class FuzzRunner<Output> {
 
     // MARK: - Run
 
-    /// Executes the three phases and returns the final result. Synchronous; the caller owns GCD-lane placement.
     /// Scratch for ``evaluateInBracket``; see the note there.
     private var hitsBuffer: [(edge: Int, hitCount: UInt8)] = []
     /// Whether any attempt has ever recorded an edge. False after a meaningful number of attempts means the source is reading a table the property never writes to, because the property's work is executing somewhere the source does not observe.
     var sawAnyEdge = false
 
+    /// Executes the three phases and returns the final result. Synchronous; the caller owns GCD-lane placement.
     package func run() -> FuzzRunResult {
         // Before the baseline is read and before screening generates a row: the lane's own pre-bracket edges are excluded, not off-lane.
         source.claimLane()
@@ -316,6 +320,7 @@ package final class FuzzRunner<Output> {
 
         finishPersistence()
         let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
+        let incidence = corpus.edgeIncidenceProfile
 
         return FuzzRunResult(
             clusters: clusters,
@@ -323,12 +328,12 @@ package final class FuzzRunner<Output> {
             counts: counts,
             corpusEntryCount: corpus.entries.count,
             mutableTierCount: corpus.mutableTierIndices.count,
-            coveredEdgeCount: corpus.coveredEdgeCount,
+            coveredEdgeCount: incidence.covered,
             instrumentedEdgeCount: source.edgeCount,
-            edgeSingletonCount: corpus.edgeSingletonCount,
-            edgeDoubletonCount: corpus.edgeDoubletonCount,
-            edgeTripletonCount: corpus.edgeTripletonCount,
-            edgeQuadrupletonCount: corpus.edgeQuadrupletonCount,
+            edgeSingletonCount: incidence.singletons,
+            edgeDoubletonCount: incidence.doubletons,
+            edgeTripletonCount: incidence.tripletons,
+            edgeQuadrupletonCount: incidence.quadrupletons,
             incidenceTotal: corpus.incidenceTotal,
             termination: finalTermination,
             clusterDiscriminations: discriminations,
@@ -926,6 +931,25 @@ package final class FuzzRunner<Output> {
         )
     }
 
+    /// Invokes the property on one probe with the breadcrumb slot marked, and stops the run if the verdict reports escaped work.
+    ///
+    /// Every direct property invocation the runner makes goes through here, so the escape has one consumer: the verdict is the property's channel for it, and this is where the runner reads that channel. Reduction probes are the exception, because the reducer speaks Bool; their escape comes back on ``FuzzReductionResult/escaped``.
+    func judge(
+        _ value: Output,
+        candidateHash: UInt64,
+        parentHash: UInt64 = 0,
+        kind: FuzzProbeKind,
+        sequence: ChoiceSequence?
+    ) -> FuzzVerdict {
+        let verdict = withBreadcrumb(candidateHash: candidateHash, parentHash: parentHash, kind: kind, sequence: sequence) {
+            property(value)
+        }
+        if verdict.isEscaped {
+            forcedTermination = .uncontainedAsyncWork
+        }
+        return verdict
+    }
+
     /// The bracket the reducer runs each probe's property invocation inside, marking the probe's own candidate.
     ///
     /// Built per reduction rather than stored, because the bracket is `@Sendable` and cannot capture the runner: taking the breadcrumb as a value here is what lets it reach one, and by reduction time ``setUpPersistence()`` has created it.
@@ -969,14 +993,13 @@ package final class FuzzRunner<Output> {
                 source.beginComparisonCapture()
             }
             let propertyStart = monotonicNanoseconds()
-            let verdict = withBreadcrumb(
+            let verdict = judge(
+                value,
                 candidateHash: slot?.candidateHash ?? 0,
                 parentHash: slot?.parentHash ?? 0,
                 kind: .search,
                 sequence: slot?.sequence
-            ) {
-                property(value)
-            }
+            )
             timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
             if capturesComparisons {
                 source.endComparisonCapture()
@@ -1164,14 +1187,15 @@ package final class FuzzRunner<Output> {
                     failure: prunedCandidate,
                     independentFailureCoverageNovel: nil
                 )
-            // A pruning probe that reached no verdict says nothing about the candidate: its hits describe the stall. The original evaluation stands and is what the corpus sees. The `(.inconclusive, _)` arm cannot be reached, because `recordAttempt` drops an inconclusive attempt before pruning.
-            case (.fail, .inconclusive):
+            // A pruning probe that reached no verdict says nothing about the candidate: its hits describe the stall. The original evaluation stands and is what the corpus sees. The `(.inconclusive, _)` and `(.escaped, _)` arms cannot be reached, because `recordAttempt` drops an inconclusive attempt before pruning.
+            case (.fail, .inconclusive), (.fail, .escaped):
                 return PrunedCandidateSelection(
                     corpus: original,
                     failure: original,
                     independentFailureCoverageNovel: nil
                 )
-            case (.pass, .inconclusive), (.discard, .inconclusive), (.inconclusive, _):
+            case (.pass, .inconclusive), (.pass, .escaped), (.discard, .inconclusive), (.discard, .escaped),
+                 (.inconclusive, _), (.escaped, _):
                 return PrunedCandidateSelection(
                     corpus: original,
                     failure: nil,
@@ -1282,6 +1306,9 @@ package final class FuzzRunner<Output> {
         let reductionStart = monotonicNanoseconds()
         let reduction = reduceStrategy(tree, value, symptom, Self.reductionProbeBracket(breadcrumb))
         counts.reductionInvocations += reduction.propertyInvocations
+        if reduction.escaped {
+            forcedTermination = .uncontainedAsyncWork
+        }
         var reducedSequence = reduction.sequence
         var reducedTree = reduction.tree
         var reducedValue = reduction.value
@@ -1292,7 +1319,7 @@ package final class FuzzRunner<Output> {
         var unnormalizedResidual = false
 
         // Any probe here can be the invocation whose async work escapes its bound. That work is still running and still recording coverage, so a later invocation would measure it rather than the input. The flag is read at each point that would drive the property again, never snapshotted, because normalization can be what sets it.
-        if configuration.experiments.normalization, forcedTermination() == nil {
+        if configuration.experiments.normalization, forcedTermination == nil {
             if inventory.containsKey(reducedKey) == false,
                let normalized: FuzzNormalizer.NormalizedForm<Output> = FuzzNormalizer.normalize(
                    reducedSequence: reducedSequence,
@@ -1300,17 +1327,16 @@ package final class FuzzRunner<Output> {
                    symptom: symptom,
                    property: { [self] value, candidate in
                        // A non-failing verdict makes the normalizer reject the variation, so a pass whose probe escaped ends on the reduced form it already has.
-                       guard forcedTermination() == nil else {
+                       guard forcedTermination == nil else {
                            return .pass
                        }
                        counts.normalizationInvocations += 1
-                       return withBreadcrumb(
+                       return judge(
+                           value,
                            candidateHash: ZobristHash.hash(of: candidate),
                            kind: .normalization,
                            sequence: candidate
-                       ) {
-                           property(value)
-                       }
+                       )
                    },
                    cache: normalizationCache
                )
@@ -1324,7 +1350,7 @@ package final class FuzzRunner<Output> {
         }
 
         // Post-reduction classification: one clean-bracket evaluation yields the post-hoc signature. Cluster identity keys on the reduced form; the signature collects within the cluster, where a second distinct one raises the ~paths marker. A cluster classified after an escape carries no signature rather than one measured against uncontained work.
-        let signature: BitSet? = forcedTermination() == nil
+        let signature: BitSet? = forcedTermination == nil
             ? attributedSignature(of: reducedValue, sequence: reducedSequence)
             : nil
 
@@ -1370,13 +1396,12 @@ package final class FuzzRunner<Output> {
     private func attributedSignature(of value: Output, sequence: ChoiceSequence) -> BitSet {
         let (_, hits) = attribute(value) { value in
             counts.classificationInvocations += 1
-            return withBreadcrumb(
+            return judge(
+                value,
                 candidateHash: ZobristHash.hash(of: sequence),
                 kind: .classification,
                 sequence: sequence
-            ) {
-                property(value)
-            }
+            )
         }
         var signature = BitSet(capacity: source.edgeCount)
         for (edge, _) in hits {
