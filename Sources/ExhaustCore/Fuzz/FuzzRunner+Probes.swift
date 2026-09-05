@@ -68,7 +68,7 @@ extension FuzzRunner {
     /// The bracket the reducer runs each probe's property invocation inside, marking the probe's own candidate.
     ///
     /// Built per reduction rather than stored, because the bracket is `@Sendable` and cannot capture the runner: taking the breadcrumb as a value here is what lets it reach one, and by reduction time ``setUpPersistence()`` has created it.
-    static func reductionProbeBracket(_ breadcrumb: FuzzBreadcrumb?) -> FuzzProbeBracket {
+    static func reductionProbeWrapper(_ breadcrumb: FuzzBreadcrumb?) -> ProbeWrapper {
         guard let breadcrumb else {
             return { _, evaluate in evaluate() }
         }

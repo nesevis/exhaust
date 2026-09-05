@@ -65,7 +65,7 @@ extension ReductionMachine {
                 gen: gen,
                 tree: tree,
                 originalSequence: sequence,
-                property: bracketedProperty(for: candidate),
+                property: wrappedProperty(for: candidate),
                 filterObservations: &filterObservations
             )
             probeCounts.record(outcome)

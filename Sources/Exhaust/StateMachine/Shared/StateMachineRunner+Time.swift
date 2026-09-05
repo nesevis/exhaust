@@ -506,7 +506,7 @@ extension __ExhaustRuntime {
         )
 
         // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction. Unlike the plain-#execute machine, `time:` mode reduces the whole candidate in one tree, so setup values minimize alongside the commands here rather than in a separate pass.
-        let reduceStrategy: @Sendable (ChoiceTree, SpecCandidateValue<Spec>, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<SpecCandidateValue<Spec>> = { tree, value, _, probeBracket in
+        let reduceStrategy: @Sendable (ChoiceTree, SpecCandidateValue<Spec>, FailureSymptom, ProbeWrapper?) -> FuzzReductionResult<SpecCandidateValue<Spec>> = { tree, value, _, probeWrapper in
             // The reducer's probe verdict has no escape case, so the probe leaves it here for the result to carry.
             let escaped = UnsafeSendableBox(false)
             let probeProperty: @Sendable (SpecCandidateValue<Spec>) -> StateMachineProbeVerdict<Void> = { candidate in
@@ -538,7 +538,7 @@ extension __ExhaustRuntime {
                 tree: tree,
                 output: value,
                 deadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds,
-                probeBracket: probeBracket,
+                probeWrapper: probeWrapper,
                 property: probeProperty
             )
             return FuzzReductionResult(

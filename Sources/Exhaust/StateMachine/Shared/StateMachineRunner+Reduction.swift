@@ -128,7 +128,7 @@ extension __ExhaustRuntime {
         tree: ChoiceTree,
         output: Value,
         deadlineNanoseconds: UInt64,
-        probeBracket: FuzzProbeBracket? = nil,
+        probeWrapper: ProbeWrapper? = nil,
         property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
     ) -> ConcurrentTwoPassResult<Value, Evidence> {
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
@@ -167,7 +167,7 @@ extension __ExhaustRuntime {
                 wallClockDeadlineNanoseconds: deadlineNanoseconds,
                 enabledEncoders: [.laneCollapse, .deletion],
                 tuning: noRelax,
-                probeBracket: probeBracket
+                probeWrapper: probeWrapper
             ),
             property: boolProperty
         ) {
@@ -195,7 +195,7 @@ extension __ExhaustRuntime {
                 wallClockDeadlineNanoseconds: deadlineNanoseconds,
                 enabledEncoders: [.valueSearch, .floatSearch],
                 tuning: noRelax,
-                probeBracket: probeBracket
+                probeWrapper: probeWrapper
             ),
             property: boolProperty
         ) {

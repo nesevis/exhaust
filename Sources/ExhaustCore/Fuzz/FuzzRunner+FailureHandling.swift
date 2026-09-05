@@ -82,7 +82,7 @@ extension FuzzRunner {
         countsAsInstance: Bool
     ) {
         let reductionStart = monotonicNanoseconds()
-        let reduction = reduceStrategy(tree, value, symptom, Self.reductionProbeBracket(breadcrumb))
+        let reduction = reduceStrategy(tree, value, symptom, Self.reductionProbeWrapper(breadcrumb))
         counts.reductionInvocations += reduction.propertyInvocations
         if reduction.escaped {
             forcedTermination = .uncontainedAsyncWork

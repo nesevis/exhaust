@@ -27,11 +27,11 @@ package struct FuzzHooks<Output> {
     /// Reduces one failing candidate, returning the reduced sequence, tree, and value.
     ///
     /// The fourth argument is the bracket every reduction probe's property invocation must run inside; a strategy that drops it leaves its probes unmarked, and an abnormal termination in one of them is then attributed to the last search candidate.
-    package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>
+    package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom, ProbeWrapper?) -> FuzzReductionResult<Output>
 
     package init(
         prune: @escaping @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree),
-        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>
+        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom, ProbeWrapper?) -> FuzzReductionResult<Output>
     ) {
         self.prune = prune
         self.reduceStrategy = reduceStrategy
@@ -75,7 +75,7 @@ package final class FuzzRunner<Output> {
     /// Prunes the value and tree before corpus admission. Nil on the value path; the spec path removes precondition-skipped commands so the corpus stores only live sequences. Runs outside the attribution bracket, only on failures and would-be admissions.
     private let prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))?
     /// The reduction the failure dispatch runs. The value path's default is ``propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)``; the spec path injects its backend reducer through ``FuzzHooks``.
-    let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output>
+    let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom, ProbeWrapper?) -> FuzzReductionResult<Output>
 
     /// Set when a property invocation reports that its asynchronous work escaped cancellation, and checked ahead of every limit. Every evaluation after that point would measure the escaped work as well as its own input, so the run stops rather than continuing to record.
     var forcedTermination: FuzzTermination?
@@ -211,8 +211,8 @@ package final class FuzzRunner<Output> {
         gen: Generator<Output>,
         property: @escaping @Sendable (Output) -> FuzzVerdict,
         reducerConfiguration: Interpreters.ReducerConfiguration
-    ) -> @Sendable (ChoiceTree, Output, FailureSymptom, FuzzProbeBracket?) -> FuzzReductionResult<Output> {
-        { tree, value, _, probeBracket in
+    ) -> @Sendable (ChoiceTree, Output, FailureSymptom, ProbeWrapper?) -> FuzzReductionResult<Output> {
+        { tree, value, _, probeWrapper in
             // The reducer speaks Bool, so an escape has to leave the probe some other way; the runner reads it from the result.
             let escaped = UnsafeSendableBox(false)
             let boolProperty: (Output) -> Bool = { value in
@@ -223,7 +223,7 @@ package final class FuzzRunner<Output> {
                 return verdict.isFailure == false
             }
             var configuration = reducerConfiguration
-            configuration.probeBracket = probeBracket
+            configuration.probeWrapper = probeWrapper
             let result = try? Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,
