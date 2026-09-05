@@ -263,6 +263,8 @@ package struct FuzzExperiments: Sendable, Equatable {
     }()
 
     /// The on/off knobs by their `EXHAUST_FUZZ_EXPERIMENT` name. ``swarmMode`` is absent: it is the one multi-state knob and parses off its enum.
+    ///
+    /// Computed rather than stored: a `WritableKeyPath` is not `Sendable`, so a stored static of these is rejected as shared mutable state. It is read twice per run, at parse and when ``legacy`` is built, so the rebuild costs nothing that matters.
     package static var knobs: [(name: String, keyPath: WritableKeyPath<FuzzExperiments, Bool>)] {
         [
             ("normalization", \.normalization),

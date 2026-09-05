@@ -55,6 +55,8 @@ package struct OperandEnergyTable {
     }
 
     /// Whether `key` may be drawn: not retired, and holding an allowance of `initial` barren draws that every yield restores in full.
+    ///
+    /// Mutating, and counted as a seating: a key the table has not met is seated on this call with its full allowance, because a draw the caller then makes has to have a slot to charge. A retired key is answered from the filter and seats nothing.
     package mutating func hasEnergy(_ key: UInt64, initial: UInt8) -> Bool {
         guard filterContains(key) == false else {
             return false
@@ -81,7 +83,10 @@ package struct OperandEnergyTable {
     /// The slot holding `key`, seating it on the first free slot in its probe window. A window entirely occupied by other keys evicts the first of them.
     ///
     /// The whole window is scanned for the key before an empty slot is taken: retirement frees slots, and a key seated past a freed slot would otherwise be re-seated fresh there with its allowance restored.
-    private mutating func slot(_ key: UInt64) -> Int {
+    ///
+    /// Zero marks an empty slot, so the low bit is forced on before the key is stored or compared. That folds each even key onto its odd neighbour, one bit of a 64-bit space, which is cheaper than asking every caller to remember the rule.
+    private mutating func slot(_ rawKey: UInt64) -> Int {
+        let key = rawKey | 1
         let home = Int(truncatingIfNeeded: key >> 24) & mask
         var firstEmpty: Int?
         for step in 0 ..< Self.probeWindow {

@@ -69,9 +69,9 @@ struct OperandEnergyTableTests {
 
     @Test("Keys sharing a home slot are seated by probing, not by evicting each other")
     func probingSeatsCollidingKeys() {
-        // Four keys with identical high bits share one home slot in a 16-slot table; the probe window is wider than that, so none evicts another.
+        // Four keys with identical high bits share one home slot in a 16-slot table; the probe window is wider than that, so none evicts another. Odd keys, because the table forces the low bit on to keep zero free as its empty marker, and even keys would fold onto their odd neighbours.
         var table = OperandEnergyTable(capacityExponent: 4)
-        let keys: [UInt64] = (1 ... 4).map { UInt64($0) }
+        let keys: [UInt64] = [1, 3, 5, 7]
         for key in keys {
             for _ in 0 ..< 2 {
                 table.note(key, yielded: false, initial: 3)

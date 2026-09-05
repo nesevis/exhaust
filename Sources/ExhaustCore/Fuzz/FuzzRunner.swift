@@ -1033,6 +1033,7 @@ package final class FuzzRunner<Output> {
                 independentFailureCoverageNovel: nil
             )
         }
+        // Recorded, not consulted: the pruned form has to be evaluated here whatever the table says, because its verdict and hits are what the corpus stores. Recording it is what lets a later candidate that mutates into the same pruned form skip.
         _ = isRecentDuplicate(hash: prunedSequenceHash)
         let parentHash = parentIndex.map { corpus.entries[$0].hash } ?? 0
         let (prunedVerdict, prunedHits) = evaluateInBracket(
