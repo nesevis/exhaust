@@ -92,6 +92,11 @@ package struct FuzzRunnerConfiguration {
     /// Called once per attempt with its phase and the edges that attempt hit. Nil in production runs; coverage-harvest tooling uses it to build a first-hit timeline without re-reading the counter regions.
     package var onAttempt: ((FuzzPhase, [(edge: Int, hitCount: UInt8)]) -> Void)?
 
+    /// Whether the crash breadcrumb stores each candidate's own sequence: on at or above ``FuzzTunables/trapCandidateBudgetFloor``, where a trapping input is worth the per-invocation cost of recording it.
+    package var recordsTrapCandidate: Bool {
+        budgetNanoseconds >= FuzzTunables.trapCandidateBudgetFloor
+    }
+
     package init(
         budgetNanoseconds: UInt64,
         seed: UInt64,

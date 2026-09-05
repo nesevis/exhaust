@@ -116,7 +116,7 @@ struct FuzzPersistenceTests {
                 try? FileManager.default.removeItem(at: directory)
             }
 
-            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL))
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL, recordsCandidateSequence: true))
             #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
 
             breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222, kind: .reduction)

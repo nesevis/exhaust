@@ -73,7 +73,7 @@ struct ExploreTimeResumeTests {
 
         // The predecessor died evaluating a mutation of the first snapshot entry. Written through the real breadcrumb so the slot layout, checksum, and commit marker are the ones a live run produces.
         let parentHash = ZobristHash.hash(of: sequences[0])
-        let predecessorBreadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL))
+        let predecessorBreadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL, recordsCandidateSequence: true))
         predecessorBreadcrumb.record(
             candidateHash: 0xABCD,
             parentHash: parentHash,

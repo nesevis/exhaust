@@ -16,6 +16,28 @@ struct BreadcrumbSidecarTests {
         }
     }
 
+    @Test("Recording the candidate follows the campaign budget")
+    func recordingFollowsBudget() {
+        let floor = FuzzTunables.trapCandidateBudgetFloor
+        // Short runs are cheap to reproduce by running them again, so they do not pay for the recording.
+        #expect(FuzzRunnerConfiguration(budgetNanoseconds: floor - 1, seed: 1).recordsTrapCandidate == false)
+        #expect(FuzzRunnerConfiguration(budgetNanoseconds: floor, seed: 1).recordsTrapCandidate)
+        #expect(FuzzRunnerConfiguration(budgetNanoseconds: floor * 6, seed: 1).recordsTrapCandidate)
+    }
+
+    @Test("Without the opt-in the slot carries hashes and a kind, and no sequence")
+    func sequenceIsOmittedByDefault() throws {
+        try withBreadcrumb(recordsCandidateSequence: false) { breadcrumb, url in
+            breadcrumb.record(candidateHash: 7, parentHash: 8, kind: .reduction, sequence: choiceSequence(of: 12))
+            let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: url))
+            // The hashes are what quarantine a parent and identify the probe; only the input itself costs per-invocation work to store.
+            #expect(survivor.candidateHash == 7)
+            #expect(survivor.parentHash == 8)
+            #expect(survivor.kind == .reduction)
+            #expect(survivor.candidateSequence == nil)
+        }
+    }
+
     @Test("A candidate past the cap is recorded as unavailable, never as a prefix")
     func oversizedCandidateIsUnavailable() throws {
         try withBreadcrumb { breadcrumb, url in
@@ -82,12 +104,16 @@ struct BreadcrumbSidecarTests {
 
 // MARK: - Helpers
 
-private func withBreadcrumb(_ body: (FuzzBreadcrumb, URL) throws -> Void) throws {
+/// Opens a breadcrumb over a scratch file, opted into storing candidate sequences, which is what the slot-layout tests are about. The process-wide default is off.
+private func withBreadcrumb(
+    recordsCandidateSequence: Bool = true,
+    _ body: (FuzzBreadcrumb, URL) throws -> Void
+) throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let url = directory.appendingPathComponent("breadcrumb.bin")
-    try body(#require(FuzzBreadcrumb(fileURL: url)), url)
+    try body(#require(FuzzBreadcrumb(fileURL: url, recordsCandidateSequence: recordsCandidateSequence)), url)
 }
 
 /// Which slot holds the higher generation, so a test can corrupt the record that was most recently written.

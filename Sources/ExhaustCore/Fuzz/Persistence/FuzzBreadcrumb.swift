@@ -28,7 +28,7 @@ package enum FuzzProbeKind: UInt64, Sendable {
 ///
 /// The write is a plain store to a dirty mmap page: no syscall, no fsync. A Swift trap kills the process, but the kernel still flushes the page before releasing the inode, so the breadcrumb survives any application-level crash; only kernel panic or hard power loss loses it.
 ///
-/// Each record carries the probe's Zobrist hash, its mutation parent's hash (0 outside the mutation phase), which kind of probe it was, and the candidate's own choice sequence. The hashes and the kind decide what a resumed run quarantines and how it describes the death; the sequence is what lets it show the user the input, which a hash cannot.
+/// Each record carries the probe's Zobrist hash, its mutation parent's hash (0 outside the mutation phase), which kind of probe it was, and, when `recordsCandidateSequence` is on, the candidate's own choice sequence. The hashes and the kind decide what a resumed run quarantines and how it describes the death; the sequence is what lets it show the user the input, which a hash cannot, and it is budget-gated because writing it costs throughput on every probe (see ``FuzzTunables/trapCandidateBudgetFloor``).
 ///
 /// ## Why two slots
 ///
@@ -43,6 +43,9 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
 
     /// The slot the next record writes. Alternates, so the newest committed slot survives intact while its successor is written.
     private var writeSlotIndex = 0
+
+    /// Whether ``record(candidateHash:parentHash:kind:sequence:)`` stores the sequence it is handed. Off leaves every slot's payload empty, so a survivor carries hashes and a kind and no input.
+    private let recordsCandidateSequence: Bool
 
     /// The largest choice sequence a slot can hold. A candidate whose encoding exceeds this is recorded as present but unavailable, never as a prefix: a truncated sequence is a different input, and offering one as the counterexample would be worse than admitting the size.
     package static let payloadCapacity = 4096
@@ -79,7 +82,10 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
     private static let payloadOffset = 48
 
     /// Opens (creating if needed) and maps the breadcrumb file, or returns nil when the platform lacks mmap or the file cannot be created.
-    package init?(fileURL: URL) {
+    ///
+    /// - Parameter recordsCandidateSequence: Whether to store each candidate's sequence in its slot. Callers derive it from the run's budget through ``FuzzRunnerConfiguration/recordsTrapCandidate``; there is no default, because a caller that has not thought about the cost should not be silently paying it.
+    package init?(fileURL: URL, recordsCandidateSequence: Bool) {
+        self.recordsCandidateSequence = recordsCandidateSequence
         #if canImport(Darwin) || canImport(Glibc)
             try? FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
@@ -137,7 +143,10 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
         kind: FuzzProbeKind,
         sequence: ChoiceSequence? = nil
     ) {
-        let payload = sequence.map { ChoiceSequenceCodec.encodeBytes($0) } ?? []
+        var payload: [UInt8] = []
+        if recordsCandidateSequence, let sequence {
+            payload = ChoiceSequenceCodec.encodeBytes(sequence)
+        }
         // Over the cap the candidate is recorded as present but unavailable rather than truncated: a prefix is a different input.
         let storedPayload = payload.count <= Self.payloadCapacity ? payload : []
 

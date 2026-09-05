@@ -331,6 +331,8 @@ A fuzzing run can find an input that traps: a `fatalError`, a failed preconditio
 
 Rerun the test and Exhaust reports the trapping input (or the input it was mutated from, when the trapping input was never stored), quarantines that region so mutation does not immediately rediscover it, and continues the search from the restored corpus for the rest of the budget.
 
+Whether the checkpoint stores the trapping candidate itself, or only identifies it by hash and names the input it was mutated from, follows the budget. Runs of ten minutes or longer store it; shorter runs do not, because a short run is cheap to reproduce by running it again and a long campaign is not. Storing the candidate writes it on every property invocation, which cost about 8% of candidate throughput on a search evaluating tens of thousands of inputs a second, so throughput steps down at that boundary.
+
 Checkpoints live in the system temporary directory and are removed when a run completes normally, so there is nothing to add to `.gitignore`. Set `EXHAUST_STATE_DIR` to relocate them, for example on CI where each step gets a fresh temporary directory. Set `EXHAUST_RESUME=0` to ignore a crashed predecessor's state and start fresh.
 
 If the instrumented code changed between crash and rerun, Exhaust re-measures the restored inputs against the rebuilt code before resuming.

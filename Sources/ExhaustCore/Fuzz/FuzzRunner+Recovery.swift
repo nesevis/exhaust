@@ -11,7 +11,10 @@ extension FuzzRunner {
             return
         }
         progressWriter = FuzzProgressWriter(store: persistence.store)
-        breadcrumb = FuzzBreadcrumb(fileURL: persistence.store.breadcrumbFileURL)
+        breadcrumb = FuzzBreadcrumb(
+            fileURL: persistence.store.breadcrumbFileURL,
+            recordsCandidateSequence: configuration.recordsTrapCandidate
+        )
         breadcrumb?.clear()
         pcTableHashAtStart = SancovRuntime.pcTableHash()
         lastCheckpointNanoseconds = startNanoseconds

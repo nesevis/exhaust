@@ -173,6 +173,15 @@ package enum FuzzTunables {
     /// Restricts the campaign draw to one kind for ablation arms: `sweep` or `walk`, read once from `EXHAUST_CAMPAIGN`; unset runs both on a fair draw.
     package static let campaignKindOverride: String? = ProcessInfo.processInfo.environment["EXHAUST_CAMPAIGN"]
 
+    // MARK: - Crash Recovery
+
+    /// Budget at or above which the crash breadcrumb records each candidate's own choice sequence, so a resumed run can show the trapping input instead of naming it by hash and quarantining its parent.
+    ///
+    /// The recording costs about 8% of candidate throughput at any budget, because the encode and the copy into the slot run inside every property invocation's bracket (on the Etna IFC type-based workload, property time went from 0.8 to 4.1 microseconds per evaluated case). What the budget changes is the value of having the input: a short run is cheap to reproduce by running it again, and a long campaign is not.
+    ///
+    /// - Note: Throughput therefore steps down at this boundary. A run just under it searches about 8% faster than one just over.
+    package static let trapCandidateBudgetFloor: UInt64 = 10 * 60 * 1_000_000_000
+
     // MARK: - Coverage Reachability
 
     /// Attempts to allow before concluding that an instrumented build is recording nothing.

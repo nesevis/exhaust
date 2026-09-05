@@ -40,7 +40,7 @@ struct CoverageGuidedRecoveryReviewTests {
                 snapshot: corpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
             )
             try store.write(document)
-            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL))
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL, recordsCandidateSequence: true))
             breadcrumb.record(candidateHash: 0xAAAA, parentHash: 0xBBBB, kind: .search, sequence: nil)
             let persistence = FuzzPersistenceContext(store: store, resumeEnabled: true)
             let survivorObservedByProperty = SendableBox<Survivor?>(nil)
