@@ -178,16 +178,13 @@ extension FuzzRunner {
         if isRecentDuplicate(hash: sequenceHash) {
             openPhaseAttempt(.mutation, parentIndex: parent?.index)
             noteDuplicateSkip(parent == nil ? .reflectionInjection : .graftInjection)
-            if let parent {
-                corpus.noteChild(forParentAt: parent.index, admitted: false)
-            }
             return true
         }
         let (verdict, hits) = evaluateInBracket(
             value,
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent?.entry.hash ?? 0, sequence: sequence)
         )
-        let admission = recordAttempt(
+        recordAttempt(
             value: value,
             tree: tree,
             sequence: sequence,
@@ -199,10 +196,6 @@ extension FuzzRunner {
             phase: .mutation,
             parentIndex: parent?.index
         )
-        // A grafted child is a child: without this the parent's quiet-child counter never advances, and the campaign stall gate reads a parent that keeps producing as one that has gone silent.
-        if let parent {
-            corpus.noteChild(forParentAt: parent.index, admitted: admission.isAdmitted)
-        }
         return true
     }
 }

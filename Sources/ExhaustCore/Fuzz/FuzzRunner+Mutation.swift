@@ -1,138 +1,77 @@
-// Candidate production for the fuzz loop: mutation strategy selection and the swarm rewrite.
+// Candidate production for the fuzz loop: arm selection and the swarm rewrite.
 
 extension FuzzRunner {
     // MARK: - Candidate Production
 
-    /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
+    /// Produces one mutated candidate from `parent` plus the bitmask of the ``MutationArm`` that shaped it (for bandit credit on admission). Two steps in sequence: one arm drawn from the enabled inventory, then the swarm rewrite of the result's branch selections.
     func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
-        let experiments = configuration.experiments
-        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
-            || experiments.graphMutation || experiments.pairMutation
-            ? composedCandidate(from: parent, parentIndex: parentIndex)
-            : legacyCandidate(from: parent)
-        switch experiments.swarmMode {
+        var (candidate, armsMask) = inventoryCandidate(from: parent, parentIndex: parentIndex)
+        switch configuration.experiments.swarmMode {
             case .off:
                 break
             case .activated:
                 // Per-candidate weights, so the activation distribution roams every produced candidate rather than every epoch.
                 let mask = SwarmMask.forIndex(swarmDerivationIndex, rootSeed: configuration.seed)
                 candidate = mask.applyActivated(to: candidate, scratch: &swarmScratch, prng: &prng)
-            case .binary:
-                let epoch = SwarmMask.forIndex(
-                    swarmDerivationIndex / FuzzTunables.swarmEpochAttempts,
-                    rootSeed: configuration.seed
-                )
-                candidate = epoch.apply(to: candidate, prng: &prng)
         }
         swarmDerivationIndex += 1
         return (candidate, armsMask)
     }
 
-    /// Draws one splice donor uniformly from the mutable tier.
+    /// Draws one splice donor uniformly from the parent domain.
     ///
-    /// The tier is the rule: a discovery-tier entry is one whose materialisation mostly fell through to the PRNG, so its bind regions are the weakest donor material in the corpus, and it is also the only donor with no cached layout to splice through. Requires two entries so a donor other than the recipient can exist; consumes one draw either way, so the stream shape does not depend on the tier's size.
+    /// The parent domain rather than the whole corpus because it is the set with cached layouts to splice through; a discovery-tier entry carries none. Requires two entries so a donor other than the recipient can exist; consumes one draw either way, so the stream shape does not depend on the domain's size.
     private func drawSpliceDonor() -> CorpusEntry? {
-        let tier = corpus.mutableTierIndices
-        guard tier.count > 1 else {
+        let domain = corpus.parentIndices
+        guard domain.count > 1 else {
             return nil
         }
-        return corpus.entries[tier[Int(prng.next(upperBound: UInt64(tier.count)))]]
+        return corpus.entries[domain[Int(prng.next(upperBound: UInt64(domain.count)))]]
     }
 
-    /// The original single-operator mutation path, kept verbatim so knob-off runs replay identically under a pinned seed: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
-    private func legacyCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
-        if randomUnit() < FuzzTunables.spliceProbability, let donor = drawSpliceDonor() {
-            if donor.hash != parent.hash,
-               let spliced = FuzzMutator.splice(
-                   recipient: parent.sequence,
-                   donor: donor.sequence,
-                   recipientLayout: parent.mutationLayout,
-                   donorLayout: donor.mutationLayout,
-                   prng: &prng
-               )
-            {
-                return (spliced, 1 << UInt32(MutationArm.splice.rawValue))
-            }
+    /// The inventory mutation path: one child from one operator, drawn from the bandit's distribution or, with the bandit off, the fixed one over the enabled inventory.
+    ///
+    /// One operator per child, never a stack. Exhaust's band operators are each already multi-perturbation (a low step moves up to three values, a high step corrupts a quarter of the sequence), and composing several per child was measured on `DeepParser` (2026-07-11) as neutral-to-worse: AFL-depth stacks destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%), and shallower stacks were worse on attempts-to-fault. A single operator also keeps the bandit's reward honest, since the arm credited is the arm that produced the child.
+    private func inventoryCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
+        let experiments = configuration.experiments
+        let layout = parent.mutationLayout
+        let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
+        var candidate = parent.sequence
+        switch arm {
+            case .low:
+                candidate = FuzzMutator.mutate(candidate, intensity: .low, layout: layout, prng: &prng)
+            case .medium:
+                candidate = FuzzMutator.mutate(candidate, intensity: .medium, layout: layout, prng: &prng)
+            case .high:
+                candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
+            case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover:
+                if let targeted = graphArmCandidate(arm, candidate, parent: parent, parentIndex: parentIndex) {
+                    candidate = targeted
+                }
+            case .splice:
+                if let donor = drawSpliceDonor(),
+                   donor.hash != parent.hash,
+                   let spliced = FuzzMutator.splice(
+                       recipient: candidate,
+                       donor: donor.sequence,
+                       recipientLayout: layout,
+                       donorLayout: donor.mutationLayout,
+                       prng: &prng
+                   )
+                {
+                    candidate = spliced
+                }
         }
+        if candidate != parent.sequence {
+            return (candidate, 1 << UInt32(arm.rawValue))
+        }
+        // The arm found nothing to do (no usable bind region or donor, no targetable group, a no-op band step) and the corpus would reject the duplicate. Fall back to one band mutation so the attempt always explores; the band is credited, not the arm that missed.
         let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
         let intensity = MutationIntensity.allCases[Int(intensityDraw)]
         return (
-            FuzzMutator.mutate(
-                parent.sequence,
-                intensity: intensity,
-                layout: parent.mutationLayout,
-                prng: &prng
-            ),
+            FuzzMutator.mutate(candidate, intensity: intensity, prng: &prng),
             1 << UInt32(MutationArm(intensity: intensity).rawValue)
         )
-    }
-
-    /// The experiment mutation path: one child composed from `stackedMutation`'s operator stack with each operator drawn from the bandit's distribution (or the legacy fixed one when only stacking is on).
-    ///
-    /// The stack draw is 2^0...2^2 ({1, 2, 4} operators), not AFL's 2^1...2^7: Exhaust's band operators are each already multi-perturbation (a low-band step moves up to three values, a high-band step corrupts a quarter of the sequence), and the AFL-depth stacks measured on `DeepParser` destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%).
-    private func composedCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
-        let experiments = configuration.experiments
-        let stackSize = 1 << Int(prng.next(upperBound: 3))
-        let stackCount = experiments.stackedMutation ? stackSize : 1
-        var candidate = parent.sequence
-        var armsMask: UInt32 = 0
-        for mutationIndex in 0 ..< stackCount {
-            let layout = mutationIndex == 0 ? parent.mutationLayout : nil
-            let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
-            let beforeArm = candidate
-            switch arm {
-                case .low:
-                    candidate = FuzzMutator.mutate(
-                        candidate, intensity: .low, layout: layout, prng: &prng
-                    )
-                case .medium:
-                    candidate = FuzzMutator.mutate(
-                        candidate, intensity: .medium, layout: layout, prng: &prng
-                    )
-                case .high:
-                    candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
-                case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover:
-                    guard let targeted = graphArmCandidate(arm, candidate, parent: parent, parentIndex: parentIndex) else {
-                        continue
-                    }
-                    candidate = targeted
-                case .valueWalk, .regionSweep:
-                    // Unreachable from the bandit draw and the fixed distribution (campaigns dispatch at parent level), kept for switch exhaustiveness.
-                    continue
-                case .splice:
-                    guard let donor = drawSpliceDonor() else {
-                        continue
-                    }
-                    // Skip self-splices against the current candidate, not the parent as the legacy path does: mid-stack the candidate has already drifted, so a parent-donor splice is genuine recombination.
-                    if donor.sequence != candidate,
-                       let spliced = FuzzMutator.splice(
-                           recipient: candidate,
-                           donor: donor.sequence,
-                           recipientLayout: layout,
-                           donorLayout: donor.mutationLayout,
-                           prng: &prng
-                       )
-                    {
-                        candidate = spliced
-                    }
-            }
-            // Credit only a change. A missing arm rides the stack alongside arms that worked, and would otherwise take weight from them.
-            if candidate != beforeArm {
-                armsMask |= 1 << UInt32(arm.rawValue)
-            }
-        }
-        if candidate == parent.sequence {
-            // Nothing perturbed the parent (splice arms found no usable bind region or donor, or a band mutation was a no-op on this sequence), and the corpus would reject the duplicate. Fall back to one band mutation so the attempt always explores.
-            let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
-            let intensity = MutationIntensity.allCases[Int(intensityDraw)]
-            armsMask |= 1 << UInt32(MutationArm(intensity: intensity).rawValue)
-            candidate = FuzzMutator.mutate(
-                candidate,
-                intensity: intensity,
-                prng: &prng
-            )
-        }
-        return (candidate, armsMask)
     }
 
     /// Applies one graph-targeted operator to the candidate, or nil when the parent carries no targeting tables (a discovery-tier parent) or the operator found nothing to target. The tables are built on the first draw that reaches here.
@@ -164,7 +103,7 @@ extension FuzzRunner {
                     corpus: corpus,
                     prng: &prng
                 )
-            case .low, .medium, .high, .splice, .valueWalk, .regionSweep:
+            case .low, .medium, .high, .splice:
                 return nil
         }
     }

@@ -240,7 +240,7 @@ struct ExploreSpecTimeRuntimeTests {
         let result = runner.run()
         #expect(result.corpusEntryCount > 0)
 
-        for index in runner.corpus.mutableTierIndices {
+        for index in runner.corpus.parentIndices {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
                 adapter.generator, prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
@@ -263,7 +263,7 @@ struct ExploreSpecTimeRuntimeTests {
             )
         }
         let resolved = try #require(report)
-        #expect(resolved.totalAttempts == 0)
+        #expect(resolved.attempts.total == 0)
         guard case .invalidConfiguration = resolved.termination else {
             Issue.record("Expected invalidConfiguration, got \(resolved.termination)")
             return
@@ -284,14 +284,12 @@ struct ExploreSpecTimeRuntimeTests {
         #expect(branches.isEmpty == false, "the command generator should produce at least one branch entry")
         #expect(branches.allSatisfy { $0.fingerprint != 0 }, "all branch entries must carry a non-zero fingerprint for swarm masking to work")
 
-        // The fingerprint is the source location of the synthesized pick, so it shifts whenever this file is edited above the spec; any single epoch masks a 2-branch site with probability 3/8. Scanning 64 epochs makes the check deterministic in practice (miss probability (5/8)^64) without pinning a fingerprint.
-        let maskingEpochExists = (0 ..< 64).contains { epoch in
-            let mask = SwarmMask.forIndex(epoch, rootSeed: 42)
-            return branches.contains { branch in
-                mask.allowedBranches(fingerprint: branch.fingerprint, branchCount: branch.branchCount) != nil
-            }
+        // The fingerprint is the source location of the synthesized pick, so it shifts whenever this file is edited above the spec; the check therefore asks for a weighting at whatever fingerprint the site carries rather than pinning one.
+        let mask = SwarmMask.forIndex(0, rootSeed: 42)
+        let weightedSiteExists = branches.contains { branch in
+            mask.branchWeights(fingerprint: branch.fingerprint, branchCount: branch.branchCount) != nil
         }
-        #expect(maskingEpochExists, "at least one epoch should mask the command generator's pick site")
+        #expect(weightedSiteExists, "the command generator's pick site should receive swarm weights")
     }
 
     @Test("A slow property body overshoots the budget by whole attempts and the run still returns")
@@ -317,7 +315,7 @@ struct ExploreSpecTimeRuntimeTests {
             property: adapter.property
         )
         let elapsed = ContinuousClock.now - start
-        #expect(report.totalAttempts >= 1)
+        #expect(report.attempts.total >= 1)
         #expect(report.clusters.isEmpty, "the slow spec has no fault to find")
         #expect(elapsed >= .milliseconds(300), "a non-empty attempt sleeps at least 300 ms, past the 100 ms budget — the run cannot interrupt a property body mid-attempt")
     }
@@ -359,7 +357,7 @@ struct ExploreSpecTimeRuntimeTests {
         let result = runner.run()
         #expect(result.corpusEntryCount > 0)
 
-        for index in runner.corpus.mutableTierIndices {
+        for index in runner.corpus.parentIndices {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
                 adapter.generator, prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree

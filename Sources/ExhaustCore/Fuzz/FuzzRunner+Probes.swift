@@ -87,14 +87,11 @@ extension FuzzRunner {
         counts[duplicateSkipsFor: origin] += 1
     }
 
-    /// Whether the run recently evaluated this sequence, recording it either way. Always false with the `candidateDedup` knob off.
+    /// Whether the run recently evaluated this sequence, recording it either way.
     ///
-    /// A skipped candidate counts toward the phase's attempts and the parent's quiet-child tally, never toward `evaluatedSearchCases` or the corpus. The check assumes the property is a function of the sequence, as replay already does.
+    /// A skipped candidate counts toward the phase's attempts, never toward `evaluatedSearchCases` or the corpus. The check assumes the property is a function of the sequence, as replay already does.
     func isRecentDuplicate(hash: UInt64) -> Bool {
-        guard configuration.experiments.candidateDedup else {
-            return false
-        }
-        return corpus.markEvaluated(hash: hash)
+        corpus.markEvaluated(hash: hash)
     }
 
     /// One search attempt's evaluation: runs the property inside the attribution bracket with the breadcrumb slot, comparison capture, and property timing around it, and notes whether the run has seen an edge yet.

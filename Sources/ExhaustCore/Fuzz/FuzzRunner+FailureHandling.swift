@@ -97,7 +97,7 @@ extension FuzzRunner {
         var unnormalizedResidual = false
 
         // Any probe here can be the invocation whose async work escapes its bound. That work is still running and still recording coverage, so a later invocation would measure it rather than the input. The flag is read at each point that would drive the property again, never snapshotted, because normalization can be what sets it.
-        if configuration.experiments.normalization, forcedTermination == nil {
+        if forcedTermination == nil {
             if inventory.containsKey(reducedKey) == false,
                let normalized: FuzzNormalizer.NormalizedForm<Output> = FuzzNormalizer.normalize(
                    reducedSequence: reducedSequence,

@@ -420,52 +420,25 @@ struct GraphMutationOperatorTests {
         }
     }
 
-    // MARK: - Stall Gate
-
-    @Test("The quiet-child counter increments per child and resets on admission")
-    func quietChildCounter() throws {
-        let fixture = try #require(zipFixture())
-        let corpus = FuzzCorpus(edgeCount: 4)
-        let admission = corpus.offer(
-            sequence: fixture.sequence,
-            tree: fixture.tree,
-            hits: [(edge: 0, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .mutation
-        )
-        guard case let .admitted(index, _) = admission else {
-            Issue.record("Fixture entry was not admitted")
-            return
-        }
-        #expect(corpus.childrenSinceAdmission(forParentAt: index) == 0)
-        for count in 1 ... 5 {
-            corpus.noteChild(forParentAt: index, admitted: false)
-            #expect(corpus.childrenSinceAdmission(forParentAt: index) == count)
-        }
-        corpus.noteChild(forParentAt: index, admitted: true)
-        #expect(corpus.childrenSinceAdmission(forParentAt: index) == 0)
-    }
-
     // MARK: - Bandit Inventory
 
-    @Test("A legacy-sized bandit never picks a graph arm and ignores its rewards")
+    @Test("A band-only bandit never picks a graph arm and ignores its rewards")
     func banditInventoryRestriction() {
-        var legacy = MutationBandit()
+        var bandOnly = MutationBandit()
         for step in 0 ..< 1000 {
-            let arm = legacy.pick(random: Double(step) / 1000)
-            #expect(arm.rawValue < MutationArm.legacyArmCount)
+            let arm = bandOnly.pick(random: Double(step) / 1000)
+            #expect(MutationArm.bandArms.contains(arm))
         }
-        let before = legacy.probabilities
-        legacy.reward(.swap)
-        legacy.reward(.lockstepDelta)
-        #expect(legacy.probabilities == before)
+        let before = bandOnly.probabilities
+        bandOnly.reward(.swap)
+        bandOnly.reward(.lockstepDelta)
+        #expect(bandOnly.probabilities == before)
 
-        var full = MutationBandit(armCount: MutationArm.allCases.count)
+        var full = MutationBandit(arms: MutationArm.allCases)
         var sawGraphArm = false
         for step in 0 ..< 1000 {
             let arm = full.pick(random: Double(step) / 1000)
-            if arm.rawValue >= MutationArm.legacyArmCount {
+            if MutationArm.bandArms.contains(arm) == false {
                 sawGraphArm = true
             }
         }
@@ -490,7 +463,6 @@ private func targetingExperiments(graph: Bool, pair: Bool) -> FuzzExperiments {
     var experiments = FuzzExperiments()
     experiments.graphMutation = graph
     experiments.pairMutation = pair
-    experiments.campaignMutation = false
     return experiments
 }
 
