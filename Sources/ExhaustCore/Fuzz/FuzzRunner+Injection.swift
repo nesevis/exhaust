@@ -10,7 +10,7 @@ extension FuzzRunner {
         else {
             return false
         }
-        // Reconstruction and reflection run outside the bracket, like every other candidate production path; evaluateInjected opens it around the property call.
+        // Reconstruction and reflection run outside the bracket, like every other candidate production path; evaluate opens it around the property call.
         guard let value = reflectionReconstructor(word),
               let tree = try? Interpreters.reflect(gen, with: value)
         else {
@@ -18,7 +18,8 @@ extension FuzzRunner {
         }
         let sequence = ChoiceSequence.flatten(tree)
         counts.reflectionInjectionAttempts += 1
-        return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: nil)
+        evaluate(injectedCandidate(sequence: sequence, tree: tree, value: value, parent: nil))
+        return true
     }
 
     /// Grafts a harvested operand into one field of a materialized corpus parent, reflects the whole composite through the generator, and evaluates it.
@@ -59,10 +60,11 @@ extension FuzzRunner {
         else {
             return false
         }
-        // The graft is a child of the parent it scaffolds, so its opportunity opens here like the child loop's, and recordAttempt attributes it to the parent without re-opening.
+        // The graft is a child of the parent it scaffolds, so its opportunity opens here like the child loop's, and evaluate attributes it to the parent without re-opening.
         openMutationAttempt()
         counts.graftInjectionAttempts += 1
-        return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent))
+        evaluate(injectedCandidate(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent)))
+        return true
     }
 
     /// Overwrites one or several tag-compatible value entries of a corpus parent's flat sequence with the same harvested comparison operand and evaluates the result as an ordinary mutation candidate.
@@ -91,21 +93,20 @@ extension FuzzRunner {
             return false
         }
 
-        openMutationAttempt()
         counts.comparandSubstitutionAttempts += 1
-        let feedback = evaluateFuzzCandidate(
-            mutated,
+        var yielded = false
+        if let candidate = childCandidate(
+            from: mutated,
             parent: parent,
             parentIndex: parentIndex,
             armsMask: 0,
             origin: .comparandSubstitution
-        )
-        // A yield is admission or a failure. Admission alone would retire the arm too early: its purpose is to satisfy a precondition that a fault sits behind, and satisfying one need not light an edge the corpus admits for.
-        operandEnergy.note(
-            key,
-            yielded: feedback.admitted || feedback.failed,
-            initial: FuzzTunables.comparandOperandEnergy
-        )
+        ) {
+            let evaluation = evaluate(candidate)
+            // A yield is admission or a failure. Admission alone would retire the arm too early: its purpose is to satisfy a precondition that a fault sits behind, and satisfying one need not light an edge the corpus admits for.
+            yielded = evaluation.admission.isAdmitted || evaluation.verdict?.isFailure == true
+        }
+        operandEnergy.note(key, yielded: yielded, initial: FuzzTunables.comparandOperandEnergy)
         return true
     }
 
@@ -165,37 +166,27 @@ extension FuzzRunner {
         return mixed ^ (mixed >> 32)
     }
 
-    /// Evaluates a candidate produced by comparison-operand injection and records the attempt, sharing the tail of the reconstructor and graft paths.
+    /// Wraps a reflected candidate for ``evaluate(_:)``, sharing the tail of the reconstructor and graft paths.
     ///
-    /// `parent` is nil for a whole-value candidate reflected from the operand alone, and the grafted corpus entry with its index for a field graft. It sources the breadcrumb's parent hash, the recorded generation, and the attribution index, so a graft counts against its parent the same way a normal mutation does. The whole-value path has no parent, so recordAttempt opens the mutation count for it.
-    private func evaluateInjected(
+    /// `parent` is nil for a whole-value candidate reflected from the operand alone, and the grafted corpus entry with its index for a field graft. It sources the breadcrumb's parent hash, the recorded generation, and the attribution index, so a graft counts against its parent the same way a normal mutation does. The whole-value path has no parent, so evaluate opens the mutation count for it. The reflected tree travels with the candidate, so it is not rebuilt.
+    private func injectedCandidate(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         value: Output,
         parent: (index: Int, entry: CorpusEntry)?
-    ) -> Bool {
-        let sequenceHash = ZobristHash.hash(of: sequence)
-        if isRecentDuplicate(hash: sequenceHash) {
-            openPhaseAttempt(.mutation, parentIndex: parent?.index)
-            noteDuplicateSkip(parent == nil ? .reflectionInjection : .graftInjection)
-            return true
-        }
-        let (verdict, hits) = evaluateInBracket(
-            value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent?.entry.hash ?? 0, sequence: sequence)
-        )
-        recordAttempt(
+    ) -> FuzzCandidate<Output> {
+        FuzzCandidate(
+            sequence: sequence,
+            hash: ZobristHash.hash(of: sequence),
             value: value,
             tree: tree,
-            sequence: sequence,
-            sequenceHash: sequenceHash,
-            verdict: verdict,
-            hits: hits,
             convergence: 1.0,
             generation: parent.map { $0.entry.generation + 1 } ?? 0,
             phase: .mutation,
-            parentIndex: parent?.index
+            origin: parent == nil ? .reflectionInjection : .graftInjection,
+            parentIndex: parent?.index,
+            parentHash: parent?.entry.hash ?? 0,
+            armsMask: 0
         )
-        return true
     }
 }

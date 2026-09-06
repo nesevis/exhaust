@@ -18,6 +18,35 @@ private struct PrunedCandidateSelection<Output> {
     let independentFailureCoverageNovel: Bool?
 }
 
+/// One materialized search candidate on its way to the property: the flat sequence the loop hashes and offers, the value the property judges, and where it came from.
+///
+/// The tree is nil for the producers that materialize flat (mutation children and fresh draws); ``FuzzRunner/evaluate(_:)`` rebuilds it only for the candidates that admit or fail. The reflection and graft producers already hold the tree they reflected and carry it here so it is not rebuilt.
+struct FuzzCandidate<Output>: ~Copyable {
+    let sequence: ChoiceSequence
+    /// `ZobristHash.hash(of:)` of `sequence`, computed once by the producer for the duplicate check, the breadcrumb, and corpus admission.
+    let hash: UInt64
+    let value: Output
+    let tree: ChoiceTree?
+    /// Fraction of coordinates the materializer resolved from the prefix; decides the corpus tier. 1 for fresh draws and reflected values.
+    let convergence: Double
+    let generation: Int
+    let phase: FuzzPhase
+    /// The producer, for the per-arm duplicate-skip tally.
+    let origin: CandidateOrigin
+    /// The parent the candidate was derived from, for failure boosts and attempt attribution; nil for fresh draws and whole-value reflection.
+    let parentIndex: Int?
+    /// The parent's sequence hash for the crash breadcrumb; 0 without a parent.
+    let parentHash: UInt64
+    /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; 0 outside the arm inventory.
+    let armsMask: UInt32
+}
+
+/// What one evaluation came to: the corpus's decision and, when the property ran, its verdict. The verdict is nil for a candidate skipped as a recent duplicate or discarded before it was recorded.
+struct FuzzEvaluation {
+    let admission: CorpusAdmission
+    let verdict: FuzzVerdict?
+}
+
 /// The spec-path carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
 ///
 /// Nil on the value path. A spec adapter populates both fields: the prune hook keeps precondition-skipped commands out of the corpus, and the reduce strategy routes reduction through the spec's backend reducer (sequential specs reuse ``FuzzRunner/propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)`` with the spec deadline; `.tasks` specs will wrap their two-pass reducer, which must run synchronously on the loop's lane: reduction is always inline so probes never pollute attempt coverage, and no concurrent dispatch context exists).
@@ -454,9 +483,9 @@ package final class FuzzRunner<Output> {
             }
             checkpointIfDue()
 
-            switch freshSample(interpreter: &interpreter, phase: .sampling) {
-                case let .evaluated(admission):
-                    if admission.isAdmitted {
+            switch freshCandidate(interpreter: &interpreter, phase: .sampling) {
+                case let .drawn(candidate):
+                    if evaluate(candidate).admission.isAdmitted {
                         samplesSinceNovelty = 0
                     } else {
                         samplesSinceNovelty += 1
@@ -557,8 +586,11 @@ package final class FuzzRunner<Output> {
 
             // Fresh-draw mixture: with the current mixture probability, spend this iteration on one fresh generator draw instead of a parent batch, keeping sampling alive as a background rate. Fresh draws reach basins no corpus entry has visited, which corpus-uniform exploration cannot. The adaptive ramp (floor to cap over a starvation window of non-admitting attempts) responds to corpus health, and is also what re-samples the generator once mutation has run the corpus dry.
             if randomUnit() < currentFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission) {
-                switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
-                    case .evaluated, .exhausted:
+                switch freshCandidate(interpreter: &fallbackInterpreter, phase: .mutation) {
+                    case let .drawn(candidate):
+                        evaluate(candidate)
+                        continue
+                    case .exhausted:
                         continue
                     case let .generationError(message):
                         return .generationError(message)
@@ -567,9 +599,9 @@ package final class FuzzRunner<Output> {
 
             guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
                 // Empty mutable tier: fall back to fresh sampling until something is mutable.
-                switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
-                    case .evaluated:
-                        break
+                switch freshCandidate(interpreter: &fallbackInterpreter, phase: .mutation) {
+                    case let .drawn(candidate):
+                        evaluate(candidate)
                     case .exhausted:
                         // A fully enumerated domain with an empty mutable tier has nothing left to produce: the interpreter's stream stays exhausted and tier membership only changes on admissions, which need evaluations. Waiting out the plateau window instead would burn up to half the budget on a hot loop.
                         let now = monotonicNanoseconds()
@@ -586,14 +618,15 @@ package final class FuzzRunner<Output> {
                     break
                 }
                 let (mutated, armsMask) = nextCandidate(from: parent, parentIndex: parentIndex)
-                openMutationAttempt()
-                evaluateFuzzCandidate(
-                    mutated,
+                if let child = childCandidate(
+                    from: mutated,
                     parent: parent,
                     parentIndex: parentIndex,
                     armsMask: armsMask,
                     origin: .mutationChild
-                )
+                ) {
+                    evaluate(child)
+                }
             }
         }
     }
@@ -608,83 +641,98 @@ package final class FuzzRunner<Output> {
         return floor + (cap - floor) * progress
     }
 
-    /// Per-candidate outcome handed back to the producing arm. Comparand substitution charges its operand's energy on it; the other arms discard it.
-    struct CandidateFeedback {
-        /// Whether the corpus admitted the candidate.
-        let admitted: Bool
-        /// Whether the property failed on the candidate. A producing arm can be worth its attempts through faults alone: an operand that satisfies a precondition reaches a failure without necessarily lighting an edge the corpus would admit for.
-        let failed: Bool
-    }
-
-    @discardableResult
-    func evaluateFuzzCandidate(
-        _ candidate: ChoiceSequence,
+    /// Materializes a mutated sequence into a child candidate through guided materialization, or nil when the materializer rejects it. Opens the mutation attempt before materializing, so a rejected child still counts.
+    ///
+    /// Flat emission produces the value, the fresh sequence, and its hash without building a ChoiceTree; the tree is rebuilt by ``evaluate(_:)`` only for the rare candidates that consume it.
+    func childCandidate(
+        from mutated: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,
         armsMask: UInt32,
         origin: CandidateOrigin
-    ) -> CandidateFeedback {
-        // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
+    ) -> FuzzCandidate<Output>? {
+        openMutationAttempt()
         let guidedSeed = prng.next()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
-            prefix: candidate,
+            prefix: mutated,
             mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
-            return CandidateFeedback(admitted: false, failed: false)
+            return nil
         }
-        // swiftlint:disable:next force_cast
-        let value = anyValue as! Output
-        let sequenceHash = ZobristHash.hash(of: sequence)
-        if isRecentDuplicate(hash: sequenceHash) {
-            noteDuplicateSkip(origin)
-            return CandidateFeedback(admitted: false, failed: false)
-        }
-        let (verdict, hits) = evaluateInBracket(
-            value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash, sequence: sequence)
-        )
-
-        // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
-        let admissionNovel = corpus.wouldAdmit(hits: hits)
-        var tree = ChoiceTree.just
-        var deferredTreeRebuild: (() -> ChoiceTree?)?
-        if admissionNovel || (prune != nil && verdict.isFailure) {
-            guard let rebuilt = rebuildTree(for: sequence) else {
-                counts.discardedAttempts += 1
-                return CandidateFeedback(admitted: false, failed: false)
-            }
-            tree = rebuilt
-        } else if verdict.isFailure {
-            deferredTreeRebuild = { self.rebuildTree(for: sequence) }
-        }
-
-        let admission = recordAttempt(
-            value: value,
-            tree: tree,
+        return FuzzCandidate(
             sequence: sequence,
-            sequenceHash: sequenceHash,
-            deferredTreeRebuild: deferredTreeRebuild,
-            verdict: verdict,
-            hits: hits,
+            hash: ZobristHash.hash(of: sequence),
+            // swiftlint:disable:next force_cast
+            value: anyValue as! Output,
+            tree: nil,
             convergence: decodingReport?.convergence ?? 0,
             generation: parent.generation + 1,
             phase: .mutation,
-            parentIndex: parentIndex
+            origin: origin,
+            parentIndex: parentIndex,
+            parentHash: parent.hash,
+            armsMask: armsMask
+        )
+    }
+
+    /// Evaluates one candidate: the recent-duplicate check, the property inside the attribution bracket, the tree rebuild for the candidates that consume it, the corpus offer, failure dispatch, and bandit credit. Every producer ends here, so the attempt accounting and the breadcrumb live in one place.
+    ///
+    /// The tree is rebuilt only when something downstream reads it. Admission stores it as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and flat-materialized offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction, a small minority once a fault's clusters are known, so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
+    @discardableResult
+    func evaluate(_ candidate: consuming FuzzCandidate<Output>) -> FuzzEvaluation {
+        if isRecentDuplicate(hash: candidate.hash) {
+            openPhaseAttempt(candidate.phase, parentIndex: candidate.parentIndex)
+            noteDuplicateSkip(candidate.origin)
+            return FuzzEvaluation(admission: .rejectedDuplicate, verdict: nil)
+        }
+        let (verdict, hits) = evaluateInBracket(
+            candidate.value,
+            recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: candidate.sequence)
+        )
+
+        var tree = candidate.tree ?? .just
+        var deferredTreeRebuild: (() -> ChoiceTree?)?
+        if candidate.tree == nil {
+            if corpus.wouldAdmit(hits: hits) || (prune != nil && verdict.isFailure) {
+                guard let rebuilt = rebuildTree(for: candidate.sequence) else {
+                    openPhaseAttempt(candidate.phase, parentIndex: candidate.parentIndex)
+                    counts.discardedAttempts += 1
+                    return FuzzEvaluation(admission: .rejectedNotNovel, verdict: nil)
+                }
+                tree = rebuilt
+            } else if verdict.isFailure {
+                let sequence = candidate.sequence
+                deferredTreeRebuild = { self.rebuildTree(for: sequence) }
+            }
+        }
+
+        let admission = recordAttempt(
+            value: candidate.value,
+            tree: tree,
+            sequence: candidate.sequence,
+            sequenceHash: candidate.hash,
+            deferredTreeRebuild: deferredTreeRebuild,
+            verdict: verdict,
+            hits: hits,
+            convergence: candidate.convergence,
+            generation: candidate.generation,
+            phase: candidate.phase,
+            parentIndex: candidate.parentIndex
         )
         if admission.isAdmitted, configuration.experiments.banditBands {
-            for arm in MutationArm.allCases where armsMask & (1 << UInt32(arm.rawValue)) != 0 {
+            for arm in MutationArm.allCases where candidate.armsMask & (1 << UInt32(arm.rawValue)) != 0 {
                 bandit.reward(arm)
             }
         }
-        return CandidateFeedback(admitted: admission.isAdmitted, failed: verdict.isFailure)
+        return FuzzEvaluation(admission: admission, verdict: verdict)
     }
 
     // MARK: - Shared Attempt Plumbing
 
-    /// The sole incrementer of `counts.mutationAttempts`: each mutation-phase candidate opportunity opens through here exactly once, so the invariant lives in one place instead of three coordinated comments. Opened by the producer, before materialization, so candidates the materializer discards still count. The child loop and the field graft open their own opportunities; parentless paths (the empty-tier fallback and whole-value injection) open theirs through ``recordAttempt(value:tree:sequence:sequenceHash:deferredTreeRebuild:verdict:hits:convergence:generation:phase:isBoundaryDerived:parentIndex:)``.
+    /// The sole incrementer of `counts.mutationAttempts`: each mutation-phase candidate opportunity opens through here exactly once, so the invariant lives in one place instead of three coordinated comments. Opened by the producer, before materialization, so candidates the materializer discards still count. The child loop and the field graft open their own opportunities; parentless paths (fresh draws and whole-value injection) open theirs inside ``evaluate(_:)``.
     func openMutationAttempt() {
         counts.mutationAttempts += 1
     }
@@ -707,21 +755,21 @@ package final class FuzzRunner<Output> {
         }
     }
 
-    /// The outcome of one fresh interpreter sample, shared by Phase 2 and the mutation phase's empty-tier fallback.
-    private enum FreshSampleOutcome {
-        case evaluated(CorpusAdmission)
+    /// One fresh interpreter draw, shared by Phase 2 and the mutation phase's fresh mixture and empty-tier fallback.
+    enum FreshDraw: ~Copyable {
+        case drawn(FuzzCandidate<Output>)
         /// The interpreter returned nil; its stream is exhausted.
         case exhausted
         case generationError(String)
     }
 
-    /// Draws one fresh sample from `interpreter`, evaluates it in the attribution bracket, and records the attempt under `phase`.
+    /// Draws one fresh candidate from `interpreter` under `phase`.
     ///
-    /// The draw is flat: the interpreter emits the sequence the loop hashes and offers on every attempt and builds no tree. The tree is read only by admission (the mutation fallback), the prune hook, and reduction, so it is rebuilt just for the candidates that fail or would be admitted, the discipline ``evaluateFuzzCandidate(_:parent:parentIndex:armsMask:origin:)`` applies to mutated candidates. Building a tree to flatten and drop it was 6% of a mutation-phase run under the adaptive fresh mixture.
-    private func freshSample(
+    /// The draw is flat: the interpreter emits the sequence the loop hashes and offers on every attempt and builds no tree. Building a tree to flatten and drop it was 6% of a mutation-phase run under the adaptive fresh mixture.
+    private func freshCandidate(
         interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
         phase: FuzzPhase
-    ) -> FreshSampleOutcome {
+    ) -> FreshDraw {
         let generated: (value: Output, sequence: ChoiceSequence)?
         do {
             generated = try interpreter.nextFlat()
@@ -731,39 +779,19 @@ package final class FuzzRunner<Output> {
         guard let (value, sequence) = generated else {
             return .exhausted
         }
-        let sequenceHash = ZobristHash.hash(of: sequence)
-        if isRecentDuplicate(hash: sequenceHash) {
-            openPhaseAttempt(phase, parentIndex: nil)
-            noteDuplicateSkip(.freshSample)
-            return .evaluated(.rejectedDuplicate)
-        }
-        let (verdict, hits) = evaluateInBracket(
-            value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: 0, sequence: sequence)
-        )
-
-        var tree = ChoiceTree.just
-        if verdict.isFailure || corpus.wouldAdmit(hits: hits) {
-            guard let rebuilt = rebuildTree(for: sequence) else {
-                openPhaseAttempt(phase, parentIndex: nil)
-                counts.discardedAttempts += 1
-                return .evaluated(.rejectedNotNovel)
-            }
-            tree = rebuilt
-        }
-
-        let admission = recordAttempt(
-            value: value,
-            tree: tree,
+        return .drawn(FuzzCandidate(
             sequence: sequence,
-            sequenceHash: sequenceHash,
-            verdict: verdict,
-            hits: hits,
+            hash: ZobristHash.hash(of: sequence),
+            value: value,
+            tree: nil,
             convergence: 1.0,
             generation: 0,
-            phase: phase
-        )
-        return .evaluated(admission)
+            phase: phase,
+            origin: .freshSample,
+            parentIndex: nil,
+            parentHash: 0,
+            armsMask: 0
+        ))
     }
 
     /// Rebuilds a candidate's tree by exact materialization of its stored sequence.
