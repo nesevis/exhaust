@@ -111,23 +111,6 @@ package struct BitSet: Hashable, Sendable {
         return true
     }
 
-    /// The Jaccard similarity between this set and `other`: |A ∩ B| / |A ∪ B|, or 1 when both are empty.
-    ///
-    /// Used at report time to find the passing signatures nearest a cluster's necessary-edge set.
-    package func jaccardSimilarity(to other: BitSet) -> Double {
-        precondition(capacity == other.capacity, "BitSet capacity mismatch: \(capacity) vs \(other.capacity)")
-        var intersectionCount = 0
-        var unionCount = 0
-        for wordIndex in words.indices {
-            intersectionCount += (words[wordIndex] & other.words[wordIndex]).nonzeroBitCount
-            unionCount += (words[wordIndex] | other.words[wordIndex]).nonzeroBitCount
-        }
-        guard unionCount > 0 else {
-            return 1
-        }
-        return Double(intersectionCount) / Double(unionCount)
-    }
-
     // MARK: - Iteration
 
     /// Calls `body` for each present index in ascending order.

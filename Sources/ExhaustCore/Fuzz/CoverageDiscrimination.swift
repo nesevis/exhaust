@@ -20,54 +20,45 @@ package struct ClusterDiscrimination: Sendable {
     /// The cluster these results belong to, by ``FaultCluster/id``.
     package let clusterID: Int
 
-    /// Edges present in every reduced signature of the cluster — the path the SUT must traverse to reach this fault. Cheap (BitSet AND) and close to the minimal causal path because reduction has already stripped incidental coverage.
-    package let necessaryEdges: BitSet
-
-    /// The top discriminating edges, ranked by ``EdgeDiscrimination/power`` descending. Bounded by ``FuzzTunables/discriminatingEdgeLimit``.
+    /// Candidate discriminating edges, ranked by ``EdgeDiscrimination/power`` descending. Bounded by ``FuzzTunables/discriminatingEdgeCandidateLimit``; the report symbolizes them, folds edges that resolve to one source location, and keeps ``FuzzTunables/discriminatingEdgeLimit``.
     package let rankedEdges: [EdgeDiscrimination]
-
-    /// Necessary edges absent from the passing signatures most similar to this cluster (highest Jaccard) — the branches that push the SUT from "almost fails" to "fails". Empty when the corpus has no passing entries to compare against.
-    package let nearMissDistinguishingEdges: BitSet
 }
 
-/// The corpus's passing entries: the P(hit | pass) denominator, counted once, beside the signatures the near-miss search walks.
+/// The corpus's passing entries as per-edge hit counts: the P(hit | pass) denominator, counted once for every cluster.
 ///
-/// The sample is a property of the corpus, not of the cluster being ranked. Holding the signatures and their per-edge counts as one value keeps ranking linear in the corpus — counting per cluster made the report O(clusters x corpus) — and, because the two travel together, a caller cannot pass counts that describe a different set of signatures than the ones being searched.
+/// Counts rather than signatures: ranking needs only how many passing entries hit each edge, and holding the count array beside its sample size keeps a caller from pairing counts with a denominator they do not describe. Building per-entry bitmaps here was the last report-time `BitSet` construction after entries stopped storing signatures.
 package struct PassingSample: Sendable {
-    /// The signatures themselves, for the near-miss differential's similarity search.
-    package let signatures: [BitSet]
-
     /// How many signatures hit each edge, indexed by edge. Edges at or beyond `edgeCount` are not represented.
     private let counts: [Int]
 
-    /// Counts one passing sample over an edge domain of `edgeCount`.
-    package init(signatures: [BitSet], edgeCount: Int) {
+    /// The number of passing entries counted, the ranking's denominator.
+    package let sampleSize: Int
+
+    /// Counts one passing sample over an edge domain of `edgeCount` from each passing entry's hit edges.
+    package init(passingHits: some Sequence<[(edge: Int, hitCount: UInt8)]>, edgeCount: Int) {
         var counts = [Int](repeating: 0, count: max(0, edgeCount))
-        for signature in signatures {
-            signature.forEachIndex { edge in
-                if edge >= 0, edge < counts.count {
-                    counts[edge] += 1
-                }
+        var sampleSize = 0
+        for hits in passingHits {
+            sampleSize += 1
+            for (edge, _) in hits where edge >= 0 && edge < counts.count {
+                counts[edge] += 1
             }
         }
-        self.signatures = signatures
         self.counts = counts
+        self.sampleSize = sampleSize
     }
 
-    /// The number of signatures in the sample — the ranking's denominator.
-    package var sampleSize: Int {
-        signatures.count
-    }
-
-    /// Signatures hitting `edge`, or zero for an edge outside the counted domain.
+    /// Passing entries hitting `edge`, or zero for an edge outside the counted domain.
     package subscript(edge: Int) -> Int {
         counts.indices.contains(edge) ? counts[edge] : 0
     }
 }
 
-/// Pure functions computing edge discrimination over accumulated signatures. Runs once at report time; the live loop only stores BitSets.
+/// Pure functions computing edge discrimination over accumulated signatures. Runs once at report time; the live loop only stores per-cluster signatures.
 ///
-/// The failing sample is the cluster's post-reduction signatures rather than raw failing attempts: reduction strips incidental coverage (setup, logging, branches taken by coincidence), so the reduced signature has much higher signal density. The passing sample is the corpus's passing entries — a coverage-novelty-biased sample, which is fine for ranking: bias toward diverse passing paths widens the denominator's coverage rather than distorting which edges only failures hit.
+/// The failing sample is the cluster's post-reduction signatures rather than raw failing attempts: reduction strips incidental coverage (setup, logging, branches taken by coincidence), so the reduced signature has much higher signal density. The passing sample is the corpus's passing entries, a coverage-novelty-biased sample, which is fine for ranking: bias toward diverse passing paths widens the denominator's coverage rather than distorting which edges only failures hit.
+///
+/// Ranking is the one analysis. A necessary-edge intersection and a near-miss differential (the necessary edges the closest passing signatures lack) were measured on 2026-09-06 and named nothing a reader acts on: on IFC the near-miss set pointed at the validity checks that rejected almost-failing runs, never at the mutated rule the ranking already found.
 package enum CoverageDiscrimination {
     /// Computes the discrimination results for one cluster against the passing corpus.
     ///
@@ -75,46 +66,24 @@ package enum CoverageDiscrimination {
     ///   - clusterID: The cluster's stable identifier, carried through to the result.
     ///   - failingSignatures: The cluster's reduced signatures. Empty yields empty results.
     ///   - passing: The passing corpus entries. Build it once and pass the same value to every cluster.
-    ///   - edgeCount: The signature capacity (instrumented edge count).
-    /// - Returns: Necessary edges, ranked discriminating edges, and the near-miss differential.
     package static func discriminate(
         clusterID: Int,
         failingSignatures: [BitSet],
-        passing: PassingSample,
-        edgeCount: Int
+        passing: PassingSample
     ) -> ClusterDiscrimination {
-        let necessary = necessaryEdges(of: failingSignatures, edgeCount: edgeCount)
-        let ranked = rankedEdges(failingSignatures: failingSignatures, passing: passing)
-        let nearMiss = nearMissDifferential(
-            necessaryEdges: necessary,
-            passingSignatures: passing.signatures,
-            edgeCount: edgeCount
-        )
-        return ClusterDiscrimination(
+        ClusterDiscrimination(
             clusterID: clusterID,
-            necessaryEdges: necessary,
-            rankedEdges: ranked,
-            nearMissDistinguishingEdges: nearMiss
+            rankedEdges: rankedEdges(failingSignatures: failingSignatures, passing: passing)
         )
     }
 
-    /// Intersects the cluster's signatures: edges present in every failure are necessary conditions for the fault.
-    package static func necessaryEdges(of signatures: [BitSet], edgeCount: Int) -> BitSet {
-        guard var necessary = signatures.first else {
-            return BitSet(capacity: edgeCount)
-        }
-        for signature in signatures.dropFirst() {
-            necessary = necessary.intersection(signature)
-        }
-        return necessary
-    }
-
-    /// Ranks edges by discriminative power, keeping edges that discriminate at all (power above 1) up to the configured limit.
+    /// Ranks edges by discriminative power, keeping edges that discriminate at all (power above 1) up to `limit`.
     ///
-    /// Edges hit by every signature on both sides are common code (function entry, setup) and are excluded by the power cutoff, not by special-casing.
+    /// Edges hit by every signature on both sides are common code (function entry, setup) and are excluded by the power cutoff, not by special-casing. The default limit is the candidate pool the report folds by source location; several edges of one function usually rank together, and folding after symbolization is what keeps the printed list from spending its slots on one function's offsets.
     package static func rankedEdges(
         failingSignatures: [BitSet],
-        passing: PassingSample
+        passing: PassingSample,
+        limit: Int = FuzzTunables.discriminatingEdgeCandidateLimit
     ) -> [EdgeDiscrimination] {
         guard failingSignatures.isEmpty == false else {
             return []
@@ -152,30 +121,6 @@ package enum CoverageDiscrimination {
             }
             return lhs.edge < rhs.edge
         }
-        return Array(statistics.prefix(FuzzTunables.discriminatingEdgeLimit))
-    }
-
-    /// Finds the passing signatures most similar to the cluster's necessary-edge set and returns the necessary edges every one of them misses.
-    ///
-    /// This is Hypothesis's `explain` strategy adapted to the corpus: the near-misses walked almost the whole failing path, so what they lack is what distinguishes failing from almost-failing.
-    package static func nearMissDifferential(
-        necessaryEdges: BitSet,
-        passingSignatures: [BitSet],
-        edgeCount: Int
-    ) -> BitSet {
-        guard necessaryEdges.isEmpty == false, passingSignatures.isEmpty == false else {
-            return BitSet(capacity: edgeCount)
-        }
-        let ranked = passingSignatures
-            .map { signature in (signature: signature, similarity: necessaryEdges.jaccardSimilarity(to: signature)) }
-            .sorted { $0.similarity > $1.similarity }
-            .prefix(FuzzTunables.nearMissComparisonCount)
-
-        // Edges present in the cluster but absent from every near-miss.
-        var distinguishing = necessaryEdges
-        for nearMiss in ranked {
-            distinguishing = distinguishing.subtracting(nearMiss.signature)
-        }
-        return distinguishing
+        return Array(statistics.prefix(limit))
     }
 }
