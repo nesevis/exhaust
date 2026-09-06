@@ -82,11 +82,6 @@ extension FuzzRunner {
         }
     }
 
-    /// Charges one duplicate skip to the arm that produced the candidate.
-    func noteDuplicateSkip(_ origin: CandidateOrigin) {
-        counts[duplicateSkipsFor: origin] += 1
-    }
-
     /// Whether the run recently evaluated this sequence, recording it either way.
     ///
     /// A skipped candidate counts toward the phase's attempts, never toward `evaluatedSearchCases` or the corpus. The check assumes the property is a function of the sequence, as replay already does.
@@ -129,7 +124,7 @@ extension FuzzRunner {
     /// Evaluates the reduced value once in a bracket of its own and returns its coverage signature.
     func attributedSignature(of value: Output, sequence: ChoiceSequence) -> BitSet {
         let (_, hits) = attribute(value) { value in
-            counts.classificationInvocations += 1
+            counts.invocations.record(.classification, invocations: 1)
             return judge(
                 value,
                 candidateHash: ZobristHash.hash(of: sequence),

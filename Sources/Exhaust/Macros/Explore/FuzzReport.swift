@@ -591,9 +591,9 @@ package extension FuzzReport {
             ),
             evaluated: counts.evaluatedSearchCases,
             discardedByProperty: counts.discardedEvaluations,
-            operandEnergyEvictions: counts.operandEnergyEvictions,
-            operandEnergySeatings: counts.operandEnergySeatings,
-            operandEnergyRetirements: counts.operandEnergyRetirements
+            operandEnergyEvictions: result.diagnostics.operandEnergyEvictions,
+            operandEnergySeatings: result.diagnostics.operandEnergySeatings,
+            operandEnergyRetirements: result.diagnostics.operandEnergyRetirements
         )
         invocations = Invocations(
             search: counts.evaluatedSearchCases,
@@ -603,7 +603,7 @@ package extension FuzzReport {
             classification: counts.classificationInvocations,
             recovery: counts.recoveryInvocations,
             diagnostic: 0,
-            pruneIdentitySkips: counts.pruneIdentitySkips
+            pruneIdentitySkips: result.diagnostics.pruneIdentitySkips
         )
         let profile = result.parentProfile
         coverage = Coverage(
@@ -621,12 +621,12 @@ package extension FuzzReport {
                 meanCells: profile.meanCells,
                 maximumCells: profile.maximumCells
             ),
-            coveredEdges: result.coveredEdgeCount,
+            coveredEdges: result.incidence.covered,
             instrumentedEdges: result.instrumentedEdgeCount,
-            singletons: result.edgeSingletonCount,
-            doubletons: result.edgeDoubletonCount,
-            tripletons: result.edgeTripletonCount,
-            quadrupletons: result.edgeQuadrupletonCount,
+            singletons: result.incidence.singletons,
+            doubletons: result.incidence.doubletons,
+            tripletons: result.incidence.tripletons,
+            quadrupletons: result.incidence.quadrupletons,
             incidenceTotal: result.incidenceTotal,
             incidenceSamples: result.incidenceSampleCount,
             offLaneHits: result.offLaneEdgeHits

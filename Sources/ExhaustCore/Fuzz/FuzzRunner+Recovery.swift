@@ -231,7 +231,7 @@ extension FuzzRunner {
             return nil
         }
         let (verdict, hits) = attribute(value) { value in
-            counts.recoveryInvocations += 1
+            counts.invocations.record(.recovery, invocations: 1)
             return judge(value, candidateHash: ZobristHash.hash(of: sequence), kind: .recovery, sequence: sequence)
         }
         return (value, tree, verdict, hits)

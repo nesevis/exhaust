@@ -153,6 +153,7 @@ package final class FuzzRunner<Output> {
     }
 
     var counts = FuzzRunCounts()
+    var diagnostics = FuzzDiagnostics()
     var timing = FuzzRunTiming()
 
     /// Derivation index for the swarm mask, advanced once per produced mutation candidate in ``nextCandidate(from:)``.
@@ -332,9 +333,9 @@ package final class FuzzRunner<Output> {
             finalTermination = .coverageUnreachable
         }
 
-        counts.operandEnergyEvictions = operandEnergy.evictions
-        counts.operandEnergySeatings = operandEnergy.seatings
-        counts.operandEnergyRetirements = operandEnergy.retirements
+        diagnostics.operandEnergyEvictions = operandEnergy.evictions
+        diagnostics.operandEnergySeatings = operandEnergy.seatings
+        diagnostics.operandEnergyRetirements = operandEnergy.retirements
 
         let clusters = faults.inventory.snapshot()
         let unmatched = faults.inventory.unmatchedUnreducedCounts
@@ -351,20 +352,16 @@ package final class FuzzRunner<Output> {
 
         finishPersistence()
         let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
-        let incidence = corpus.edgeIncidenceProfile
 
         return FuzzRunResult(
             clusters: clusters,
             unmatchedUnreducedCounts: unmatched,
             counts: counts,
+            diagnostics: diagnostics,
             corpusEntryCount: corpus.entries.count,
             parentCount: corpus.parentIndices.count,
-            coveredEdgeCount: incidence.covered,
             instrumentedEdgeCount: source.edgeCount,
-            edgeSingletonCount: incidence.singletons,
-            edgeDoubletonCount: incidence.doubletons,
-            edgeTripletonCount: incidence.tripletons,
-            edgeQuadrupletonCount: incidence.quadrupletons,
+            incidence: corpus.edgeIncidenceProfile,
             incidenceTotal: corpus.incidenceTotal,
             incidenceSampleCount: corpus.incidenceSampleCount,
             termination: finalTermination,
@@ -412,12 +409,9 @@ package final class FuzzRunner<Output> {
         }
         // The run seed, so the screening rows are pinned by the same seed that pins every other search decision. An unseeded #explore draws a fresh seed per run, which rotates the rows the same way a fresh #exhaust run does.
         var rows = ScreeningRunner.Rows(plan: plan, coveringSeed: configuration.seed, skipToRow: nil)
-        var summary = ScreeningRunner.Summary()
         while terminationDue() == nil, let (rowIndex, row) = rows.next() {
-            // Counted before the row is built, so a failure classified inside this row sees a 1-based attempt index like every other phase; the post-phase assignment below reconciles to the row count. The breadcrumb clears first so a trap while the generator builds the row is not attributed to the previous attempt.
-            counts.screeningAttempts += 1
+            // The breadcrumb clears before the row is built, so a trap while the generator builds it is not attributed to the previous attempt.
             breadcrumb?.clear()
-            summary.rowAttempts += 1
             guard let (value, tree) = ScreeningRunner.materializeRow(
                 erasedGen,
                 row: row,
@@ -425,10 +419,9 @@ package final class FuzzRunner<Output> {
                 profile: plan.profile,
                 needsTree: true
             ) as (Output, ChoiceTree)? else {
-                summary.rejectedRows += 1
+                counts.attempts.record(.screening, .screeningRow, .rejectedByMaterializer)
                 continue
             }
-            summary.propertyInvocations += 1
             // Convergence is 1: the tree came straight from materialization.
             let sequence = ChoiceSequence.flatten(tree)
             evaluate(FuzzCandidate(
@@ -447,8 +440,6 @@ package final class FuzzRunner<Output> {
             ))
             checkpointIfDue()
         }
-        counts.screeningAttempts = summary.rowAttempts
-        counts.screeningRejectedAttempts = summary.rejectedRows
     }
 
     // MARK: - Phase 2: Random Sampling
@@ -638,7 +629,7 @@ package final class FuzzRunner<Output> {
         return floor + (cap - floor) * progress
     }
 
-    /// Materializes a mutated sequence into a child candidate through guided materialization, or nil when the materializer rejects it. Opens the mutation attempt before materializing, so a rejected child still counts.
+    /// Materializes a mutated sequence into a child candidate through guided materialization, or nil when the materializer rejects it, which is recorded as the attempt's outcome.
     ///
     /// Flat emission produces the value, the fresh sequence, and its hash without building a ChoiceTree; the tree is rebuilt by ``evaluate(_:)`` only for the rare candidates that consume it.
     func childCandidate(
@@ -648,7 +639,6 @@ package final class FuzzRunner<Output> {
         armsMask: UInt32,
         origin: CandidateOrigin
     ) -> FuzzCandidate<Output>? {
-        openMutationAttempt()
         let guidedSeed = prng.next()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
@@ -656,7 +646,7 @@ package final class FuzzRunner<Output> {
             mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
-            counts.discardedAttempts += 1
+            counts.attempts.record(.mutation, origin, .rejectedByMaterializer)
             return nil
         }
         return FuzzCandidate(
@@ -683,8 +673,7 @@ package final class FuzzRunner<Output> {
     func evaluate(_ candidate: consuming FuzzCandidate<Output>) -> FuzzEvaluation {
         // Screening rows are distinct by construction and are never entered in the recent-hash table, as in #exhaust.
         if candidate.origin != .screeningRow, isRecentDuplicate(hash: candidate.hash) {
-            openPhaseAttempt(candidate.phase, parentIndex: candidate.parentIndex)
-            noteDuplicateSkip(candidate.origin)
+            counts.attempts.record(candidate.phase, candidate.origin, .duplicate)
             return FuzzEvaluation(admission: .rejectedDuplicate, verdict: nil)
         }
         let (verdict, hits) = evaluateInBracket(
@@ -696,8 +685,7 @@ package final class FuzzRunner<Output> {
         if candidate.tree == nil {
             if corpus.wouldAdmit(hits: hits) || (prune != nil && verdict.isFailure) {
                 guard let rebuilt = rebuildTree(for: candidate.sequence) else {
-                    openPhaseAttempt(candidate.phase, parentIndex: candidate.parentIndex)
-                    counts.discardedAttempts += 1
+                    counts.attempts.record(candidate.phase, candidate.origin, .rejectedByMaterializer)
                     return FuzzEvaluation(admission: .rejectedNotNovel, verdict: nil)
                 }
                 candidate.tree = rebuilt
@@ -722,29 +710,6 @@ package final class FuzzRunner<Output> {
     }
 
     // MARK: - Shared Attempt Plumbing
-
-    /// The sole incrementer of `counts.mutationAttempts`: each mutation-phase candidate opportunity opens through here exactly once, so the invariant lives in one place instead of three coordinated comments. Opened by the producer, before materialization, so candidates the materializer discards still count. The child loop and the field graft open their own opportunities; parentless paths (fresh draws and whole-value injection) open theirs inside ``evaluate(_:)``.
-    func openMutationAttempt() {
-        counts.mutationAttempts += 1
-    }
-
-    /// Opens the phase's attempt tally for a candidate opportunity no producer opened.
-    ///
-    /// A rejection returns before ``recordAttempt(value:tree:sequence:sequenceHash:deferredTreeRebuild:verdict:hits:convergence:generation:phase:isBoundaryDerived:parentIndex:)``, so without this it lands in `duplicateCandidatesSkipped` or `discardedAttempts` and in no phase tally: `totalAttempts` stops covering the rejections and an attempt-limited run runs past its limit.
-    ///
-    /// Screening opens none, since its tally is reconciled to the covering array's row count once the phase ends. A mutation candidate with a parent opened its opportunity in the producer, before materialization.
-    func openPhaseAttempt(_ phase: FuzzPhase, parentIndex: Int?) {
-        switch phase {
-            case .screening:
-                break
-            case .sampling:
-                counts.samplingAttempts += 1
-            case .mutation:
-                if parentIndex == nil {
-                    openMutationAttempt()
-                }
-        }
-    }
 
     /// One fresh interpreter draw, shared by Phase 2 and the mutation phase's fresh mixture and empty-tier fallback.
     enum FreshDraw: ~Copyable {
@@ -818,14 +783,10 @@ package final class FuzzRunner<Output> {
         let parentIndex = candidate.parentIndex
         let tree = candidate.tree ?? .just
         configuration.onAttempt?(phase, hits)
-        openPhaseAttempt(phase, parentIndex: parentIndex)
-        counts.evaluatedSearchCases += 1
-        if verdict.isDiscard {
-            counts.discardedEvaluations += 1
-        }
+        // Recorded before failure dispatch, so a failure classified in this attempt sees a 1-based attempt index.
+        counts.attempts.record(phase, candidate.origin, FuzzAttemptOutcome(verdict))
         // An inconclusive evaluation stops here. Its hits describe a stalled execution, so offering them would admit the shape of a timeout as a mutation parent, mark the attempt as discovery, and reset the plateau window on it.
         if verdict.isInconclusive {
-            counts.inconclusiveAttempts += 1
             let admission = CorpusAdmission.rejectedInconclusive
             noteAdmission(admission)
             return admission
@@ -940,7 +901,7 @@ package final class FuzzRunner<Output> {
         let prunedSequenceHash = ZobristHash.hash(of: prunedSequence)
         // A hook that removed nothing hands back the sequence just evaluated, and re-running the property on it cannot answer differently.
         if prunedSequenceHash == original.sequenceHash, prunedSequence == original.sequence {
-            counts.pruneIdentitySkips += 1
+            diagnostics.pruneIdentitySkips += 1
             return PrunedCandidateSelection(
                 corpus: original,
                 failure: original.verdict.isFailure ? original : nil,
@@ -958,7 +919,7 @@ package final class FuzzRunner<Output> {
                 sequence: prunedSequence
             )
         )
-        counts.pruneInvocations += 1
+        counts.invocations.record(.prune, invocations: 1)
         let prunedCandidate = EvaluatedFuzzCandidate(
             value: pruned.value,
             tree: pruned.tree,

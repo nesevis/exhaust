@@ -11,6 +11,14 @@ package struct RunLedger: Sendable, Equatable {
         case regression
         case directedSampling
         case reduction
+        /// The spec path's prune hook re-evaluating a pruned candidate.
+        case prune
+        /// Post-reduction normalization probes.
+        case normalization
+        /// The one clean-bracket evaluation that takes a reduced form's coverage signature.
+        case classification
+        /// Re-judging persisted entries at resume.
+        case recovery
     }
 
     package enum Outcome: Int, CaseIterable, Sendable {

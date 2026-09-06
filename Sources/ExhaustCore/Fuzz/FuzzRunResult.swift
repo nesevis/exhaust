@@ -154,68 +154,226 @@ package enum CandidateOrigin: Int, CaseIterable, Sendable {
     case comparandSubstitution
 }
 
-/// Groups lifecycle accounting for a `time:` run separately from its resulting corpus, coverage, and timing statistics.
-package struct FuzzRunCounts: Sendable {
-    package var screeningAttempts = 0
-    package var samplingAttempts = 0
-    package var mutationAttempts = 0
-    package var screeningRejectedAttempts = 0
-    package var discardedAttempts = 0
-    /// Evaluated search cases the property discarded (a skip error). Counted inside `evaluatedSearchCases`, since the property ran.
-    package var discardedEvaluations = 0
-    package var evaluatedSearchCases = 0
-    /// Candidates produced by the three comparison-operand injection paths (each counted inside `mutationAttempts` too): a harvested operand reconstructed into a whole value and reflected, an operand grafted into one field of a corpus parent and reflected, and an operand written over tag-compatible entries of a parent's flat sequence. A drawn operand that reconstructs, reflects, or finds no slot is not an attempt. All zero on a build without trace-cmp instrumentation, since the pool never fills.
-    package var reflectionInjectionAttempts = 0
-    package var graftInjectionAttempts = 0
-    package var comparandSubstitutionAttempts = 0
-    package var pruneInvocations = 0
-    package var reductionInvocations = 0
-    package var normalizationInvocations = 0
-    package var classificationInvocations = 0
-    package var recoveryInvocations = 0
-    /// Attempts whose evaluation reached no verdict (a `.tasks` probe that stalled and was cancelled). Counted inside `evaluatedSearchCases`, since the property ran; excluded from the corpus, since nothing was learned about the input.
-    package var inconclusiveAttempts = 0
-    /// Duplicate skips by the arm that produced the candidate, indexed by ``CandidateOrigin`` raw value, so a duplicate rate can be read per arm rather than only in aggregate. Each is counted in its phase's attempt tally, never in `evaluatedSearchCases`.
-    ///
-    /// The arms divide the same way the attempt counters do, so a rate is the arm's skips over its attempts. Ordinary mutation children have no attempt counter of their own: theirs is `mutationAttempts` less the campaign and injection tallies.
-    package var duplicateSkips = [Int](repeating: 0, count: CandidateOrigin.allCases.count)
+/// What became of one candidate opportunity.
+package enum FuzzAttemptOutcome: Int, CaseIterable, Sendable {
+    /// The property ran and passed.
+    case pass = 0
+    /// The property ran and failed.
+    case fail
+    /// The property ran and declined to judge the value (a skip error).
+    case discard
+    /// The property ran and reached no verdict: a `.tasks` probe that stalled and was cancelled, or one whose work escaped.
+    case inconclusive
+    /// The materializer rejected the candidate before the property ran: a mutated prefix guided materialization could not complete, a screening row that would not build, or a tree that would not rebuild.
+    case rejectedByMaterializer
+    /// Skipped before the property ran because the run had recently evaluated the same choice sequence.
+    case duplicate
 
-    /// Search candidates skipped before property entry because the run had recently evaluated the same choice sequence. Counted in the phase's attempt tally, not in `evaluatedSearchCases`.
-    package var duplicateCandidatesSkipped: Int {
-        duplicateSkips.reduce(0, +)
-    }
-
-    /// Reads one arm's duplicate skips.
-    package subscript(duplicateSkipsFor origin: CandidateOrigin) -> Int {
-        get {
-            duplicateSkips[origin.rawValue]
-        }
-        set {
-            duplicateSkips[origin.rawValue] = newValue
+    /// Whether the property ran.
+    package var isEvaluated: Bool {
+        switch self {
+            case .pass, .fail, .discard, .inconclusive:
+                true
+            case .rejectedByMaterializer, .duplicate:
+                false
         }
     }
 
+    package init(_ verdict: FuzzVerdict) {
+        self = if verdict.isInconclusive {
+            .inconclusive
+        } else if verdict.isDiscard {
+            .discard
+        } else if verdict.isFailure {
+            .fail
+        } else {
+            .pass
+        }
+    }
+}
+
+/// Every candidate opportunity of a `time:` run, by phase, producer, and outcome.
+///
+/// One table replaces the per-phase and per-producer tallies the loop used to increment by hand at six different sites. Every candidate carries its phase and origin, so ``FuzzRunner/evaluate(_:)`` and the producers record exactly one outcome per opportunity, and every figure the report prints is a sum over some slice of the table.
+package struct FuzzAttemptLedger: Sendable, Equatable {
+    private static let originCount = CandidateOrigin.allCases.count
+    private static let outcomeCount = FuzzAttemptOutcome.allCases.count
+    private static let phaseStride = originCount * outcomeCount
+
+    private var cells = [Int](repeating: 0, count: FuzzPhase.allCases.count * phaseStride)
+
+    package init() {}
+
+    private static func index(_ phase: FuzzPhase, _ origin: CandidateOrigin, _ outcome: FuzzAttemptOutcome) -> Int {
+        phase.ordinal * phaseStride + origin.rawValue * outcomeCount + outcome.rawValue
+    }
+
+    package mutating func record(_ phase: FuzzPhase, _ origin: CandidateOrigin, _ outcome: FuzzAttemptOutcome) {
+        cells[Self.index(phase, origin, outcome)] += 1
+    }
+
+    package func count(_ phase: FuzzPhase, _ origin: CandidateOrigin, _ outcome: FuzzAttemptOutcome) -> Int {
+        cells[Self.index(phase, origin, outcome)]
+    }
+
+    /// Opportunities in one phase, every producer and outcome.
+    package func count(phase: FuzzPhase) -> Int {
+        let base = phase.ordinal * Self.phaseStride
+        return cells[base ..< base + Self.phaseStride].reduce(0, +)
+    }
+
+    /// Opportunities from one producer across every phase, or one outcome of that producer's.
+    package func count(origin: CandidateOrigin, outcome: FuzzAttemptOutcome? = nil) -> Int {
+        var total = 0
+        for phase in FuzzPhase.allCases {
+            if let outcome {
+                total += count(phase, origin, outcome)
+            } else {
+                for candidateOutcome in FuzzAttemptOutcome.allCases {
+                    total += count(phase, origin, candidateOutcome)
+                }
+            }
+        }
+        return total
+    }
+
+    /// One outcome across every phase and producer.
+    package func count(outcome: FuzzAttemptOutcome) -> Int {
+        var total = 0
+        for phase in FuzzPhase.allCases {
+            for origin in CandidateOrigin.allCases {
+                total += count(phase, origin, outcome)
+            }
+        }
+        return total
+    }
+
+    /// One outcome within one phase.
+    package func count(phase: FuzzPhase, outcome: FuzzAttemptOutcome) -> Int {
+        var total = 0
+        for origin in CandidateOrigin.allCases {
+            total += count(phase, origin, outcome)
+        }
+        return total
+    }
+
+    package var total: Int {
+        cells.reduce(0, +)
+    }
+}
+
+/// Counters that describe the machinery rather than the search: read by the attachment renderer, never by the loop.
+package struct FuzzDiagnostics: Sendable, Equatable {
     /// Comparand-substitution energy keys seated into a slot another key held, and seatings overall. A high ratio means the energy table is undersized for the run and retirement is being undone by collision.
     package var operandEnergyEvictions = 0
     package var operandEnergySeatings = 0
     package var operandEnergyRetirements = 0
-
     /// Pruning passes that removed nothing, so the original evaluation stood in for a re-evaluation of the identical sequence.
     package var pruneIdentitySkips = 0
 
-    /// Counts candidate opportunities opened across all search phases, including candidates rejected before property entry.
-    package var totalAttempts: Int {
-        screeningAttempts + samplingAttempts + mutationAttempts
+    package init() {}
+}
+
+/// Lifecycle accounting for a `time:` run: the attempt table and the property invocations outside it. The named figures are projections of the two, kept so the report and the tests read the same names as before.
+package struct FuzzRunCounts: Sendable {
+    /// Every candidate opportunity, by phase, producer, and outcome.
+    package var attempts = FuzzAttemptLedger()
+
+    /// Property invocations outside search attempts: pruning, reduction, normalization, classification, and recovery. Aggregate counts only; their verdicts are consumed where they happen.
+    package var invocations = RunLedger()
+
+    package init() {}
+
+    package var screeningAttempts: Int {
+        attempts.count(phase: .screening)
     }
 
-    /// Counts property invocations across search, pruning, reduction, normalization, classification, and recovery.
+    package var samplingAttempts: Int {
+        attempts.count(phase: .sampling)
+    }
+
+    package var mutationAttempts: Int {
+        attempts.count(phase: .mutation)
+    }
+
+    /// Screening rows rejected while building or materializing their candidate.
+    package var screeningRejectedAttempts: Int {
+        attempts.count(phase: .screening, outcome: .rejectedByMaterializer)
+    }
+
+    /// Sampling and mutation candidates the materializer rejected before property entry.
+    package var discardedAttempts: Int {
+        attempts.count(phase: .sampling, outcome: .rejectedByMaterializer)
+            + attempts.count(phase: .mutation, outcome: .rejectedByMaterializer)
+    }
+
+    /// Evaluated search cases the property discarded (a skip error). Counted inside `evaluatedSearchCases`, since the property ran.
+    package var discardedEvaluations: Int {
+        attempts.count(outcome: .discard)
+    }
+
+    /// Attempts whose evaluation reached no verdict. Counted inside `evaluatedSearchCases`, since the property ran; excluded from the corpus, since nothing was learned about the input.
+    package var inconclusiveAttempts: Int {
+        attempts.count(outcome: .inconclusive)
+    }
+
+    package var evaluatedSearchCases: Int {
+        FuzzAttemptOutcome.allCases.reduce(0) { total, outcome in
+            outcome.isEvaluated ? total + attempts.count(outcome: outcome) : total
+        }
+    }
+
+    /// Candidates produced by the three comparison-operand injection paths, each counted inside `mutationAttempts` too. A drawn operand that reconstructs, reflects, or finds no slot is not an attempt. All zero on a build without trace-cmp instrumentation, since the pool never fills.
+    package var reflectionInjectionAttempts: Int {
+        attempts.count(origin: .reflectionInjection)
+    }
+
+    package var graftInjectionAttempts: Int {
+        attempts.count(origin: .graftInjection)
+    }
+
+    package var comparandSubstitutionAttempts: Int {
+        attempts.count(origin: .comparandSubstitution)
+    }
+
+    package var pruneInvocations: Int {
+        invocations.count(.prune)
+    }
+
+    package var reductionInvocations: Int {
+        invocations.count(.reduction)
+    }
+
+    package var normalizationInvocations: Int {
+        invocations.count(.normalization)
+    }
+
+    package var classificationInvocations: Int {
+        invocations.count(.classification)
+    }
+
+    package var recoveryInvocations: Int {
+        invocations.count(.recovery)
+    }
+
+    /// Search candidates skipped before property entry because the run had recently evaluated the same choice sequence. Counted in the phase's attempt tally, not in `evaluatedSearchCases`.
+    package var duplicateCandidatesSkipped: Int {
+        attempts.count(outcome: .duplicate)
+    }
+
+    /// One producer's duplicate skips, so a duplicate rate can be read per arm: the arm's skips over its attempts.
+    package subscript(duplicateSkipsFor origin: CandidateOrigin) -> Int {
+        attempts.count(origin: origin, outcome: .duplicate)
+    }
+
+    /// Candidate opportunities opened across all search phases, including candidates rejected before property entry.
+    package var totalAttempts: Int {
+        attempts.total
+    }
+
+    /// Property invocations across search, pruning, reduction, normalization, classification, and recovery.
     package var totalPropertyInvocations: Int {
-        evaluatedSearchCases
-            + pruneInvocations
-            + reductionInvocations
-            + normalizationInvocations
-            + classificationInvocations
-            + recoveryInvocations
+        evaluatedSearchCases + invocations.totalInvocations
     }
 }
 
@@ -243,15 +401,12 @@ package struct FuzzRunResult: Sendable {
     package var clusters: [FaultCluster]
     package var unmatchedUnreducedCounts: [FailureSymptom: Int]
     package var counts: FuzzRunCounts
+    package var diagnostics: FuzzDiagnostics
     package var corpusEntryCount: Int
     package var parentCount: Int
-    package var coveredEdgeCount: Int
     package var instrumentedEdgeCount: Int
-    /// Incidence frequency counts: edges hit by exactly one attempt (Q₁), two (Q₂), three (Q₃), four (Q₄), plus the incidence-matrix sum. Q₃ and Q₄ feed iChao2; the sum denominates the discovery probability.
-    package var edgeSingletonCount: Int
-    package var edgeDoubletonCount: Int
-    package var edgeTripletonCount: Int = 0
-    package var edgeQuadrupletonCount: Int = 0
+    /// The corpus's edge incidence at the end of the run: covered edges and the Q₁ to Q₄ frequency counts that feed the estimators.
+    package var incidence: EdgeIncidenceProfile
     /// `V`, the incidence-matrix sum: the discovery-probability denominator for incidence data.
     package var incidenceTotal: Int = 0
     /// Counts conclusive, nonduplicate search cases represented as rows in the incidence matrix.
@@ -277,6 +432,26 @@ package struct FuzzRunResult: Sendable {
     package var offLaneEdgeHits: Int = 0
     /// The parent domain's length and cell distribution at the end of the run.
     package var parentProfile: ParentProfile = .empty
+
+    package var coveredEdgeCount: Int {
+        incidence.covered
+    }
+
+    package var edgeSingletonCount: Int {
+        incidence.singletons
+    }
+
+    package var edgeDoubletonCount: Int {
+        incidence.doubletons
+    }
+
+    package var edgeTripletonCount: Int {
+        incidence.tripletons
+    }
+
+    package var edgeQuadrupletonCount: Int {
+        incidence.quadrupletons
+    }
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {

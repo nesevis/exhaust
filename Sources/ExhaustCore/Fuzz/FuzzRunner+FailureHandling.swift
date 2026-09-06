@@ -92,7 +92,7 @@ extension FuzzRunner {
     ) {
         let reductionStart = monotonicNanoseconds()
         let reduction = reduceStrategy(tree, value, symptom, Self.reductionProbeWrapper(breadcrumb))
-        counts.reductionInvocations += reduction.propertyInvocations
+        counts.invocations.record(.reduction, invocations: reduction.propertyInvocations)
         if reduction.escaped {
             forcedTermination = .uncontainedAsyncWork
         }
@@ -117,7 +117,7 @@ extension FuzzRunner {
                        guard forcedTermination == nil else {
                            return .pass
                        }
-                       counts.normalizationInvocations += 1
+                       counts.invocations.record(.normalization, invocations: 1)
                        return judge(
                            value,
                            candidateHash: ZobristHash.hash(of: candidate),

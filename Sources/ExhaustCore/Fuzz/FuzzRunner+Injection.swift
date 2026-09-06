@@ -17,7 +17,6 @@ extension FuzzRunner {
             return false
         }
         let sequence = ChoiceSequence.flatten(tree)
-        counts.reflectionInjectionAttempts += 1
         evaluate(injectedCandidate(sequence: sequence, tree: tree, value: value, parent: nil))
         return true
     }
@@ -60,9 +59,6 @@ extension FuzzRunner {
         else {
             return false
         }
-        // The graft is a child of the parent it scaffolds, so its opportunity opens here like the child loop's, and evaluate attributes it to the parent without re-opening.
-        openMutationAttempt()
-        counts.graftInjectionAttempts += 1
         evaluate(injectedCandidate(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent)))
         return true
     }
@@ -93,7 +89,6 @@ extension FuzzRunner {
             return false
         }
 
-        counts.comparandSubstitutionAttempts += 1
         var yielded = false
         if let candidate = childCandidate(
             from: mutated,
