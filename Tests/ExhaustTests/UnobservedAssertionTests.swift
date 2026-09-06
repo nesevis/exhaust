@@ -197,21 +197,25 @@ struct UnobservedAssertionTests {
     }
 }
 
-/// Covers the XCTest branch of the suppression scope, which only an `XCTestCase` can exercise: `XCTExpectFailure` traps when it runs outside an XCTest test.
-///
-/// The branch sees XCTest's own assertion failures. A Swift Testing `#expect` records through Swift Testing, which an XCTest expected-failure scope never observes, so under an XCTest host an assertion the detection rewrite missed stays invisible.
-final class AbsorbedIssuesXCTestTests: XCTestCase {
-    func testXCTestAssertionFailuresReachTheLedger() {
-        // Resolved inside an XCTestCase, where Test.current is nil, so this exercises the XCTest branch.
-        let ledger = AbsorbedIssues()
-        XCTAssertEqual(ledger.framework, .xcTest)
+// Covers the XCTest branch of the suppression scope, which only an `XCTestCase` can exercise: `XCTExpectFailure` traps when it runs outside an XCTest test.
+//
+// The branch sees XCTest's own assertion failures. A Swift Testing `#expect` records through Swift Testing, which an XCTest expected-failure scope never observes, so under an XCTest host an assertion the detection rewrite missed stays invisible.
+//
+// Apple platforms only, like the branch itself: `XCTExpectFailure` does not exist in swift-corelibs-xctest, so the scope routes through Swift Testing there and an `XCTFail` is not absorbed.
+#if canImport(ObjectiveC)
+    final class AbsorbedIssuesXCTestTests: XCTestCase {
+        func testXCTestAssertionFailuresReachTheLedger() {
+            // Resolved inside an XCTestCase, where Test.current is nil, so this exercises the XCTest branch.
+            let ledger = AbsorbedIssues()
+            XCTAssertEqual(ledger.framework, .xcTest)
 
-        ledger.absorbing {
-            XCTFail("absorbed")
+            ledger.absorbing {
+                XCTFail("absorbed")
+            }
+            XCTAssertEqual(ledger.expectationFailures.count, 1)
         }
-        XCTAssertEqual(ledger.expectationFailures.count, 1)
     }
-}
+#endif
 
 // MARK: - Helpers
 

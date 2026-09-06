@@ -1,6 +1,6 @@
-import SpecFixture
 import Exhaust
 import MatrixSpecs
+import SpecFixture
 import Testing
 
 @Suite("Negative control: gradient-free latch", .serialized)
@@ -51,7 +51,7 @@ struct NegativeControlTests {
             .replay(1),
             .suppress(.issueReporting)
         )
-        #expect(report.totalAttempts > 0)
+        #expect(report.attempts.total > 0)
         #expect(report.clusters.isEmpty, "The gradient-free latch was found — a feedback channel now ladders streak-gated state. Move this fixture into that channel's differential gate and update fuzzer-selftest-sut-landscape.md.")
     }
 }

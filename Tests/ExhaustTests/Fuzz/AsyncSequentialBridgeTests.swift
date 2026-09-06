@@ -5,6 +5,8 @@ import Testing
 
 #if canImport(Glibc)
     import Glibc
+#elseif os(Windows)
+    import WinSDK
 #endif
 
 /// Where an async sequential spec's commands actually execute.
@@ -46,6 +48,8 @@ private func threadIdentifier() -> UInt64 {
         var identifier: UInt64 = 0
         pthread_threadid_np(nil, &identifier)
         return identifier
+    #elseif os(Windows)
+        return UInt64(GetCurrentThreadId())
     #else
         return UInt64(pthread_self())
     #endif

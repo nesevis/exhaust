@@ -1,7 +1,7 @@
-import SpecFixture
 import Exhaust
 import ExhaustCore
 import MatrixSpecs
+import SpecFixture
 import Testing
 
 @Suite("Spec fuzz validation", .serialized)
@@ -16,6 +16,6 @@ struct SpecFuzzTests {
             .suppress(.issueReporting)
         )
         #expect(report.clusters.isEmpty == false)
-        #expect(report.totalAttempts > 0)
+        #expect(report.attempts.total > 0)
     }
 }

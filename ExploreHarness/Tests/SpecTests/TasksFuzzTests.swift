@@ -1,6 +1,6 @@
-import SpecFixture
 import Exhaust
 import MatrixSpecs
+import SpecFixture
 import Testing
 
 @Suite("Tasks fuzz validation: cooperative interleaving", .serialized)
@@ -31,7 +31,7 @@ struct TasksFuzzTests {
             .commandLimit(20),
             .suppress(.issueReporting)
         )
-        #expect(report.totalAttempts > 0)
+        #expect(report.attempts.total > 0)
         #expect(report.clusters.isEmpty == false, "Lane-marker mutation should realize a read-read-write-write interleaving within the budget")
         #expect(report.clusters.allSatisfy { $0.symptoms.contains("StateMachineCheckFailure") }, "Fault L surfaces as the balanceMatchesModel invariant violation")
     }
@@ -49,7 +49,7 @@ struct TasksFuzzTests {
             .replay(1),
             .suppress(.issueReporting)
         )
-        #expect(report.totalAttempts > 0)
+        #expect(report.attempts.total > 0)
         #expect(report.clusters.isEmpty, "A single-lane schedule realized fault L — the cooperative path is executing lanes it should not have, or the fixture gained a sequential fault")
     }
 

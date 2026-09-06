@@ -37,7 +37,7 @@ struct ExploreFuzzTests {
 
         // Throughput is recorded so a pipeline-cost regression surfaces as falling attempts per second.
         #expect(report.attemptsPerSecond > 0)
-        #expect(report.testingOverheadFraction >= 0 && report.testingOverheadFraction <= 1)
+        #expect(report.timing.testingOverheadFraction >= 0 && report.timing.testingOverheadFraction <= 1)
     }
 
     @Test("The clustered inventory separates the slippage pair that symptom deduplication cannot", .timeLimit(.minutes(2)))
@@ -45,7 +45,7 @@ struct ExploreFuzzTests {
         let report = Self.report
 
         // The distinctive signal is separation, not depth: the two faults A and B throw the same error type from the same site, so a symptom-deduplicating view — everything a blind sampler can offer — collapses them to one entry. The blind sampler here confirms it sees at most one IntegrityError symptom, with no way to tell the two faults apart.
-        let blindSymptoms = blindSampleFaultTypes(attempts: report.totalAttempts, seed: 20_260_710)
+        let blindSymptoms = blindSampleFaultTypes(attempts: report.attempts.total, seed: 20_260_710)
         let blindIntegritySymptoms = blindSymptoms.filter { $0 == "IntegrityError" }
         #expect(blindIntegritySymptoms.count <= 1, "symptom deduplication cannot distinguish A from B")
 
@@ -61,14 +61,14 @@ struct ExploreFuzzTests {
     func summaryAttribution() {
         let summary = Self.summary
 
-        // The compact suspect form is what a developer reads in the failure message, and each fault names the branch it threw from.
-        #expect(summary.contains("validateWindow (Parser.swift)"))
-        #expect(summary.contains("decodeData (Parser.swift)"))
-        #expect(summary.contains("decodeControl (Parser.swift)"))
-        #expect(summary.contains("checkChecksum (Parser.swift)"))
+        // The suspect form is the debugger's simplified name, what a developer reads in the failure message, and each fault names the branch it threw from.
+        #expect(summary.contains("static Parser.validateWindow(_:) (Parser.swift)"))
+        #expect(summary.contains("static Parser.decodeData(_:) (Parser.swift)"))
+        #expect(summary.contains("static Parser.decodeControl(_:) (Parser.swift)"))
+        #expect(summary.contains("static Parser.checkChecksum(_:) (Parser.swift)"))
 
         // Function-entry edges resolve to a line; interior edges collapse to the bare file rather than rendering a misleading `:0`.
-        #expect(summary.contains("integrityCheck (Parser.swift:121)"))
+        #expect(summary.contains("static Parser.integrityCheck(mode:) (Parser.swift:121)"))
 
         // The seed reaches the report, so the run a reader replays is the run that produced these clusters.
         #expect(summary.contains("Reproduce: .replay(20260710)"))
@@ -87,13 +87,13 @@ struct ExploreFuzzTests {
         }
 
         // Both halves throw from one site, so the line a stack trace would print is identical for the two.
-        #expect(data.contains("integrityCheck (Parser.swift:121)"))
-        #expect(control.contains("integrityCheck (Parser.swift:121)"))
+        #expect(data.contains("static Parser.integrityCheck(mode:) (Parser.swift:121)"))
+        #expect(control.contains("static Parser.integrityCheck(mode:) (Parser.swift:121)"))
 
         // The suspect list reaches past the shared throw site to the decoder that selected the branch, which is what shows the reader these are two faults rather than one.
-        #expect(data.contains("decodeData (Parser.swift)"))
+        #expect(data.contains("static Parser.decodeData(_:) (Parser.swift)"))
         #expect(data.contains("decodeControl") == false)
-        #expect(control.contains("decodeControl (Parser.swift)"))
+        #expect(control.contains("static Parser.decodeControl(_:) (Parser.swift)"))
         #expect(control.contains("decodeData") == false)
     }
 
