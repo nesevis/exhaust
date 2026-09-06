@@ -94,7 +94,7 @@ package struct FuzzReductionResult<Output> {
     }
 }
 
-/// Runs the covering-array, random-sampling, and mutation phases against one property, accumulating a corpus and a clustered fault inventory.
+/// Runs the covering array, random-sampling, and mutation phases against one property, accumulating a corpus and a clustered fault inventory.
 ///
 /// The runner is single-threaded: the corpus, gate, PRNG, and every instrumented evaluation — attempt brackets, reduction probes, classification re-runs — execute on the one GCD lane that owns `run()`. Reduction runs inline at the point of failure discovery, trading attempts for signal purity: no instrumented code ever executes concurrently with an open attempt bracket, so every coverage snapshot is attributable to exactly one evaluation and classification feedback lands at a deterministic point in the attempt stream.
 package final class FuzzRunner<Output> {

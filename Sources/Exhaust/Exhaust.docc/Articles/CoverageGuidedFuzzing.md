@@ -57,7 +57,7 @@ When the run cannot see the code it is testing, it says so: a run that records n
 
 Exhaust runs the property in three phases:
 
-1. **Screening.** The boundary catalogue `#exhaust` tries first (integer min/max/zero, IEEE 754 sentinels, Unicode edge cases), combined by the covering-array sampler. Screening stops at its own row cap, the end of the covering array, or the time budget, whichever comes first. Inputs that reach new branches are kept.
+1. **Screening.** The boundary catalogue `#exhaust` tries first (integer min/max/zero, IEEE 754 sentinels, Unicode edge cases), combined by the covering array sampler. Screening stops at its own row cap, the end of the covering array, or the time budget, whichever comes first. Inputs that reach new branches are kept.
 2. **Sampling.** Random generation, as in `#exhaust`, until new branches stop appearing or 10% of the budget has elapsed.
 3. **Mutation.** Exhaust modifies inputs that reached interesting branches (the corpus). A modified input that reaches a branch nothing in the corpus has reached joins the corpus and is modified in turn. A fraction of attempts is spent on fresh generation rather than mutation, and that fraction grows while the corpus stops admitting new inputs and falls back once discoveries resume, so the search keeps probing beyond the corpus's neighbourhood for the whole run. This continues until the budget runs out or new branches stop appearing.
 

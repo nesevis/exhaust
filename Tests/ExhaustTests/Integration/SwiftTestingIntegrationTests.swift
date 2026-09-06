@@ -293,7 +293,7 @@ struct SwiftTestingIntegrationTests {
 
     @Test("#examine rejects a screening replay seed")
     func examineRejectsScreeningReplaySeed() {
-        // A screening seed addresses a covering-array row #examine cannot replay, and honoring its digits as a sampling seed would silently validate a different stream than the one the seed names.
+        // A screening seed addresses a covering array row #examine cannot replay, and honoring its digits as a sampling seed would silently validate a different stream than the one the seed names.
         let generator = #gen(.int(in: 0 ... 100))
         var report: ExamineReport?
         withKnownIssue("Screening seeds cannot seed #examine") {
@@ -305,7 +305,7 @@ struct SwiftTestingIntegrationTests {
 
     @Test("#explore rejects a screening replay seed")
     func exploreRejectsScreeningReplaySeed() {
-        // Same contract as #examine: a screening seed names a covering-array row, not a run seed.
+        // Same contract as #examine: a screening seed names a covering array row, not a run seed.
         var report: ExploreReport<Int>?
         withKnownIssue("Screening seeds cannot seed #explore") {
             report = #explore(

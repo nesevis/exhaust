@@ -147,7 +147,7 @@ package enum FuzzTunables {
 
     /// Attempts to allow before concluding that an instrumented build is recording nothing.
     ///
-    /// Comfortably past the screening phase, so a run is judged on evaluations spanning all three phases rather than on a handful of covering-array rows.
+    /// Comfortably past the screening phase, so a run is judged on evaluations spanning all three phases rather than on a handful of covering array rows.
     package static let coverageUnreachableAttemptThreshold = 1000
 }
 

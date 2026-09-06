@@ -5,7 +5,7 @@
 
 // MARK: - Removal Scope Query
 
-/// Static scope builder for removal operations (element removal and covering-array-backed aligned removal).
+/// Static scope builder for removal operations (element removal and covering array backed aligned removal).
 enum RemovalQuery {
     /// Computes element removal scopes for all sequence nodes with deletable elements.
     ///
@@ -62,7 +62,7 @@ enum RemovalQuery {
 
     // MARK: - Covering Aligned Removal Scopes
 
-    /// Computes covering-array-backed aligned removal scopes for all zip nodes with multiple deletable sequence children.
+    /// Computes covering array backed aligned removal scopes for all zip nodes with multiple deletable sequence children.
     ///
     /// Each zip node with two or more deletable sibling sequences produces one ``CoveringAlignedRemovalScope``. The scope contains a ``BalancedCoveringArrayGenerator`` whose parameters are the sibling sequences and whose domains are `elementCount + 1` (the extra value encodes "skip this sibling"). The encoder pulls rows from the generator, decoding each into an element deletion combination with pairwise interaction coverage.
     ///

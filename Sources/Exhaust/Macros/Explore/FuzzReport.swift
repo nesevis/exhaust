@@ -125,7 +125,7 @@ public struct FuzzReport: Sendable {
 
     /// The phase of the run that produced a finding.
     public enum Phase: String, Sendable, Equatable {
-        /// Phase 1: covering-array screening over type-boundary values.
+        /// Phase 1: covering array screening over type-boundary values.
         case screening
         /// Phase 2: PRNG-driven random sampling.
         case sampling
@@ -196,7 +196,7 @@ public struct FuzzReport: Sendable {
     ///
     /// An attempt is a candidate opportunity: a screening row built, a sample drawn, a mutation child produced. Not every attempt reaches the property: the materializer discards some, the duplicate table skips some, and screening rejects rows it cannot build. ``evaluated`` counts the ones that did reach it; ``total`` counts every opportunity.
     public struct Attempts: Sendable, Equatable {
-        /// Candidate rows opened by Phase 1 (covering-array screening), including rows rejected before property entry.
+        /// Candidate rows opened by Phase 1 (covering array screening), including rows rejected before property entry.
         public let screening: Int
 
         /// Generated candidates opened and evaluated by Phase 2 (random sampling).

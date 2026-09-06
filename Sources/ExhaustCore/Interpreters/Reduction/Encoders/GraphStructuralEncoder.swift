@@ -19,19 +19,19 @@ struct GraphStructuralEncoder: GraphEncoder {
     /// Set at ``start(scope:)`` from the operation type. Each structural operation reports under its own encoder name for logging and instrumentation.
     private(set) var name: EncoderName = .deletion
 
-    /// Single-shot mutation for non-covering-array operations.
+    /// Single-shot mutation for non-covering array operations.
     private var probe: EncoderProbe?
 
     /// The candidate sequence pre-built at ``start(scope:)`` for single-shot operations.
     private var probeCandidate: ChoiceSequence?
 
-    /// Multi-shot state for covering-array-backed aligned removal. Accessed by ``nextCoveringAlignedProbe()`` in `GraphStructuralEncoder+Removal.swift`.
+    /// Multi-shot state for covering array backed aligned removal. Accessed by ``nextCoveringAlignedProbe()`` in `GraphStructuralEncoder+Removal.swift`.
     var coveringAlignedState: CoveringAlignedState?
 
     /// True if any replacement candidate was built but rejected by the shortlex gate. When true, the structural relax round may find value in trying the same candidates without the gate.
     var hadReplacementShortlexRejection = false
 
-    /// Tracks the covering-array cursor state for aligned removal probes, persisting across encoder restarts so the next restart resumes where the previous left off.
+    /// Tracks the covering array cursor state for aligned removal probes, persisting across encoder restarts so the next restart resumes where the previous left off.
     struct CoveringAlignedState {
         let scope: CoveringAlignedRemovalScope
         let baseSequence: ChoiceSequence

@@ -34,7 +34,7 @@ public struct ExhaustReport: Sendable {
     /// Property invocations during the screening phase.
     public var screeningInvocations: Int = 0
 
-    /// Counts covering-array rows considered as screening candidates.
+    /// Counts covering array rows considered as screening candidates.
     public var screeningRows: Int = 0
 
     /// Counts screening rows rejected before property invocation.

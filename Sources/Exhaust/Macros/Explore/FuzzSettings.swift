@@ -35,7 +35,7 @@ public enum PropertyFuzzSettings: Sendable {
 
     /// Skips the boundary-screening phase, so the search starts directly from random sampling.
     ///
-    /// Screening probes covering-array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
+    /// Screening probes covering array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
     case skipScreening
 
     /// Ends the run early once the search stops reaching new code, returning the unused budget instead of spending it.
@@ -76,7 +76,7 @@ public enum StateMachineFuzzSettings: Sendable {
 
     /// Skips the boundary-screening phase, so the search starts directly from random sampling.
     ///
-    /// Screening probes covering-array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
+    /// Screening probes covering array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
     case skipScreening
 
     /// Ends the run early once the search stops reaching new code, returning the unused budget instead of spending it.
@@ -120,7 +120,7 @@ struct ParsedPropertyFuzzSettings {
         for setting in settings {
             switch setting {
                 case let .replay(replaySeed):
-                    // A fuzz run replays the whole search from its root seed, so only sampling forms apply here. A screening seed addresses a covering-array row this runner cannot replay, and honoring its seed digits as a run seed would silently run a different search than the one the seed names.
+                    // A fuzz run replays the whole search from its root seed, so only sampling forms apply here. A screening seed addresses a covering array row this runner cannot replay, and honoring its seed digits as a run seed would silently run a different search than the one the seed names.
                     switch replaySeed.resolve() {
                         case let .sampling(resolvedSeed, _):
                             seed = resolvedSeed

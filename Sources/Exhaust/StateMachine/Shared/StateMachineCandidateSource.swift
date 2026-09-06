@@ -4,7 +4,7 @@ import ExhaustCore
 ///
 /// Merging the seed into the discovery case makes the unrepresentable states unconstructible: a screening candidate cannot lack its replay address, and no other candidate can carry one.
 enum StateMachineCandidateProvenance {
-    /// An SCA screening row: the covering-array seed whose row stream produced it, the sequence length of the tier it came from, and the 0-based row within that tier.
+    /// An SCA screening row: the covering array seed whose row stream produced it, the sequence length of the tier it came from, and the 0-based row within that tier.
     case screening(coveringSeed: UInt64, tierLength: Int, rowInTier: Int)
     /// The fixed seed-0 sequential probe.
     case smokeTest
@@ -38,7 +38,7 @@ enum StateMachineCandidateProvenance {
 
     /// The seed for ``StateMachineResult/seed``: only those a sampling replay can consume.
     ///
-    /// A screening candidate is addressed by covering-array row and a smoke test is a hardcoded zero. Neither addresses a point in a PRNG stream, so neither belongs in ``StateMachineResult/seed``. The screening address still reaches the user through ``StateMachineResult/replaySeed``.
+    /// A screening candidate is addressed by covering array row and a smoke test is a hardcoded zero. Neither addresses a point in a PRNG stream, so neither belongs in ``StateMachineResult/seed``. The screening address still reaches the user through ``StateMachineResult/replaySeed``.
     var resultSeed: UInt64? {
         switch self {
             case .screening, .smokeTest: nil
@@ -55,7 +55,7 @@ enum StateMachineCandidateProvenance {
         }
     }
 
-    /// The seed the failure context reports: the PRNG seed for candidates a PRNG produced, and `nil` for screening, whose identity is a covering-array row rather than a position in a PRNG stream.
+    /// The seed the failure context reports: the PRNG seed for candidates a PRNG produced, and `nil` for screening, whose identity is a covering array row rather than a position in a PRNG stream.
     var failureContextSeed: UInt64? {
         switch self {
             case .screening: nil
@@ -81,7 +81,7 @@ struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     }
 }
 
-/// Thrown by the screening replay source when its addressed covering-array row cannot be reproduced, which means the spec's command domain no longer matches the one the seed was recorded against.
+/// Thrown by the screening replay source when its addressed covering array row cannot be reproduced, which means the spec's command domain no longer matches the one the seed was recorded against.
 struct ScreeningReplayRowUnreachable: Error, CustomStringConvertible {
     let row: Int
     let tierLength: Int

@@ -353,7 +353,7 @@ package final class FuzzCorpus {
 
     /// Clears the admission-novelty baseline while keeping every entry, statistic, and report tally.
     ///
-    /// Called once at the screening-to-sampling handover. Screening's covering-array rows are an analysis pass, and letting their coverage bind search admission can spend the entire novelty gradient before search begins: on a sparse precondition the boundary rows light most of the map, no search-phase candidate is ever coverage-novel, and the run plateaus having admitted nothing, which is the corpus-capture failure mode. After the reset the search phases start with the fresh map a screening-free run has, while screening's admitted entries keep competing as mutation parents and ``coveredEdgeCount`` keeps reporting the whole run.
+    /// Called once at the screening-to-sampling handover. Screening's covering array rows are an analysis pass, and letting their coverage bind search admission can spend the entire novelty gradient before search begins: on a sparse precondition the boundary rows light most of the map, no search-phase candidate is ever coverage-novel, and the run plateaus having admitted nothing, which is the corpus-capture failure mode. After the reset the search phases start with the fresh map a screening-free run has, while screening's admitted entries keep competing as mutation parents and ``coveredEdgeCount`` keeps reporting the whole run.
     package func resetNoveltyBaseline() {
         for index in seenBucketMasks.indices {
             seenBucketMasks[index] = 0

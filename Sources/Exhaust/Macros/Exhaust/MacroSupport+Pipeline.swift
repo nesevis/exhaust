@@ -59,7 +59,7 @@ package extension __ExhaustRuntime {
 
     // MARK: - Screening Phase
 
-    /// Runs the structured covering-array phase, returning early on first failure.
+    /// Runs the structured covering array phase, returning early on first failure.
     static func runScreeningPhase<Output>(
         context: PipelineContext<Output>,
         screeningBudget: UInt64,

@@ -155,7 +155,7 @@ extension __ExhaustRuntime {
     ///
     /// The analysis is deliberately budget-independent. Passing the screening budget as a composite threshold would make the factor domains vary with the budget, and a `{seed}-U{row}L{length}` replay runs under a different budget than discovery did: the covering array would differ and the replay would land on another row.
     ///
-    /// A deterministic setup generator (a zero-parameter `@Setup`, whose generator is a bare `.just`) has no parameters for the analysis to extract, so it contributes a zero-factor block whose `buildTree` always yields the one tree the generator materializes. The block carries no covering-array budget, but it keeps the invariant that every with-setup screening candidate receives a setup tree — without it, screening probes would run against an unconfigured spec.
+    /// A deterministic setup generator (a zero-parameter `@Setup`, whose generator is a bare `.just`) has no parameters for the analysis to extract, so it contributes a zero-factor block whose `buildTree` always yields the one tree the generator materializes. The block carries no covering array budget, but it keeps the invariant that every with-setup screening candidate receives a setup tree — without it, screening probes would run against an unconfigured spec.
     static func setupScreeningFactors<Spec: StateMachineSpecBase>(
         for _: Spec.Type
     ) -> ScreeningLeadingFactors? {
@@ -228,7 +228,7 @@ extension __ExhaustRuntime {
     }
 }
 
-/// An independent block of covering-array factors belonging to a different generator than the screening row's.
+/// An independent block of covering array factors belonging to a different generator than the screening row's.
 ///
 /// The factors join the row's covering array so interactions between the two blocks are covered, but the block's slice of each row is replayed through its own generator rather than folded into the row's fallback tree.
 struct ScreeningLeadingFactors {

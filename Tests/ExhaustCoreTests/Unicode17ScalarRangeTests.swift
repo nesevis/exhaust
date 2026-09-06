@@ -56,7 +56,7 @@ struct Unicode17ScalarRangeTests {
         #expect(unassigned.isEmpty == false)
     }
 
-    /// Every scalar the covering-array sampler screens has to be drawable, or screening silently loses that hazard.
+    /// Every scalar the covering array sampler screens has to be drawable, or screening silently loses that hazard.
     ///
     /// An earlier version of this list was a hand-picked subset of the blocks and dropped three: final sigma, the Kelvin sign, and U+FDFA. Nothing failed, because a boundary value outside the range set is quietly discarded during construction.
     @Test("Every screened boundary scalar is drawable")
