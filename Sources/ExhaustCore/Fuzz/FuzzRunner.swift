@@ -685,8 +685,26 @@ package final class FuzzRunner<Output> {
         if candidate.tree == nil {
             if corpus.wouldAdmit(hits: hits) || (prune != nil && verdict.isFailure) {
                 guard let rebuilt = rebuildTree(for: candidate.sequence) else {
-                    counts.attempts.record(candidate.phase, candidate.origin, .rejectedByMaterializer)
-                    return FuzzEvaluation(admission: .rejectedNotNovel, verdict: nil)
+                    // The property ran, so the attempt is recorded with its verdict. The candidate is not offered, since admission would store the placeholder tree, but a failure is still dispatched and held unreduced rather than lost.
+                    counts.attempts.record(candidate.phase, candidate.origin, FuzzAttemptOutcome(verdict))
+                    if verdict.isFailure {
+                        handleFailure(
+                            EvaluatedFuzzCandidate(
+                                value: candidate.value,
+                                tree: .just,
+                                sequence: candidate.sequence,
+                                sequenceHash: candidate.hash,
+                                verdict: verdict,
+                                hits: hits
+                            ),
+                            deferredTreeRebuild: { nil },
+                            parentIndex: candidate.parentIndex,
+                            phase: candidate.phase,
+                            coverageNovel: false,
+                            attemptIndex: attemptTimelineIndex
+                        )
+                    }
+                    return FuzzEvaluation(admission: .rejectedNotNovel, verdict: verdict)
                 }
                 candidate.tree = rebuilt
             } else if verdict.isFailure {

@@ -92,16 +92,19 @@ package enum SancovSymbolizer {
                     continue
                 }
                 var info = Dl_info()
-                guard dladdr(address, &info) != 0, let symbol = info.dli_sname else {
+                guard dladdr(address, &info) != 0 else {
                     continue
                 }
-                let mangled = String(cString: symbol)
-                // Classified on the mangled name, where the ABI documents the generated globals as suffixes, not on demangled prose. Nothing a reader can open sits behind a metadata accessor or a reabstraction thunk, so the edge is omitted rather than described.
-                guard isCompilerGenerated(mangled: mangled) == false else {
-                    continue
+                if let symbol = info.dli_sname {
+                    let mangled = String(cString: symbol)
+                    // Classified on the mangled name, where the ABI documents the generated globals as suffixes, not on demangled prose. Nothing a reader can open sits behind a metadata accessor or a reabstraction thunk, so the edge is omitted rather than described.
+                    guard isCompilerGenerated(mangled: mangled) == false else {
+                        continue
+                    }
+                    let fullName = stripSpecialization(demangle(mangled) ?? mangled)
+                    resolved[edge] = (mangled, moduleName(ofMangled: mangled), fullName)
                 }
-                let fullName = stripSpecialization(demangle(mangled) ?? mangled)
-                resolved[edge] = (mangled, moduleName(ofMangled: mangled), fullName)
+                // A stripped image gives dladdr the load address and no name; atos can still read the dSYM, so the address is queued either way and an unnamed edge takes its name from there.
                 if let imagePath = info.dli_fname, info.dli_fbase != nil {
                     let image = AtosImage(
                         path: String(cString: imagePath),
@@ -112,11 +115,18 @@ package enum SancovSymbolizer {
             }
 
             var displayNames: [String: String] = [:]
-            var sources: [Int: (file: String, line: Int)] = [:]
+            var sources: [Int: AtosLine] = [:]
             #if os(macOS)
                 displayNames = simplifiedNames(forMangled: Array(Set(resolved.values.map(\.mangled))))
                 for (image, targets) in atosTargets {
                     sources.merge(sourceLocations(image: image, targets: targets)) { _, new in new }
+                }
+                // Edges dladdr could not name: atos's own name, when it produced one, stands in for the mangled form, with no module to classify by.
+                for (edge, line) in sources where resolved[edge] == nil {
+                    guard let name = line.name else {
+                        continue
+                    }
+                    resolved[edge] = (name, nil, stripSpecialization(name))
                 }
             #endif
 
@@ -129,7 +139,7 @@ package enum SancovSymbolizer {
                     displayName: displayNames[symbol.mangled] ?? symbol.fullName,
                     fullName: symbol.fullName,
                     file: source?.file,
-                    line: source.flatMap { $0.line > 0 ? $0.line : nil }
+                    line: source?.line.flatMap { $0 > 0 ? $0 : nil }
                 )
             }
             return locations
@@ -242,8 +252,13 @@ package enum SancovSymbolizer {
             } catch {
                 return [:]
             }
-            stdin.fileHandleForWriting.write(Data((mangled.joined(separator: "\n") + "\n").utf8))
-            stdin.fileHandleForWriting.closeFile()
+            // Written off the reading thread: the tool emits as it consumes, so writing every name before reading any output can fill the stdout pipe and block both sides. The pipe is a class, so the handle travels into the closure without a Sendable claim.
+            let input = Data((mangled.joined(separator: "\n") + "\n").utf8)
+            let writer = stdin.fileHandleForWriting
+            DispatchQueue.global().async {
+                writer.write(input)
+                writer.closeFile()
+            }
             let data = stdout.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             guard process.terminationStatus == 0, let output = String(data: data, encoding: .utf8) else {
@@ -262,11 +277,18 @@ package enum SancovSymbolizer {
             return names
         }
 
-        /// Runs `atos` once for one image and reads the file and line of each address whose output carries source information. Failures leave every address unplaced.
+        /// One parsed line of `atos` output: the symbol name it printed, and the file and line when it carried source information.
+        private struct AtosLine {
+            let name: String?
+            let file: String?
+            let line: Int?
+        }
+
+        /// Runs `atos` once for one image and parses each address's line: the name before ` (in `, and the file and line when present. Failures leave every address absent.
         private static func sourceLocations(
             image: AtosImage,
             targets: [(edge: Int, programCounter: UInt)]
-        ) -> [Int: (file: String, line: Int)] {
+        ) -> [Int: AtosLine] {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/atos")
             process.arguments = ["-o", image.path, "-l", String(format: "0x%lx", image.loadAddress)]
@@ -284,23 +306,32 @@ package enum SancovSymbolizer {
             guard process.terminationStatus == 0, let output = String(data: data, encoding: .utf8) else {
                 return [:]
             }
-            // One output line per input address, in order: "name (in Module) (File.swift:123)". `<stdin>` is what atos reports for a symbol it cannot place; the symbol is real, the file is not.
-            var sources: [Int: (file: String, line: Int)] = [:]
+            // One output line per input address, in order: "name (in Module) (File.swift:123)". An address atos cannot name comes back as the bare address, which is no name. `<stdin>` is what atos reports for a symbol it cannot place; the symbol is real, the file is not.
+            var sources: [Int: AtosLine] = [:]
             let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
             for (index, target) in targets.enumerated() where index < lines.count {
                 let line = String(lines[index])
-                guard let sourceRange = line.range(of: #"\(([^()]+):(\d+)\)\s*$"#, options: .regularExpression) else {
+                var name: String?
+                if let inRange = line.range(of: " (in ") {
+                    let candidate = String(line[..<inRange.lowerBound])
+                    name = candidate.isEmpty || candidate.hasPrefix("0x") ? nil : candidate
+                }
+                var file: String?
+                var number: Int?
+                if let sourceRange = line.range(of: #"\(([^()]+):(\d+)\)\s*$"#, options: .regularExpression) {
+                    let source = line[sourceRange].dropFirst().dropLast()
+                    if let colon = source.lastIndex(of: ":"), let parsed = Int(source[source.index(after: colon)...]) {
+                        let parsedFile = String(source[..<colon])
+                        if parsedFile != "<stdin>" {
+                            file = parsedFile
+                            number = parsed
+                        }
+                    }
+                }
+                guard name != nil || file != nil else {
                     continue
                 }
-                let source = line[sourceRange].dropFirst().dropLast()
-                guard let colon = source.lastIndex(of: ":"), let number = Int(source[source.index(after: colon)...]) else {
-                    continue
-                }
-                let file = String(source[..<colon])
-                guard file != "<stdin>" else {
-                    continue
-                }
-                sources[target.edge] = (file, number)
+                sources[target.edge] = AtosLine(name: name, file: file, line: number)
             }
             return sources
         }
