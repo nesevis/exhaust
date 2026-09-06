@@ -9,7 +9,7 @@ extension FuzzRunner {
         if let forced = forcedTermination {
             return forced
         }
-        if configuration.stopOnFirstFault, inventory.clusterCount > 0 {
+        if configuration.stopOnFirstFault, faults.inventory.clusterCount > 0 {
             return .firstFaultFound
         }
         if let limit = configuration.attemptLimit, counts.totalAttempts >= limit {

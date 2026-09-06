@@ -67,7 +67,7 @@ extension FuzzRunner {
         lastCheckpointNanoseconds = now
 
         let metadata = checkpointMetadata(now: now)
-        let clusters = inventory.snapshot()
+        let clusters = faults.inventory.snapshot()
         let entries = corpus.entries
         let epoch = reportEpochNanoseconds
         writer.submit {
@@ -97,7 +97,7 @@ extension FuzzRunner {
         let epoch = reportEpochNanoseconds
         return FuzzProgressDocument(
             metadata: checkpointMetadata(now: now),
-            clusters: inventory.snapshot().map { FuzzProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
+            clusters: faults.inventory.snapshot().map { FuzzProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
             snapshot: corpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
         )
     }
@@ -147,7 +147,7 @@ extension FuzzRunner {
                 discoveringPhase: phase
             ))
         }
-        inventory.restore(clusters: restoredClusters)
+        faults.inventory.restore(clusters: restoredClusters)
 
         var restoredFailures: [RestoredFailure] = []
         for record in document.snapshot {
@@ -173,12 +173,16 @@ extension FuzzRunner {
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard
             )
-            if case let .fail(symptom) = verdict {
+            if verdict.isFailure {
                 restoredFailures.append(RestoredFailure(
-                    value: value,
-                    tree: tree,
-                    sequence: sequence,
-                    symptom: symptom,
+                    candidate: EvaluatedFuzzCandidate(
+                        value: value,
+                        tree: tree,
+                        sequence: sequence,
+                        sequenceHash: ZobristHash.hash(of: sequence),
+                        verdict: verdict,
+                        hits: hits
+                    ),
                     phase: phase,
                     coverageNovel: admission.isAdmitted,
                     // An entry the predecessor recorded as failing is already in the restored counts, and reducing it back into its cluster would tally it twice. One that passed for the predecessor and fails now is this build's own evidence and counts.
@@ -195,10 +199,7 @@ extension FuzzRunner {
                 break
             }
             handleFailure(
-                value: failure.value,
-                tree: failure.tree,
-                sequence: failure.sequence,
-                symptom: failure.symptom,
+                failure.candidate,
                 parentIndex: nil,
                 phase: failure.phase,
                 coverageNovel: failure.coverageNovel,
@@ -211,10 +212,7 @@ extension FuzzRunner {
 
     /// A restored entry that fails on the current build, held until the corpus is whole so its reduction's checkpoints record a complete snapshot.
     private struct RestoredFailure {
-        let value: Output
-        let tree: ChoiceTree
-        let sequence: ChoiceSequence
-        let symptom: FailureSymptom
+        let candidate: EvaluatedFuzzCandidate<Output>
         let phase: FuzzPhase
         let coverageNovel: Bool
         let countsAsInstance: Bool

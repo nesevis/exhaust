@@ -2,7 +2,8 @@
 
 import Foundation
 
-private struct EvaluatedFuzzCandidate<Output> {
+/// A candidate the property has judged: what failure dispatch and the prune path carry.
+struct EvaluatedFuzzCandidate<Output> {
     let value: Output
     let tree: ChoiceTree
     let sequence: ChoiceSequence
@@ -114,8 +115,7 @@ package final class FuzzRunner<Output> {
 
     /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
     package let corpus: FuzzCorpus
-    let inventory = FaultInventory()
-    var gate: ReductionGate
+    var faults = FaultPipeline()
     var prng: Xoshiro256
     var bandit = MutationBandit()
 
@@ -133,9 +133,6 @@ package final class FuzzRunner<Output> {
 
     /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs during reduction — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.
     let renderValue: @Sendable (Any) -> String
-
-    /// Zobrist-keyed normalization results reused across reductions; boxed because ``FuzzNormalizer/normalize(reducedSequence:erasedGen:symptom:property:cache:)`` takes the shared-box type.
-    let normalizationCache = SendableBox<[UInt64: ChoiceSequence?]>([:])
 
     var startNanoseconds: UInt64 = 0
     /// When an attempt last covered an edge no attempt had covered before, or zero if none ever did.
@@ -223,7 +220,6 @@ package final class FuzzRunner<Output> {
             )
         )
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
-        gate = ReductionGate()
         prng = Xoshiro256(seed: configuration.seed)
         var arms = MutationArm.bandArms
         if configuration.experiments.graphMutation {
@@ -340,8 +336,8 @@ package final class FuzzRunner<Output> {
         counts.operandEnergySeatings = operandEnergy.seatings
         counts.operandEnergyRetirements = operandEnergy.retirements
 
-        let clusters = inventory.snapshot()
-        let unmatched = inventory.unmatchedUnreducedCounts
+        let clusters = faults.inventory.snapshot()
+        let unmatched = faults.inventory.unmatchedUnreducedCounts
 
         // Report-time statistics: the ranking runs once, here, against one passing sample counted from the corpus.
         let passing = corpus.passingSample
@@ -850,13 +846,17 @@ package final class FuzzRunner<Output> {
                 precomputedHash: candidate.hash
             )
             noteAdmission(admission)
-            if case let .fail(symptom) = verdict {
+            if verdict.isFailure {
                 handleFailure(
-                    value: candidate.value,
-                    tree: tree,
+                    EvaluatedFuzzCandidate(
+                        value: candidate.value,
+                        tree: tree,
+                        sequence: candidate.sequence,
+                        sequenceHash: candidate.hash,
+                        verdict: verdict,
+                        hits: hits
+                    ),
                     deferredTreeRebuild: deferredTreeRebuild,
-                    sequence: candidate.sequence,
-                    symptom: symptom,
                     parentIndex: parentIndex,
                     phase: phase,
                     coverageNovel: admission.isAdmitted,
@@ -892,16 +892,11 @@ package final class FuzzRunner<Output> {
             precomputedHash: candidates.corpus.sequenceHash
         )
         noteAdmission(admission)
-        if let failure = candidates.failure,
-           case let .fail(symptom) = failure.verdict
-        {
+        if let failure = candidates.failure {
             // A non-nil deferred rebuild implies no prune hook, so the failure candidate is always the original whose placeholder tree the rebuild replaces.
             handleFailure(
-                value: failure.value,
-                tree: failure.tree,
+                failure,
                 deferredTreeRebuild: deferredTreeRebuild,
-                sequence: failure.sequence,
-                symptom: symptom,
                 parentIndex: parentIndex,
                 phase: phase,
                 coverageNovel: candidates.independentFailureCoverageNovel
