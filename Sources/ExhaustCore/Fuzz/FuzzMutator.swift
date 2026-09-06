@@ -4,7 +4,8 @@
 // (prefix -> fallback tree -> PRNG) makes any perturbation of the flattened sequence produce a
 // valid value, so mutations here only need to be cheap and varied, not structurally sound.
 // A mutation that mangles marker pairing degrades to PRNG fallback with low convergence, and
-// the corpus tier split routes such children away from parent selection.
+// the corpus tier split keeps such children out of the champion archive: they are short, shortlex
+// would favour them, and as champions they evict the longer parents the search covers ground from.
 
 /// The perturbation weight class of one fuzz mutation.
 ///

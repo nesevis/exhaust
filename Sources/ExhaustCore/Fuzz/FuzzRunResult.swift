@@ -144,8 +144,6 @@ package enum CandidateOrigin: Int, CaseIterable, Sendable {
     case freshSample
     /// An ordinary mutation of a corpus parent.
     case mutationChild
-    /// A candidate from a campaign probe session.
-    case campaign
     /// A harvested comparison operand reconstructed into a whole value.
     case reflectionInjection
     /// A harvested operand grafted into one field of a corpus parent.
@@ -164,8 +162,6 @@ package struct FuzzRunCounts: Sendable {
     /// Evaluated search cases the property discarded (a skip error). Counted inside `evaluatedSearchCases`, since the property ran.
     package var discardedEvaluations = 0
     package var evaluatedSearchCases = 0
-    /// Candidates evaluated inside campaign probe sessions (counted inside `mutationAttempts` too). Zero whenever the `campaignMutation` knob is off or no parent's stall gate opened.
-    package var campaignAttempts = 0
     /// Candidates produced by the three comparison-operand injection paths (each counted inside `mutationAttempts` too): a harvested operand reconstructed into a whole value and reflected, an operand grafted into one field of a corpus parent and reflected, and an operand written over tag-compatible entries of a parent's flat sequence. A drawn operand that reconstructs, reflects, or finds no slot is not an attempt. All zero on a build without trace-cmp instrumentation, since the pool never fills.
     package var reflectionInjectionAttempts = 0
     package var graftInjectionAttempts = 0
@@ -246,7 +242,7 @@ package struct FuzzRunResult: Sendable {
     package var unmatchedUnreducedCounts: [FailureSymptom: Int]
     package var counts: FuzzRunCounts
     package var corpusEntryCount: Int
-    package var mutableTierCount: Int
+    package var parentCount: Int
     package var coveredEdgeCount: Int
     package var instrumentedEdgeCount: Int
     /// Incidence frequency counts: edges hit by exactly one attempt (Q₁), two (Q₂), three (Q₃), four (Q₄), plus the incidence-matrix sum. Q₃ and Q₄ feed iChao2; the sum denominates the discovery probability.
@@ -277,6 +273,8 @@ package struct FuzzRunResult: Sendable {
     package var seed: UInt64
     /// Instrumented edges that fired during the run on threads the run did not own, so the search never saw them. Zero when the source cannot tell.
     package var offLaneEdgeHits: Int = 0
+    /// The parent domain's length and cell distribution at the end of the run.
+    package var parentProfile: ParentProfile = .empty
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {

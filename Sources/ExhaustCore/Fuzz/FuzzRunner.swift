@@ -191,9 +191,9 @@ package final class FuzzRunner<Output> {
             )
         )
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
-        gate = ReductionGate(experiments: configuration.experiments)
+        gate = ReductionGate()
         prng = Xoshiro256(seed: configuration.seed)
-        var arms = MutationArm.legacyArms
+        var arms = MutationArm.bandArms
         if configuration.experiments.graphMutation {
             arms += [.swap, .shuffle, .move, .lockstepDelta]
         }
@@ -311,14 +311,13 @@ package final class FuzzRunner<Output> {
         let clusters = inventory.snapshot()
         let unmatched = inventory.unmatchedUnreducedCounts
 
-        // Report-time statistics: the live loop stored only BitSets; the ranking runs once, here.
-        let passing = PassingSample(signatures: corpus.passingSignatures, edgeCount: source.edgeCount)
+        // Report-time statistics: the ranking runs once, here, against one passing sample counted from the corpus.
+        let passing = corpus.passingSample
         let discriminations = clusters.map { cluster in
             CoverageDiscrimination.discriminate(
                 clusterID: cluster.id,
                 failingSignatures: cluster.signatures,
-                passing: passing,
-                edgeCount: source.edgeCount
+                passing: passing
             )
         }
 
@@ -331,7 +330,7 @@ package final class FuzzRunner<Output> {
             unmatchedUnreducedCounts: unmatched,
             counts: counts,
             corpusEntryCount: corpus.entries.count,
-            mutableTierCount: corpus.mutableTierIndices.count,
+            parentCount: corpus.parentIndices.count,
             coveredEdgeCount: incidence.covered,
             instrumentedEdgeCount: source.edgeCount,
             edgeSingletonCount: incidence.singletons,
@@ -351,7 +350,8 @@ package final class FuzzRunner<Output> {
             attemptsAtFirstFault: attemptsAtFirstFault,
             timing: timing,
             seed: configuration.seed,
-            offLaneEdgeHits: max(0, source.offLaneHitCount - offLaneHitsAtStart)
+            offLaneEdgeHits: max(0, source.offLaneHitCount - offLaneHitsAtStart),
+            parentProfile: corpus.parentProfile
         )
     }
 
@@ -511,13 +511,6 @@ package final class FuzzRunner<Output> {
             seed: configuration.seed ^ 0x5EED_FA11_BACC_0FFE,
             maxRuns: UInt64.max
         )
-        // Reseed burst interpreter, distinct from both Phase 2's seed and the empty-tier fallback's. Created once and advanced across bursts so each plateau escape sees fresh samples.
-        var reseedInterpreter = ValueAndChoiceTreeInterpreter(
-            gen,
-            materializePicks: false,
-            seed: configuration.seed ^ 0x2E_5EED_B005_7000,
-            maxRuns: UInt64.max
-        )
         // Saturation stop, opt-in only: the run ends early when the discovery-probability estimate says the search has stopped reaching new code, never on a stopwatch. Sampled on an attempt interval because the estimate scans the per-edge incidence counters.
         var nextSaturationCheckAttempt = configuration.saturationMinimumAttempts
 
@@ -528,11 +521,6 @@ package final class FuzzRunner<Output> {
             if configuration.stopWhenSaturated, counts.evaluatedSearchCases >= nextSaturationCheckAttempt {
                 nextSaturationCheckAttempt = counts.evaluatedSearchCases + configuration.saturationCheckInterval
                 if isSaturated() {
-                    if configuration.experiments.reseedBurst,
-                       runReseedBurst(interpreter: &reseedInterpreter)
-                    {
-                        continue
-                    }
                     let plateauNow = monotonicNanoseconds()
                     let deadline = startNanoseconds + configuration.budgetNanoseconds
                     return .plateau(unusedNanoseconds: deadline > plateauNow ? deadline - plateauNow : 0)
@@ -567,9 +555,8 @@ package final class FuzzRunner<Output> {
                 continue
             }
 
-            // Fresh-draw mixture: with the current mixture probability, spend this iteration on one fresh generator draw instead of a parent batch, keeping sampling alive as a background rate. Fresh draws reach basins no corpus entry has visited, which corpus-uniform exploration cannot. The adaptive ramp (floor to cap over a starvation window of non-admitting attempts) responds to corpus health; with the ramp disabled the fixed epsilon governs alone.
-            let freshEpsilon = currentFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission)
-            if freshEpsilon > 0, randomUnit() < freshEpsilon {
+            // Fresh-draw mixture: with the current mixture probability, spend this iteration on one fresh generator draw instead of a parent batch, keeping sampling alive as a background rate. Fresh draws reach basins no corpus entry has visited, which corpus-uniform exploration cannot. The adaptive ramp (floor to cap over a starvation window of non-admitting attempts) responds to corpus health, and is also what re-samples the generator once mutation has run the corpus dry.
+            if randomUnit() < currentFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission) {
                 switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
                     case .evaluated, .exhausted:
                         continue
@@ -594,19 +581,7 @@ package final class FuzzRunner<Output> {
                 continue
             }
 
-            let childBudget = configuration.experiments.powerSchedule
-                ? corpus.powerScheduleChildren(forParentAt: parentIndex, base: FuzzTunables.childrenPerParent)
-                : FuzzTunables.childrenPerParent
-
-            // Campaign dispatch: a gate-open parent spends this visit's child budget on one coordinated probe session instead of independent draws. Campaign candidates bypass the swarm rewrite deliberately — scrambling branch selections would break the session's coordination.
-            if configuration.experiments.campaignMutation,
-               corpus.childrenSinceAdmission(forParentAt: parentIndex) >= FuzzTunables.campaignStallThreshold,
-               randomUnit() < FuzzTunables.campaignShare,
-               runCampaign(parent: parent, parentIndex: parentIndex, budget: childBudget)
-            {
-                continue
-            }
-            for _ in 0 ..< childBudget {
+            for _ in 0 ..< FuzzTunables.childrenPerParent {
                 if terminationDue() != nil {
                     break
                 }
@@ -623,49 +598,18 @@ package final class FuzzRunner<Output> {
         }
     }
 
-    /// The fresh-draw mixture in effect for the current iteration: the adaptive starvation ramp when configured, the fixed epsilon otherwise.
+    /// The fresh-draw mixture in effect for the current iteration.
     ///
-    /// The ramp climbs linearly from ``FuzzTunables/freshMixtureFloor`` to ``FuzzTunables/freshMixtureCap`` as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant. A cap at or below the floor disables the ramp.
+    /// The ramp climbs linearly from ``FuzzTunables/freshMixtureFloor`` to ``FuzzTunables/freshMixtureCap`` as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant.
     package func currentFreshMixture(attemptsSinceAdmission: Int) -> Double {
         let floor = FuzzTunables.freshMixtureFloor
         let cap = FuzzTunables.freshMixtureCap
-        guard cap > floor else {
-            return FuzzTunables.freshDrawEpsilon
-        }
         let progress = min(1, Double(attemptsSinceAdmission) / FuzzTunables.freshMixtureRampAttempts)
         return floor + (cap - floor) * progress
     }
 
-    /// Draws fresh samples to break out of a mutation plateau, returning true when a new edge or fault cluster was discovered and mutation should resume.
-    ///
-    /// Phase 2's sampling plateau fired against a smaller corpus; after mutation expanded coverage, the generator may still reach edges nothing in the corpus covers. The burst is a fixed attempt budget rather than a consecutive-non-novel window, so a generator that produces only bucket-novel entries (no new edges) does not prolong the burst indefinitely.
-    private func runReseedBurst(
-        interpreter: inout ValueAndChoiceTreeInterpreter<Output>
-    ) -> Bool {
-        let discoveryAtEntry = lastDiscoveryNanoseconds
-        for _ in 0 ..< FuzzTunables.reseedBurstAttemptLimit {
-            if terminationDue() != nil {
-                return lastDiscoveryNanoseconds > discoveryAtEntry
-            }
-            checkpointIfDue()
-            switch freshSample(interpreter: &interpreter, phase: .mutation) {
-                case .evaluated:
-                    if lastDiscoveryNanoseconds > discoveryAtEntry {
-                        return true
-                    }
-                case .exhausted, .generationError:
-                    return lastDiscoveryNanoseconds > discoveryAtEntry
-            }
-        }
-        return lastDiscoveryNanoseconds > discoveryAtEntry
-    }
-
-    /// Per-candidate outcome handed back to the producing arm. Campaigns steer their next probe on it; single-shot arms discard it.
+    /// Per-candidate outcome handed back to the producing arm. Comparand substitution charges its operand's energy on it; the other arms discard it.
     struct CandidateFeedback {
-        /// Whether guided materialization produced a value and the property ran.
-        let materialized: Bool
-        /// Whether the property declined to judge the value (its precondition was not met).
-        let discarded: Bool
         /// Whether the corpus admitted the candidate.
         let admitted: Bool
         /// Whether the property failed on the candidate. A producing arm can be worth its attempts through faults alone: an operand that satisfies a precondition reaches a failure without necessarily lighting an edge the corpus would admit for.
@@ -689,16 +633,14 @@ package final class FuzzRunner<Output> {
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
-            corpus.noteChild(forParentAt: parentIndex, admitted: false)
-            return CandidateFeedback(materialized: false, discarded: true, admitted: false, failed: false)
+            return CandidateFeedback(admitted: false, failed: false)
         }
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
         let sequenceHash = ZobristHash.hash(of: sequence)
         if isRecentDuplicate(hash: sequenceHash) {
             noteDuplicateSkip(origin)
-            corpus.noteChild(forParentAt: parentIndex, admitted: false)
-            return CandidateFeedback(materialized: true, discarded: false, admitted: false, failed: false)
+            return CandidateFeedback(admitted: false, failed: false)
         }
         let (verdict, hits) = evaluateInBracket(
             value,
@@ -717,8 +659,7 @@ package final class FuzzRunner<Output> {
                 expecting: sequence
             ) else {
                 counts.discardedAttempts += 1
-                corpus.noteChild(forParentAt: parentIndex, admitted: false)
-                return CandidateFeedback(materialized: false, discarded: true, admitted: false, failed: false)
+                return CandidateFeedback(admitted: false, failed: false)
             }
             tree = rebuilt
         } else if verdict.isFailure {
@@ -751,13 +692,7 @@ package final class FuzzRunner<Output> {
                 bandit.reward(arm)
             }
         }
-        corpus.noteChild(forParentAt: parentIndex, admitted: admission.isAdmitted)
-        return CandidateFeedback(
-            materialized: true,
-            discarded: verdict.isDiscard,
-            admitted: admission.isAdmitted,
-            failed: verdict.isFailure
-        )
+        return CandidateFeedback(admitted: admission.isAdmitted, failed: verdict.isFailure)
     }
 
     /// Re-materializes the guided tree for a flat-emission candidate and verifies it flattens to the phase-1 sequence.

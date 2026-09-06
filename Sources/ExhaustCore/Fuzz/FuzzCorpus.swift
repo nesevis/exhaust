@@ -18,16 +18,22 @@ package struct CorpusEntry: Sendable {
     /// Nil until something needs them: construction walks the whole graph, so it is deferred to the first parent draw that consumes it. Stays nil forever for discovery-tier entries, which are never mutation parents, and for runs whose experiment knobs consume no targeting tables. Read it through ``FuzzCorpus/mutationTargets(forParentAt:)``, which fills it on demand — a direct read sees nil for an entry that has not been drawn yet.
     package fileprivate(set) var mutationTargets: MutationTargets?
 
-    /// The edges hit during this entry's property evaluation.
-    package let signature: BitSet
-
-    /// The raw (edge, saturating count) pairs behind `signature`, retained so a checkpoint can record what the entry covered when it was admitted.
+    /// The (edge, saturating count) pairs from this entry's property evaluation, in first-hit order, filtered to the corpus edge domain at admission.
+    ///
+    /// The only record of what the entry covered. A `BitSet` over the whole edge domain costs 11 KB per entry on a 90k-edge build whatever share of it is set, so the pairs carry the coverage and report-time discrimination builds its bitmaps from them. Consumers walk this directly and need no bounds check.
     package let hits: [(edge: Int, hitCount: UInt8)]
+
+    /// Whether the entry's evaluation hit `edge`.
+    ///
+    /// - Complexity: O(*n*) in the entry's covered edges. Membership is not what the search asks of an entry, which walks every edge; use it for a single query, not inside a loop over the domain.
+    package func covers(_ edge: Int) -> Bool {
+        hits.contains { $0.edge == edge }
+    }
 
     /// Whether the entry was admitted on boundary-derived credit rather than coverage novelty. Retained for faithful re-offer on restore.
     package let isBoundaryDerived: Bool
 
-    /// The materializer's convergence ratio for this entry; decides tier membership.
+    /// The materializer's convergence ratio for this entry: the share of coordinates resolved from the mutated prefix or the fallback tree rather than the PRNG. Decides tier membership at admission; retained afterwards only for the checkpoint record.
     package let convergence: Double
 
     /// Mutation distance from a phase-1/2 root: roots are 0, a mutation of a parent is `parent.generation + 1`.
@@ -55,24 +61,15 @@ package struct CorpusEntry: Sendable {
 
     /// Multiplier on the entry's parent-selection score from failures among its children. 1 when no child failed; see ``FuzzTunables`` for the provisional and cluster-aware values.
     var failureBoost: Double = 1.0
-
-    // MARK: - Power-Schedule State (Experiment: powerSchedule)
-
-    /// Times this entry has been picked as a mutation parent.
-    var timesPicked: Int = 0
-
-    /// Children spawned from this entry across all picks — the frequency denominator in the energy formula.
-    var childrenSpawned: Int = 0
-
-    /// Children of this entry evaluated since one was last admitted. Drives the campaign stall gate: a parent whose cheap mutations have gone quiet is worth a coordinated multi-probe spend.
-    var childrenSinceAdmission: Int = 0
 }
 
 /// Which tier an admitted entry landed in.
+///
+/// The split is a length guard for the champion archive. Convergence says nothing about an entry's worth as a parent: the stored sequence is the materializer's complete output whatever share of it the PRNG supplied. What it does track is length. A child that fell through to the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Admitting every entry as a parent was measured on IFC (`fuzz-loop-experiments-2026-09-06.md`): the parent pool shrank 4.5%, its mean length fell 4.1%, and covered edges fell 3.1% while the corpus stayed flat. The tier keeps those entries' coverage credit and denies them cells.
 package enum CorpusTier: Sendable, Equatable {
-    /// Eligible for parent selection; mutations inherit real structure.
+    /// Eligible for parent selection and for champion cells.
     case mutable
-    /// Retained for coverage credit and rarity counts, but not picked as a mutation root — mutations would mostly hit PRNG fallback.
+    /// Retained for coverage credit and rarity counts, but never a mutation parent and never a champion. Such entries are short, and letting them claim cells sweeps longer incumbents out of the archive; see ``FuzzTunables/mutableTierConvergenceThreshold``.
     case discovery
 }
 
@@ -110,6 +107,63 @@ package struct EdgeIncidenceProfile: Sendable {
     package let quadrupletons: Int
 }
 
+/// The shape of the parent domain at one moment: how long its sequences are, and how many champion cells each parent holds.
+///
+/// Exists because parent count alone cannot tell displacement from growth. A short entry that claims many cells evicts several longer incumbents at once, so the domain can shrink while admissions rise; the length figures against ``meanEntryLength`` show whether the parents are a shorter population than the corpus they were drawn from, and the cell figures show whether a few entries hold most of the archive.
+package struct ParentProfile: Sendable, Equatable {
+    /// Entries in the parent domain.
+    package let parentCount: Int
+    /// Sequence lengths over the parent domain.
+    package let minimumLength: Int
+    package let medianLength: Int
+    package let meanLength: Double
+    package let maximumLength: Int
+    /// Mean sequence length over every admitted entry, parent or not, as the comparison point for the parent figures.
+    package let meanEntryLength: Double
+    /// Champion cells held per parent. All zero when the archive is off.
+    package let minimumCells: Int
+    package let medianCells: Int
+    package let meanCells: Double
+    package let maximumCells: Int
+
+    package static let empty = ParentProfile(
+        parentCount: 0,
+        minimumLength: 0,
+        medianLength: 0,
+        meanLength: 0,
+        maximumLength: 0,
+        meanEntryLength: 0,
+        minimumCells: 0,
+        medianCells: 0,
+        meanCells: 0,
+        maximumCells: 0
+    )
+
+    package init(
+        parentCount: Int,
+        minimumLength: Int,
+        medianLength: Int,
+        meanLength: Double,
+        maximumLength: Int,
+        meanEntryLength: Double,
+        minimumCells: Int,
+        medianCells: Int,
+        meanCells: Double,
+        maximumCells: Int
+    ) {
+        self.parentCount = parentCount
+        self.minimumLength = minimumLength
+        self.medianLength = medianLength
+        self.meanLength = meanLength
+        self.maximumLength = maximumLength
+        self.meanEntryLength = meanEntryLength
+        self.minimumCells = minimumCells
+        self.medianCells = medianCells
+        self.meanCells = meanCells
+        self.maximumCells = maximumCells
+    }
+}
+
 /// Accumulates coverage-interesting inputs and answers "which parent should the mutation phase mutate next?"
 ///
 /// Single-threaded by design: the exploration loop owns the corpus and touches it between attempts, so no synchronisation is needed on the hot path. Failure-weight updates arriving from completed reduction Tasks must be routed through the owning loop rather than calling in from another thread.
@@ -120,15 +174,15 @@ package struct EdgeIncidenceProfile: Sendable {
 ///
 /// ## Parent Selection
 ///
-/// A weighted-random pick over the mutable tier. An entry's weight is `(rarity + α · noveltyBonus) · failureBoost`, where rarity is Σ 1/coveringEntryCount(edge) over the entry's edges, the novelty bonus is the same sum restricted to the edges the entry introduced, and the failure boost is the two-stage densification multiplier. Rarity is maintained incrementally: admission bumps per-edge covering counts and marks only the affected entries' cached scores dirty via the edge-to-entries index.
+/// A weighted-random pick over the parent domain: mutable-tier entries that are not quarantined and, with the champion archive on, hold at least one cell. The tier exists to keep short low-convergence entries out of the archive (see ``CorpusTier``). An entry's weight is `(rarity + α · noveltyBonus) · failureBoost`, where rarity is Σ 1/coveringEntryCount(edge) over the entry's edges, the novelty bonus is the same sum restricted to the edges the entry introduced, and the failure boost is the two-stage densification multiplier. Rarity is maintained incrementally: admission bumps per-edge covering counts and marks only the affected entries' cached scores dirty via the edge-to-entries index.
 package final class FuzzCorpus {
     /// The edge capacity all signatures must share; fixed at init to the instrumented edge count.
     package let edgeCount: Int
 
     package private(set) var entries: [CorpusEntry] = []
 
-    /// Indices of mutable-tier entries, the parent-selection domain.
-    package private(set) var mutableTierIndices: [Int] = []
+    /// Indices of the mutable-tier entries eligible as mutation parents: not quarantined and, with the champion archive on, holding at least one cell.
+    package private(set) var parentIndices: [Int] = []
 
     /// Per-edge bitmask of hit-count buckets seen corpus-wide; novelty is a set bit not yet present.
     private var seenBucketMasks: [UInt8]
@@ -155,11 +209,9 @@ package final class FuzzCorpus {
     /// Cached parent-selection scores, parallel to `entries`; nil means dirty.
     private var cachedScores: [Double?] = []
 
-    /// Running sums of the mutable tier's scores in tier order, so a pick is one binary search instead of two passes over the tier. Rebuilt lazily on the first pick after anything that can move a score or the tier: an admission, a failure boost, a champion eviction, or a quarantine. Only read with the age-decay knob off; with it on every draw moves a score, so the pick walks the tier as before.
+    /// Running sums of the mutable tier's scores in tier order, so a pick is one binary search instead of two passes over the tier. Rebuilt lazily on the first pick after anything that can move a score or the tier: an admission, a failure boost, a champion eviction, or a quarantine.
     private var tierPrefixSums: [Double] = []
     private var tierPrefixSumsValid = false
-    /// Times each entry has been returned by ``pickParent(random:)``, feeding the experimental age decay. Grows with `entries`.
-    private var parentDrawCounts: [Int] = []
 
     private var seenHashes: Set<UInt64> = []
 
@@ -171,12 +223,12 @@ package final class FuzzCorpus {
         recentHashes.insertReportingPresence(hash)
     }
 
-    /// Experiment knobs; the corpus reads `championArchive`.
+    /// Experiment knobs; the corpus reads the targeting knobs to decide whether entries build mutation tables.
     private let experiments: FuzzExperiments
 
-    // MARK: - Champion Archive (Experiment: championArchive)
+    // MARK: - Champion Archive
 
-    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier-eligible entries — a discovery-tier entry keeps its coverage credit but must not be able to empty the mutation pool by holding cells it can never be mutated from.
+    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier entries. A discovery-tier entry keeps its coverage credit but claims no cells: such entries are short, shortlex favours them, and letting them claim cells evicted the longer incumbents and cost IFC 3.1% of covered edges when measured (see ``CorpusTier``). The archive itself is net-beneficial; the same measurement found that turning it off costs a further 1.9% coverage and 37% throughput, because parents drawn from the whole corpus are 3.5 times longer.
 
     /// The entry index holding each edge's cell, or nil while the edge is uncovered (or its champion was quarantined).
     private var edgeChampions: [Int?]
@@ -201,9 +253,14 @@ package final class FuzzCorpus {
         coveringEntries.reduce(0) { $0 + $1.count }
     }
 
-    /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination. Discarded entries are neither passing nor failing and stay out of the sample.
-    package var passingSignatures: [BitSet] {
-        entries.filter { $0.propertyFailed == false && $0.propertyDiscarded == false }.map { $0.signature }
+    /// The passing entries as per-edge hit counts: the P(hit | pass) sample for report-time discrimination. Discarded entries are neither passing nor failing and stay out of the sample.
+    package var passingSample: PassingSample {
+        PassingSample(
+            passingHits: entries.lazy
+                .filter { $0.propertyFailed == false && $0.propertyDiscarded == false }
+                .map(\.hits),
+            edgeCount: edgeCount
+        )
     }
 
     /// The covered-edge tally and the Q1 through Q4 incidence classes, from one pass over the edge domain.
@@ -238,6 +295,28 @@ package final class FuzzCorpus {
             doubletons: doubletons,
             tripletons: tripletons,
             quadrupletons: quadrupletons
+        )
+    }
+
+    /// The parent domain's length and cell distribution. Sorts the domain, so it is read once at report time, never per attempt.
+    package var parentProfile: ParentProfile {
+        guard parentIndices.isEmpty == false else {
+            return .empty
+        }
+        let lengths = parentIndices.map { entries[$0].sequence.count }.sorted()
+        let cells = parentIndices.map { championCounts[$0] }.sorted()
+        let entryLengthTotal = entries.reduce(0) { $0 + $1.sequence.count }
+        return ParentProfile(
+            parentCount: parentIndices.count,
+            minimumLength: lengths[0],
+            medianLength: lengths[lengths.count / 2],
+            meanLength: Double(lengths.reduce(0, +)) / Double(lengths.count),
+            maximumLength: lengths[lengths.count - 1],
+            meanEntryLength: Double(entryLengthTotal) / Double(entries.count),
+            minimumCells: cells[0],
+            medianCells: cells[cells.count / 2],
+            meanCells: Double(cells.reduce(0, +)) / Double(cells.count),
+            maximumCells: cells[cells.count - 1]
         )
     }
 
@@ -370,13 +449,15 @@ package final class FuzzCorpus {
             return .rejectedNotNovel
         }
 
-        var signature = BitSet(capacity: edgeCount)
+        // Filtering once here is what lets every later consumer walk the pairs without repeating the domain check.
+        var storedHits: [(edge: Int, hitCount: UInt8)] = []
+        storedHits.reserveCapacity(hits.count)
         var coveredRunFirstEdge = false
         for (edge, hitCount) in hits {
             guard edge >= 0, edge < edgeCount else {
                 continue
             }
-            signature.insert(edge)
+            storedHits.append((edge, hitCount))
             seenBucketMasks[edge] |= HitCountBucket.bucketMask(for: hitCount)
             if everCoveredEdges[edge] == false {
                 coveredRunFirstEdge = true
@@ -396,8 +477,7 @@ package final class FuzzCorpus {
             tree: tree,
             // Deferred to the first parent draw that consumes it; see `mutationTargets(forParentAt:)`.
             mutationTargets: nil,
-            signature: signature,
-            hits: hits,
+            hits: storedHits,
             isBoundaryDerived: isBoundaryDerived,
             convergence: convergence,
             generation: generation,
@@ -410,21 +490,15 @@ package final class FuzzCorpus {
         )
         entries.append(entry)
         cachedScores.append(nil)
-        parentDrawCounts.append(0)
         championCounts.append(0)
         donorFingerprints.append([])
         seenHashes.insert(hash)
 
         var isParentEligible = false
         if tier == .mutable, quarantinedHashes.contains(hash) == false {
-            if experiments.championArchive {
-                claimChampionships(for: index, signature: signature)
-                if championCounts[index] > 0 {
-                    mutableTierIndices.append(index)
-                    isParentEligible = true
-                }
-            } else {
-                mutableTierIndices.append(index)
+            claimChampionships(for: index)
+            if championCounts[index] > 0 {
+                parentIndices.append(index)
                 isParentEligible = true
             }
         }
@@ -436,7 +510,7 @@ package final class FuzzCorpus {
         }
 
         // Bump rarity denominators and dirty every entry whose score depends on a bumped edge. Only parent-eligible entries ever have their score read, so only they are indexed for invalidation. Indexing every entry made admission cost O(corpus) per edge, and boundary-credit screening rows on a low-edge target turn that into a quadratic stall: 1.5 ms per row at -Onone on a 12-edge fixture, with the run never leaving screening. The rarity denominator still counts every entry.
-        signature.forEachIndex { edge in
+        for (edge, _) in storedHits {
             coveringEntryCounts[edge] += 1
             for coveringIndex in coveringEntries[edge] {
                 cachedScores[coveringIndex] = nil
@@ -451,26 +525,26 @@ package final class FuzzCorpus {
 
     // MARK: - Champion Archive
 
-    /// Claims every cell of `signature` the new entry wins by shortlex comparison, evicting dethroned entries whose cell count returns to zero from parent selection.
+    /// Claims every cell of the entry's covered edges that it wins by shortlex comparison, evicting dethroned entries whose cell count returns to zero from parent selection.
     ///
     /// One comparison per hit edge on admission; admissions are rare, so this never touches the per-attempt path. Eviction is deterministic: only championship arithmetic removes an entry, never insertion order.
-    private func claimChampionships(for index: Int, signature: BitSet) {
+    private func claimChampionships(for index: Int) {
         let sequence = entries[index].sequence
-        signature.forEachIndex { edge in
+        for (edge, _) in entries[index].hits {
             guard let incumbentIndex = edgeChampions[edge] else {
                 edgeChampions[edge] = index
                 championCounts[index] += 1
-                return
+                continue
             }
             guard championOrderPrecedes(sequence, entries[incumbentIndex].sequence) else {
-                return
+                continue
             }
             edgeChampions[edge] = index
             championCounts[index] += 1
             championCounts[incumbentIndex] -= 1
             if championCounts[incumbentIndex] == 0 {
                 // Linear scan, deliberately: the weighted parent pick maps its random draw through this array's cumulative order, so tier membership must stay an ordered array — a Set's per-process iteration order would break seeded replay. Eviction fires only when an entry loses its last championship, and the scan is cheap at realistic tier sizes; revisit with a measurement, not a Set.
-                mutableTierIndices.removeAll { $0 == incumbentIndex }
+                parentIndices.removeAll { $0 == incumbentIndex }
                 removeDonorSpans(forEntryAt: incumbentIndex)
                 tierPrefixSumsValid = false
             }
@@ -539,13 +613,10 @@ package final class FuzzCorpus {
     /// The entry keeps its coverage credit and rarity contributions; only its eligibility as a mutation root is revoked. A hash with no corpus entry (the trapping candidate itself, which died before admission) is remembered so a later identical admission is barred too.
     package func quarantine(sequenceHash: UInt64) {
         quarantinedHashes.insert(sequenceHash)
-        mutableTierIndices.removeAll { entries[$0].hash == sequenceHash }
+        parentIndices.removeAll { entries[$0].hash == sequenceHash }
         tierPrefixSumsValid = false
         for index in entries.indices where entries[index].hash == sequenceHash {
             removeDonorSpans(forEntryAt: index)
-        }
-        guard experiments.championArchive else {
-            return
         }
         // A quarantined champion releases its cells rather than locking them to an entry that can never be mutated again; later admissions may reclaim them. Championship arithmetic can never re-admit the entry — offer checks the quarantine set before any claiming happens.
         for index in entries.indices where entries[index].hash == sequenceHash {
@@ -565,7 +636,7 @@ package final class FuzzCorpus {
 
     /// Whether any enabled experiment consumes the graph-targeted mutation tables. False means no entry ever builds a graph.
     private var consumesMutationTargets: Bool {
-        experiments.graphMutation || experiments.pairMutation || experiments.campaignMutation
+        experiments.graphMutation || experiments.pairMutation
     }
 
     /// The parent's graph-targeted mutation tables, built on first use and cached for the entry's lifetime.
@@ -674,52 +745,7 @@ package final class FuzzCorpus {
         tierPrefixSumsValid = false
     }
 
-    /// Advances the parent's quiet-child counter: an admitted child resets it, any other child increments it.
-    package func noteChild(forParentAt index: Int, admitted: Bool) {
-        guard entries.indices.contains(index) else {
-            return
-        }
-        if admitted {
-            entries[index].childrenSinceAdmission = 0
-        } else {
-            entries[index].childrenSinceAdmission += 1
-        }
-    }
-
-    /// The parent's quiet-child count, for the campaign stall gate.
-    package func childrenSinceAdmission(forParentAt index: Int) -> Int {
-        guard entries.indices.contains(index) else {
-            return 0
-        }
-        return entries[index].childrenSinceAdmission
-    }
-
-    // MARK: - Power Schedule
-
-    /// The number of children to draw from the parent at `index` under the AFLFast-family FAST schedule, mutating the entry's pick counters.
-    ///
-    /// The formula is `base · 2^s / (1 + f)` clamped to `1 ... cap`, where `s` counts prior picks (bounded by ``FuzzTunables/powerScheduleExponentLimit``) and `f` counts children already spawned. AFLFast's `f` is path frequency — how many generated inputs exercised the seed's path — which the corpus does not track per attempt; children spawned is the cheap proxy with the same intent: a neighborhood that has already been fuzzed heavily earns less energy per visit, while a parent the schedule keeps returning to (rare coverage keeps it winning selection) ramps up exponentially until the cap.
-    package func powerScheduleChildren(forParentAt index: Int, base: Int) -> Int {
-        entries[index].timesPicked += 1
-        let exponent = min(entries[index].timesPicked - 1, FuzzTunables.powerScheduleExponentLimit)
-        let frequency = 1 + entries[index].childrenSpawned
-        let energy = base * (1 << exponent) / frequency
-        let clamped = min(max(energy, 1), FuzzTunables.powerScheduleEnergyCap)
-        entries[index].childrenSpawned += clamped
-        return clamped
-    }
-
     // MARK: - Parent Selection
-
-    /// The entry's score with the experimental age decay applied: base score over `1 + k × timesDrawn`, so founders lose priority as they are milked. With the coefficient at its default 0 this is exactly ``score(at:)``.
-    private func agedScore(at index: Int) -> Double {
-        let base = score(at: index)
-        let decayCoefficient = FuzzTunables.parentAgeDecayCoefficient
-        guard decayCoefficient > 0 else {
-            return base
-        }
-        return base / (1 + decayCoefficient * Double(parentDrawCounts[index]))
-    }
 
     /// The parent-selection score of the entry at `index`, computing and caching it if dirty.
     package func score(at index: Int) -> Double {
@@ -728,7 +754,7 @@ package final class FuzzCorpus {
         }
         let entry = entries[index]
         var rarity = 0.0
-        entry.signature.forEachIndex { edge in
+        for (edge, _) in entry.hits {
             rarity += 1.0 / Double(coveringEntryCounts[edge])
         }
         var noveltyBonus = 0.0
@@ -743,40 +769,22 @@ package final class FuzzCorpus {
 
     /// Picks a mutation parent by weighted random draw over the mutable tier, or nil when the tier is empty.
     ///
-    /// The draw lands on the first tier position whose running score sum exceeds `random` times the total, found by binary search over ``tierPrefixSums``. Walking the tier twice per pick (once to sum, once to locate) was 2.4% of a mutation-phase run at a tier of 230 entries, almost all of it the per-entry dynamic exclusivity check on the score cache. Summing the scores in tier order and subtracting them from the draw one by one are not the same floating-point computation, so a draw within an ulp of a boundary can land differently than the walk did; the walk survives only for the experimental age-decay knob, under which every draw moves a score.
+    /// The draw lands on the first tier position whose running score sum exceeds `random` times the total, found by binary search over ``tierPrefixSums``. Walking the tier twice per pick (once to sum, once to locate) was 2.4% of a mutation-phase run at a tier of 230 entries, almost all of it the per-entry dynamic exclusivity check on the score cache. Score-weighted selection is the only policy: a uniform epsilon floor and AFLFast-style age decay were both measured worse on every workload tried (see the basin-escape survey in ExhaustDocs).
     ///
     /// - Parameter random: A uniform draw in [0, 1), supplied by the caller so runs stay deterministic under a pinned seed.
     package func pickParent(random: Double) -> (index: Int, entry: CorpusEntry)? {
-        guard mutableTierIndices.isEmpty == false else {
+        guard parentIndices.isEmpty == false else {
             return nil
-        }
-        // Epsilon floor. With probability epsilon, a uniformly random mutable entry, reusing the caller's draw by rescaling it: below epsilon the draw addresses the tier uniformly, above it the remainder rescales onto score-weighted selection. Every basin keeps a floor escape probability regardless of the score distribution.
-        let epsilon = FuzzTunables.parentSelectionEpsilon
-        var random = random
-        if epsilon > 0 {
-            if random < epsilon {
-                let uniformIndex = mutableTierIndices[min(
-                    Int(random / epsilon * Double(mutableTierIndices.count)),
-                    mutableTierIndices.count - 1
-                )]
-                parentDrawCounts[uniformIndex] += 1
-                return (uniformIndex, entries[uniformIndex])
-            }
-            random = (random - epsilon) / (1 - epsilon)
-        }
-        if FuzzTunables.parentAgeDecayCoefficient > 0 || FuzzTunables.parentPickUsesWalk {
-            return pickParentByWalk(random: random)
         }
         if tierPrefixSumsValid == false {
             rebuildTierPrefixSums()
         }
         let totalWeight = tierPrefixSums[tierPrefixSums.count - 1]
         guard totalWeight > 0 else {
-            let fallbackIndex = mutableTierIndices[min(
-                Int(random * Double(mutableTierIndices.count)),
-                mutableTierIndices.count - 1
+            let fallbackIndex = parentIndices[min(
+                Int(random * Double(parentIndices.count)),
+                parentIndices.count - 1
             )]
-            parentDrawCounts[fallbackIndex] += 1
             return (fallbackIndex, entries[fallbackIndex])
         }
         let target = random * totalWeight
@@ -790,46 +798,19 @@ package final class FuzzCorpus {
                 low = middle + 1
             }
         }
-        let index = mutableTierIndices[low]
-        parentDrawCounts[index] += 1
+        let index = parentIndices[low]
         return (index, entries[index])
     }
 
     /// Recomputes ``tierPrefixSums`` from the current scores in tier order.
     private func rebuildTierPrefixSums() {
         tierPrefixSums.removeAll(keepingCapacity: true)
-        tierPrefixSums.reserveCapacity(mutableTierIndices.count)
+        tierPrefixSums.reserveCapacity(parentIndices.count)
         var running = 0.0
-        for index in mutableTierIndices {
+        for index in parentIndices {
             running += score(at: index)
             tierPrefixSums.append(running)
         }
         tierPrefixSumsValid = true
-    }
-
-    /// The two-pass weighted walk, kept for the age-decay knob (a decayed score changes on every draw of its entry, so no prefix sum stays valid between picks) and for ``FuzzTunables/parentPickUsesWalk``. Takes the draw after the epsilon rescale. Package-visible so a test can drive both picks with the same draws and count disagreements.
-    package func pickParentByWalk(random: Double) -> (index: Int, entry: CorpusEntry)? {
-        var totalWeight = 0.0
-        for index in mutableTierIndices {
-            totalWeight += agedScore(at: index)
-        }
-        guard totalWeight > 0 else {
-            let fallbackIndex = mutableTierIndices[min(
-                Int(random * Double(mutableTierIndices.count)),
-                mutableTierIndices.count - 1
-            )]
-            parentDrawCounts[fallbackIndex] += 1
-            return (fallbackIndex, entries[fallbackIndex])
-        }
-        var remaining = random * totalWeight
-        for index in mutableTierIndices {
-            remaining -= agedScore(at: index)
-            if remaining < 0 {
-                parentDrawCounts[index] += 1
-                return (index, entries[index])
-            }
-        }
-        let lastIndex = mutableTierIndices[mutableTierIndices.count - 1]
-        return (lastIndex, entries[lastIndex])
     }
 }
