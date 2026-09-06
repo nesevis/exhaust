@@ -115,9 +115,8 @@ extension Materializer {
                     // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(bp, min: min, max: max)
                 } else {
-                    // Explicit-range inner value: reject if out of range.
-                    // Float NaN/infinity: pass through so problematic-value screening counterexamples are reducible.
-                    guard bp >= min, bp <= max || tag.isFloatingPoint else {
+                    // Explicit-range inner value: reject if out of range. Floating-point patterns pass through whatever their bits, as `clampBits` passes them through in guided mode: NaN and infinity keep problematic-value counterexamples reducible, and a prefix pattern below `min` that guided carried forward must replay exactly.
+                    guard tag.isFloatingPoint || (bp >= min && bp <= max) else {
                         throw RejectionError()
                     }
                     randomBits = tag.clampBits(bp, min: min, max: max)
