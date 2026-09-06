@@ -117,10 +117,10 @@ struct ExploreTimeResumeTests {
         #expect(restored.firstSeenAttempt == 1)
         #expect(restored.instanceCount >= 3)
         #expect(restored.reducedDescription != "planted-restored-cluster")
-        #expect(report.corpusEntryCount >= entryRecords.count)
-        #expect(report.screeningAttempts == 0)
-        #expect(report.samplingAttempts == 0)
-        #expect(report.mutationAttempts > 0)
+        #expect(report.coverage.corpusEntryCount >= entryRecords.count)
+        #expect(report.attempts.screening == 0)
+        #expect(report.attempts.sampling == 0)
+        #expect(report.attempts.mutation > 0)
         #expect(report.termination == .attemptLimitReached)
 
         // Normal completion removes the recovery state — a surviving log is the crash signal.
@@ -187,11 +187,11 @@ struct ExploreTimeResumeTests {
         )
 
         // Restore succeeded: the corpus carries entries from the predecessor's snapshot.
-        #expect(report.corpusEntryCount >= 3)
+        #expect(report.coverage.corpusEntryCount >= 3)
         // The live source reports 32 edges, proving attribution came from the live source (the document stored 16-edge signatures that are now invalid).
-        #expect(report.instrumentedEdgeCount == 32)
+        #expect(report.coverage.instrumentedEdges == 32)
         // Covered edges should be in the live source's range (20+), not the document's (0-3).
-        #expect(report.coveredEdgeCount > 0)
+        #expect(report.coverage.coveredEdges > 0)
     }
 
     @Test("Resume opt-out ignores predecessor state")
@@ -296,7 +296,7 @@ struct ExploreTimeResumeTests {
             // Restore re-judges every cluster against the current build and drops the ones that now pass, so the fault has to still be a fault for the inventory to carry over.
             property: { $0 == plantedValue ? .fail(FailureSymptom(kind: "PlantedFault")) : .pass }
         )
-        #expect(report.evaluatedSearchCases == 0)
+        #expect(report.attempts.evaluated == 0)
         #expect(report.resumedFromCrash)
         // Symptom and description are re-derived from the live evaluation, not carried from the record: a predecessor's prose can describe a fault that no longer presents that way.
         #expect(report.clusters.contains { $0.symptoms == ["PlantedFault"] })
@@ -396,7 +396,7 @@ private func resumeWithOverlappingSnapshotEntry(predecessorRecordedFailure: Bool
         persistence: FuzzPersistenceContext(store: store, resumeEnabled: true),
         property: { $0 == plantedValue ? .fail(FailureSymptom(kind: "PlantedFault")) : .pass }
     )
-    #expect(report.evaluatedSearchCases == 0)
+    #expect(report.attempts.evaluated == 0)
     return report
 }
 

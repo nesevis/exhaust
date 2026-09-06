@@ -155,11 +155,11 @@ struct FuzzPersistenceTests {
                 return
             }
         }
-        #expect(corpus.mutableTierIndices.count == 4)
+        #expect(corpus.parentIndices.count == 4)
 
         let quarantinedHash = ZobristHash.hash(of: sequences[1])
         corpus.quarantine(sequenceHash: quarantinedHash)
-        #expect(corpus.mutableTierIndices.count == 3)
+        #expect(corpus.parentIndices.count == 3)
         for draw in stride(from: 0.0, to: 1.0, by: 0.05) {
             if let (_, entry) = corpus.pickParent(random: draw) {
                 #expect(entry.hash != quarantinedHash)

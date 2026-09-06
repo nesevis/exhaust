@@ -67,55 +67,48 @@ struct IssueReportingIntegrationTests {
 
     @Test("An escape during recovery reports only the escaped-work diagnosis")
     func recoveryEscapeDoesNotReportAPointlessRun() {
-        var report = FuzzReport(
+        var report = FuzzReport.empty(termination: .uncontainedAsyncWork, seed: 1)
+        report = FuzzReport(
             clusters: [],
             unreducedFailureCounts: [:],
-            screeningAttempts: 0,
-            samplingAttempts: 0,
-            mutationAttempts: 0,
-            reflectionInjectionAttempts: 0,
-            graftInjectionAttempts: 0,
-            comparandSubstitutionAttempts: 0,
-            discardedAttempts: 0,
-            discardedEvaluations: 0,
-            screeningRejectedAttempts: 0,
-            evaluatedSearchCases: 0,
-            pruneInvocations: 0,
-            reductionInvocations: 0,
-            normalizationInvocations: 0,
-            classificationInvocations: 0,
-            recoveryInvocations: 1,
-            duplicateCandidatesSkipped: 0,
-            duplicateSkips: .zero,
-            operandEnergyEvictions: 0,
-            operandEnergySeatings: 0,
-            operandEnergyRetirements: 0,
-            pruneIdentitySkips: 0,
-            diagnosticInvocations: 0,
-            corpusEntryCount: 0,
-            mutableTierCount: 0,
-            coveredEdgeCount: 0,
-            instrumentedEdgeCount: 16,
-            edgeSingletonCount: 0,
-            edgeDoubletonCount: 0,
-            edgeTripletonCount: 0,
-            edgeQuadrupletonCount: 0,
-            incidenceTotal: 0,
-            incidenceSampleCount: 0,
             termination: .uncontainedAsyncWork,
-            elapsed: .nanoseconds(1),
-            lastDiscovery: .zero,
-            timing: FuzzReport.TimingBreakdown(
+            seed: 1,
+            attempts: report.attempts,
+            invocations: FuzzReport.Invocations(
+                search: 0,
+                prune: 0,
+                reduction: 0,
+                normalization: 0,
+                classification: 0,
+                recovery: 1,
+                diagnostic: 0,
+                pruneIdentitySkips: 0
+            ),
+            coverage: FuzzReport.Coverage(
+                corpusEntryCount: 0,
+                parentCount: 0,
+                parentProfile: .empty,
+                coveredEdges: 0,
+                instrumentedEdges: 16,
+                singletons: 0,
+                doubletons: 0,
+                tripletons: 0,
+                quadrupletons: 0,
+                incidenceTotal: 0,
+                incidenceSamples: 0,
+                offLaneHits: 0
+            ),
+            timing: FuzzReport.Timing(
+                elapsed: .nanoseconds(1),
+                lastDiscovery: .zero,
                 property: .nanoseconds(1),
                 screeningOverhead: .zero,
                 samplingOverhead: .zero,
                 mutationOverhead: .zero,
                 reduction: .zero,
-                other: .zero
-            ),
-            seed: 1,
-            offLaneEdgeHits: 0,
-            testingOverheadFraction: 0
+                other: .zero,
+                testingOverheadFraction: 0
+            )
         )
         report.recordCrashResume()
         let reporter = RecordingIssueReporter()
@@ -133,8 +126,8 @@ struct IssueReportingIntegrationTests {
             }
         }
 
-        #expect(report.evaluatedSearchCases == 0)
-        #expect(report.totalPropertyInvocations == 1)
+        #expect(report.attempts.evaluated == 0)
+        #expect(report.invocations.total == 1)
         #expect(reporter.issues.count == 1)
         #expect(reporter.issues.first?.message.contains("asynchronous work did not return under cancellation") == true)
         #expect(reporter.issues.contains { $0.message.contains("evaluated no new candidates") } == false)

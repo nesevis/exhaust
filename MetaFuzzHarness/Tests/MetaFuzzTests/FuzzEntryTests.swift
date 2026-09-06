@@ -36,15 +36,15 @@ struct FuzzEntryTests {
 
 private func printProbeMetrics(_ report: FuzzReport) {
     let percentage: (TimeSpan) -> String = { duration in
-        guard report.elapsed.nanoseconds > 0 else {
+        guard report.timing.elapsed.nanoseconds > 0 else {
             return "0.0"
         }
-        return String(format: "%.1f", duration.seconds / report.elapsed.seconds * 100)
+        return String(format: "%.1f", duration.seconds / report.timing.elapsed.seconds * 100)
     }
     let timing = report.timing
     print(
         "metafuzz: probe throughput \(String(format: "%.1f", report.attemptsPerSecond)) evaluated cases/s "
-            + "(\(report.evaluatedSearchCases) cases); property \(percentage(timing.property))% · "
+            + "(\(report.attempts.evaluated) cases); property \(percentage(timing.property))% · "
             + "screening \(percentage(timing.screeningOverhead))% · "
             + "sampling \(percentage(timing.samplingOverhead))% · "
             + "mutation \(percentage(timing.mutationOverhead))% · "

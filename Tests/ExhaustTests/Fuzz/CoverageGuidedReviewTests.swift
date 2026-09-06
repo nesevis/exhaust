@@ -82,8 +82,8 @@ struct CoverageGuidedReviewTests {
             return
         }
         #expect(value as? Int == 0)
-        #expect(entry.signature.contains(0))
-        #expect(entry.signature.contains(1) == false)
+        #expect(entry.covers(0))
+        #expect(entry.covers(1) == false)
     }
 
     @Test("A passing prune re-evaluation does not erase the original failure")
@@ -134,8 +134,8 @@ struct CoverageGuidedReviewTests {
         #expect(result.clusters.first?.symptoms == [.returnedFalse])
         let entry = try #require(runner.corpus.entries.first)
         #expect(entry.propertyFailed == false)
-        #expect(entry.signature.contains(0))
-        #expect(entry.signature.contains(1) == false)
+        #expect(entry.covers(0))
+        #expect(entry.covers(1) == false)
     }
 }
 

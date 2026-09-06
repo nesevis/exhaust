@@ -718,7 +718,7 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 // The generation error explains why nothing ran; the pointless-run diagnostic below would misdirect the reader toward the time budget.
-                if report.evaluatedSearchCases == 0 {
+                if report.attempts.evaluated == 0 {
                     return
                 }
             case .uncontainedAsyncWork:
@@ -731,7 +731,7 @@ public extension __ExhaustRuntime {
                 break
         }
 
-        if report.evaluatedSearchCases == 0, report.termination != .uncontainedAsyncWork {
+        if report.attempts.evaluated == 0, report.termination != .uncontainedAsyncWork {
             if report.resumedFromCrash {
                 // A resumed run can arrive with its declared budget already consumed by crashed predecessors. The pointless-run error below would misdirect the reader toward the generator and budget, both fine, so the resume gets its own message and the restored inventory still reports.
                 reportError(
@@ -761,12 +761,12 @@ public extension __ExhaustRuntime {
     ///
     /// Eager and outcome-independent — a passing fuzz run still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
     package static func recordFuzzAttachments(report: FuzzReport, suppressAttachments: Bool) {
-        guard suppressAttachments == false, report.totalAttempts > 0 else {
+        guard suppressAttachments == false, report.attempts.total > 0 else {
             return
         }
         for cluster in report.clusters {
             recordAttachment(
-                renderCluster(cluster, isFrontier: false).joined(separator: "\n"),
+                renderClusterBlock(cluster, isFrontier: false, detail: .full).joined(separator: "\n"),
                 named: "explore-time-cluster-\(cluster.id + 1).txt"
             )
         }

@@ -133,7 +133,7 @@ struct FuzzRunnerTests {
         #expect(result.counts.mutationAttempts >= 500)
         // The empty-corpus fallback sampled fresh values and seeded the corpus.
         #expect(result.corpusEntryCount > 0)
-        #expect(result.mutableTierCount > 0)
+        #expect(result.parentCount > 0)
     }
 
     @Test("Structurally distinct failures with one symptom form distinct clusters")
@@ -289,8 +289,8 @@ struct FuzzRunnerTests {
         #expect(result.counts.inconclusiveAttempts > 0)
         #expect(result.incidenceSampleCount > 0)
         #expect(result.incidenceSampleCount < result.counts.evaluatedSearchCases)
-        #expect(report.incidenceSampleCount == result.incidenceSampleCount)
-        #expect(report.estimatedReachableEdgeCount == CoverageEstimators.iChao2ReachableEdges(
+        #expect(report.coverage.incidenceSamples == result.incidenceSampleCount)
+        #expect(report.coverage.estimatedReachableEdges == CoverageEstimators.iChao2ReachableEdges(
             covered: result.coveredEdgeCount,
             singletons: result.edgeSingletonCount,
             doubletons: result.edgeDoubletonCount,
@@ -346,13 +346,9 @@ struct FuzzRunnerTests {
         let result = runner.run()
         #expect(result.counts.duplicateCandidatesSkipped > 0)
 
-        let skips = FuzzReport(result: result).duplicateSkips
-        let sum = skips.freshDraw
-            + skips.mutationChild
-            + skips.campaign
-            + skips.reflectionInjection
-            + skips.graftInjection
-            + skips.comparandSubstitution
+        let skips = FuzzReport(result: result).attempts.duplicateSkips
+        let arms = [skips.freshDraw, skips.mutationChild, skips.reflectionInjection, skips.graftInjection, skips.comparandSubstitution]
+        let sum = arms.reduce(0, +)
         #expect(sum == result.counts.duplicateCandidatesSkipped)
         for origin in CandidateOrigin.allCases {
             #expect(result.counts[duplicateSkipsFor: origin] >= 0)
