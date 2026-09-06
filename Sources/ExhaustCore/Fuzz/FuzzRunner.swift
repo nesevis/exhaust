@@ -40,7 +40,7 @@ struct FuzzCandidate<Output>: ~Copyable {
     let parentHash: UInt64
     /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; 0 outside the arm inventory.
     let armsMask: UInt32
-    /// Whether the candidate is a covering-array row, admitted for its boundary values without coverage novelty.
+    /// Whether the candidate is a covering array row, admitted for its boundary values without coverage novelty.
     let isBoundaryDerived: Bool
 }
 
@@ -408,62 +408,51 @@ package final class FuzzRunner<Output> {
     // MARK: - Phase 1: Screening
 
     private func runScreeningPhase() {
-        // The verdict and hits captured by the property wrapper are read by onExample, which fires synchronously after each evaluation and before the next bracket begins.
-        var lastVerdict = FuzzVerdict.pass
-        var lastHits: [(edge: Int, hitCount: UInt8)] = []
-
-        let wrappedProperty: (Output) -> Bool = { [self] value in
-            let (verdict, hits) = evaluateInBracket(value, recordingBreadcrumb: nil)
-            lastVerdict = verdict
-            lastHits = hits
-            return verdict.isFailure == false
+        guard let plan = ScreeningRunner.plan(
+            gen,
+            screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget())
+        ) else {
+            return
         }
-
-        // The breadcrumb clears before the row is built: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt. The attribution bracket itself opens inside evaluateInBracket, around the property call, for every phase alike.
-        let beforeRow: () -> Void = { [self] in
-            // Counted before the row runs, so a failure classified inside this row sees a 1-based attempt index like every other phase; the post-phase assignment below reconciles to the runner's own tally, which counts the same rows.
+        // The run seed, so the screening rows are pinned by the same seed that pins every other search decision. An unseeded #explore draws a fresh seed per run, which rotates the rows the same way a fresh #exhaust run does.
+        var rows = ScreeningRunner.Rows(plan: plan, coveringSeed: configuration.seed, skipToRow: nil)
+        var summary = ScreeningRunner.Summary()
+        while terminationDue() == nil, let (rowIndex, row) = rows.next() {
+            // Counted before the row is built, so a failure classified inside this row sees a 1-based attempt index like every other phase; the post-phase assignment below reconciles to the row count. The breadcrumb clears first so a trap while the generator builds the row is not attributed to the previous attempt.
             counts.screeningAttempts += 1
             breadcrumb?.clear()
-        }
-
-        let result = ScreeningRunner.run(
-            gen,
-            screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget()),
-            // The run seed, so the screening rows are pinned by the same seed that pins every other search decision. An unseeded #explore draws a fresh seed per run, which rotates the rows the same way a fresh #exhaust run does.
-            coveringSeed: configuration.seed,
-            continuePastFailure: true,
-            beforeRow: beforeRow,
-            property: wrappedProperty,
-            onExample: { [self] value, tree, _ in
-                checkpointIfDue()
-                // The runner judged the row already, so it skips evaluate. Convergence is 1: the tree came straight from materialization.
-                let sequence = ChoiceSequence.flatten(tree)
-                recordAttempt(
-                    FuzzCandidate(
-                        sequence: sequence,
-                        hash: ZobristHash.hash(of: sequence),
-                        value: value,
-                        tree: tree,
-                        convergence: 1.0,
-                        generation: 0,
-                        phase: .screening,
-                        origin: .screeningRow,
-                        parentIndex: nil,
-                        parentHash: 0,
-                        armsMask: 0,
-                        isBoundaryDerived: true
-                    ),
-                    deferredTreeRebuild: nil,
-                    verdict: lastVerdict,
-                    hits: lastHits
-                )
-            },
-            shouldTerminate: { [self] in
-                terminationDue() != nil
+            summary.rowAttempts += 1
+            guard let (value, tree) = ScreeningRunner.materializeRow(
+                erasedGen,
+                row: row,
+                rowIndex: rowIndex,
+                profile: plan.profile,
+                needsTree: true
+            ) as (Output, ChoiceTree)? else {
+                summary.rejectedRows += 1
+                continue
             }
-        )
-        counts.screeningAttempts = result.summary.rowAttempts
-        counts.screeningRejectedAttempts = result.summary.rejectedRows
+            summary.propertyInvocations += 1
+            // Convergence is 1: the tree came straight from materialization.
+            let sequence = ChoiceSequence.flatten(tree)
+            evaluate(FuzzCandidate(
+                sequence: sequence,
+                hash: ZobristHash.hash(of: sequence),
+                value: value,
+                tree: tree,
+                convergence: 1.0,
+                generation: 0,
+                phase: .screening,
+                origin: .screeningRow,
+                parentIndex: nil,
+                parentHash: 0,
+                armsMask: 0,
+                isBoundaryDerived: true
+            ))
+            checkpointIfDue()
+        }
+        counts.screeningAttempts = summary.rowAttempts
+        counts.screeningRejectedAttempts = summary.rejectedRows
     }
 
     // MARK: - Phase 2: Random Sampling
@@ -691,12 +680,13 @@ package final class FuzzRunner<Output> {
         )
     }
 
-    /// Evaluates one candidate: the recent-duplicate check, the property inside the attribution bracket, the tree rebuild for the candidates that consume it, the corpus offer, failure dispatch, and bandit credit. Every producer ends here, so the attempt accounting and the breadcrumb live in one place.
+    /// Evaluates one candidate: the recent-duplicate check, the property inside the attribution bracket, the tree rebuild for the candidates that consume it, the corpus offer, failure dispatch, and bandit credit. Every producer, screening rows included, ends here, so the attempt accounting and the breadcrumb live in one place.
     ///
     /// The tree is rebuilt only when something downstream reads it. Admission stores it as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and flat-materialized offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction, a small minority once a fault's clusters are known, so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
     @discardableResult
     func evaluate(_ candidate: consuming FuzzCandidate<Output>) -> FuzzEvaluation {
-        if isRecentDuplicate(hash: candidate.hash) {
+        // Screening rows are distinct by construction and are never entered in the recent-hash table, as in #exhaust.
+        if candidate.origin != .screeningRow, isRecentDuplicate(hash: candidate.hash) {
             openPhaseAttempt(candidate.phase, parentIndex: candidate.parentIndex)
             noteDuplicateSkip(candidate.origin)
             return FuzzEvaluation(admission: .rejectedDuplicate, verdict: nil)
@@ -818,7 +808,7 @@ package final class FuzzRunner<Output> {
         return tree
     }
 
-    /// The post-evaluation epilogue: counts the attempt, offers the candidate, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal. ``evaluate(_:)`` reaches it after judging the candidate; screening reaches it directly, its rows judged by the covering-array runner.
+    /// The post-evaluation epilogue: counts the attempt, offers the candidate, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
     ///
     /// A candidate without a tree is offered with a placeholder. It cannot be stored: trees are rebuilt for every candidate that admits or fails.
     @discardableResult

@@ -59,26 +59,27 @@ package enum ScreeningRunner {
         }
     }
 
-    /// Runs screening analysis and iterates through the covering array, calling `property` for each row.
-    ///
-    /// - Parameters:
-    ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
-    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogs every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
-    ///   - shouldTerminate: Checked each iteration. When it returns `true`, screening stops early and reports `.partial`. The `#explore(time:)` path passes its wall-clock budget check so a slow property does not consume the entire time budget before the mutation phase begins.
-    package static func run<Output>(
-        _ gen: Generator<Output>,
-        screeningBudget: UInt64,
-        coveringSeed: UInt64,
-        skipToRow: Int? = nil,
-        continuePastFailure: Bool = false,
-        beforeRow: (() -> Void)? = nil,
-        property: (Output) -> Bool,
-        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil,
-        shouldTerminate: (() -> Bool)? = nil
-    ) -> Result<Output> {
+    /// The analyzed screening domain for one run: the profile that turns rows into trees, and the figures the result reports.
+    package struct Plan {
+        package let profile: any ScreeningProfile
+        package let domainSizes: [UInt64]
+        package let parameterCount: Int
+        package let totalSpace: UInt64
+        /// Rows this run may test, `screeningBudget` clamped to `Int`.
+        package let budget: Int
+        package let screeningBudget: UInt64
+        /// 2 for the pairwise covering array, 1 for the single-parameter sweep.
+        package let strength: Int
+        package let kind: String
+        /// Whether a run that tests every row without a rejection or failure has covered the whole domain.
+        package let isExhaustiveCandidate: Bool
+    }
+
+    /// Analyzes the generator into a ``Plan``, or nil when it has no analyzable enumerable or large domain.
+    package static func plan(_ gen: Generator<some Any>, screeningBudget: UInt64) -> Plan? {
         let modelBudget = Self.modelBudget(for: screeningBudget)
         guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: modelBudget) else {
-            return .notApplicable
+            return nil
         }
 
         if case let .large(largeProfile) = analysis {
@@ -108,164 +109,182 @@ package enum ScreeningRunner {
                 isExhaustiveCandidate = false
         }
 
-        let domainSizes = profile.domainSizes
-        let paramCount = profile.parameterCount
-        let totalSpace = profile.totalSpace
-        let budget = Int(min(screeningBudget, UInt64(Int.max)))
+        guard profile.parameterCount >= 1 else {
+            return nil
+        }
+        return Plan(
+            profile: profile,
+            domainSizes: profile.domainSizes,
+            parameterCount: profile.parameterCount,
+            totalSpace: profile.totalSpace,
+            budget: Int(min(screeningBudget, UInt64(Int.max))),
+            screeningBudget: screeningBudget,
+            strength: profile.parameterCount >= 2 ? 2 : 1,
+            kind: kind,
+            isExhaustiveCandidate: isExhaustiveCandidate
+        )
+    }
 
-        guard paramCount >= 1 else { return .notApplicable }
+    /// The covering rows of one run, pulled one at a time: the pairwise stream for two or more parameters, the rotated sweep for one.
+    ///
+    /// A plain `next()` rather than `IteratorProtocol`, which would put a witness call and Optional wrapping on every row in debug builds. `skipToRow` consumes the rows before the target without yielding them and ends the stream after the target; ``consumed`` is the row count a result reports.
+    package struct Rows {
+        private let plan: Plan
+        private let skipToRow: Int?
+        private let nextPairwiseRow: (() -> CoveringArrayRow?)?
+        private let rotationStart: UInt64
+        private var rowIndex: Int
+        private var finished = false
 
-        // Erase once for the whole screening loop; testRow calls materializeAny directly to avoid per-row erasure.
+        /// Rows advanced so far: every row yielded plus every row skipped up to a target.
+        package var consumed: Int {
+            rowIndex
+        }
+
+        package init(plan: Plan, coveringSeed: UInt64, skipToRow: Int?) {
+            self.plan = plan
+            self.skipToRow = skipToRow
+            if plan.parameterCount >= 2 {
+                // Saturation gates on this run's budget to match the `.exhaustive` result; a screening-row replay must therefore run under the discovery budget, which the budget-dependent domain analysis already requires.
+                nextPairwiseRow = SaturatingRowGenerator.rowStream(
+                    domainSizes: plan.domainSizes,
+                    seed: coveringSeed,
+                    saturationBudget: plan.screeningBudget
+                )
+                rotationStart = 0
+                rowIndex = 0
+            } else {
+                // The covering seed rotates the sweep's start so a domain larger than the budget has no permanently untestable tail: successive runs sweep different windows and collectively reach every value, matching the pairwise path's per-run rotation.
+                nextPairwiseRow = nil
+                rotationStart = plan.domainSizes[0] > 0 ? coveringSeed % plan.domainSizes[0] : 0
+                rowIndex = skipToRow ?? 0
+            }
+        }
+
+        /// The next row and its index, or nil at the budget, the end of the stream, or after the replay target.
+        package mutating func next() -> (index: Int, row: CoveringArrayRow)? {
+            guard finished else {
+                if let nextPairwiseRow {
+                    while rowIndex < plan.budget, let row = nextPairwiseRow() {
+                        if let target = skipToRow, rowIndex < target {
+                            rowIndex += 1
+                            continue
+                        }
+                        return yield(row)
+                    }
+                    return nil
+                }
+                guard rowIndex < plan.budget, UInt64(rowIndex) < plan.domainSizes[0] else {
+                    return nil
+                }
+                let row = CoveringArrayRow(values: [(rotationStart &+ UInt64(rowIndex)) % plan.domainSizes[0]])
+                return yield(row)
+            }
+            return nil
+        }
+
+        private mutating func yield(_ row: CoveringArrayRow) -> (index: Int, row: CoveringArrayRow) {
+            let index = rowIndex
+            if skipToRow == nil {
+                rowIndex += 1
+            } else {
+                finished = true
+            }
+            return (index, row)
+        }
+    }
+
+    /// Runs screening and iterates through the covering array, calling `property` for each row.
+    ///
+    /// - Parameters:
+    ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
+    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
+    package static func run<Output>(
+        _ gen: Generator<Output>,
+        screeningBudget: UInt64,
+        coveringSeed: UInt64,
+        skipToRow: Int? = nil,
+        continuePastFailure: Bool = false,
+        property: (Output) -> Bool,
+        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
+    ) -> Result<Output> {
+        guard let plan = plan(gen, screeningBudget: screeningBudget) else {
+            return .notApplicable
+        }
+        // Erase once for the whole screening loop; materializeRow takes the erased generator to avoid per-row erasure.
         let erasedGen = gen.erase()
-        // A passing row's tree is only read by the onExample stats callback; without one, testRow skips tree construction.
+        // A passing row's tree is only read by the onExample stats callback; without one, the row is materialized without a tree and a failing row is materialized again for the report.
         let needsTree = onExample != nil
 
-        // Pull-based pairwise coverage for 2+ parameters.
-        if paramCount >= 2 {
-            // Saturation gates on this run's budget to match the `.exhaustive` result below; a screening-row replay must therefore run under the discovery budget, which the budget-dependent domain analysis above already requires.
-            let nextRow = SaturatingRowGenerator.rowStream(
-                domainSizes: domainSizes,
-                seed: coveringSeed,
-                saturationBudget: screeningBudget
-            )
-            var summary = Summary()
-            var rowIndex = 0
-            var failureObserved = false
-            while rowIndex < budget, let row = nextRow() {
-                if shouldTerminate?() == true {
-                    break
-                }
-                if let target = skipToRow, rowIndex < target {
-                    rowIndex += 1
+        var rows = Rows(plan: plan, coveringSeed: coveringSeed, skipToRow: skipToRow)
+        var summary = Summary()
+        var failureObserved = false
+        while let (rowIndex, row) = rows.next() {
+            summary.rowAttempts += 1
+            guard let (value, tree) = materializeRow(erasedGen, row: row, rowIndex: rowIndex, profile: plan.profile, needsTree: needsTree) as (Output, ChoiceTree)? else {
+                summary.rejectedRows += 1
+                continue
+            }
+            summary.propertyInvocations += 1
+            let passed = property(value)
+            var reportedTree = tree
+            if needsTree == false, passed == false {
+                // The failure path reads the tree, so rebuild it. Same seed and fallback reproduce the first pass deterministically; a divergence cannot happen, and skipping the row is the safe response if it somehow does.
+                guard let (_, realTree) = materializeRow(erasedGen, row: row, rowIndex: rowIndex, profile: plan.profile, needsTree: true) as (Output, ChoiceTree)? else {
+                    summary.propertyInvocations -= 1
+                    summary.rejectedRows += 1
                     continue
                 }
-                summary.rowAttempts += 1
-                let rowResult = testRow(
-                    erasedGen, row: row, rowIndex: rowIndex,
-                    profile: profile, needsTree: needsTree,
-                    beforeRow: beforeRow, property: property
-                )
-                if let rowResult {
-                    summary.propertyInvocations += 1
-                    onExample?(rowResult.value, rowResult.tree, rowResult.passed)
-                    if rowResult.passed == false {
-                        if continuePastFailure {
-                            failureObserved = true
-                        } else {
-                            return .failure(
-                                value: rowResult.value, tree: rowResult.tree,
-                                rowOrdinal: rowIndex + 1, summary: summary,
-                                strength: 2, rows: rowIndex + 1,
-                                parameters: paramCount, totalSpace: totalSpace, kind: kind
-                            )
-                        }
-                    }
+                reportedTree = realTree
+            }
+            onExample?(value, reportedTree, passed)
+            if passed == false {
+                if continuePastFailure {
+                    failureObserved = true
                 } else {
-                    summary.rejectedRows += 1
+                    return .failure(
+                        value: value, tree: reportedTree,
+                        rowOrdinal: rowIndex + 1, summary: summary,
+                        strength: plan.strength, rows: rowIndex + 1,
+                        parameters: plan.parameterCount, totalSpace: plan.totalSpace, kind: plan.kind
+                    )
                 }
-                if skipToRow != nil { break }
-                rowIndex += 1
             }
-
-            // Only report exhaustive when every point in the full Cartesian product was tested, not just all t-tuples.
-            if isExhaustiveCandidate,
-               skipToRow == nil,
-               failureObserved == false,
-               summary.rejectedRows == 0,
-               UInt64(summary.rowAttempts) >= totalSpace
-            {
-                return .exhaustive(summary: summary)
-            }
-
-            return .partial(
-                summary: summary, strength: 2, rows: rowIndex,
-                parameters: paramCount, totalSpace: totalSpace, kind: kind
-            )
         }
 
-        // Single parameter: enumerate all values. The covering seed rotates the sweep's start so a domain larger than the budget has no permanently untestable tail: successive runs sweep different windows and collectively reach every value, matching the pairwise path's per-run rotation.
-        var summary = Summary()
-        var rowIndex = skipToRow ?? 0
-        var failureObserved = false
-        let rotationStart = domainSizes[0] > 0 ? coveringSeed % domainSizes[0] : 0
-        while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
-            if shouldTerminate?() == true {
-                break
-            }
-            let row = CoveringArrayRow(values: [(rotationStart &+ UInt64(rowIndex)) % domainSizes[0]])
-            summary.rowAttempts += 1
-            let rowResult = testRow(
-                erasedGen, row: row, rowIndex: rowIndex,
-                profile: profile, needsTree: needsTree,
-                beforeRow: beforeRow, property: property
-            )
-            if let rowResult {
-                summary.propertyInvocations += 1
-                onExample?(rowResult.value, rowResult.tree, rowResult.passed)
-                if rowResult.passed == false {
-                    if continuePastFailure {
-                        failureObserved = true
-                    } else {
-                        return .failure(
-                            value: rowResult.value, tree: rowResult.tree,
-                            rowOrdinal: rowIndex + 1, summary: summary,
-                            strength: 1, rows: rowIndex + 1,
-                            parameters: paramCount, totalSpace: totalSpace, kind: kind
-                        )
-                    }
-                }
-            } else {
-                summary.rejectedRows += 1
-            }
-            if skipToRow != nil { break }
-            rowIndex += 1
-        }
-
-        if isExhaustiveCandidate,
+        // Only report exhaustive when every point in the domain was tested, not just all t-tuples.
+        let domainRows = plan.parameterCount >= 2 ? plan.totalSpace : plan.domainSizes[0]
+        if plan.isExhaustiveCandidate,
            skipToRow == nil,
            failureObserved == false,
            summary.rejectedRows == 0,
-           UInt64(summary.rowAttempts) >= domainSizes[0]
+           UInt64(summary.rowAttempts) >= domainRows
         {
             return .exhaustive(summary: summary)
         }
 
         return .partial(
-            summary: summary, strength: 1, rows: rowIndex,
-            parameters: paramCount, totalSpace: totalSpace, kind: kind
+            summary: summary, strength: plan.strength, rows: rows.consumed,
+            parameters: plan.parameterCount, totalSpace: plan.totalSpace, kind: plan.kind
         )
     }
 
-    // MARK: - Row Testing
+    // MARK: - Row Materialization
 
-    private struct RowResult<Output> {
-        let value: Output
-        let tree: ChoiceTree
-        let passed: Bool
-    }
-
-    /// Builds a tree from a covering array row, materializes it, and tests the property.
+    /// Builds a tree from a covering array row and materializes it, returning the value and its tree, or nil when the row cannot be built or materialized.
     ///
-    /// Materializes in two phases when `needsTree` is `false`: phase 1 skips ``ChoiceTree`` construction because a passing row's tree is never read, and a failing row triggers a second materialization that builds the real tree for the failure report. Guided materialization is deterministic for a fixed seed and fallback tree, so both phases produce the same value (the same pattern ``SequenceDecoder`` uses).
-    ///
-    /// Returns `nil` when materialization fails (row is skipped). Otherwise returns the value, its choice tree, and whether the property passed.
-    private static func testRow<Output>(
+    /// With `needsTree` false the walk skips ``ChoiceTree`` construction and the returned tree is a placeholder; guided materialization is deterministic for a fixed seed and fallback tree, so a second call with `needsTree` true produces the same value with the real tree (the same pattern ``SequenceDecoder`` uses).
+    package static func materializeRow<Output>(
         _ erasedGen: AnyGenerator,
         row: CoveringArrayRow,
         rowIndex: Int,
         profile: any ScreeningProfile,
-        needsTree: Bool,
-        beforeRow: (() -> Void)?,
-        property: (Output) -> Bool
-    ) -> RowResult<Output>? {
-        // Fires before the row is built and materialized, not before the property runs. A caller that brackets each row for measurement (the coverage-guided loop opens a coverage attribution window here) must have generation inside the bracket: building the input executes the generator, and in an instrumented build that is code whose coverage belongs to this row.
-        beforeRow?()
-        guard let tree = profile.buildTree(from: row) else { return nil }
-
-        let mode = Materializer.Mode.guided(
-            seed: UInt64(rowIndex),
-            fallbackTree: nil
-        )
+        needsTree: Bool
+    ) -> (value: Output, tree: ChoiceTree)? {
+        guard let tree = profile.buildTree(from: row) else {
+            return nil
+        }
+        let mode = Materializer.Mode.guided(seed: UInt64(rowIndex), fallbackTree: nil)
         switch Materializer.materializeAny(
             erasedGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree,
             skipTree: needsTree == false,
@@ -273,21 +292,7 @@ package enum ScreeningRunner {
         ) {
             case let .success(anyValue, freshTree, _):
                 // swiftlint:disable:next force_cast
-                let value = anyValue as! Output
-                let passed = property(value)
-                guard needsTree == false, passed == false else {
-                    return RowResult(value: value, tree: freshTree, passed: passed)
-                }
-                // Phase 2: the failure path reads the tree, so rebuild it. Same seed and fallback reproduce phase 1 deterministically; a divergence here cannot happen, and skipping the row is the safe response if it somehow does.
-                switch Materializer.materializeAny(
-                    erasedGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree,
-                    collectDecodingReport: false
-                ) {
-                    case let .success(_, realTree, _):
-                        return RowResult(value: value, tree: realTree, passed: passed)
-                    case .rejected, .failed:
-                        return nil
-                }
+                return (anyValue as! Output, freshTree)
             case .rejected, .failed:
                 return nil
         }

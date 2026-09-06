@@ -166,7 +166,7 @@ package extension ChoiceSequence {
                 }
             case let .resize(_, choices):
                 output.append(.group(true))
-                // while-loop: avoiding IteratorProtocol overhead in debug builds.
+                // while-loop: avoiding IteratorProtocol overhead in debug builds
                 var rIdx = 0
                 while rIdx < choices.count {
                     flatten(choices[rIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
