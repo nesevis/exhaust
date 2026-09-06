@@ -6,8 +6,8 @@ private struct EvaluatedFuzzCandidate<Output> {
     let value: Output
     let tree: ChoiceTree
     let sequence: ChoiceSequence
-    /// `ZobristHash.hash(of:)` of `sequence` when the producing path already computed it for the crash breadcrumb, so corpus admission does not hash the same sequence twice. Nil on paths that never hashed (screening rows).
-    let sequenceHash: UInt64?
+    /// `ZobristHash.hash(of:)` of `sequence`, so admission does not hash it again.
+    let sequenceHash: UInt64
     let verdict: FuzzVerdict
     let hits: [(edge: Int, hitCount: UInt8)]
 }
@@ -26,7 +26,8 @@ struct FuzzCandidate<Output>: ~Copyable {
     /// `ZobristHash.hash(of:)` of `sequence`, computed once by the producer for the duplicate check, the breadcrumb, and corpus admission.
     let hash: UInt64
     let value: Output
-    let tree: ChoiceTree?
+    /// Set by the producer when it already holds the tree, otherwise by ``FuzzRunner/evaluate(_:)`` when something consumes one.
+    var tree: ChoiceTree?
     /// Fraction of coordinates the materializer resolved from the prefix; decides the corpus tier. 1 for fresh draws and reflected values.
     let convergence: Double
     let generation: Int
@@ -39,6 +40,8 @@ struct FuzzCandidate<Output>: ~Copyable {
     let parentHash: UInt64
     /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; 0 outside the arm inventory.
     let armsMask: UInt32
+    /// Whether the candidate is a covering-array row, admitted for its boundary values without coverage novelty.
+    let isBoundaryDerived: Bool
 }
 
 /// What one evaluation came to: the corpus's decision and, when the property ran, its verdict. The verdict is nil for a candidate skipped as a recent duplicate or discarded before it was recorded.
@@ -433,17 +436,26 @@ package final class FuzzRunner<Output> {
             property: wrappedProperty,
             onExample: { [self] value, tree, _ in
                 checkpointIfDue()
-                // Every covering-array row is boundary-derived; convergence is 1 because the tree came straight from materialization.
+                // The runner judged the row already, so it skips evaluate. Convergence is 1: the tree came straight from materialization.
+                let sequence = ChoiceSequence.flatten(tree)
                 recordAttempt(
-                    value: value,
-                    tree: tree,
-                    sequence: ChoiceSequence.flatten(tree),
+                    FuzzCandidate(
+                        sequence: sequence,
+                        hash: ZobristHash.hash(of: sequence),
+                        value: value,
+                        tree: tree,
+                        convergence: 1.0,
+                        generation: 0,
+                        phase: .screening,
+                        origin: .screeningRow,
+                        parentIndex: nil,
+                        parentHash: 0,
+                        armsMask: 0,
+                        isBoundaryDerived: true
+                    ),
+                    deferredTreeRebuild: nil,
                     verdict: lastVerdict,
-                    hits: lastHits,
-                    convergence: 1.0,
-                    generation: 0,
-                    phase: .screening,
-                    isBoundaryDerived: true
+                    hits: lastHits
                 )
             },
             shouldTerminate: { [self] in
@@ -674,7 +686,8 @@ package final class FuzzRunner<Output> {
             origin: origin,
             parentIndex: parentIndex,
             parentHash: parent.hash,
-            armsMask: armsMask
+            armsMask: armsMask,
+            isBoundaryDerived: false
         )
     }
 
@@ -693,7 +706,6 @@ package final class FuzzRunner<Output> {
             recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: candidate.sequence)
         )
 
-        var tree = candidate.tree ?? .just
         var deferredTreeRebuild: (() -> ChoiceTree?)?
         if candidate.tree == nil {
             if corpus.wouldAdmit(hits: hits) || (prune != nil && verdict.isFailure) {
@@ -702,7 +714,7 @@ package final class FuzzRunner<Output> {
                     counts.discardedAttempts += 1
                     return FuzzEvaluation(admission: .rejectedNotNovel, verdict: nil)
                 }
-                tree = rebuilt
+                candidate.tree = rebuilt
             } else if verdict.isFailure {
                 let sequence = candidate.sequence
                 deferredTreeRebuild = { self.rebuildTree(for: sequence) }
@@ -710,17 +722,10 @@ package final class FuzzRunner<Output> {
         }
 
         let admission = recordAttempt(
-            value: candidate.value,
-            tree: tree,
-            sequence: candidate.sequence,
-            sequenceHash: candidate.hash,
+            candidate,
             deferredTreeRebuild: deferredTreeRebuild,
             verdict: verdict,
-            hits: hits,
-            convergence: candidate.convergence,
-            generation: candidate.generation,
-            phase: candidate.phase,
-            parentIndex: candidate.parentIndex
+            hits: hits
         )
         if admission.isAdmitted, configuration.experiments.banditBands {
             for arm in MutationArm.allCases where candidate.armsMask & (1 << UInt32(arm.rawValue)) != 0 {
@@ -790,7 +795,8 @@ package final class FuzzRunner<Output> {
             origin: .freshSample,
             parentIndex: nil,
             parentHash: 0,
-            armsMask: 0
+            armsMask: 0,
+            isBoundaryDerived: false
         ))
     }
 
@@ -812,22 +818,19 @@ package final class FuzzRunner<Output> {
         return tree
     }
 
-    /// The shared post-evaluation epilogue: counts the attempt, offers the candidate to the corpus, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
+    /// The post-evaluation epilogue: counts the attempt, offers the candidate, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal. ``evaluate(_:)`` reaches it after judging the candidate; screening reaches it directly, its rows judged by the covering-array runner.
+    ///
+    /// A candidate without a tree is offered with a placeholder. It cannot be stored: trees are rebuilt for every candidate that admits or fails.
     @discardableResult
     func recordAttempt(
-        value: Output,
-        tree: ChoiceTree,
-        sequence: ChoiceSequence,
-        sequenceHash: UInt64? = nil,
-        deferredTreeRebuild: (() -> ChoiceTree?)? = nil,
+        _ candidate: borrowing FuzzCandidate<Output>,
+        deferredTreeRebuild: (() -> ChoiceTree?)?,
         verdict: FuzzVerdict,
-        hits: [(edge: Int, hitCount: UInt8)],
-        convergence: Double,
-        generation: Int,
-        phase: FuzzPhase,
-        isBoundaryDerived: Bool = false,
-        parentIndex: Int? = nil
+        hits: [(edge: Int, hitCount: UInt8)]
     ) -> CorpusAdmission {
+        let phase = candidate.phase
+        let parentIndex = candidate.parentIndex
+        let tree = candidate.tree ?? .just
         configuration.onAttempt?(phase, hits)
         openPhaseAttempt(phase, parentIndex: parentIndex)
         counts.evaluatedSearchCases += 1
@@ -845,24 +848,24 @@ package final class FuzzRunner<Output> {
         // Value path: no prune hook, so the candidate offered and the candidate dispatched are both the original. Offering it directly skips the two generic carrier structs below, whose construction and teardown retained and released every field of the output type on every attempt.
         guard prune != nil else {
             let admission = corpus.offer(
-                sequence: sequence,
+                sequence: candidate.sequence,
                 tree: tree,
                 hits: hits,
-                convergence: convergence,
-                generation: generation,
+                convergence: candidate.convergence,
+                generation: candidate.generation,
                 phase: phase,
-                isBoundaryDerived: isBoundaryDerived,
+                isBoundaryDerived: candidate.isBoundaryDerived,
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard,
-                precomputedHash: sequenceHash
+                precomputedHash: candidate.hash
             )
             noteAdmission(admission)
             if case let .fail(symptom) = verdict {
                 handleFailure(
-                    value: value,
+                    value: candidate.value,
                     tree: tree,
                     deferredTreeRebuild: deferredTreeRebuild,
-                    sequence: sequence,
+                    sequence: candidate.sequence,
                     symptom: symptom,
                     parentIndex: parentIndex,
                     phase: phase,
@@ -874,10 +877,10 @@ package final class FuzzRunner<Output> {
         }
 
         let originalCandidate = EvaluatedFuzzCandidate(
-            value: value,
+            value: candidate.value,
             tree: tree,
-            sequence: sequence,
-            sequenceHash: sequenceHash,
+            sequence: candidate.sequence,
+            sequenceHash: candidate.hash,
             verdict: verdict,
             hits: hits
         )
@@ -890,10 +893,10 @@ package final class FuzzRunner<Output> {
             sequence: candidates.corpus.sequence,
             tree: candidates.corpus.tree,
             hits: candidates.corpus.hits,
-            convergence: convergence,
-            generation: generation,
+            convergence: candidate.convergence,
+            generation: candidate.generation,
             phase: phase,
-            isBoundaryDerived: isBoundaryDerived,
+            isBoundaryDerived: candidate.isBoundaryDerived,
             propertyFailed: candidates.corpus.verdict.isFailure,
             propertyDiscarded: candidates.corpus.verdict.isDiscard,
             precomputedHash: candidates.corpus.sequenceHash
@@ -980,48 +983,37 @@ package final class FuzzRunner<Output> {
             hits: prunedHits
         )
 
-        switch (original.verdict, prunedVerdict) {
-            case let (.fail(originalSymptom), .fail(prunedSymptom))
-            where originalSymptom == prunedSymptom:
-                return PrunedCandidateSelection(
-                    corpus: prunedCandidate,
-                    failure: prunedCandidate,
-                    independentFailureCoverageNovel: nil
-                )
-            // A pruning probe that reached no verdict says nothing about the candidate: its hits describe the stall. The original evaluation stands and is what the corpus sees. The `(.inconclusive, _)` and `(.escaped, _)` arms cannot be reached, because `recordAttempt` drops an inconclusive attempt before pruning.
-            case (.fail, .inconclusive), (.fail, .escaped):
+        // A pruning probe without a verdict says nothing about the candidate; the original evaluation stands. The original is never inconclusive or escaped here: `recordAttempt` drops those before pruning.
+        switch prunedVerdict {
+            case .inconclusive, .escaped:
                 return PrunedCandidateSelection(
                     corpus: original,
-                    failure: original,
+                    failure: original.verdict.isFailure ? original : nil,
                     independentFailureCoverageNovel: nil
                 )
-            case (.pass, .inconclusive), (.pass, .escaped), (.discard, .inconclusive), (.discard, .escaped),
-                 (.inconclusive, _), (.escaped, _):
-                return PrunedCandidateSelection(
-                    corpus: original,
-                    failure: nil,
-                    independentFailureCoverageNovel: nil
-                )
-            case (.fail, _):
-                return PrunedCandidateSelection(
-                    corpus: prunedCandidate,
-                    failure: original,
-                    independentFailureCoverageNovel: corpus.wouldAdmit(hits: original.hits)
-                )
-            case (.pass, .fail), (.discard, .fail):
-                return PrunedCandidateSelection(
-                    corpus: prunedCandidate,
-                    failure: prunedCandidate,
-                    independentFailureCoverageNovel: nil
-                )
-            // A discard on either side is not a failure; the pruned candidate carries the corpus verdict either way. The prune hook is the spec path's, which never discards, so the discard arms exist for exhaustiveness.
-            case (.pass, .pass), (.pass, .discard), (.discard, .pass), (.discard, .discard):
-                return PrunedCandidateSelection(
-                    corpus: prunedCandidate,
-                    failure: nil,
-                    independentFailureCoverageNovel: nil
-                )
+            case .pass, .discard, .fail:
+                break
         }
+        // The corpus stores the pruned form. The failure dispatched is the pruned form when it fails with the original's symptom or when only it failed, and the original when pruning changed or removed the failure, with novelty then judged on the original's own hits. The spec path's prune hook never discards; a discard is simply not a failure.
+        guard case let .fail(originalSymptom) = original.verdict else {
+            return PrunedCandidateSelection(
+                corpus: prunedCandidate,
+                failure: prunedVerdict.isFailure ? prunedCandidate : nil,
+                independentFailureCoverageNovel: nil
+            )
+        }
+        if case let .fail(prunedSymptom) = prunedVerdict, prunedSymptom == originalSymptom {
+            return PrunedCandidateSelection(
+                corpus: prunedCandidate,
+                failure: prunedCandidate,
+                independentFailureCoverageNovel: nil
+            )
+        }
+        return PrunedCandidateSelection(
+            corpus: prunedCandidate,
+            failure: original,
+            independentFailureCoverageNovel: corpus.wouldAdmit(hits: original.hits)
+        )
     }
 
     /// One uniform draw in [0, 1) from the run PRNG (the top 53 bits of one 64-bit draw), so probability-space decisions replay deterministically under a pinned seed.

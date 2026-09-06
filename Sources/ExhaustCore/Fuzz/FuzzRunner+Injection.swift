@@ -186,7 +186,8 @@ extension FuzzRunner {
             origin: parent == nil ? .reflectionInjection : .graftInjection,
             parentIndex: parent?.index,
             parentHash: parent?.entry.hash ?? 0,
-            armsMask: 0
+            armsMask: 0,
+            isBoundaryDerived: false
         )
     }
 }

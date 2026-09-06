@@ -140,6 +140,8 @@ package struct FuzzRunnerConfiguration {
 ///
 /// The mutation phase runs several producers over the same corpus, and they differ sharply in how often they rebuild something already evaluated. Without this the run reports one aggregate rate, which cannot say whether an arm is worth its attempts.
 package enum CandidateOrigin: Int, CaseIterable, Sendable {
+    /// A screening row. Never checked against the recent-hash table, so its skip count is always zero.
+    case screeningRow
     /// A fresh interpreter draw: the sampling phase, and the mutation phase's empty-tier fallback.
     case freshSample
     /// An ordinary mutation of a corpus parent.
