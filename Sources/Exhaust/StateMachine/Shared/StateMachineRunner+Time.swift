@@ -284,27 +284,57 @@ extension __ExhaustRuntime {
         _: Spec.Type,
         commandLimit: Int? = nil
     ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>> {
+        buildSequentialAdapter(
+            Spec.self,
+            commandLimit: commandLimit,
+            verdictProperty: syncSequentialVerdictProperty(Spec.self),
+            identifySkips: { candidate in
+                Spec.identifySkips(setupStep: candidate.setupStep, commands: candidate.taggedCommands.map(\.1))
+            }
+        )
+    }
+
+    /// Builds the generator and property hooks for an async `.sequential` spec under `time:` mode.
+    ///
+    /// The async twin of ``buildSequentialSpecAdapter(_:commandLimit:)``: the same tagged sequence shape, skip pruning, and property-only reduction, with the executor loop bridged through `blockingAwait`. The blocking bridge is safe here because the fuzz loop owns a GCD lane; the cooperative pool runs the awaited commands while the lane waits.
+    static func buildAsyncSequentialSpecAdapter<Spec: AsyncStateMachineSpec>(
+        _: Spec.Type,
+        commandLimit: Int? = nil
+    ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>> {
+        nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
+        let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
+        return buildSequentialAdapter(
+            Spec.self,
+            commandLimit: commandLimit,
+            verdictProperty: asyncSequentialVerdictProperty(specInit: specInit),
+            identifySkips: { candidate in
+                asyncSkipIdentifier(candidate.setupStep, candidate.taggedCommands.map(\.1))
+            }
+        )
+    }
+
+    /// The one sequential adapter body: the sync and async forms differ only in how the executor loop is invoked and how skips are identified, so both hand those two closures here and share the generator, the prune hook, and the reduction.
+    ///
+    /// The verdict property drives the runner and carries the thrown error as the failure symptom; the Bool probe pruning and reduction use is derived from it, so the two can never disagree on what passes. Reduction is the value path's with the spec deadline: a spec reduction probe replays a whole command sequence against a fresh system under test, so it gets more wall clock per candidate.
+    private static func buildSequentialAdapter<Spec: StateMachineSpecBase>(
+        _: Spec.Type,
+        commandLimit: Int?,
+        verdictProperty: @escaping @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict,
+        identifySkips: @escaping @Sendable (SpecCandidateValue<Spec>) -> Set<Int>
+    ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>> {
         let taggedSequenceGen = taggedSequenceGenerator(
             commandGen: Spec.commandGenerator,
             commandLimit: commandLimit ?? FuzzTunables.specDefaultCommandLimit
         )
         let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: taggedSequenceGen)
-
-        // Two views of the one executor loop: the verdict property drives the runner and carries the thrown error as the failure symptom; the Bool probe derived from it serves pruning and reduction, where only pass/fail matters.
-        let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = syncSequentialVerdictProperty(Spec.self)
-        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = syncSequentialProperty(Spec.self)
-
-        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            Spec.identifySkips(setupStep: candidate.setupStep, commands: candidate.taggedCommands.map(\.1))
+        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
+            verdictProperty(candidate).isFailure == false
         }
-
         let pruneHook = specTimePruneHook(
             sequenceGen: taggedSequenceGen,
             rawProperty: rawProperty,
             identifySkips: identifySkips
         )
-
-        // The value path's reduction with the spec deadline: a spec reduction probe replays a whole command sequence against a fresh SUT, so it gets more wall clock per candidate.
         let reduceStrategy = FuzzRunner.propertyOnlyReduceStrategy(
             gen: candidateGen,
             property: verdictProperty,
@@ -313,7 +343,6 @@ extension __ExhaustRuntime {
                 wallClockDeadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds
             )
         )
-
         return SpecFuzzAdapter(
             generator: candidateGen,
             property: verdictProperty,
@@ -361,52 +390,6 @@ extension __ExhaustRuntime {
             let prunedTree = setupTree.map { composeCandidateTree(setupTree: $0, commandTree: pruned.tree) } ?? pruned.tree
             return (prunedValue, prunedTree)
         }
-    }
-
-    /// Builds the generator and property hooks for an async `.sequential` spec under `time:` mode.
-    ///
-    /// The async twin of ``buildSequentialSpecAdapter(_:commandLimit:)``: the same tagged sequence shape, skip pruning, and property-only reduction, with the executor loop bridged through `_blockingAwaitSemaphore`. The blocking bridge is safe here because the fuzz loop owns a GCD lane — the cooperative pool runs the awaited commands while the lane waits.
-    static func buildAsyncSequentialSpecAdapter<Spec: AsyncStateMachineSpec>(
-        _: Spec.Type,
-        commandLimit: Int? = nil
-    ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>> {
-        let taggedSequenceGen = taggedSequenceGenerator(
-            commandGen: Spec.commandGenerator,
-            commandLimit: commandLimit ?? FuzzTunables.specDefaultCommandLimit
-        )
-        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: taggedSequenceGen)
-
-        nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-
-        // Two views of the one executor loop, exactly as the sync adapter: the verdict property carries the thrown error as the failure symptom; the Bool probe derived from it serves pruning and reduction.
-        let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = asyncSequentialVerdictProperty(specInit: specInit)
-        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = asyncSequentialProperty(specInit: specInit)
-
-        let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
-        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            asyncSkipIdentifier(candidate.setupStep, candidate.taggedCommands.map(\.1))
-        }
-
-        let pruneHook = specTimePruneHook(
-            sequenceGen: taggedSequenceGen,
-            rawProperty: rawProperty,
-            identifySkips: identifySkips
-        )
-
-        let reduceStrategy = FuzzRunner.propertyOnlyReduceStrategy(
-            gen: candidateGen,
-            property: verdictProperty,
-            reducerConfiguration: Interpreters.ReducerConfiguration(
-                maxStalls: 2,
-                wallClockDeadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds
-            )
-        )
-
-        return SpecFuzzAdapter(
-            generator: candidateGen,
-            property: verdictProperty,
-            hooks: FuzzHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
-        )
     }
 }
 
