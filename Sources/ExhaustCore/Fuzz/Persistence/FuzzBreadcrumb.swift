@@ -6,6 +6,8 @@ import Foundation
     import Darwin
 #elseif canImport(Glibc)
     import Glibc
+#elseif canImport(WinSDK)
+    import WinSDK
 #endif
 
 /// Which of the run's property invocations a breadcrumb slot belongs to.
@@ -36,7 +38,12 @@ package enum FuzzProbeKind: UInt64, Sendable {
 package final class FuzzBreadcrumb: @unchecked Sendable {
     // @unchecked: the mapping is created once at init and only the owning loop thread writes it.
     private let mapping: UnsafeMutableRawPointer
-    private let fileDescriptor: Int32
+    #if canImport(Darwin) || canImport(Glibc)
+        private let fileDescriptor: Int32
+    #elseif canImport(WinSDK)
+        private let fileHandle: UnsafeMutableRawPointer
+        private let mappingHandle: UnsafeMutableRawPointer
+    #endif
 
     /// Rises on every record, so a reader can tell which of the two slots is the newer.
     private var generation: UInt64 = 0
@@ -107,6 +114,55 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
             }
             mapping = mapped
             fileDescriptor = descriptor
+        #elseif canImport(WinSDK)
+            try? FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            var filePath = fileURL.path
+            if filePath.first == "/", filePath.dropFirst(2).first == ":" {
+                filePath.removeFirst()
+            }
+            let rawHandle: UnsafeMutableRawPointer? = filePath.withCString(encodedAs: UTF16.self) { widePath in
+                CreateFileW(
+                    widePath,
+                    DWORD(0x8000_0000) | DWORD(0x4000_0000),
+                    DWORD(0x0000_0001) | DWORD(0x0000_0002),
+                    nil,
+                    DWORD(4),
+                    DWORD(0x80),
+                    nil
+                )
+            }
+            guard let hFile = rawHandle, hFile != INVALID_HANDLE_VALUE else {
+                return nil
+            }
+            let rawMapping: UnsafeMutableRawPointer? = CreateFileMappingW(
+                hFile,
+                nil,
+                DWORD(0x04),
+                0,
+                DWORD(Self.mappingSize),
+                nil
+            )
+            guard let hMapping = rawMapping else {
+                CloseHandle(hFile)
+                return nil
+            }
+            let rawView: UnsafeMutableRawPointer? = MapViewOfFile(
+                hMapping,
+                DWORD(0x02),
+                0, 0,
+                SIZE_T(Self.mappingSize)
+            )
+            guard let mapped = rawView else {
+                CloseHandle(hMapping)
+                CloseHandle(hFile)
+                return nil
+            }
+            mapping = mapped
+            fileHandle = hFile
+            mappingHandle = hMapping
         #else
             return nil
         #endif
@@ -116,6 +172,10 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
         #if canImport(Darwin) || canImport(Glibc)
             munmap(mapping, Self.mappingSize)
             close(fileDescriptor)
+        #elseif canImport(WinSDK)
+            UnmapViewOfFile(mapping)
+            CloseHandle(mappingHandle)
+            CloseHandle(fileHandle)
         #endif
     }
 
