@@ -652,26 +652,13 @@ package final class FuzzRunner<Output> {
         var tree = ChoiceTree.just
         var deferredTreeRebuild: (() -> ChoiceTree?)?
         if admissionNovel || (prune != nil && verdict.isFailure) {
-            guard let rebuilt = rebuildGuidedTree(
-                candidate: candidate,
-                seed: guidedSeed,
-                fallbackTree: parent.tree,
-                expecting: sequence
-            ) else {
+            guard let rebuilt = rebuildTree(for: sequence) else {
                 counts.discardedAttempts += 1
                 return CandidateFeedback(admitted: false, failed: false)
             }
             tree = rebuilt
         } else if verdict.isFailure {
-            let parentTree = parent.tree
-            deferredTreeRebuild = {
-                self.rebuildGuidedTree(
-                    candidate: candidate,
-                    seed: guidedSeed,
-                    fallbackTree: parentTree,
-                    expecting: sequence
-                )
-            }
+            deferredTreeRebuild = { self.rebuildTree(for: sequence) }
         }
 
         let admission = recordAttempt(
@@ -693,34 +680,6 @@ package final class FuzzRunner<Output> {
             }
         }
         return CandidateFeedback(admitted: admission.isAdmitted, failed: verdict.isFailure)
-    }
-
-    /// Re-materializes the guided tree for a flat-emission candidate and verifies it flattens to the phase-1 sequence.
-    ///
-    /// The rebuild is deterministic for identical candidate, seed, and fallback, so a nil return marks an impossible parity break; the caller decides whether that discards the attempt (eager path) or skips the consumer (deferred path).
-    private func rebuildGuidedTree(
-        candidate: ChoiceSequence,
-        seed: UInt64,
-        fallbackTree: ChoiceTree,
-        expecting sequence: ChoiceSequence
-    ) -> ChoiceTree? {
-        let rebuilt = Materializer.materializeAny(
-            erasedGen,
-            prefix: candidate,
-            mode: .guided(seed: seed, fallbackTree: fallbackTree)
-        )
-        guard case let .success(_, freshTree, _) = rebuilt,
-              ChoiceSequence.flatten(freshTree) == sequence
-        else {
-            ExhaustLog.error(
-                category: .propertyTest,
-                event: "flat_emission_rebuild_divergence",
-                "guided tree rebuild diverged from the flat-emission sequence for an identical candidate, seed, and fallback"
-            )
-            assertionFailure("flat-emission parity break: guided tree rebuild diverged for identical inputs")
-            return nil
-        }
-        return freshTree
     }
 
     // MARK: - Shared Attempt Plumbing
@@ -785,7 +744,7 @@ package final class FuzzRunner<Output> {
 
         var tree = ChoiceTree.just
         if verdict.isFailure || corpus.wouldAdmit(hits: hits) {
-            guard let rebuilt = rebuildFreshTree(interpreter: &interpreter, expecting: sequence) else {
+            guard let rebuilt = rebuildTree(for: sequence) else {
                 openPhaseAttempt(phase, parentIndex: nil)
                 counts.discardedAttempts += 1
                 return .evaluated(.rejectedNotNovel)
@@ -807,22 +766,19 @@ package final class FuzzRunner<Output> {
         return .evaluated(admission)
     }
 
-    /// Rebuilds the tree of the interpreter's most recent flat draw by replaying the run from its seed, and verifies it flattens to the sequence the draw emitted.
+    /// Rebuilds a candidate's tree by exact materialization of its stored sequence.
     ///
-    /// The replay is deterministic for the same run index, seed, and unique-site decisions, so a nil return marks an impossible parity break between the flat and tree-building walks; the caller drops the attempt rather than admitting a placeholder tree.
-    private func rebuildFreshTree(
-        interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
-        expecting sequence: ChoiceSequence
-    ) -> ChoiceTree? {
-        guard let (_, tree) = try? interpreter.reproduceWithTree(),
+    /// The flat pass emits the complete sequence, and exact mode re-derives everything the flattening drops (`getSize` leaves, inactive branches, bind structure) from the generator walk, so the seed and the fallback tree that produced the candidate are not needed again. A nil return means exact mode rejected a sequence the materializer itself emitted, or its tree re-flattened differently; the caller discards the attempt rather than storing a placeholder tree. Measured 2026-09-06 on IFC and STLC: no such divergence, endpoints identical to the seed-and-fallback replay it replaced.
+    private func rebuildTree(for sequence: ChoiceSequence) -> ChoiceTree? {
+        guard case let .success(_, tree, _) = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact),
               ChoiceSequence.flatten(tree) == sequence
         else {
             ExhaustLog.error(
                 category: .propertyTest,
-                event: "flat_draw_rebuild_divergence",
-                "tree rebuild diverged from the flat draw's sequence for an identical run and seed"
+                event: "exact_rebuild_divergence",
+                "exact materialization did not reproduce a sequence the flat pass emitted"
             )
-            assertionFailure("flat draw parity break: tree rebuild diverged for an identical run and seed")
+            assertionFailure("flat-emission parity break: exact rebuild diverged from the emitted sequence")
             return nil
         }
         return tree
