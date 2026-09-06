@@ -6,8 +6,8 @@ import Testing
 @Suite("Coverage-guided recovery review regressions")
 struct CoverageGuidedRecoveryReviewTests {
     #if canImport(Darwin) || canImport(Glibc)
-        @Test("Resume reattribution clears the predecessor breadcrumb before evaluating")
-        func resumeReattributionClearsPredecessorBreadcrumbBeforeProperty() throws {
+        @Test("Resume reattribution marks its own probe rather than leaving the predecessor's breadcrumb standing")
+        func resumeReattributionMarksItsOwnProbe() throws {
             let directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("exhaust-coverage-guided-recovery-review")
                 .appendingPathComponent(UUID().uuidString)
@@ -32,6 +32,7 @@ struct CoverageGuidedRecoveryReviewTests {
                     seed: 1,
                     budgetNanoseconds: 60_000_000_000,
                     consumedNanoseconds: 1,
+                    attemptsConsumed: 1000,
                     lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
                     pcTableHash: 0,
                     edgeCount: 1
@@ -40,10 +41,10 @@ struct CoverageGuidedRecoveryReviewTests {
                 snapshot: corpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
             )
             try store.write(document)
-            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL))
-            breadcrumb.record(candidateHash: 0xAAAA, parentHash: 0xBBBB)
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL, recordsCandidateSequence: true))
+            breadcrumb.record(candidateHash: 0xAAAA, parentHash: 0xBBBB, kind: .search, sequence: nil)
             let persistence = FuzzPersistenceContext(store: store, resumeEnabled: true)
-            let survivorObservedByProperty = SendableBox<(candidateHash: UInt64, parentHash: UInt64)?>(nil)
+            let survivorObservedByProperty = SendableBox<Survivor?>(nil)
             let runner = FuzzRunner(
                 gen: generator,
                 property: { _ in
@@ -66,7 +67,11 @@ struct CoverageGuidedRecoveryReviewTests {
             _ = runner.run()
 
             #expect(value == 0 || value == 1)
-            #expect(survivorObservedByProperty.withValue { $0 } == nil)
+            // A trap here belongs to the restored entry being re-judged, not to whatever the predecessor was evaluating when it died, so the slot names this probe.
+            let observed = try #require(survivorObservedByProperty.withValue { $0 })
+            #expect(observed.kind == .recovery)
+            #expect(observed.candidateHash != 0xAAAA)
+            #expect(observed.parentHash == 0)
         }
     #endif
 }

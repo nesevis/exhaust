@@ -10,41 +10,9 @@ struct ReductionGateTests {
         #expect(gate.admit(sequenceHash: 42, symptom: .returnedFalse) == .duplicate)
     }
 
-    @Test("Per-symptom cap stops dispatch with a periodic escape hatch")
-    func capAndEscape() {
-        // The fixed every-K-th cadence under test is the legacy path; the adaptive default is covered by escapeBackoffArithmetic.
-        var experiments = FuzzExperiments()
-        experiments.escapeBackoff = false
-        var gate = ReductionGate(experiments: experiments)
-        var hash: UInt64 = 0
-        var verdicts: [ReductionGate.Verdict] = []
-        // Run enough distinct failures of one symptom to pass the cap and reach the escape interval.
-        for _ in 0 ..< (FuzzTunables.reductionEscapeInterval * 2) {
-            hash += 1
-            verdicts.append(gate.admit(sequenceHash: hash, symptom: .returnedFalse))
-        }
-        let reduceCount = verdicts.count(where: { verdict in
-            if case .reduce = verdict {
-                return true
-            }
-            return false
-        })
-        let escapeCount = verdicts.count(where: { $0 == .reduce(escape: true) })
-        let capped = verdicts.count(where: { $0 == .recordUnreduced })
-        // Cap admissions plus two escape-interval admissions.
-        #expect(reduceCount == FuzzTunables.perClusterReductionCap + 2)
-        #expect(escapeCount == 2)
-        #expect(capped == verdicts.count - reduceCount)
-
-        // A different symptom has its own budget.
-        #expect(gate.admit(sequenceHash: hash + 1, symptom: FailureSymptom(kind: "Other")) == .reduce(escape: false))
-    }
-
     @Test("Adaptive escape interval widens on existing-cluster escapes and resets on a new cluster")
     func escapeBackoffArithmetic() {
-        var experiments = FuzzExperiments()
-        experiments.escapeBackoff = true
-        var gate = ReductionGate(experiments: experiments)
+        var gate = ReductionGate()
         var hash: UInt64 = 0
         let symptom = FailureSymptom.returnedFalse
 
@@ -81,28 +49,5 @@ struct ReductionGateTests {
             gate.noteEscapeOutcome(symptom: symptom, isNewCluster: false)
         }
         #expect(failuresUntilEscape(limit: FuzzTunables.reductionEscapeIntervalCap + 1) == FuzzTunables.reductionEscapeIntervalCap)
-    }
-
-    @Test("The legacy fixed interval is untouched when the experiment is off")
-    func escapeBackoffOffPreservesLegacyCadence() {
-        var experiments = FuzzExperiments()
-        experiments.escapeBackoff = false
-        var gate = ReductionGate(experiments: experiments)
-        var hash: UInt64 = 0
-        var verdicts: [ReductionGate.Verdict] = []
-        for _ in 0 ..< (FuzzTunables.reductionEscapeInterval * 2) {
-            hash += 1
-            verdicts.append(gate.admit(sequenceHash: hash, symptom: .returnedFalse))
-        }
-        // noteEscapeOutcome is a no-op with the knob off; the cadence stays every K-th seen failure.
-        gate.noteEscapeOutcome(symptom: .returnedFalse, isNewCluster: false)
-        hash += 1
-        var followUp: [ReductionGate.Verdict] = []
-        for _ in 0 ..< FuzzTunables.reductionEscapeInterval {
-            hash += 1
-            followUp.append(gate.admit(sequenceHash: hash, symptom: .returnedFalse))
-        }
-        #expect(verdicts.count(where: { $0 == .reduce(escape: true) }) == 2)
-        #expect(followUp.count(where: { $0 == .reduce(escape: true) }) == 1)
     }
 }

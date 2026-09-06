@@ -15,9 +15,25 @@ protocol ProbeSessionState {
     var graph: ChoiceGraph { get set }
     var gen: AnyGenerator { get }
     var property: (Any) -> Bool { get }
+    var probeWrapper: ProbeWrapper? { get }
     var rejectCache: Set<UInt64> { get set }
     var collectStats: Bool { get }
     var isInstrumented: Bool { get }
+}
+
+extension ProbeSessionState {
+    /// The property with the host's wrapper around it, carrying the candidate the probe is testing.
+    ///
+    /// Built per decode rather than once, because the sequence it reports is the one being decoded. Returns `property` unchanged when there is no wrapper, so a host that does not observe probes allocates no closure.
+    func wrappedProperty(for candidate: ChoiceSequence) -> (Any) -> Bool {
+        guard let probeWrapper else {
+            return property
+        }
+        let hostProperty = property
+        return { output in
+            probeWrapper(candidate) { hostProperty(output) }
+        }
+    }
 }
 
 // MARK: - Probe Session
@@ -159,7 +175,7 @@ struct ProbeSession {
             gen: state.gen,
             tree: state.tree,
             originalSequence: state.sequence,
-            property: state.property,
+            property: state.wrappedProperty(for: candidateBuffer),
             filterObservations: &filterObservations,
             precomputedHash: pendingProbeHash
         )

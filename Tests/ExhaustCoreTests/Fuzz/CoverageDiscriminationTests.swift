@@ -3,31 +3,13 @@ import Testing
 
 @Suite("Coverage discrimination math on synthetic signatures")
 struct CoverageDiscriminationTests {
-    @Test("Necessary edges are the intersection across the cluster's signatures")
-    func necessaryIntersection() {
-        let necessary = CoverageDiscrimination.necessaryEdges(
-            of: [bits([1, 2, 3, 7]), bits([1, 3, 7, 9]), bits([0, 1, 3, 7])],
-            edgeCount: 16
-        )
-        #expect(necessary.indices == [1, 3, 7])
-    }
-
-    @Test("No signatures yield an empty necessary set")
-    func necessaryEmpty() {
-        let necessary = CoverageDiscrimination.necessaryEdges(of: [], edgeCount: 16)
-        #expect(necessary.isEmpty)
-    }
-
     @Test("An edge hit by every failure and no pass ranks first; common code is excluded")
     func rankingSeparatesSignalFromSetup() {
         // Edge 0 is common code (every signature, both sides). Edge 5 is hit by every failure and no pass. Edge 3 is hit by every failure and half the passes.
         let failing = [bits([0, 3, 5]), bits([0, 3, 5])]
-        let passing = [bits([0, 3]), bits([0]), bits([0, 3]), bits([0])]
+        let passing = sample([[0, 3], [0], [0, 3], [0]])
 
-        let ranked = CoverageDiscrimination.rankedEdges(
-            failingSignatures: failing,
-            passingSignatures: passing
-        )
+        let ranked = CoverageDiscrimination.rankedEdges(failingSignatures: failing, passing: passing)
         #expect(ranked.first?.edge == 5)
         #expect(ranked.first?.failureHitFraction == 1.0)
         #expect(ranked.first?.passingHitFraction == 0.0)
@@ -41,69 +23,43 @@ struct CoverageDiscriminationTests {
         }
     }
 
-    @Test("Ranking is bounded by the tunable limit")
+    @Test("Ranking is bounded by the requested limit")
     func rankingLimit() {
-        // Ten edges, each in every failure and no pass — all discriminate maximally.
+        // Ten edges, each in every failure and no pass; all discriminate maximally.
         let failing = [bits(Array(0 ..< 10))]
-        let passing = [bits([20])]
-        let ranked = CoverageDiscrimination.rankedEdges(
-            failingSignatures: failing,
-            passingSignatures: passing
-        )
-        #expect(ranked.count == FuzzTunables.discriminatingEdgeLimit)
+        let passing = sample([[20]])
+        let ranked = CoverageDiscrimination.rankedEdges(failingSignatures: failing, passing: passing, limit: 4)
+        #expect(ranked.count == 4)
+        let candidates = CoverageDiscrimination.rankedEdges(failingSignatures: failing, passing: passing)
+        #expect(candidates.count == min(10, FuzzTunables.discriminatingEdgeCandidateLimit))
     }
 
     @Test("No failing signatures yield an empty ranking")
     func rankingEmpty() {
-        let ranked = CoverageDiscrimination.rankedEdges(
-            failingSignatures: [],
-            passingSignatures: [bits([1, 2])]
-        )
+        let ranked = CoverageDiscrimination.rankedEdges(failingSignatures: [], passing: sample([[1, 2]]))
         #expect(ranked.isEmpty)
     }
 
-    @Test("Near-miss differential isolates the edges the closest passing runs lack")
-    func nearMissDifferential() {
-        let necessary = bits([1, 2, 3, 4, 5])
-        // Two near-misses walk most of the path but never edge 5; one distant signature shares nothing.
-        let passing = [bits([1, 2, 3, 4]), bits([1, 2, 3]), bits([9, 10])]
-        let distinguishing = CoverageDiscrimination.nearMissDifferential(
-            necessaryEdges: necessary,
-            passingSignatures: passing,
-            edgeCount: 16
-        )
-        #expect(distinguishing.indices == [5])
+    @Test("The passing sample counts entries and per-edge hits, ignoring edges outside the domain")
+    func passingSampleCounts() {
+        let passing = sample([[0, 3], [0], [3, 40]])
+        #expect(passing.sampleSize == 3)
+        #expect(passing[0] == 2)
+        #expect(passing[3] == 2)
+        #expect(passing[1] == 0)
+        #expect(passing[40] == 0)
     }
 
-    @Test("Near-miss differential is empty without passing signatures or necessary edges")
-    func nearMissEmptyInputs() {
-        #expect(CoverageDiscrimination.nearMissDifferential(
-            necessaryEdges: bits([1]),
-            passingSignatures: [],
-            edgeCount: 16
-        ).isEmpty)
-        #expect(CoverageDiscrimination.nearMissDifferential(
-            necessaryEdges: BitSet(capacity: 16),
-            passingSignatures: [bits([1])],
-            edgeCount: 16
-        ).isEmpty)
-    }
-
-    @Test("Full discrimination composes the three analyses")
+    @Test("Full discrimination carries the cluster identity and the ranking")
     func composedDiscrimination() {
         let failing = [bits([0, 3, 5]), bits([0, 3, 5])]
-        let passing = [bits([0, 3]), bits([0])]
         let discrimination = CoverageDiscrimination.discriminate(
             clusterID: 7,
             failingSignatures: failing,
-            passingSignatures: passing,
-            edgeCount: 16
+            passing: sample([[0, 3], [0]])
         )
         #expect(discrimination.clusterID == 7)
-        #expect(discrimination.necessaryEdges.indices == [0, 3, 5])
         #expect(discrimination.rankedEdges.first?.edge == 5)
-        // The nearest pass {0, 3} lacks edge 5; both near-misses lack it.
-        #expect(discrimination.nearMissDistinguishingEdges.indices == [5])
     }
 }
 
@@ -115,4 +71,8 @@ private func bits(_ indices: [Int]) -> BitSet {
         set.insert(index)
     }
     return set
+}
+
+private func sample(_ entries: [[Int]]) -> PassingSample {
+    PassingSample(passingHits: entries.map { edges in edges.map { (edge: $0, hitCount: UInt8(1)) } }, edgeCount: 32)
 }

@@ -7,7 +7,7 @@
 
 /// Defines the scope of a subgraph removal operation.
 ///
-/// Three scope granularities: element removal across one or more sequences, structural subtree removal, and covering-array-backed aligned removal across sibling sequences under a common zip.
+/// Three scope granularities: element removal across one or more sequences, structural subtree removal, and covering array backed aligned removal across sibling sequences under a common zip.
 enum RemovalScope {
     /// Remove elements from one or more sequences. Subsumes both single-parent removal and aligned removal across sibling sequences.
     case elements(ElementRemovalScope)

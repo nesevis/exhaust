@@ -65,6 +65,75 @@ struct IssueReportingIntegrationTests {
         #expect(reporter.issues.isEmpty)
     }
 
+    @Test("An escape during recovery reports only the escaped-work diagnosis")
+    func recoveryEscapeDoesNotReportAPointlessRun() {
+        var report = FuzzReport.empty(termination: .uncontainedAsyncWork, seed: 1)
+        report = FuzzReport(
+            clusters: [],
+            unreducedFailureCounts: [:],
+            termination: .uncontainedAsyncWork,
+            seed: 1,
+            attempts: report.attempts,
+            invocations: FuzzReport.Invocations(
+                search: 0,
+                prune: 0,
+                reduction: 0,
+                normalization: 0,
+                classification: 0,
+                recovery: 1,
+                diagnostic: 0,
+                pruneIdentitySkips: 0
+            ),
+            coverage: FuzzReport.Coverage(
+                corpusEntryCount: 0,
+                parentCount: 0,
+                parentProfile: .empty,
+                coveredEdges: 0,
+                instrumentedEdges: 16,
+                singletons: 0,
+                doubletons: 0,
+                tripletons: 0,
+                quadrupletons: 0,
+                incidenceTotal: 0,
+                incidenceSamples: 0,
+                offLaneHits: 0
+            ),
+            timing: FuzzReport.Timing(
+                elapsed: .nanoseconds(1),
+                lastDiscovery: .zero,
+                property: .nanoseconds(1),
+                screeningOverhead: .zero,
+                samplingOverhead: .zero,
+                mutationOverhead: .zero,
+                reduction: .zero,
+                other: .zero,
+                testingOverheadFraction: 0
+            )
+        )
+        report.recordCrashResume()
+        let reporter = RecordingIssueReporter()
+
+        absorbingDirectTestingIssues {
+            withIssueReporters([reporter]) {
+                __ExhaustRuntime.reportFuzzIssues(
+                    report: report,
+                    suppressIssueReporting: false,
+                    fileID: #fileID,
+                    filePath: #filePath,
+                    line: #line,
+                    column: #column
+                )
+            }
+        }
+
+        #expect(report.attempts.evaluated == 0)
+        #expect(report.invocations.total == 1)
+        #expect(reporter.issues.count == 1)
+        #expect(reporter.issues.first?.message.contains("asynchronous work did not return under cancellation") == true)
+        #expect(reporter.issues.contains { $0.message.contains("evaluated no new candidates") } == false)
+        #expect(reporter.issues.contains { $0.message.contains("asserts nothing") } == false)
+    }
+
     @Test("Explore assertion rerun is counted as one diagnostic invocation")
     func exploreAssertionRerunIsCountedAsDiagnosticInvocation() {
         let reporter = RecordingIssueReporter()

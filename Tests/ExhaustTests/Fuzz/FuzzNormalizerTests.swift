@@ -12,20 +12,20 @@ struct FuzzNormalizerTests {
 
     @Test("A stalled mask-gate residual is re-driven to the canonical minimal value")
     func maskGateResidualNormalizes() {
-        let cache = SendableBox<[UInt64: ChoiceSequence?]>([:])
+        var cache: [UInt64: ChoiceSequence?] = [:]
         let normalized: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
             erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase(),
             symptom: .returnedFalse,
-            property: Self.maskProperty,
-            cache: cache
+            property: { value, _ in Self.maskProperty(value) },
+            cache: &cache
         )
         #expect(normalized?.value == 3)
     }
 
     @Test("A second normalization of the same reduced form is a cache hit with zero probes")
     func cacheHitSkipsProbing() {
-        let cache = SendableBox<[UInt64: ChoiceSequence?]>([:])
+        var cache: [UInt64: ChoiceSequence?] = [:]
         let evaluationCount = SendableBox<Int>(0)
         let countingProperty: @Sendable (Int) -> FuzzVerdict = { value in
             evaluationCount.withValue { $0 += 1 }
@@ -37,8 +37,8 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
-            property: countingProperty,
-            cache: cache
+            property: { value, _ in countingProperty(value) },
+            cache: &cache
         )
         let probesForFirst = evaluationCount.withValue { $0 }
         #expect(first?.value == 3)
@@ -48,8 +48,8 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
-            property: countingProperty,
-            cache: cache
+            property: { value, _ in countingProperty(value) },
+            cache: &cache
         )
         #expect(second?.value == 3)
         #expect(evaluationCount.withValue { $0 } == probesForFirst, "the cached result must not re-probe the property")
@@ -57,7 +57,7 @@ struct FuzzNormalizerTests {
 
     @Test("An already-canonical form normalizes to nothing and caches the negative result")
     func canonicalFormIsANoOp() {
-        let cache = SendableBox<[UInt64: ChoiceSequence?]>([:])
+        var cache: [UInt64: ChoiceSequence?] = [:]
         let equalityProperty: @Sendable (Int) -> FuzzVerdict = { value in
             value == 171 ? .fail(.returnedFalse) : .pass
         }
@@ -66,12 +66,12 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
-            property: equalityProperty,
-            cache: cache
+            property: { value, _ in equalityProperty(value) },
+            cache: &cache
         )
         #expect(outcome == nil)
         // The negative result is cached as an explicit nil entry, not an absence.
-        let cachedEntry: ChoiceSequence?? = cache.withValue { $0[ZobristHash.hash(of: singleValueSequence(171))] }
+        let cachedEntry: ChoiceSequence?? = cache[ZobristHash.hash(of: singleValueSequence(171))]
         guard case .some(.none) = cachedEntry else {
             Issue.record("expected an explicit cached nil, got \(String(describing: cachedEntry))")
             return
@@ -87,13 +87,13 @@ struct FuzzNormalizerTests {
             }
             return value & 0b11 == 0b11 ? .fail(FailureSymptom(kind: "B")) : .pass
         }
-        let cache = SendableBox<[UInt64: ChoiceSequence?]>([:])
+        var cache: [UInt64: ChoiceSequence?] = [:]
         let outcome: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
             erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase(),
             symptom: FailureSymptom(kind: "A"),
-            property: slippingProperty,
-            cache: cache
+            property: { value, _ in slippingProperty(value) },
+            cache: &cache
         )
         #expect(outcome == nil)
     }

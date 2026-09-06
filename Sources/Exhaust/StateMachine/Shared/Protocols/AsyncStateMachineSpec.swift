@@ -106,7 +106,8 @@ public extension AsyncStateMachineSpec {
                 return skips
             }
             if let idleTimeoutMilliseconds {
-                return __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work) ?? []
+                // Either timeout degrades the same way: skip pruning is an optimisation, and an empty set only costs the candidates it would have removed.
+                return __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work).value ?? []
             }
             return __ExhaustRuntime.blockingAwait(work)
         }

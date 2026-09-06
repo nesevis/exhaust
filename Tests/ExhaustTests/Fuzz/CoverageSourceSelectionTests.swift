@@ -8,8 +8,8 @@ import Testing
     extension CoverageRegistryTests {
         @Suite("Coverage source selection")
         struct CoverageSourceSelectionTests {
-            @Test("Counters win when both recorders are registered; tracePCGuards serve alone")
-            func productionSourcePrefersCountersWhenBothRegistered() {
+            @Test("Either recorder alone yields its source; both together are a conflict")
+            func productionSourceRefusesAMixedRecorderBuild() throws {
                 // Both registries are process-global, so every path here restores them.
                 SancovRuntime.resetForTesting()
                 TracePCGuardCoverageSource.resetRegistryForTesting()
@@ -24,11 +24,16 @@ import Testing
                 defer { counters.deallocate() }
 
                 // Trace-pc-guards alone: the isolated source.
-                #expect(FuzzInstrumentationCheck.productionSource(harvestsComparisons: false) is TracePCGuardCoverageSource)
+                let guardsOnly = try #require(FuzzInstrumentationCheck.productionSource(harvestsComparisons: false).source)
+                #expect(guardsOnly is TracePCGuardCoverageSource)
 
-                // Both: the counters, because a build adds them beside `trace-pc-guard` only when the trace-pc-guard context cannot see the property's work.
+                // Both: neither, because the two number their edges independently and nothing says which one the run should read.
                 SancovRuntime.registerCounters(start: counters, end: counters + 8)
-                #expect(FuzzInstrumentationCheck.productionSource(harvestsComparisons: false) is SancovCoverageSource)
+                let conflict = try #require(
+                    FuzzInstrumentationCheck.productionSource(harvestsComparisons: false).conflictingEdgeCounts
+                )
+                #expect(conflict.guardEdges == 4)
+                #expect(conflict.counterEdges == 8)
             }
         }
     }

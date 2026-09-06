@@ -104,7 +104,7 @@ extension ReductionMachine {
             gen: gen,
             tree: tree,
             originalSequence: sequence,
-            property: property,
+            property: wrappedProperty(for: candidate),
             filterObservations: &filterObservations,
             precomputedHash: probeHash
         )

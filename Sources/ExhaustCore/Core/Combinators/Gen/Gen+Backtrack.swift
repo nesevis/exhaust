@@ -6,7 +6,7 @@
 package extension Gen {
     /// Selects among partial generators by weighted draw, retrying without replacement until one produces a value, and throws ``GeneratorError/backtrackExhausted`` when none does.
     ///
-    /// Lowers to a `.pick` whose tuples carry ``ReflectiveOperation/PickTuple/isBacktrack``, wrapped in an `.isomorph` that unwraps `Output?` to `Output`. Only the winning arm is recorded, so the sequence is indistinguishable from a committed pick that happened to select it and every non-generation pass reads it as one. The unwrap throws rather than traps because a nil can reach it from any pass that executes forward transforms without auditioning: a recorded or pivoted arm that fails in the materializer, a covering-array row, a derivative sample.
+    /// Lowers to a `.pick` whose tuples carry ``ReflectiveOperation/PickTuple/isBacktrack``, wrapped in an `.isomorph` that unwraps `Output?` to `Output`. Only the winning arm is recorded, so the sequence is indistinguishable from a committed pick that happened to select it and every non-generation pass reads it as one. The unwrap throws rather than traps because a nil can reach it from any pass that executes forward transforms without auditioning: a recorded or pivoted arm that fails in the materializer, a covering array row, a derivative sample.
     ///
     /// - Parameters:
     ///   - choices: Weighted arms, each of which may produce `nil` to withdraw. Weights must be positive.

@@ -168,10 +168,12 @@ extension CoverageRegistryTests {
                         start: UnsafeRawPointer(base),
                         end: UnsafeRawPointer(base + 2)
                     )
-                    let descriptions = SancovSymbolizer.symbolize(edges: [0])
-                    #expect(descriptions[0]?.contains("strlen") == true)
+                    let symbols = SancovSymbolizer.symbolize(edges: [0])
+                    #expect(symbols[0]?.displayName.contains("strlen") == true)
+                    // A C symbol has no Swift module.
+                    #expect(symbols[0]?.module == nil)
                     // An edge with no PC-table entry is omitted, not fabricated.
-                    #expect(descriptions[7] == nil)
+                    #expect(symbols[7] == nil)
                 }
             }
         #endif

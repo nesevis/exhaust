@@ -20,8 +20,8 @@ struct ExploreTimeRuntimeTests {
             }
         }
         #expect(report?.termination == .instrumentationMissing)
-        #expect(report?.totalAttempts == 0)
-        #expect(report?.elapsed == .zero)
+        #expect(report?.attempts.total == 0)
+        #expect(report?.timing.elapsed == .zero)
     }
 
     // MARK: - Per-Variant Reporting Channel
@@ -107,11 +107,11 @@ struct ExploreTimeRuntimeTests {
             )
         }
         let skipped = run(settings: [.replay(1), .suppress(.all), .skipScreening])
-        #expect(skipped.screeningAttempts == 0)
-        #expect(skipped.samplingAttempts > 0)
+        #expect(skipped.attempts.screening == 0)
+        #expect(skipped.attempts.sampling > 0)
 
         let defaulted = run(settings: [.replay(1), .suppress(.all)])
-        #expect(defaulted.screeningAttempts > 0)
+        #expect(defaulted.attempts.screening > 0)
     }
 
     @Test("A failure found on a path the run could not see is still reported beside the no-coverage error")
@@ -147,8 +147,8 @@ struct ExploreTimeRuntimeTests {
             property: { _ in .pass }
         )
         #expect(report.termination == .coverageUnreachable)
-        #expect(report.totalAttempts >= FuzzTunables.coverageUnreachableAttemptThreshold)
-        #expect(report.totalAttempts < attemptLimit)
+        #expect(report.attempts.total >= FuzzTunables.coverageUnreachableAttemptThreshold)
+        #expect(report.attempts.total < attemptLimit)
     }
 
     @Test("A live source that records nothing is reported even when the budget ends before the reachability threshold")
@@ -166,7 +166,7 @@ struct ExploreTimeRuntimeTests {
             property: { _ in .pass }
         )
         #expect(report.termination == .coverageUnreachable)
-        #expect(report.evaluatedSearchCases > 0)
+        #expect(report.attempts.evaluated > 0)
     }
 
     @Test("A synthetic source that records nothing is not mistaken for unreachable coverage")
@@ -199,12 +199,12 @@ struct ExploreTimeRuntimeTests {
             Issue.record("Expected invalidConfiguration, got \(report.termination)")
             return
         }
-        #expect(report.totalAttempts == 0)
+        #expect(report.attempts.total == 0)
     }
 
     @Test("A screening replay seed is a configuration error, not a run", arguments: ["19-U3", "19-U3L5"])
     func screeningReplaySeedRejected(encodedSeed: String) {
-        // The digits before the U marker are a covering-array seed, not a run seed. Honoring them as one would silently run a different search than the row the seed names, so both screening forms fail configuration instead.
+        // The digits before the U marker are a covering array seed, not a run seed. Honoring them as one would silently run a different search than the row the seed names, so both screening forms fail configuration instead.
         let report = __ExhaustRuntime.runExploreTimeCore(
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .seconds(60),
@@ -217,7 +217,7 @@ struct ExploreTimeRuntimeTests {
             Issue.record("Expected invalidConfiguration, got \(report.termination)")
             return
         }
-        #expect(report.totalAttempts == 0)
+        #expect(report.attempts.total == 0)
     }
 
     @Test("A nonpositive time budget is a configuration error, not a run")
@@ -234,7 +234,7 @@ struct ExploreTimeRuntimeTests {
             Issue.record("Expected invalidConfiguration, got \(report.termination)")
             return
         }
-        #expect(report.totalAttempts == 0)
+        #expect(report.attempts.total == 0)
     }
 
     @Test("An attempt-limited run wraps the runner result into the public report")
@@ -252,22 +252,22 @@ struct ExploreTimeRuntimeTests {
             }
         )
         #expect(report.termination == .attemptLimitReached)
-        #expect(report.totalAttempts >= 800)
-        #expect(report.totalAttempts == report.evaluatedSearchCases + report.rejectedSearchAttempts)
-        #expect(report.totalPropertyInvocations == report.evaluatedSearchCases
-            + report.pruneInvocations
-            + report.reductionInvocations
-            + report.normalizationInvocations
-            + report.classificationInvocations
-            + report.recoveryInvocations
-            + report.diagnosticInvocations)
+        #expect(report.attempts.total >= 800)
+        #expect(report.attempts.total == report.attempts.evaluated + report.attempts.rejected)
+        #expect(report.invocations.total == report.attempts.evaluated
+            + report.invocations.prune
+            + report.invocations.reduction
+            + report.invocations.normalization
+            + report.invocations.classification
+            + report.invocations.recovery
+            + report.invocations.diagnostic)
         #expect(report.seed == 7)
         #expect(report.attemptsPerSecond > 0)
-        #expect(report.coveredEdgeCount > 0)
-        #expect(report.instrumentedEdgeCount == 32)
+        #expect(report.coverage.coveredEdges > 0)
+        #expect(report.coverage.instrumentedEdges == 32)
         #expect(report.clusters.count == 1)
-        #expect(report.testingOverheadFraction >= 0)
-        #expect(report.testingOverheadFraction <= 1)
+        #expect(report.timing.testingOverheadFraction >= 0)
+        #expect(report.timing.testingOverheadFraction <= 1)
         let timing = report.timing
         let attributedNanoseconds = timing.property.nanoseconds
             + timing.screeningOverhead.nanoseconds
@@ -275,7 +275,7 @@ struct ExploreTimeRuntimeTests {
             + timing.mutationOverhead.nanoseconds
             + timing.reduction.nanoseconds
             + timing.other.nanoseconds
-        #expect(attributedNanoseconds == report.elapsed.nanoseconds)
+        #expect(attributedNanoseconds == report.timing.elapsed.nanoseconds)
         #expect(timing.property > .zero)
         #expect(timing.screeningOverhead > .zero)
         if let cluster = report.clusters.first {
@@ -285,11 +285,10 @@ struct ExploreTimeRuntimeTests {
             #expect(cluster.reducedCount >= 1)
             #expect(cluster.firstSeen <= cluster.lastSeen)
             // The reduced form 42 hits only edge 2 (42 % 10); passing values also land there, but far below 100%.
-            #expect(cluster.necessaryEdgeCount == 1)
             #expect(cluster.discriminatingEdges.first?.edgeIndex == 2)
             #expect(cluster.discriminatingEdges.first?.failureHitFraction == 1.0)
-            // Synthetic edge indices address no real program counters, so no location resolves.
-            #expect(cluster.discriminatingEdges.allSatisfy { $0.location == nil })
+            // Synthetic edge indices address no real program counters, so no symbol resolves.
+            #expect(cluster.discriminatingEdges.allSatisfy { $0.symbol == nil })
         }
     }
 
@@ -309,7 +308,7 @@ struct ExploreTimeRuntimeTests {
             }
         )
         let replayedValues = UnsafeSendableBox<[Int]>([])
-        let invocationsBeforeReplay = report.totalPropertyInvocations
+        let invocationsBeforeReplay = report.invocations.total
 
         __ExhaustRuntime.replayFuzzDiagnostics(
             report: &report,
@@ -321,8 +320,8 @@ struct ExploreTimeRuntimeTests {
         )
 
         #expect(replayedValues.value == [42])
-        #expect(report.diagnosticInvocations == 1)
-        #expect(report.totalPropertyInvocations == invocationsBeforeReplay + 1)
+        #expect(report.invocations.diagnostic == 1)
+        #expect(report.invocations.total == invocationsBeforeReplay + 1)
     }
 
     @Test("Async timed assertion diagnostics await the reduced counterexample")
@@ -353,7 +352,7 @@ struct ExploreTimeRuntimeTests {
         )
 
         #expect(replayedValues.value == [42])
-        #expect(report.diagnosticInvocations == 1)
+        #expect(report.invocations.diagnostic == 1)
     }
 
     @Test("Reports are deterministic under a pinned seed, modulo task-completion timing")
@@ -380,9 +379,9 @@ struct ExploreTimeRuntimeTests {
             first.clusters.map { $0.discriminatingEdges.map(\.edgeIndex) }
                 == second.clusters.map { $0.discriminatingEdges.map(\.edgeIndex) }
         )
-        #expect(first.clusters.map(\.necessaryEdgeCount) == second.clusters.map(\.necessaryEdgeCount))
-        #expect(first.corpusEntryCount == second.corpusEntryCount)
-        #expect(first.coveredEdgeCount == second.coveredEdgeCount)
+        #expect(first.clusters.map { $0.discriminatingEdges.map(\.edgeIndex) } == second.clusters.map { $0.discriminatingEdges.map(\.edgeIndex) })
+        #expect(first.coverage.corpusEntryCount == second.coverage.corpusEntryCount)
+        #expect(first.coverage.coveredEdges == second.coverage.coveredEdges)
     }
 
     @Test("The fault inventory is reported as an issue unless suppressed")
@@ -440,65 +439,62 @@ struct ExploreTimeRuntimeTests {
 
     @Test("Terminal suspects collapse duplicate function names, keeping the line-bearing form")
     func suspectsCollapseDuplicateNames() {
-        // Three renderings of the same function — full line, line 0 (interior edge), and no file at all — plus one genuinely distinct suspect. Only the line-bearing form of the duplicate and the distinct suspect should survive.
+        // Three edges in the same function: a resolved line, line 0 (an interior edge), and no file at all, plus one genuinely distinct suspect. Only the line-bearing form of the duplicate and the distinct suspect should survive.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
-            makeEdge(index: 2, location: "SpecFixture.RacyLedger.audit() + 80 (RacyLedger.swift:0)"),
-            makeEdge(index: 3, location: "SpecFixture.RacyLedger.audit() + 96"),
-            makeEdge(index: 4, location: "SpecFixture.RacyLedger.deposit(_:) + 12 (RacyLedger.swift:36)"),
+            makeEdge(index: 1, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: 45)),
+            makeEdge(index: 2, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: nil)),
+            makeEdge(index: 3, symbol: makeSymbol("RacyLedger.audit()", file: nil, line: nil)),
+            makeEdge(index: 4, symbol: makeSymbol("RacyLedger.deposit(_:)", file: "RacyLedger.swift", line: 36)),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
         #expect(suspects == [
-            "RacyLedger.audit (RacyLedger.swift:45)",
-            "RacyLedger.deposit (RacyLedger.swift:36)",
+            "RacyLedger.audit() (RacyLedger.swift:45)",
+            "RacyLedger.deposit(_:) (RacyLedger.swift:36)",
         ])
     }
 
     @Test("Terminal suspects keep distinct line references within one function")
     func suspectsKeepDistinctLines() {
-        // Two resolved lines in the same function are distinct locations; only the line-less rendering collapses.
+        // Two resolved lines in the same function are distinct locations; only the line-less edge collapses.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
-            makeEdge(index: 2, location: "SpecFixture.RacyLedger.audit() + 80 (RacyLedger.swift:52)"),
-            makeEdge(index: 3, location: "SpecFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
+            makeEdge(index: 1, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: 45)),
+            makeEdge(index: 2, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: 52)),
+            makeEdge(index: 3, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: nil)),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
         #expect(suspects == [
-            "RacyLedger.audit (RacyLedger.swift:45)",
-            "RacyLedger.audit (RacyLedger.swift:52)",
+            "RacyLedger.audit() (RacyLedger.swift:45)",
+            "RacyLedger.audit() (RacyLedger.swift:52)",
         ])
     }
 
     @Test("Terminal suspects prefer the line-bearing form even when it ranks behind a line-less duplicate")
     func suspectsPreferLineBearingForm() {
-        // The line-less form leads the edge ranking; the collapse must still keep the line-bearing rendering.
+        // The line-less edge leads the ranking; the collapse must still keep the line-bearing rendering.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
-            makeEdge(index: 2, location: "SpecFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+            makeEdge(index: 1, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: nil)),
+            makeEdge(index: 2, symbol: makeSymbol("RacyLedger.audit()", file: "RacyLedger.swift", line: 45)),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
-        #expect(suspects == ["RacyLedger.audit (RacyLedger.swift:45)"])
+        #expect(suspects == ["RacyLedger.audit() (RacyLedger.swift:45)"])
     }
 
-    @Test("Terminal suspects drop edges that symbolized into compiler-generated code")
+    @Test("Terminal suspects drop edges that symbolized into synthesized bodies")
     func suspectsDropCompilerGenerated() {
-        // atos resolves thunks and synthesized conformances to a pseudo-file. They name no branch a reader can act on, so they never reach a suspect line.
+        // Debug info files a derived conformance's body under a pseudo-path. It names no branch a reader can act on, so it never reaches a suspect line.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 24 (/<compiler-generated>:0)"),
-            makeEdge(index: 2, location: "SpecFixture.RacyLedger.deposit(_:) + 12 (RacyLedger.swift:36)"),
+            makeEdge(index: 1, symbol: makeSymbol("static RacyLedger.== infix(_:_:)", file: "/<compiler-generated>", line: 0)),
+            makeEdge(index: 2, symbol: makeSymbol("RacyLedger.deposit(_:)", file: "RacyLedger.swift", line: 36)),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
-        #expect(suspects == ["RacyLedger.deposit (RacyLedger.swift:36)"])
+        #expect(suspects == ["RacyLedger.deposit(_:) (RacyLedger.swift:36)"])
     }
 
-    @Test("Terminal suspects shorten a private symbol to its bare function name")
-    func suspectsShortenPrivateSymbols() {
-        // A private function demangles as `(name in _Discriminator)`. The discriminator is build-specific, so it identifies nothing to a reader comparing two runs.
-        let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "SpecFixture.RacyLedger.(reconcile in _8B3D01F2)() + 40 (RacyLedger.swift:72)"),
-        ]
-        let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
-        #expect(suspects == ["reconcile (RacyLedger.swift:72)"])
+    @Test("A symbol renders its name alone without a file, and name plus file without a line")
+    func symbolRendering() {
+        #expect(makeSymbol("reconcile()", file: nil, line: nil).rendered == "reconcile()")
+        #expect(makeSymbol("reconcile()", file: "RacyLedger.swift", line: nil).rendered == "reconcile() (RacyLedger.swift)")
+        #expect(makeSymbol("reconcile()", file: "RacyLedger.swift", line: 72).rendered == "reconcile() (RacyLedger.swift:72)")
     }
 
     @Test("A run whose property never ran reports the pointless-run error even when suppressed")
@@ -513,7 +509,7 @@ struct ExploreTimeRuntimeTests {
             },
             property: { _ in .pass }
         )
-        #expect(report.totalAttempts == 0)
+        #expect(report.attempts.total == 0)
         withKnownIssue {
             __ExhaustRuntime.reportFuzzIssues(
                 report: report,
@@ -582,13 +578,17 @@ struct ExploreTimeRuntimeTests {
 
 private struct MarkerError: Error {}
 
-private func makeEdge(index: Int, location: String?) -> FuzzReport.DiscriminatingEdge {
+private func makeEdge(index: Int, symbol: FuzzReport.SymbolLocation?) -> FuzzReport.DiscriminatingEdge {
     FuzzReport.DiscriminatingEdge(
         edgeIndex: index,
         failureHitFraction: 1.0,
         passingHitFraction: 0.0,
-        location: location
+        symbol: symbol
     )
+}
+
+private func makeSymbol(_ displayName: String, module: String? = "SpecFixture", file: String?, line: Int?) -> FuzzReport.SymbolLocation {
+    FuzzReport.SymbolLocation(module: module, displayName: displayName, fullName: displayName, file: file, line: line)
 }
 
 private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -> FuzzReport.Cluster {
@@ -605,8 +605,6 @@ private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -
         firstSeenAttempt: 1,
         lastSeen: .seconds(1),
         discriminatingEdges: discriminatingEdges,
-        necessaryEdgeCount: discriminatingEdges.count,
-        nearMissEdgeIndices: [],
         reducedSequence: []
     )
 }
@@ -619,4 +617,100 @@ private func passthroughSource() -> SyntheticCoverageSource<Int> {
         }
         return edges
     })
+}
+
+@Suite("Discriminating edge folding")
+struct DiscriminatingEdgeFoldingTests {
+    @Test("Edges of one function fold onto its distinct resolved lines, in ranked order")
+    func foldsOffsetsOntoLines() {
+        // The shape one IFC cluster ranked: a single getter at five offsets. Two resolved lines survive; the unresolved offset and the repeats fold away.
+        let getter = "RegLabel.allBelow.getter"
+        let candidates = [
+            makeEdge(index: 29, symbol: makeSymbol(getter, module: "IFCMachine", file: "RegisterMachine.swift", line: 66)),
+            makeEdge(index: 30, symbol: makeSymbol(getter, module: "IFCMachine", file: "RegisterMachine.swift", line: 67)),
+            makeEdge(index: 31, symbol: makeSymbol(getter, module: "IFCMachine", file: "RegisterMachine.swift", line: nil)),
+            makeEdge(index: 32, symbol: makeSymbol(getter, module: "IFCMachine", file: "RegisterMachine.swift", line: 67)),
+            makeEdge(index: 39, symbol: makeSymbol(getter, module: "IFCMachine", file: "RegisterMachine.swift", line: 67)),
+            makeEdge(index: 1575, symbol: makeSymbol("regStep(_:_:)", module: "IFCMachine", file: "RegisterMachine.swift", line: 692)),
+        ]
+        let folded = __ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: 5)
+        #expect(folded.map(\.edgeIndex) == [29, 30, 1575])
+    }
+
+    @Test("Synthesized bodies are dropped and an unplaced symbol folds with itself")
+    func dropsSynthesizedAndFoldsUnplaced() {
+        // The STLC shapes: a derived equality body, a private function atos could not place (two edges, one symbol), and a function with a line.
+        let candidates = [
+            makeEdge(index: 3, symbol: makeSymbol("static STLCType.== infix(_:_:)", module: "STLC", file: "/<compiler-generated>", line: 0)),
+            makeEdge(index: 130, symbol: makeSymbol("stlcSubstImpl(_:_:_:config:)", module: "STLC", file: nil, line: nil)),
+            makeEdge(index: 131, symbol: makeSymbol("stlcSubstImpl(_:_:_:config:)", module: "STLC", file: nil, line: nil)),
+            makeEdge(index: 98, symbol: makeSymbol("stlcGetType(_:_:)", module: "STLC", file: "STLC.swift", line: 91)),
+            makeEdge(index: 99, symbol: makeSymbol("stlcGetType(_:_:)", module: "STLC", file: "STLC.swift", line: 91)),
+        ]
+        let folded = __ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: 5)
+        #expect(folded.map(\.edgeIndex) == [130, 98])
+    }
+
+    @Test("Unlocated edges are kept without symbolization and dropped with it")
+    func unlocatedEdgesFollowSymbolization() {
+        let candidates = [makeEdge(index: 7, symbol: nil), makeEdge(index: 8, symbol: nil)]
+        #expect(__ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: false, limit: 5).map(\.edgeIndex) == [7, 8])
+        #expect(__ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: 5).isEmpty)
+    }
+
+    @Test("The limit caps distinct locations, not candidates")
+    func limitCountsDistinctLocations() {
+        let candidates = (0 ..< 8).map { index in
+            makeEdge(index: index, symbol: makeSymbol("function\(index)()", file: "File.swift", line: 10 + index))
+        }
+        #expect(__ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: 3).map(\.edgeIndex) == [0, 1, 2])
+    }
+}
+
+@Suite("Symbol classification")
+struct SymbolClassificationTests {
+    @Test("Compiler-generated globals are recognized on the mangled name")
+    func mangledClassification() {
+        // A type metadata accessor, a reabstraction thunk, an outlined copy, a merged function, and a protocol witness thunk.
+        for mangled in ["$s4STLC10STLCConfigVMa", "$s4STLC1fyyFTR", "$s4STLC8STLCExprOWOy", "$s4STLC1gyyFTm", "$s4STLC4TypeVSQAASQ2eeoiySbx_xtFZTW"] {
+            #expect(SancovSymbolizer.isCompilerGenerated(mangled: mangled), "\(mangled)")
+        }
+        // A plain function, a specialization of one, a C symbol, and a getter.
+        for mangled in ["$s4STLC11stlcGetTypeySo0A4TypeVSgSayADG_AA0A4ExprOtF", "$s4STLC1fyyFTf4d_n", "_exhaust_tpg_bind", "$s4STLC8RegLabelV8allBelowSayACGvg"] {
+            #expect(SancovSymbolizer.isCompilerGenerated(mangled: mangled) == false, "\(mangled)")
+        }
+    }
+
+    @Test("The module is the first identifier of a mangled Swift name")
+    func moduleName() {
+        #expect(SancovSymbolizer.moduleName(ofMangled: "$s4STLC11stlcGetTypeySo0A4TypeVSgSayADG_AA0A4ExprOtF") == "STLC")
+        #expect(SancovSymbolizer.moduleName(ofMangled: "$s10IFCMachine8RegLabelO8allBelowSayACGvg") == "IFCMachine")
+        #expect(SancovSymbolizer.moduleName(ofMangled: "$sSa6appendyyxF") == "Swift")
+        #expect(SancovSymbolizer.moduleName(ofMangled: "_exhaust_tpg_bind") == nil)
+    }
+
+    @Test("Specialization wrappers strip to the function in both demangler forms")
+    func specializationStripping() {
+        #expect(SancovSymbolizer.stripSpecialization("function signature specialization <Arg[2] = Dead> of STLC.stlcGetType([STLC.STLCType], STLC.STLCExpr) -> STLC.STLCType?") == "STLC.stlcGetType([STLC.STLCType], STLC.STLCExpr) -> STLC.STLCType?")
+        #expect(SancovSymbolizer.stripSpecialization("specialized stlcGetType(_:_:)") == "stlcGetType(_:_:)")
+        #expect(SancovSymbolizer.stripSpecialization("stlcGetType(_:_:)") == "stlcGetType(_:_:)")
+    }
+
+    #if os(macOS)
+        @Test("The simplifier renders the debugger's form for the shapes the IFC and STLC dumps produced")
+        func simplifiedNames() throws {
+            let names = SancovSymbolizer.simplifiedNames(forMangled: [
+                "$s4STLC11stlcGetTypeySo0A4TypeVSgSayADG_AA0A4ExprOtF",
+                "$s10IFCMachine8RegLabelO8allBelowSayACGvg",
+                "$s4STLC13stlcSubstImpl33_1954C2AFCB1824DC713E91E170B31520LLyAA0A4ExprOSi_A2E6configAA0A6ConfigVtF",
+                "$s4STLC11stlcGetTypeySo0A4TypeVSgSayADG_AA0A4ExprOtFTf4d_n",
+            ])
+            // The toolchain tool may be absent on a bare runner; then nothing renders and the full demangling stands in.
+            try #require(names.isEmpty == false, "swift-demangle unavailable")
+            #expect(names["$s4STLC11stlcGetTypeySo0A4TypeVSgSayADG_AA0A4ExprOtF"] == "stlcGetType(_:_:)")
+            #expect(names["$s10IFCMachine8RegLabelO8allBelowSayACGvg"] == "RegLabel.allBelow.getter")
+            #expect(names["$s4STLC13stlcSubstImpl33_1954C2AFCB1824DC713E91E170B31520LLyAA0A4ExprOSi_A2E6configAA0A6ConfigVtF"]?.hasPrefix("stlcSubstImpl(") == true)
+            #expect(names["$s4STLC11stlcGetTypeySo0A4TypeVSgSayADG_AA0A4ExprOtFTf4d_n"] == "stlcGetType(_:_:)")
+        }
+    #endif
 }

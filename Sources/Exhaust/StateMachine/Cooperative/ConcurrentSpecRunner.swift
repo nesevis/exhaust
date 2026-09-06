@@ -17,6 +17,18 @@
 // Limitation: the schedule array has one entry per non-prefix command, but the drain loop consumes one entry per dequeued job, including continuations from internal suspension points. Commands that suspend multiple times consume schedule entries meant for later commands, causing the schedule to exhaust early. Once exhausted, lane assignment falls back to deterministic round-robin (`scheduleIndex % concurrencyLevel`). Command-level lane assignment and ordering remain fully reducible; continuation-level interleavings are not encoded in the choice sequence because the number of suspension points per command is a runtime property that cannot be known before execution.
 import ExhaustCore
 
+/// How a drain ended, and for a timeout whether the abandoned work is still running.
+///
+/// A caller that only asks "did this time out" cannot tell a probe whose work stopped from one whose tasks are still executing the system under test. The second keeps consuming the process and keeps recording coverage against later attempts, so a search cannot treat the two the same way.
+package enum ExecutionDisposition: Equatable, Sendable {
+    /// The drain reached its terminal condition.
+    case completed
+    /// The idle timeout fired and the cancellation drain then completed, so nothing from this probe is still running.
+    case timedOutQuiesced
+    /// The idle timeout fired and cancellation did not drain either, so the probe's tasks were abandoned while still running.
+    case timedOutEscaped
+}
+
 /// Outcome of draining a single tagged command sequence through the cooperative scheduler.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct ConcurrentExecutionResult<Spec: AsyncStateMachineSpec> {
@@ -24,8 +36,14 @@ struct ConcurrentExecutionResult<Spec: AsyncStateMachineSpec> {
     var passed: Bool
     /// The execution trace, populated only when `recordTrace` is true.
     var trace: [TraceStep]
-    /// Whether execution stalled because no continuations arrived within the idle timeout.
-    var timedOut: Bool = false
+    /// How the drain ended. A timeout carries whether the abandoned work quiesced.
+    var disposition: ExecutionDisposition = .completed
+
+    /// Whether execution stalled because no continuations arrived within the idle timeout, either disposition.
+    var timedOut: Bool {
+        disposition != .completed
+    }
+
     /// The SUT state after the concurrent execution, populated only when `recordTrace` is true.
     var systemUnderTest: Spec.SystemUnderTest?
     /// The spec's failure description after the concurrent execution, populated only when `recordTrace` is true and the execution failed.
@@ -423,16 +441,18 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 executor: executors[0],
                 idleTimeoutMilliseconds: cancellationDrainMilliseconds
             )
+            var disposition = ExecutionDisposition.timedOutQuiesced
             if case .timedOut = cancellationOutcome {
                 abandonTimedOutTasks(
                     runQueue: runQueue,
                     executors: executors
                 )
+                disposition = .timedOutEscaped
             }
             return ConcurrentExecutionResult(
                 passed: false,
                 trace: assembleTrace(),
-                timedOut: true,
+                disposition: disposition,
                 laneResponses: collectLaneResponses()
             )
         }
@@ -541,16 +561,18 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             failureFlag: failed,
             onTraceSignal: nil
         )
+        var disposition = ExecutionDisposition.timedOutQuiesced
         if case .timedOut = cancellationOutcome {
             abandonTimedOutTasks(
                 runQueue: runQueue,
                 executors: executors
             )
+            disposition = .timedOutEscaped
         }
         return ConcurrentExecutionResult(
             passed: false,
             trace: assembleTrace(),
-            timedOut: true,
+            disposition: disposition,
             laneResponses: collectLaneResponses()
         )
     }

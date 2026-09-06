@@ -51,41 +51,4 @@ struct MutationBanditTests {
         let second = (0 ..< 10).map { step in bandit.pick(random: Double(step) / 10) }
         #expect(first == second)
     }
-
-    @Test("Power schedule ramps energy for revisited parents and divides by spawn frequency")
-    func powerScheduleArithmetic() {
-        let corpus = FuzzCorpus(edgeCount: 8)
-        let sequence: ChoiceSequence = [.just]
-        _ = corpus.offer(
-            sequence: sequence,
-            tree: .just,
-            hits: [(edge: 1, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        let base = FuzzTunables.childrenPerParent
-        var energies: [Int] = []
-        for _ in 0 ..< 12 {
-            energies.append(corpus.powerScheduleChildren(forParentAt: 0, base: base))
-        }
-        // First pick spends the base energy; every value obeys the clamp; sustained revisits reach the cap as 2^s outruns the frequency denominator.
-        #expect(energies[0] == base)
-        #expect(energies.allSatisfy { $0 >= 1 && $0 <= FuzzTunables.powerScheduleEnergyCap })
-        #expect(energies.last == FuzzTunables.powerScheduleEnergyCap)
-
-        // The arithmetic matches the formula step by step.
-        var timesPicked = 0
-        var childrenSpawned = 0
-        for energy in energies {
-            timesPicked += 1
-            let exponent = min(timesPicked - 1, FuzzTunables.powerScheduleExponentLimit)
-            let expected = min(
-                max(base * (1 << exponent) / (1 + childrenSpawned), 1),
-                FuzzTunables.powerScheduleEnergyCap
-            )
-            #expect(energy == expected)
-            childrenSpawned += expected
-        }
-    }
 }

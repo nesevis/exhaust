@@ -2,11 +2,9 @@
 //
 // A uniform draw over the intensity bands is the naive default the literature beats twice over: stacking several operators per child outperforms one-at-a-time (Wu et al., "One Fuzzing Strategy to Rule Them All", ICSE 2022), and the right operator weights vary by target, so any fixed tuning loses to an adaptive one (same paper; MOpt, USENIX Security 2019). The bandit here is EXP3 (exponential-weight exploration/exploitation), chosen over discounted UCB because the reward signal — corpus admission — is sparse and non-stationary in exactly the way EXP3's adversarial guarantees tolerate: admission rates collapse as coverage saturates, and a band that stops paying should decay rather than coast on stale confidence intervals.
 //
-// Two deviations from textbook EXP3, both of which weaken its regret guarantee rather than preserve it. Neither is measured, and both are reasons the `banditBands` knob has not earned its default-on gate yet.
+// One deviation from textbook EXP3: the update uses the arm's selection probability at reward time rather than at pick time. Weights move only on admissions, which are rare relative to picks, so the drift between the two should be small, and it is unmeasured. Each child comes from exactly one arm, so the reward lands on the arm that produced it; stacked children, which would have made this a combinatorial bandit problem, were removed after measuring neutral-to-worse.
 //
-// First, the update uses the arm's selection probability at reward time rather than at pick time. Weights move only on admissions, which are rare relative to picks, so the drift between the two should be small — but "should be small" is an argument, not a measurement.
-//
-// Second, and larger: with `stackedMutation` several arms compose one child, and on admission every contributing arm is rewarded. EXP3 is a single-arm algorithm; crediting a whole stack is a combinatorial bandit problem with different guarantees, and the arm that did the work and the arm that did nothing receive the same reward. Credit assignment across a stack is the open question here, not the exploration rate.
+// The bandit ships on because the inventory is ten arms, six of which are graph and pair operators that miss cheaply on parents they cannot target; a uniform draw over that inventory spends children on misses. The four-arm inventory it was first measured against (2026-07-11, neutral-to-worse) gave a uniform draw little to get wrong, so that result does not carry over. The comparison that would settle it, bandit against the fixed distribution over the same ten arms, has not been run.
 
 import Foundation
 
@@ -22,16 +20,9 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case lockstepDelta = 7
     case twinSplice = 8
     case typedCrossover = 9
-    /// The adaptive one-leaf walk campaign under the `campaignMutation` knob. Dispatched at parent level when the stall gate opens, never in the bandit's own draw; the case exists so admissions credit the arm's statistics.
-    case valueWalk = 10
-    /// The bind-region covering-sweep campaign under the `campaignMutation` knob. Dispatched at parent level when the stall gate opens, never in the bandit's own draw; the case exists so admissions credit the arm's statistics.
-    case regionSweep = 11
 
-    /// The size of the inventory with every experiment knob off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so the legacy inventory is the raw-value prefix of this length.
-    package static let legacyArmCount = 4
-
-    /// The inventory with every experiment knob off, in raw-value order.
-    package static let legacyArms = Array(MutationArm.allCases.prefix(legacyArmCount))
+    /// The inventory with the targeting knobs off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so this is the raw-value prefix of the inventory.
+    package static let bandArms: [MutationArm] = [.low, .medium, .high, .splice]
 
     /// The arm credited for a band mutation of this intensity.
     ///
@@ -61,16 +52,11 @@ package struct MutationBandit: Sendable {
     /// The distribution over `weights`, recomputed only when a reward moves them. Picks happen once per candidate and rewards once per admission, so computing the distribution per pick allocated an array on every candidate for a value that changes a few times a second at most.
     private var cachedProbabilities: [Double]
 
-    /// Creates a bandit over the given arm inventory. The default covers the legacy inventory.
-    package init(arms: [MutationArm] = MutationArm.legacyArms) {
+    /// Creates a bandit over the given arm inventory. The default covers the band inventory alone.
+    package init(arms: [MutationArm] = MutationArm.bandArms) {
         self.arms = arms
         weights = Array(repeating: 1.0, count: arms.count)
         cachedProbabilities = Self.probabilities(over: weights)
-    }
-
-    /// Creates a bandit over the first `armCount` arms in ``MutationArm``'s raw-value order.
-    package init(armCount: Int) {
-        self.init(arms: Array(MutationArm.allCases.prefix(armCount)))
     }
 
     /// The current selection probability of each arm: the exploration-smoothed, weight-proportional EXP3 distribution.

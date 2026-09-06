@@ -8,7 +8,9 @@ import Foundation
 package enum FuzzTunables {
     // MARK: - Corpus
 
-    /// Convergence threshold τ separating the mutable tier from the discovery tier. Entries at or above it inherit enough choice-sequence structure to be worth mutating; entries below it would mostly hit PRNG fallback, paying mutation cost for what amounts to fresh sampling.
+    /// Convergence threshold τ separating the mutable tier from the discovery tier.
+    ///
+    /// The tier is a length guard for the champion archive, not a judgement of the entry as a parent. A child that resolved mostly through the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Measured 2026-09-06 (`fuzz-loop-experiments-2026-09-06.md`): admitting every entry as a parent cost IFC 3.1% of covered edges and 4.5% of its parent pool while the corpus stayed flat, with parent length down 4.1%. Keeping low-convergence entries out of the archive holds the pool off the shortlex floor.
     package static let mutableTierConvergenceThreshold = 0.5
 
     /// Weight of the novelty bonus term (α) in parent selection.
@@ -69,32 +71,20 @@ package enum FuzzTunables {
     /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
     package static let discardParentEnergy = 1.0 / 3.0
 
-    /// Fresh samples drawn in the reseed burst before a mutation plateau terminates the run. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks; 1000 matches Phase 2's sampling plateau window.
-    package static let reseedBurstAttemptLimit = 1000
-
     /// Maximum slots one comparand-substitution candidate may overwrite with the drawn operand. The count is drawn uniformly in 1...min(span, compatible slots): 1 preserves the single-slot magic-gate move, larger counts perform the agreement move for preconditions that require many positions to match at once. Kept small: each extra slot halves the chance that every overwritten position was one the comparison actually constrained.
     package static let comparandSubstitutionSlotSpan = 8
 
-    /// Probability that parent selection picks a uniformly random mutable-tier entry instead of a score-weighted one, guaranteeing every basin a floor escape probability no score distribution can squeeze out. Experimental, read once from `EXHAUST_PARENT_EPSILON`; 0 (the default) disables the floor. See the basin-escape survey in ExhaustDocs.
-    package static let parentSelectionEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_EPSILON"].flatMap(Double.init) ?? 0
+    /// Barren draws a comparand-substitution key gets before it is retired, and the allowance a yielding draw restores it to. A yield is a corpus admission or a failure: the arm can be worth its attempts through faults that light no new edge, so admission alone would retire it too early.
+    package static let comparandOperandEnergy: UInt8 = 16
 
-    /// Whether parent selection uses the two-pass weighted walk instead of the prefix-sum binary search. Experimental, read once from `EXHAUST_PARENT_PICK=walk`; the two agree except when a draw lands within a rounding error of a boundary, and the knob exists so a benchmark arm can hold trajectories bit-identical to a build without the prefix sums.
-    package static let parentPickUsesWalk: Bool = ProcessInfo.processInfo.environment["EXHAUST_PARENT_PICK"] == "walk"
+    /// Floor of the adaptive fresh-draw mixture: the probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick while the corpus is admitting. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost, so a healthy corpus keeps only a background rate.
+    package static let freshMixtureFloor = 0.05
 
-    /// Age-decay coefficient for parent scores: an entry's effective score is its base score divided by `1 + k × timesDrawn`, so a basin's founders lose priority as they are milked (the AFLFast idea). Experimental, read once from `EXHAUST_PARENT_AGE_K`; 0 (the default) disables decay. At 0.01 a parent's weight halves after 100 draws.
-    package static let parentAgeDecayCoefficient: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_AGE_K"].flatMap(Double.init) ?? 0
+    /// Cap of the adaptive fresh-draw mixture, reached when the corpus has admitted nothing for a full ramp. The default sits at the measured dose-response knee: on basin-fragmented workloads a starved run climbs to spending most of its budget on fresh draws, matching the exploration share FuzzChick reaches through queue starvation.
+    package static let freshMixtureCap = 0.6
 
-    /// Probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick, keeping the sampling phase alive as a background rate through the whole run. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost. Experimental, read once from `EXHAUST_FRESH_EPSILON`; 0 (the default) disables the mixture.
-    package static let freshDrawEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_EPSILON"].flatMap(Double.init) ?? 0
-
-    /// Floor of the adaptive fresh-draw mixture: the background sampling rate a healthy, admitting corpus keeps. Overridable via `EXHAUST_FRESH_FLOOR`.
-    package static let freshMixtureFloor: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_FLOOR"].flatMap(Double.init) ?? 0.05
-
-    /// Cap of the adaptive fresh-draw mixture, reached when the corpus has admitted nothing for a full ramp. A cap at or below the floor disables the ramp and the fixed `freshDrawEpsilon` governs alone. The default sits at the measured dose-response knee: on basin-fragmented workloads a starved run climbs to spending most of its budget on fresh draws, matching the exploration share FuzzChick reaches through queue starvation. Overridable via `EXHAUST_FRESH_CAP`; 0 disables the ramp.
-    package static let freshMixtureCap: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_CAP"].flatMap(Double.init) ?? 0.6
-
-    /// Attempts without a corpus admission over which the mixture climbs linearly from floor to cap. Overridable via `EXHAUST_FRESH_RAMP`.
-    package static let freshMixtureRampAttempts: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_RAMP"].flatMap(Double.init) ?? 2000
+    /// Attempts without a corpus admission over which the mixture climbs linearly from floor to cap.
+    package static let freshMixtureRampAttempts = 2000.0
 
     // MARK: - Crash Recovery
 
@@ -106,32 +96,22 @@ package enum FuzzTunables {
 
     // MARK: - Report-Time Discrimination
 
-    /// Discriminating edges reported per cluster. Beyond a handful, the ranking's tail is noise against small failing samples.
+    /// Discriminating source locations reported per cluster. Beyond a handful, the ranking's tail is noise against small failing samples.
     package static let discriminatingEdgeLimit = 5
 
-    /// Passing signatures (highest Jaccard similarity to the cluster's necessary edges) compared in the near-miss differential.
-    package static let nearMissComparisonCount = 3
+    /// Ranked edges handed to the report per cluster before it folds them by source location and keeps ``discriminatingEdgeLimit``. One function usually ranks at several offsets (one IFC cluster ranked a single getter at five), so the pool has to be wider than the printed list for the list to name more than one or two functions.
+    package static let discriminatingEdgeCandidateLimit = 40
 
     // MARK: - Reduction Backpressure
 
     /// Reduced instances per cluster before further symptom-matched failures are recorded unreduced.
     package static let perClusterReductionCap = 5
 
-    /// Every K-th symptom-matched failure is reduced anyway once the cap is reached, bounding the risk of a new bug hiding behind a familiar symptom.
+    /// Starting escape interval: the first symptom-matched failure past the cap that is reduced anyway, bounding the risk of a new bug hiding behind a familiar symptom. Later escapes widen it geometrically up to ``reductionEscapeIntervalCap``.
     package static let reductionEscapeInterval = 50
 
-    // MARK: - Power Schedule (Experiment: powerSchedule)
-
-    /// Upper bound on the children one parent pick may spawn under the power schedule. AFLFast's energy formula grows exponentially with revisits; the cap keeps a favored parent from monopolizing whole plateau windows.
-    package static let powerScheduleEnergyCap = 16
-
-    /// Bound on the exponent in the power schedule's `2^s` term, so the arithmetic saturates at the cap instead of overflowing on long runs.
-    package static let powerScheduleExponentLimit = 10
-
-    // MARK: - Swarm Generation (Experiment: swarmMode)
-
-    /// Fuzz attempts per swarm epoch. Attempts-based rather than wall-clock so the epoch schedule replays deterministically under a pinned seed regardless of machine load.
-    package static let swarmEpochAttempts = 2048
+    /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely, and the escape hatch exists precisely because symptom matching is a weak signal.
+    package static let reductionEscapeIntervalCap = 3200
 
     // MARK: - Comparison Injection
 
@@ -149,50 +129,34 @@ package enum FuzzTunables {
     /// Maximum commands per generated sequence when `#explore(Spec.self, time:)` is not given an explicit `.commandLimit`. Sequence length is half the trigger for accumulation faults — a short default silently suppresses the class this mode targets — so the default is a fixed, visible constant rather than a heuristic, matching the length the SW2a calibration sweep ran at.
     package static let specDefaultCommandLimit = 40
 
-    // MARK: - Escape-Hatch Backoff (Experiment: escapeBackoff)
-
-    /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
-    package static let reductionEscapeIntervalCap = 3200
-
     // MARK: - Graph Mutation (Experiment: graphMutation)
 
     /// Exclusive upper bound on the log-uniform exponent draw for the lockstep delta: `delta = 1 + next(2^exponent)` with `exponent < 11`, so most deltas are small agreement-preserving steps and the occasional draw jumps by up to ~2^10.
     package static let lockstepDeltaExponentLimit: UInt64 = 11
 
-    // MARK: - Campaigns (Experiment: campaignMutation)
+    // MARK: - Crash Recovery
 
-    /// Children of one parent evaluated without an admission before that parent's campaign gate opens. Campaigns are multi-probe spends, so they unlock only where the cheap arms have gone quiet; at the default `childrenPerParent` of 4 this is 8 quiet visits.
-    package static let campaignStallThreshold = 32
-
-    /// Probability that a gate-open parent visit runs a campaign instead of its ordinary child batch. Below 1 so stalled parents keep receiving ordinary mutations between campaigns.
-    package static let campaignShare = 0.5
-
-    /// Restricts the campaign draw to one kind for ablation arms: `sweep` or `walk`, read once from `EXHAUST_CAMPAIGN`; unset runs both on a fair draw.
-    package static let campaignKindOverride: String? = ProcessInfo.processInfo.environment["EXHAUST_CAMPAIGN"]
+    /// Budget at or above which the crash breadcrumb records each candidate's own choice sequence, so a resumed run can show the trapping input instead of naming it by hash and quarantining its parent.
+    ///
+    /// The recording costs about 8% of candidate throughput at any budget, because the encode and the copy into the slot run inside every property invocation's bracket (on the Etna IFC type-based workload, property time went from 0.8 to 4.1 microseconds per evaluated case). What the budget changes is the value of having the input: a short run is cheap to reproduce by running it again, and a long campaign is not.
+    ///
+    /// - Note: Throughput therefore steps down at this boundary. A run just under it searches about 8% faster than one just over.
+    package static let trapCandidateBudgetFloor: UInt64 = 10 * 60 * 1_000_000_000
 
     // MARK: - Coverage Reachability
 
     /// Attempts to allow before concluding that an instrumented build is recording nothing.
     ///
-    /// Comfortably past the screening phase, so a run is judged on evaluations spanning all three phases rather than on a handful of covering-array rows.
+    /// Comfortably past the screening phase, so a run is judged on evaluations spanning all three phases rather than on a handful of covering array rows.
     package static let coverageUnreachableAttemptThreshold = 1000
 }
 
 // MARK: - Experiment Knobs
 
-/// Per-run switches for mechanisms that land benchmark-gated.
+/// Per-run switches for the mechanisms a benchmark arm can still hold off.
 ///
-/// Every new search-side mechanism ships behind one of these knobs, default-off, and flips on only when its measured gate passes (the knob-gate-default pattern). In-package tests reach them through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
+/// A knob exists only while its off path is worth measuring against: the arm inventory (bandit, graph, and pair operators) and the swarm rewrite. Mechanisms whose off path lost its last measurement (uniform parent selection, the binary swarm mask, the power schedule, campaigns, the reseed burst, the fixed escape cadence, and the knob-off variants of normalization, candidate dedup, and the champion archive) were deleted rather than left switchable. In-package tests reach the knobs through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
 package struct FuzzExperiments: Sendable, Equatable {
-    /// Post-reduction cluster normalization: re-drive each value of a would-be-new cluster's reduced form toward its minimal still-failing bit pattern before minting the cluster. Default-on; the knob stays one release for A/B.
-    package var normalization = true
-
-    /// Adaptive reduction-gate escape interval: coverage-novel failures escape immediately; periodic escapes that land in an existing cluster widen the interval geometrically, and new-cluster escapes reset it. Default-on; the knob stays one release for A/B.
-    package var escapeBackoff = true
-
-    /// Stacked mutation: one mutation-phase child may compose several mutation operators instead of exactly one.
-    package var stackedMutation = false
-
     /// Bandit-tuned mutation band weights over the enabled arm inventory, rewarded by corpus admission.
     package var banditBands = true
 
@@ -202,56 +166,59 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Pair mutation operators: the twin splice (copy one zip twin's span over its sibling's, creating structural agreement) and the typed crossover (replace a pick subtree with a same-fingerprint span from a different corpus entry). Adds the two arms to the pick inventory the same way `graphMutation` adds its four.
     package var pairMutation = true
 
-    /// AFLFast-style power schedule for the number of children drawn per picked parent.
-    package var powerSchedule = false
-
-    /// Fresh-generation burst before a mutation plateau terminates the run: draws up to ``FuzzTunables/reseedBurstAttemptLimit`` fresh samples and resumes mutation if one discovers a new edge or fault cluster. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks, since Phase 2's plateau fired against a smaller corpus.
-    package var reseedBurst = true
-
-    /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
-    package var championArchive = true
-
-    /// Multi-probe campaigns: the adaptive one-leaf walk and the bind-region covering sweep. A campaign replaces one gate-open parent visit's child batch, spending the same child budget on a coordinated probe session instead of independent draws; the gate opens after ``FuzzTunables/campaignStallThreshold`` children without an admission.
-    package var campaignMutation = false
-
     /// How swarm generation rewrites a mutated child's branch selections.
     package enum SwarmMode: String, Sendable {
         /// No swarm rewrite: mutated children keep the uniform branch mix.
         case off
-        /// Legacy per-epoch binary mask: each pick site's branches are hard-allowed or hard-excluded for an epoch, and a disallowed selection is pivoted to an allowed one.
-        case binary
         /// Per-attempt continuous activation weights: each branch is thinned by a weight rather than excluded, so mutated children reach command mixes at specific ratios a binary mask cannot.
         case activated
     }
 
-    /// The swarm generation mode. Defaults to ``SwarmMode/activated`` — the diversity gain over no swarm is robust (~1.7x more distinct fault shapes) at no measurable throughput cost. Set `swarmMode=off` to disable swarm generation, or `swarmMode=binary` for the legacy per-epoch mask. See ADR 0006.
+    /// The swarm generation mode. Defaults to ``SwarmMode/activated`` — the diversity gain over no swarm is robust (~1.7x more distinct fault shapes) at no measurable throughput cost. Set `swarmMode=off` to disable swarm generation. See ADR 0006.
     package var swarmMode: SwarmMode = .activated
 
-    /// Creates the default knob set: mechanisms whose gates passed default on (`normalization`, `escapeBackoff`, `championArchive`, and the activated swarm mode); the rest stay off until theirs do.
+    /// Creates the default knob set, which is ``shipped``.
     package init() {}
+
+    /// The configuration a release actually runs: every knob on.
+    ///
+    /// The knobs are independent, so the type describes more configurations than anyone runs. Name the configuration a claim is about and point at this: it is the one the defaults produce and the one an unqualified statement means. ``parse(environmentValue:)`` reads as a delta from here.
+    package static let shipped = FuzzExperiments()
+
+    /// Every knob off: the baseline a benchmark arm measures a mechanism against.
+    ///
+    /// Written through ``knobs`` rather than field by field, so a knob added to one and forgotten in the other is not possible.
+    package static let legacy: FuzzExperiments = {
+        var experiments = FuzzExperiments()
+        for (_, keyPath) in knobs {
+            experiments[keyPath: keyPath] = false
+        }
+        experiments.swarmMode = .off
+        return experiments
+    }()
+
+    /// The on/off knobs by their `EXHAUST_FUZZ_EXPERIMENT` name. ``swarmMode`` is absent: it is the one multi-state knob and parses off its enum.
+    ///
+    /// Computed rather than stored: a `WritableKeyPath` is not `Sendable`, so a stored static of these is rejected as shared mutable state. It is read twice per run, at parse and when ``legacy`` is built, so the rebuild costs nothing that matters.
+    package static var knobs: [(name: String, keyPath: WritableKeyPath<FuzzExperiments, Bool>)] {
+        [
+            ("banditBands", \.banditBands),
+            ("graphMutation", \.graphMutation),
+            ("pairMutation", \.pairMutation),
+        ]
+    }
 
     /// A parse failure with the offending fragment, rendered into the run's configuration error. Silent typos would invalidate benchmark arms, so unknown knobs are a hard error rather than a warning.
     package struct ParseError: Error, CustomStringConvertible {
         package let description: String
     }
 
-    /// Parses an `EXHAUST_FUZZ_EXPERIMENT` value like `stackedMutation=on,banditBands=off` on top of the defaults.
+    /// Parses an `EXHAUST_FUZZ_EXPERIMENT` value like `graphMutation=on,banditBands=off` as a delta from ``shipped``.
     ///
     /// - Throws: ``ParseError`` on an unknown knob name or a value other than `on`/`off`.
     package static func parse(environmentValue: String) throws -> FuzzExperiments {
-        var experiments = FuzzExperiments()
-        let assignments: [(String, WritableKeyPath<FuzzExperiments, Bool>)] = [
-            ("normalization", \.normalization),
-            ("escapeBackoff", \.escapeBackoff),
-            ("stackedMutation", \.stackedMutation),
-            ("banditBands", \.banditBands),
-            ("graphMutation", \.graphMutation),
-            ("pairMutation", \.pairMutation),
-            ("campaignMutation", \.campaignMutation),
-            ("powerSchedule", \.powerSchedule),
-            ("reseedBurst", \.reseedBurst),
-            ("championArchive", \.championArchive),
-        ]
+        var experiments = FuzzExperiments.shipped
+        let assignments = knobs
         for fragment in environmentValue.split(separator: ",") {
             let parts = fragment.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else {
@@ -260,7 +227,7 @@ package struct FuzzExperiments: Sendable, Equatable {
             // swarmMode is the one multi-state knob, so it parses off the enum rather than the on/off table.
             if parts[0] == "swarmMode" {
                 guard let mode = SwarmMode(rawValue: parts[1]) else {
-                    throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT knob 'swarmMode' has value '\(parts[1])'; expected off, binary, or activated.")
+                    throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT knob 'swarmMode' has value '\(parts[1])'; expected off or activated.")
                 }
                 experiments.swarmMode = mode
                 continue

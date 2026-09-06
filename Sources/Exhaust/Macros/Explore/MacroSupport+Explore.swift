@@ -40,13 +40,13 @@ public extension __ExhaustRuntime {
                 case let .budget(exploreBudget):
                     budget = exploreBudget
                 case let .replay(replaySeed):
-                    // Screening seeds are rejected rather than ignored: they address a covering-array row that #explore cannot replay, and honoring their seed digits as a run seed would silently explore a different stream than the one the seed names.
+                    // Screening seeds are rejected rather than ignored: they address a covering array row that #explore cannot replay, and honoring their seed digits as a run seed would silently explore a different stream than the one the seed names.
                     switch replaySeed.resolve() {
                         case let .sampling(resolvedSeed, _):
                             seed = resolvedSeed
                         case .valueScreening, .specScreening:
                             reportError(
-                                "Screening replay seeds (with a U row marker) address a covering-array row and cannot seed #explore. Pass the run seed from a prior report.",
+                                "Screening replay seeds (with a U row marker) address a covering array row and cannot seed #explore. Pass the run seed from a prior report.",
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,

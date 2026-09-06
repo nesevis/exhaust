@@ -72,31 +72,32 @@ struct MetaFuzzProbe: ParsableCommand {
         }
 
         let percentage: (TimeSpan) -> String = { duration in
-            guard report.elapsed.nanoseconds > 0 else {
+            guard report.timing.elapsed.nanoseconds > 0 else {
                 return "0.0"
             }
-            return String(format: "%.1f", duration.seconds / report.elapsed.seconds * 100)
+            return String(format: "%.1f", duration.seconds / report.timing.elapsed.seconds * 100)
         }
         let timing = report.timing
         print(
             "metafuzz: probe throughput \(String(format: "%.1f", report.attemptsPerSecond)) evaluated cases/s "
-                + "(\(report.evaluatedSearchCases) cases); property \(percentage(timing.property))% · "
+                + "(\(report.attempts.evaluated) cases); property \(percentage(timing.property))% · "
                 + "screening \(percentage(timing.screeningOverhead))% · "
                 + "sampling \(percentage(timing.samplingOverhead))% · "
                 + "mutation \(percentage(timing.mutationOverhead))% · "
                 + "reduction \(percentage(timing.reduction))% · other \(percentage(timing.other))%"
         )
         print(
-            "metafuzz: probe corpus \(report.corpusEntryCount) entries, \(report.mutableTierCount) mutable tier; "
-                + "edge singletons \(report.edgeSingletonCount), doubletons \(report.edgeDoubletonCount)"
+            "metafuzz: probe corpus \(report.coverage.corpusEntryCount) entries, \(report.coverage.parentCount) mutable tier; "
+                + "edge singletons \(report.coverage.singletons), doubletons \(report.coverage.doubletons)"
         )
         print(
             "metafuzz: probe seed \(report.seed) (replay with --seed \(report.seed)); "
                 + "termination \(describe(report.termination))"
         )
 
-        // The same inventory a failing test would print, suspect lines included. A passing run emits it too: what the budget bought is the question either way. Every relaunch after a trap prints its own, so the log accumulates the whole campaign's inventory rather than one slice's.
+        // The same summary a failing test would print, followed by the inventory the attachment carries: coverage counts, the estimators, and per-cluster suspect lines. A passing run emits both too: what the budget bought is the question either way. Every relaunch after a trap prints its own, so the log accumulates the whole campaign's inventory rather than one slice's. The workflow cuts the inventory out of this log by its header, so keep it last.
         print(report.renderedSummary())
+        print(report.renderedAttachmentSummary())
 
         if report.clusters.isEmpty {
             print("metafuzz: no findings in \(budgetSeconds)s")
@@ -129,5 +130,7 @@ private func describe(_ termination: FuzzReport.Termination) -> String {
             "first fault found"
         case .coverageUnreachable:
             "coverage unreachable"
+        case .uncontainedAsyncWork:
+            "uncontained async work outlived cancellation"
     }
 }

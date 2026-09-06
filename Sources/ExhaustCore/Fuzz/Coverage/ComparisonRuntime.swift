@@ -5,7 +5,7 @@ internal import ExhaustCoverageRuntime
 
 /// Reads the comparison operands harvested by the trace-cmp hooks in ``ExhaustCoverageRuntime``.
 ///
-/// The hooks record every instrumented comparison's operand pair into a ring buffer while harvesting is enabled. This type reads the process-global ring, which serves ``SancovCoverageSource``: the counter model has no per-run context, and the ring is shared the way its counter table is. ``TracePCGuardCoverageSource`` never reaches this ring; the hooks write to the ring inside the bound context instead, so `trace-pc-guard` runs harvest independently. ``reset()`` and ``setEnabled(_:)`` frame the property evaluation, and ``forEachRecord(_:)`` drains what fired.
+/// The hooks record every instrumented comparison's operand pair into a ring buffer while harvesting is enabled. Both draining calls take a snapshot first: the process-global ring is reachable by every thread of an instrumented SUT, so it is copied under its lock and the copy is what gets walked. This type reads that ring, which serves ``SancovCoverageSource``: the counter model has no per-run context, and the ring is shared the way its counter table is. ``TracePCGuardCoverageSource`` never reaches this ring; the hooks write to the ring inside the bound context instead, so `trace-pc-guard` runs harvest independently. ``reset()`` and ``setEnabled(_:)`` frame the property evaluation, and ``forEachRecord(_:)`` drains what fired.
 package enum ComparisonRuntime {
     /// Turns operand recording on or off. Off between attempts, so only the property evaluation's comparisons are captured.
     package static func setEnabled(_ enabled: Bool) {
@@ -21,7 +21,7 @@ package enum ComparisonRuntime {
     ///
     /// `site` is the comparison's call-site address, so operands from the same comparison group together. Which operand is the constant the comparison wanted and which is the value the attempt produced is not knowable here — both enter the pool under the same site key, and the mutator tries them, which is the spray-dictionary discipline: no attribution, cheap misses.
     package static func forEachRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
-        let count = exhaust_cmp_record_count()
+        let count = exhaust_cmp_snapshot()
         guard count > 0, let base = exhaust_cmp_records() else {
             return
         }
@@ -30,9 +30,14 @@ package enum ComparisonRuntime {
         }
     }
 
+    /// Snapshots the ring and returns how many records it held. The count a later ``forEachRecord(_:)`` or ``withRecords(_:)`` would walk.
+    package static func recordCount() -> Int {
+        Int(exhaust_cmp_snapshot())
+    }
+
     /// Hands the whole record buffer since the last ``reset()`` to `body` in one call: three words per record, site then both operands. Nothing is called for an empty ring.
     package static func withRecords(_ body: (UnsafeBufferPointer<UInt64>) -> Void) {
-        let count = exhaust_cmp_record_count()
+        let count = exhaust_cmp_snapshot()
         guard count > 0, let base = exhaust_cmp_records() else {
             return
         }

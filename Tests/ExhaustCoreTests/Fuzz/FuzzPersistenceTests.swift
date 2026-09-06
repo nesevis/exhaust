@@ -116,13 +116,14 @@ struct FuzzPersistenceTests {
                 try? FileManager.default.removeItem(at: directory)
             }
 
-            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL))
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL, recordsCandidateSequence: true))
             #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
 
-            breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222)
+            breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222, kind: .reduction)
             let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
             #expect(survivor.candidateHash == 0xAAAA_BBBB)
             #expect(survivor.parentHash == 0x1111_2222)
+            #expect(survivor.kind == .reduction)
 
             breadcrumb.clear()
             #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
@@ -154,11 +155,11 @@ struct FuzzPersistenceTests {
                 return
             }
         }
-        #expect(corpus.mutableTierIndices.count == 4)
+        #expect(corpus.parentIndices.count == 4)
 
         let quarantinedHash = ZobristHash.hash(of: sequences[1])
         corpus.quarantine(sequenceHash: quarantinedHash)
-        #expect(corpus.mutableTierIndices.count == 3)
+        #expect(corpus.parentIndices.count == 3)
         for draw in stride(from: 0.0, to: 1.0, by: 0.05) {
             if let (_, entry) = corpus.pickParent(random: draw) {
                 #expect(entry.hash != quarantinedHash)
@@ -244,6 +245,7 @@ private func document(consumedNanoseconds: UInt64, clusterCount: Int) -> FuzzPro
             seed: 9,
             budgetNanoseconds: 60_000_000_000,
             consumedNanoseconds: consumedNanoseconds,
+            attemptsConsumed: 0,
             lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
             pcTableHash: 0,
             edgeCount: 8
@@ -260,11 +262,18 @@ import Foundation
 let path = CommandLine.arguments[1]
 let descriptor = open(path, O_RDWR | O_CREAT, 0o644)
 precondition(descriptor >= 0)
-precondition(ftruncate(descriptor, 16) == 0)
-guard let mapping = mmap(nil, 16, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0), mapping != MAP_FAILED else {
+// One slot of the breadcrumb layout, written by hand so the child needs no dependency on Exhaust: commit marker, generation, candidate hash, parent hash, kind, zero payload length, and the FNV-1a offset basis as the checksum of an empty payload. The marker goes down last, as a live run writes it.
+let slotSize = 48 + 4096
+precondition(ftruncate(descriptor, off_t(slotSize * 2)) == 0)
+guard let mapping = mmap(nil, slotSize * 2, PROT_READ | PROT_WRITE, MAP_SHARED, descriptor, 0), mapping != MAP_FAILED else {
     preconditionFailure("mmap failed")
 }
-mapping.storeBytes(of: UInt64(0xDEAD_BEEF_CAFE_F00D).littleEndian, toByteOffset: 0, as: UInt64.self)
-mapping.storeBytes(of: UInt64(0x1122_3344_5566_7788).littleEndian, toByteOffset: 8, as: UInt64.self)
+mapping.storeBytes(of: UInt64(1).littleEndian, toByteOffset: 8, as: UInt64.self)
+mapping.storeBytes(of: UInt64(0xDEAD_BEEF_CAFE_F00D).littleEndian, toByteOffset: 16, as: UInt64.self)
+mapping.storeBytes(of: UInt64(0x1122_3344_5566_7788).littleEndian, toByteOffset: 24, as: UInt64.self)
+mapping.storeBytes(of: UInt32(1).littleEndian, toByteOffset: 32, as: UInt32.self)
+mapping.storeBytes(of: UInt32(0).littleEndian, toByteOffset: 36, as: UInt32.self)
+mapping.storeBytes(of: UInt32(0x811C_9DC5).littleEndian, toByteOffset: 40, as: UInt32.self)
+mapping.storeBytes(of: UInt64(0x4558_4855_5354_4331).littleEndian, toByteOffset: 0, as: UInt64.self)
 fatalError("planted trap: the breadcrumb above must survive this")
 """

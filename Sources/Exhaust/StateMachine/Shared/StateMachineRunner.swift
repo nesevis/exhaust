@@ -225,7 +225,7 @@ private extension __ExhaustRuntime {
             finalize: { candidate in
                 let commands = candidate.taggedCommands.map(\.1)
                 let setupStep = candidate.setupStep
-                return __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                return __ExhaustRuntime._blockingAwaitSemaphore {
                     let spec = specInit()
                     let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupStep: setupStep)
                     guard setupFailed == false else {

@@ -46,7 +46,7 @@ struct FuzzCorpusTests {
         // Same rarity (one unique edge each), same novelty bonus, so the only difference is the discard energy.
         #expect(corpus.score(at: discardedIndex) == corpus.score(at: validIndex) * FuzzTunables.discardParentEnergy)
         #expect(corpus.entries[discardedIndex].propertyDiscarded)
-        #expect(corpus.passingSignatures.count == 1, "a discard is neither a pass nor a failure for discrimination")
+        #expect(corpus.passingSample.sampleSize == 1, "a discard is neither a pass nor a failure for discrimination")
     }
 
     @Test("Duplicate choice sequences are rejected before coverage math")
@@ -69,6 +69,35 @@ struct FuzzCorpusTests {
             phase: .sampling
         )
         #expect(second == .rejectedDuplicate)
+        #expect(corpus.incidenceSampleCount == 1, "the duplicate did not add an incidence row")
+    }
+
+    @Test("Every nonduplicate offer contributes one incidence row, including an empty signature")
+    func incidenceSampleCountTracksMatrixRows() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        _ = corpus.offer(
+            sequence: sequence(length: 1),
+            tree: .just,
+            hits: [],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+        _ = corpus.offer(
+            sequence: sequence(length: 2),
+            tree: .just,
+            hits: [(edge: 3, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+
+        #expect(corpus.incidenceSampleCount == 2)
+        #expect(corpus.incidenceTotal == 1)
+
+        corpus.resetIncidenceStatistics()
+        #expect(corpus.incidenceSampleCount == 0)
+        #expect(corpus.incidenceTotal == 0)
     }
 
     @Test("Precomputed sequence hash preserves duplicate detection")
@@ -195,7 +224,7 @@ struct FuzzCorpusTests {
             phase: .mutation
         )
         #expect(discovery == .admitted(index: 0, tier: .discovery))
-        #expect(corpus.mutableTierIndices.isEmpty)
+        #expect(corpus.parentIndices.isEmpty)
 
         let mutable = corpus.offer(
             sequence: sequence(length: 2),
@@ -206,7 +235,7 @@ struct FuzzCorpusTests {
             phase: .mutation
         )
         #expect(mutable == .admitted(index: 1, tier: .mutable))
-        #expect(corpus.mutableTierIndices == [1])
+        #expect(corpus.parentIndices == [1])
 
         // Discovery-tier entries still contribute coverage credit and rarity counts.
         #expect(corpus.coveredEdgeCount == 2)
@@ -242,7 +271,7 @@ struct FuzzCorpusTests {
         #expect(corpus.entries.count == rowCount)
         #expect(corpus.coveredEdgeCount == 12)
         // Every row covers the same 12 edges, so one shortlex-minimal champion holds every cell and the index carries at most that champion per edge. The bound allows every parent-eligible entry to be indexed once per edge; it must not scale with the corpus.
-        #expect(corpus.invalidationIndexSize <= corpus.mutableTierIndices.count * sharedHits.count)
+        #expect(corpus.invalidationIndexSize <= corpus.parentIndices.count * sharedHits.count)
         #expect(corpus.invalidationIndexSize < rowCount)
     }
 
@@ -378,43 +407,6 @@ struct FuzzCorpusTests {
             let pick = try #require(corpus.pickParent(random: draw))
             #expect(pick.index != 2)
         }
-    }
-
-    @Test("Prefix-sum pick agrees with the weighted walk on the same draws")
-    func prefixSumPickAgreesWithWalk() throws {
-        // A corpus of varied rarity: every entry covers its own edge plus a few shared ones at random hit counts, so scores spread across orders of magnitude and the archive evicts some champions along the way.
-        let corpus = FuzzCorpus(edgeCount: 64)
-        var prng = Xoshiro256(seed: 0xF3)
-        for index in 0 ..< 300 {
-            var hits: [(edge: Int, hitCount: UInt8)] = [(edge: index % 64, hitCount: 1)]
-            for _ in 0 ..< Int(prng.next(upperBound: 4)) {
-                hits.append((edge: Int(prng.next(upperBound: 64)), hitCount: UInt8(1 + prng.next(upperBound: 200))))
-            }
-            _ = corpus.offer(
-                sequence: distinctSequence(index),
-                tree: .just,
-                hits: hits,
-                convergence: 1.0,
-                generation: 0,
-                phase: .sampling
-            )
-        }
-        #expect(corpus.mutableTierIndices.count > 10)
-
-        // Both picks see the same draw; a failure boost every so often dirties scores so the prefix sums rebuild mid-stream.
-        var disagreements = 0
-        for draw in 0 ..< 200_000 {
-            if draw % 10000 == 9999 {
-                corpus.applyProvisionalFailureBoost(toParentAt: Int(prng.next(upperBound: UInt64(corpus.entries.count))))
-            }
-            let unit = Double(prng.next() >> 11) / Double(1 << 53)
-            let byPrefixSums = try #require(corpus.pickParent(random: unit))
-            let byWalk = try #require(corpus.pickParentByWalk(random: unit))
-            if byPrefixSums.index != byWalk.index {
-                disagreements += 1
-            }
-        }
-        #expect(disagreements == 0)
     }
 }
 

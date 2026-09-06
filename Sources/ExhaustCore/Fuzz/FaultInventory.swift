@@ -1,7 +1,5 @@
 // The clustered fault inventory: reduction as a discrimination signal, not just a report.
 
-import Foundation
-
 /// The cheap synchronous identity of a failure, used for backpressure before reduction runs.
 ///
 /// Symptom matching is deliberately the weak signal the inventory distrusts — two distinct bugs can share a symptom (slippage), which is why clustering keys on reduced forms instead. The symptom's only jobs are the per-cluster reduction cap and attributing unreduced failures to a plausible cluster.
@@ -27,8 +25,8 @@ package struct FailureSymptom: Hashable, Sendable {
 ///
 /// Cluster identity is the canonical structural key over the reduced sequence flattened with bind inners skipped (see ``Swift/Collection/clusterKey``). Raw sequence equality is not a reliable identity: two counterexamples that reduce to the same value through a bind or a length-coupled sequence carry different structural bookkeeping (`.sequence` valid ranges, `.branch` fingerprints, redundant bind-inner content) and would over-split into separate clusters; the key drops exactly that bookkeeping. Signatures collect *within* a cluster: a second distinct signature on the same reduced form is the "likely same cluster" taxonomy tier (same surface bug, possibly different code paths reaching the fault), while a different reduced form is always a different cluster.
 package struct FaultCluster: Sendable {
-    /// Stable identifier in discovery order.
-    package let id: Int
+    /// Stable identifier in discovery order. Settable within this file only, so ``FaultInventory/restore(clusters:)`` can renumber survivors contiguously after folding duplicates.
+    package fileprivate(set) var id: Int
 
     /// The canonical (first-recorded) reduced choice sequence.
     package let reducedSequence: ChoiceSequence
@@ -127,30 +125,51 @@ package struct FaultCluster: Sendable {
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
         attemptIndex: Int,
-        unnormalizedResidual: Bool
+        unnormalizedResidual: Bool,
+        countsAsInstance: Bool
     ) {
         if let signature, signatures.contains(signature) == false {
             signatures.append(signature)
         }
         symptoms.insert(symptom)
-        instanceCount += 1
-        reducedCount += 1
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
         firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
+        guard countsAsInstance else {
+            return
+        }
+        instanceCount += 1
+        reducedCount += 1
         if unnormalizedResidual {
             unnormalizedMemberCount += 1
         }
     }
 
+    /// Folds another record of the same fault into this one, the way ``absorb(signature:symptom:timestampNanoseconds:attemptIndex:unnormalizedResidual:)`` folds a live member: counts sum, sets union, first-seen takes the minimum and last-seen the maximum. The canonical form (sequence, description, key, discovering phase) stays this cluster's, which is the lower identifier's.
+    fileprivate mutating func merge(_ other: FaultCluster) {
+        id = Swift.min(id, other.id)
+        signatures += other.signatures.filter { signatures.contains($0) == false }
+        symptoms.formUnion(other.symptoms)
+        instanceCount += other.instanceCount
+        reducedCount += other.reducedCount
+        firstSeenNanoseconds = Swift.min(firstSeenNanoseconds, other.firstSeenNanoseconds)
+        lastSeenNanoseconds = Swift.max(lastSeenNanoseconds, other.lastSeenNanoseconds)
+        firstSeenAttempt = Swift.min(firstSeenAttempt, other.firstSeenAttempt)
+        unnormalizedMemberCount += other.unnormalizedMemberCount
+    }
+
     fileprivate mutating func absorbUnreduced(
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int
+        attemptIndex: Int,
+        countsAsInstance: Bool
     ) {
         symptoms.insert(symptom)
-        instanceCount += 1
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
         firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
+        guard countsAsInstance else {
+            return
+        }
+        instanceCount += 1
     }
 }
 
@@ -168,10 +187,8 @@ package struct ClusterClassification: Sendable {
 
 /// Accumulates fault clusters as reductions complete.
 ///
-/// Lock-guarded rather than actor-isolated so the synchronous exploration loop can record, snapshot, and checkpoint without suspending or spawning Tasks whose completion nothing awaits. Production recording happens inline on the loop's lane; the lock is what keeps the `@unchecked Sendable` honest for any other context that inspects the inventory.
-package final class FaultInventory: @unchecked Sendable {
-    // @unchecked: all mutable state is guarded by `lock`, and no method suspends while holding it.
-    private let lock = NSLock()
+/// Recording, snapshots, and checkpoints all happen inline on the loop's lane, so the inventory needs no lock; the final report reads a snapshot after the loop has returned.
+package final class FaultInventory {
     private var clusters: [FaultCluster] = []
 
     /// How many distinct clusters have classified, without copying the snapshot.
@@ -181,13 +198,16 @@ package final class FaultInventory: @unchecked Sendable {
 
     /// Cluster position by canonical reduced key, so classification stays O(1) as the inventory grows. `reducedKey` is immutable on a cluster, so entries never go stale; the index is rebuilt wholesale on ``restore(clusters:)``.
     private var clusterIndexByKey: [String: Int] = [:]
+
+    /// The cluster ``recordUnreduced`` attributes each symptom to: the one carrying that symptom with the greatest `lastSeenNanoseconds`, ties broken by the lowest index. Scanning every cluster per call made the gate's highest-volume path linear in the inventory. A resumed run has clusters it never recorded, so ``restore(clusters:)`` rebuilds this too.
+    private var attributionBySymptom: [FailureSymptom: Int] = [:]
     private var unmatchedBySymptom: [FailureSymptom: Int] = [:]
 
     package init() {}
 
     /// Failures recorded unreduced whose symptom matched no cluster at record time; merged by symptom into the report.
     package var unmatchedUnreducedCounts: [FailureSymptom: Int] {
-        lock.withLocking { unmatchedBySymptom }
+        unmatchedBySymptom
     }
 
     /// Records a completed reduction, joining an existing cluster when the reduced form is already known and creating a new cluster otherwise.
@@ -200,8 +220,9 @@ package final class FaultInventory: @unchecked Sendable {
     ///   - symptom: The failure's cheap symptom.
     ///   - phase: The phase that discovered the failing input.
     ///   - timestampNanoseconds: Monotonic time of the discovery, supplied by the caller so tests stay deterministic.
-    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed — the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics.
+    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed: the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics. Counted on the logical run's timeline, so a failure a resumed run observes while restoring carries the predecessor's attempt count rather than zero, and never precedes a cluster the predecessor recorded.
     ///   - unnormalizedResidual: Whether this member's own reduced form differed from `reducedKey` and joined only through the normalization pass.
+    ///   - countsAsInstance: Whether this reduction adds a member to the cluster it joins. False for a failure the predecessor already counted, so that a resume does not tally the same evidence again. The signature, symptom, and last-seen time still land, since those describe the fault as the current build sees it. A cluster this reduction creates is unaffected: nothing carried that fault over, so it is a discovery of this run.
     package func recordReduced(
         reducedSequence: ChoiceSequence,
         reducedKey: String,
@@ -211,85 +232,135 @@ package final class FaultInventory: @unchecked Sendable {
         phase: FuzzPhase,
         timestampNanoseconds: UInt64,
         attemptIndex: Int,
-        unnormalizedResidual: Bool = false
+        unnormalizedResidual: Bool = false,
+        countsAsInstance: Bool = true
     ) -> ClusterClassification {
-        lock.withLocking {
-            if let index = clusterIndexByKey[reducedKey] {
-                clusters[index].absorb(
-                    signature: signature,
-                    symptom: symptom,
-                    timestampNanoseconds: timestampNanoseconds,
-                    attemptIndex: attemptIndex,
-                    unnormalizedResidual: unnormalizedResidual
-                )
-                return ClusterClassification(
-                    clusterID: clusters[index].id,
-                    isNewCluster: false,
-                    instanceCount: clusters[index].instanceCount,
-                    capReached: clusters[index].reducedCount >= FuzzTunables.perClusterReductionCap
-                )
-            }
-            let cluster = FaultCluster(
-                id: clusters.count,
-                reducedSequence: reducedSequence,
-                reducedDescription: renderDescription(),
-                reducedKey: reducedKey,
+        if let index = clusterIndexByKey[reducedKey] {
+            clusters[index].absorb(
                 signature: signature,
                 symptom: symptom,
-                phase: phase,
                 timestampNanoseconds: timestampNanoseconds,
                 attemptIndex: attemptIndex,
-                unnormalizedResidual: unnormalizedResidual
+                unnormalizedResidual: unnormalizedResidual,
+                countsAsInstance: countsAsInstance
             )
-            clusterIndexByKey[reducedKey] = clusters.count
-            clusters.append(cluster)
+            refreshAttribution(forClusterAt: index)
             return ClusterClassification(
-                clusterID: cluster.id,
-                isNewCluster: true,
-                instanceCount: 1,
-                capReached: false
+                clusterID: clusters[index].id,
+                isNewCluster: false,
+                instanceCount: clusters[index].instanceCount,
+                capReached: clusters[index].reducedCount >= FuzzTunables.perClusterReductionCap
             )
         }
+        let cluster = FaultCluster(
+            id: clusters.count,
+            reducedSequence: reducedSequence,
+            reducedDescription: renderDescription(),
+            reducedKey: reducedKey,
+            signature: signature,
+            symptom: symptom,
+            phase: phase,
+            timestampNanoseconds: timestampNanoseconds,
+            attemptIndex: attemptIndex,
+            unnormalizedResidual: unnormalizedResidual
+        )
+        clusterIndexByKey[reducedKey] = clusters.count
+        clusters.append(cluster)
+        refreshAttribution(forClusterAt: clusters.count - 1)
+        return ClusterClassification(
+            clusterID: cluster.id,
+            isNewCluster: true,
+            instanceCount: 1,
+            capReached: false
+        )
     }
 
     /// Records a failure the backpressure gate declined to reduce, attributing it by symptom to the most recently seen matching cluster, or holding it unmatched.
-    package func recordUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64, attemptIndex: Int) {
-        lock.withLocking {
-            let matching = clusters.indices
-                .filter { clusters[$0].symptoms.contains(symptom) }
-                .max { clusters[$0].lastSeenNanoseconds < clusters[$1].lastSeenNanoseconds }
-            if let index = matching {
-                clusters[index].absorbUnreduced(
-                    symptom: symptom,
-                    timestampNanoseconds: timestampNanoseconds,
-                    attemptIndex: attemptIndex
-                )
-            } else {
-                unmatchedBySymptom[symptom, default: 0] += 1
+    ///
+    /// - Parameter countsAsInstance: Whether the failure adds a member to the cluster it attributes to. False for a failure the predecessor already counted, for the reason ``recordReduced(reducedSequence:reducedKey:renderDescription:signature:symptom:phase:timestampNanoseconds:attemptIndex:unnormalizedResidual:countsAsInstance:)`` gives. An unmatched symptom is tallied either way, since nothing historical exists for it to distort.
+    package func recordUnreduced(
+        symptom: FailureSymptom,
+        timestampNanoseconds: UInt64,
+        attemptIndex: Int,
+        countsAsInstance: Bool = true
+    ) {
+        if let index = attributionBySymptom[symptom] {
+            clusters[index].absorbUnreduced(
+                symptom: symptom,
+                timestampNanoseconds: timestampNanoseconds,
+                attemptIndex: attemptIndex,
+                countsAsInstance: countsAsInstance
+            )
+            refreshAttribution(forClusterAt: index)
+        } else {
+            unmatchedBySymptom[symptom, default: 0] += 1
+        }
+    }
+
+    /// Re-points ``attributionBySymptom`` at the cluster whose timestamp just advanced. Only that cluster changed, so only it can have become the argmax; the tie-break reproduces the lowest-index rule the linear scan had.
+    private func refreshAttribution(forClusterAt index: Int) {
+        let cluster = clusters[index]
+        for symptom in cluster.symptoms {
+            guard let held = attributionBySymptom[symptom] else {
+                attributionBySymptom[symptom] = index
+                continue
+            }
+            let heldTimestamp = clusters[held].lastSeenNanoseconds
+            if heldTimestamp < cluster.lastSeenNanoseconds
+                || (heldTimestamp == cluster.lastSeenNanoseconds && index < held)
+            {
+                attributionBySymptom[symptom] = index
             }
         }
     }
 
     /// Whether a cluster with the given canonical key already exists — the normalization pass's pre-check, so the (comparatively expensive) probing runs only on the rare would-be-new-cluster event.
     ///
-    /// `recordReduced` merges by key regardless of this pre-check's answer, so a stale read can only cost duplicated probing, never a duplicated cluster.
+    /// `recordReduced` merges by key regardless of this pre-check's answer.
     package func containsKey(_ reducedKey: String) -> Bool {
-        lock.withLocking { clusterIndexByKey[reducedKey] != nil }
+        clusterIndexByKey[reducedKey] != nil
     }
 
     /// A point-in-time copy for checkpointing and the final report.
     package func snapshot() -> [FaultCluster] {
-        lock.withLocking { clusters }
+        clusters
     }
 
     /// Restores the inventory from progress-log records at resume. Must run before any new recording so restored cluster identifiers keep their original, contiguous values — `recordReduced` allocates the next identifier from the cluster count.
-    package func restore(clusters restored: [FaultCluster]) {
-        lock.withLocking {
-            guard clusters.isEmpty else {
-                return
-            }
-            clusters = restored.sorted { $0.id < $1.id }
-            clusterIndexByKey = Dictionary(uniqueKeysWithValues: clusters.enumerated().map { ($1.reducedKey, $0) })
+    ///
+    /// Records sharing a `reducedKey` are folded into one cluster, and the survivors are renumbered contiguously so the identifier allocation stays a count. Duplicates are an ordinary occurrence rather than corruption: recovery re-derives the key from the materialized tree, and a derivation that over-split one fault legitimately brings two stored clusters onto one key. Indexing without folding would leave the array holding two clusters with one identity and only one of them reachable.
+    ///
+    /// - Returns: False when the inventory had already recorded, in which case nothing was restored.
+    @discardableResult
+    package func restore(clusters restored: [FaultCluster]) -> Bool {
+        guard clusters.isEmpty else {
+            return false
         }
+        clusters = FaultInventory.fold(restored.sorted { $0.id < $1.id })
+        clusterIndexByKey = Dictionary(uniqueKeysWithValues: clusters.enumerated().map { ($1.reducedKey, $0) })
+        attributionBySymptom = [:]
+        for index in clusters.indices {
+            refreshAttribution(forClusterAt: index)
+        }
+        return true
+    }
+
+    /// Merges same-key records the way the live path would have, keeping the lowest identifier's canonical form and renumbering the survivors contiguously.
+    private static func fold(_ restored: [FaultCluster]) -> [FaultCluster] {
+        var positionByKey: [String: Int] = [:]
+        var merged: [FaultCluster] = []
+        for cluster in restored {
+            guard let position = positionByKey[cluster.reducedKey] else {
+                positionByKey[cluster.reducedKey] = merged.count
+                merged.append(cluster)
+                continue
+            }
+            merged[position].merge(cluster)
+        }
+        // Contiguous again, because `recordReduced` allocates the next identifier from the cluster count.
+        for position in merged.indices {
+            merged[position].id = position
+        }
+        return merged
     }
 }

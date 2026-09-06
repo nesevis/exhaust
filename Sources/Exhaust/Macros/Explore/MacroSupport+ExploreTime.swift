@@ -46,19 +46,6 @@ enum FuzzRunExclusion {
     }
 }
 
-/// Chooses the coverage source for a production run from the registries the loader populated before `main`.
-package enum FuzzInstrumentationCheck {
-    /// The coverage source for this build, or nil when no instrumented image registered a region (the run then fails with the missing-instrumentation diagnostic).
-    ///
-    /// Both initializers return nil on an empty registry, so presence needs no separate check. A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``. When both recorders are compiled in, the counters win: the only reason to add `inline-8bit-counters` beside `trace-pc-guard` is that the guard context cannot see the property's work, and a build carrying both would otherwise get the `trace-pc-guard` source and the same diagnostic again.
-    ///
-    /// - Parameter harvestsComparisons: Requests comparison-operand harvesting; the driver passes true only when injection can place the operands.
-    package static func productionSource(harvestsComparisons: Bool) -> (any CoverageSource)? {
-        SancovCoverageSource(harvestsComparisons: harvestsComparisons)
-            ?? TracePCGuardCoverageSource(harvestsComparisons: harvestsComparisons)
-    }
-}
-
 public extension __ExhaustRuntime {
     // MARK: - Entry-Point Driver
 
@@ -146,6 +133,24 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) throws -> Bool
     ) -> FuzzReport {
         __exploreTime(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property)
+    }
+
+    /// Refuses a `Void`-returning function reference, so the call site gets a sentence rather than a type mismatch.
+    ///
+    /// A trailing closure that returns `Void` is supported: the macro reads its body, checks that it has some way to fail, and routes it to the `#expect`-aware runtime. A bare function reference is a name, and the macro cannot see through it to do either. Overload resolution picks this declaration for such a call, and its unavailability is the diagnostic.
+    @available(*, unavailable, message: "Pass a closure rather than a function reference when the property returns Void. #explore needs to see the body to route Void properties to the #expect-aware runtime, and a bare name does not expose one. Wrap it: { try myProperty($0) }.")
+    @discardableResult
+    static func __exploreTime<Output>(
+        _: ReflectiveGenerator<Output>,
+        time _: TimeSpan,
+        settings _: [PropertyFuzzSettings],
+        fileID _: StaticString = #fileID,
+        filePath _: StaticString = #filePath,
+        line _: UInt = #line,
+        column _: UInt = #column,
+        property _: @escaping @Sendable (Output) throws -> Void
+    ) -> FuzzReport {
+        fatalError("unavailable")
     }
 
     /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure. Runtime target of `#explore(time:)`.
@@ -491,13 +496,26 @@ public extension __ExhaustRuntime {
         // Injection activates on the presence of trace-cmp instrumentation, not a knob: comparand substitution places operands directly into a parent's flat sequence and needs no reflection, so every run can use a harvested operand, and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires. The reflective paths (whole-value through the reconstructor, composites through the field graft) additionally require a reflective generator, gated by their own capability flags.
 
         // A live source always enables comparison-operand harvesting: the drain is a no-op without trace-cmp instrumentation, and comparand substitution can place operands on any generator.
-        let resolvedSource: (any CoverageSource)? = switch coverage {
+        let resolvedSource: (any CoverageSource)?
+        switch coverage {
             case .production:
-                FuzzInstrumentationCheck.productionSource(harvestsComparisons: true)
+                switch FuzzInstrumentationCheck.productionSource(harvestsComparisons: true) {
+                    case let .source(source):
+                        resolvedSource = source
+                    case .notInstrumented:
+                        resolvedSource = nil
+                    case let .conflict(guardEdges, counterEdges):
+                        return .empty(
+                            termination: .invalidConfiguration(
+                                mixedRecorderMessage(guardEdges: guardEdges, counterEdges: counterEdges)
+                            ),
+                            seed: seed
+                        )
+                }
             case .none:
-                nil
+                resolvedSource = nil
             case let .injected(injected):
-                injected
+                resolvedSource = injected
         }
         guard let source = resolvedSource else {
             return .empty(termination: .instrumentationMissing, seed: seed)
@@ -506,7 +524,11 @@ public extension __ExhaustRuntime {
         if let persistence {
             configuration.persistence = persistence
             if let document = persistence.resumeDocument {
-                // A resumed run continues the logical run: the remaining slice of the declared budget, straight into the mutation phase — the restored corpus already carries the screening and sampling phases' work.
+                // A resumed run continues the logical run: the remaining slice of the declared budget, straight into the mutation phase.
+                //
+                // Both phases are skipped for any resume document, including one whose predecessor died partway through screening. Nothing records how far screening got, so the only two options are to skip all of it or to redo all of it, and skipping is the better of the two: the restored corpus already holds the admissions from the rows that ran, and redoing would spend the remaining slice re-deriving them before the mutation phase starts. The cost is that rows after the crash point go untested in this run.
+                //
+                // A run resumes because something ended the predecessor abnormally, which is a defect the user is expected to fix rather than a state to search from repeatedly, so the untested tail is accepted rather than engineered around. Persisting a screening cursor and restarting at it is the fix if that assumption stops holding.
                 let consumed = document.metadata.consumedNanoseconds
                 configuration.budgetNanoseconds = budgetNanoseconds > consumed ? budgetNanoseconds - consumed : 0
                 configuration.skipScreening = true
@@ -628,6 +650,21 @@ public extension __ExhaustRuntime {
         guard context.resumeDocument != nil, let survivor = context.survivor else {
             return
         }
+        // The sidecar holds the candidate itself when it fit the slot, so the reader gets the input rather than a number they can do nothing with.
+        let candidateText: String
+        if let sequence = survivor.candidateSequence {
+            candidateText = "candidate \(sequence.shortString)"
+        } else {
+            candidateText = "candidate 0x\(String(survivor.candidateHash, radix: 16)) (too large to record, or written by an older build)"
+        }
+        // Which probe was running decides where to look: a reduction or normalization probe drives inputs the search never produced.
+        let probeText = switch survivor.kind {
+            case .search: "a search attempt"
+            case .reduction: "reduction of an earlier failure"
+            case .normalization: "normalization of a reduced form"
+            case .classification: "post-reduction classification"
+            case .recovery: "the re-judgement of a restored input"
+        }
         let parentText: String
         if let parentSequence = context.survivorParentSequence() {
             parentText = "a mutation of corpus parent \(parentSequence.shortString) (hash 0x\(String(survivor.parentHash, radix: 16)))"
@@ -637,7 +674,7 @@ public extension __ExhaustRuntime {
             parentText = "a mutation of a parent not present in the last checkpoint"
         }
         reportError(
-            "A previous run of this test was killed by a Swift trap while evaluating candidate 0x\(String(survivor.candidateHash, radix: 16)) — \(parentText). The run resumes for the remaining budget with the crash region quarantined; fix the trap before extending the budget.",
+            "A previous run of this test terminated abnormally while \(candidateText) was in flight, during \(probeText), \(parentText). A trap in the property is one cause; a kill signal, an out-of-memory kill, or a crash elsewhere in the process leave the same marker. The run resumes for the remaining budget with the crash region quarantined; establish what ended the predecessor before extending the budget.",
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -681,18 +718,24 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 // The generation error explains why nothing ran; the pointless-run diagnostic below would misdirect the reader toward the time budget.
-                if report.evaluatedSearchCases == 0 {
+                if report.attempts.evaluated == 0 {
                     return
                 }
+            case .uncontainedAsyncWork:
+                // The attempts before the escape are real findings and report below; the run stopped because everything after it would have been measured against work that was still running.
+                reportError(
+                    "An attempt's asynchronous work did not return under cancellation and was abandoned while still running, so the run stopped: the escaped work keeps executing the system under test and keeps recording coverage, and every later attempt would carry some of it in its own signature. Raise .idleTimeout, reduce .parallelize, or find the command that does not return when its task is cancelled.",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
             case .budgetExhausted, .coveragePlateau, .attemptLimitReached, .firstFaultFound:
                 break
         }
 
-        if report.evaluatedSearchCases == 0 {
+        if report.attempts.evaluated == 0, report.termination != .uncontainedAsyncWork {
             if report.resumedFromCrash {
                 // A resumed run can arrive with its declared budget already consumed by crashed predecessors. The pointless-run error below would misdirect the reader toward the generator and budget, both fine, so the resume gets its own message and the restored inventory still reports.
                 reportError(
-                    "The declared time budget was already consumed by crashed predecessors, so this run evaluated no new candidates. The restored fault inventory is reported as-is; fix the trap before extending the budget.",
+                    "The declared time budget was already consumed by predecessors that terminated abnormally, so this run evaluated no new candidates. The restored fault inventory is reported as-is; establish what ended the predecessors before extending the budget.",
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
             } else {
@@ -718,12 +761,12 @@ public extension __ExhaustRuntime {
     ///
     /// Eager and outcome-independent — a passing fuzz run still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
     package static func recordFuzzAttachments(report: FuzzReport, suppressAttachments: Bool) {
-        guard suppressAttachments == false, report.totalAttempts > 0 else {
+        guard suppressAttachments == false, report.attempts.total > 0 else {
             return
         }
         for cluster in report.clusters {
             recordAttachment(
-                renderCluster(cluster, isFrontier: false).joined(separator: "\n"),
+                renderClusterBlock(cluster, isFrontier: false, detail: .full).joined(separator: "\n"),
                 named: "explore-time-cluster-\(cluster.id + 1).txt"
             )
         }

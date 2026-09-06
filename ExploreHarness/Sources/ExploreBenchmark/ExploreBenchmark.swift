@@ -499,6 +499,8 @@ struct BenchmarkRecord: Codable {
     var mutationAttempts: Int
     var totalAttempts: Int
     var discardedAttempts: Int
+    var duplicateCandidatesSkipped: Int
+    var pruneIdentitySkips: Int
     var elapsedSeconds: Double
     var attemptsPerSecond: Double
     var overheadFraction: Double
@@ -536,6 +538,8 @@ struct BenchmarkRecord: Codable {
         }
         totalAttempts = try container.decode(Int.self, forKey: .totalAttempts)
         discardedAttempts = try container.decode(Int.self, forKey: .discardedAttempts)
+        duplicateCandidatesSkipped = try container.decodeIfPresent(Int.self, forKey: .duplicateCandidatesSkipped) ?? 0
+        pruneIdentitySkips = try container.decodeIfPresent(Int.self, forKey: .pruneIdentitySkips) ?? 0
         elapsedSeconds = try container.decode(Double.self, forKey: .elapsedSeconds)
         attemptsPerSecond = try container.decode(Double.self, forKey: .attemptsPerSecond)
         overheadFraction = try container.decode(Double.self, forKey: .overheadFraction)
@@ -571,6 +575,8 @@ struct BenchmarkRecord: Codable {
         mutationAttempts = report.mutationAttempts
         totalAttempts = report.totalAttempts
         discardedAttempts = report.discardedAttempts
+        duplicateCandidatesSkipped = report.duplicateCandidatesSkipped
+        pruneIdentitySkips = report.pruneIdentitySkips
         elapsedSeconds = report.elapsed.seconds
         attemptsPerSecond = report.attemptsPerSecond
         overheadFraction = report.testingOverheadFraction
@@ -598,6 +604,8 @@ struct BenchmarkRecord: Codable {
                 "firstFaultFound"
             case .coverageUnreachable:
                 "coverageUnreachable"
+            case .uncontainedAsyncWork:
+                "uncontainedAsyncWork"
         }
         clusters = report.clusters.map { cluster in
             ClusterRecord(

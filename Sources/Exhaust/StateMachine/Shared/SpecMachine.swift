@@ -421,7 +421,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
     let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
     let commandGen: Generator<Backend.Spec.Command>
     let commandLimit: Int
-    /// Lane count for a `sequenceGen` built by ``zipScheduleMarker(onto:concurrencyLevel:)``, or `nil` when the generator tags every command `.prefix` without drawing a marker. Screening builds its covering-array tree to match: a lane-aware tree handed to a marker-free generator puts a lane node where the command pick belongs, and the row stops binding.
+    /// Lane count for a `sequenceGen` built by ``zipScheduleMarker(onto:concurrencyLevel:)``, or `nil` when the generator tags every command `.prefix` without drawing a marker. Screening builds its covering array tree to match: a lane-aware tree handed to a marker-free generator puts a lane node where the command pick belongs, and the row stops binding.
     let concurrencyLevel: Int?
     let identifySkips: @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>
     let property: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool

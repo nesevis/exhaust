@@ -20,11 +20,11 @@ package struct FuzzProgressDocument: Codable, Sendable {
         self.snapshot = snapshot
     }
 
-    package static let currentVersion = 2
+    package static let currentVersion = 3
 
     /// Run parameters and checkpoint bookkeeping.
     package struct Metadata: Codable, Sendable {
-        /// The root seed, so a resumed run replays the same search decisions.
+        /// The writing run's root seed. Provenance only, and it cannot become a continuation: the PRNG position is not persisted, so reusing the seed restarts the stream at zero and replays a prefix that was already consumed, against a corpus that stream never drew on. A resumed run takes its own seed and says so in the report.
         package var seed: UInt64
 
         /// The full wall-clock budget of the original run in nanoseconds.
@@ -32,6 +32,9 @@ package struct FuzzProgressDocument: Codable, Sendable {
 
         /// Monotonic run time consumed as of the last checkpoint; a resumed run gets the remainder.
         package var consumedNanoseconds: UInt64
+
+        /// Attempts opened as of the last checkpoint, across every process of the logical run. A resumed run numbers its own attempts from here, so cluster discovery indices stay on one timeline the way ``consumedNanoseconds`` keeps timestamps on one.
+        package var attemptsConsumed: Int
 
         /// Wall-clock time of the last checkpoint, for the staleness cutoff.
         package var lastCheckpointEpochSeconds: Double
@@ -46,6 +49,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             seed: UInt64,
             budgetNanoseconds: UInt64,
             consumedNanoseconds: UInt64,
+            attemptsConsumed: Int,
             lastCheckpointEpochSeconds: Double,
             pcTableHash: UInt64,
             edgeCount: Int
@@ -53,6 +57,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             self.seed = seed
             self.budgetNanoseconds = budgetNanoseconds
             self.consumedNanoseconds = consumedNanoseconds
+            self.attemptsConsumed = attemptsConsumed
             self.lastCheckpointEpochSeconds = lastCheckpointEpochSeconds
             self.pcTableHash = pcTableHash
             self.edgeCount = edgeCount
@@ -72,11 +77,11 @@ package struct FuzzProgressDocument: Codable, Sendable {
         /// Run-relative timestamps (nanoseconds since the logical run's start), not raw monotonic readings — a resumed process has a different monotonic origin.
         package var firstSeenNanoseconds: UInt64
         package var lastSeenNanoseconds: UInt64
-        /// The 1-based attempt index of the cluster's earliest attributed failure. Optional so logs written before the field existed still decode; restore treats a missing value as 0.
-        package var firstSeenAttempt: Int?
-        /// Members that joined this cluster only through normalization. Optional for the same pre-existing-log reason as ``firstSeenAttempt``.
-        package var unnormalizedMemberCount: Int?
-        /// Signature edge indices, one array per distinct signature. Dropped on PC-hash mismatch.
+        /// The 1-based attempt index of the cluster's earliest attributed failure, on the logical run's timeline.
+        package var firstSeenAttempt: Int
+        /// Members that joined this cluster only through normalization.
+        package var unnormalizedMemberCount: Int
+        /// Signature edge indices, one array per distinct signature. Provenance only: restore regenerates signatures from its own re-evaluation, because edge coverage moves with any behaviour change the PC-table hash does not fingerprint.
         package var signatureIndices: [[Int]]
 
         package init(cluster: FaultCluster, epochNanoseconds: UInt64) {
@@ -103,7 +108,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
     /// One corpus entry, serialized so restore can re-offer it in original admission order.
     package struct CorpusEntryRecord: Codable, Sendable {
         package var sequence: String
-        /// Hit edges and their saturating counts, parallel arrays — the exact offer input, so restore rebuilds bucket masks and rarity identically.
+        /// Hit edges and their saturating counts, parallel arrays — the offer input as the predecessor observed it. Provenance only: restore re-attributes every entry and offers the live hits, since a persisted signature describes paths the current build may no longer take.
         package var hitEdges: [Int]
         package var hitCounts: [UInt8]
         package var convergence: Double
@@ -111,8 +116,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var phase: String
         package var isBoundaryDerived: Bool
         package var propertyFailed: Bool
-        /// Whether the property discarded this entry. Optional so logs written before the field existed (version 2) still decode; restore treats a missing value as false.
-        package var propertyDiscarded: Bool?
+        /// Whether the property discarded this entry. Provenance only, like ``propertyFailed``: restore takes both from its own evaluation.
+        package var propertyDiscarded: Bool
 
         package init(entry: CorpusEntry) {
             sequence = ChoiceSequenceCodec.encode(entry.sequence)

@@ -60,7 +60,7 @@ Links:
 Exhaust's approach to fuzzing is best described as coverage-guided PBT, built on the same machinery as the PBT search loop. It also borrows liberally from approaches across the spectrum:
 
 - Hit count buckets and (edge, hit count bucket) pair novelty from AFL
-- Comparison operands from REDQUEEN via AFL++
+- Comparison operands as candidate values, inspired by REDQUEEN via AFL++
 - Fallback to fresh generation, and corpus admission of discarded values from FuzzChick
 - Activated swarm testing to skew the branch selections of mutated candidates, to preference varying non-uniform directions
 - STADS' species discovery estimate as an opt-in stopping condition

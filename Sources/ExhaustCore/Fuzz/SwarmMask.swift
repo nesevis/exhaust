@@ -1,10 +1,10 @@
-// Swarm generation for the mutation phase: per-epoch branch masking.
+// Swarm generation for the mutation phase: per-candidate branch activation weights.
 //
-// A uniform branch mix statistically suppresses value shapes that need a run of one kind — the canonical case is a stack that never fills while `pop` and `clear` stay in the mix (Groce et al., "Swarm Testing", ISSTA 2012). Fuzz therefore runs in swarm epochs: within one epoch a deterministic mask disallows a random subset of each pick site's branches, and mutated children have their disallowed branch selections pivoted to allowed ones before materialization. Diversity comes from the epoch schedule, not any single mask.
+// A uniform branch mix statistically suppresses value shapes that need a run of one kind; the canonical case is a stack that never fills while `pop` and `clear` stay in the mix (Groce et al., "Swarm Testing", ISSTA 2012). Every mutated child therefore gets its own deterministic per-site weighting, and its branch selections are re-drawn under those weights before materialization. Diversity comes from the weights roaming across candidates, not any single mask. Groce's original binary mask (branches hard-allowed or hard-excluded per epoch) reached the motivating fixture's fault band about 15 times slower than the continuous weights, with far higher variance (2026-08-21), and was removed.
 //
-// The mask lives beside the choice sequence, derived from the root seed, never inside it. Whole-run replay reproduces the epoch schedule for free, and `.exact` re-materialization of any individual entry reads its branch selections from the sequence itself, so reproducers never need the mask. The mask is applied as a sequence rewrite in the mutation layer — the guided materializer then follows the pivoted branch and PRNG-fills its content, exactly as it does for the existing branch-pivot operator — so no interpreter or materializer code paths change.
+// The mask lives beside the choice sequence, derived from the root seed, never inside it. Whole-run replay reproduces the schedule for free, and `.exact` re-materialization of any individual entry reads its branch selections from the sequence itself, so reproducers never need the mask. The mask is applied as a sequence rewrite in the mutation layer; the guided materializer then follows the re-drawn branch and PRNG-fills its content, exactly as it does for the existing branch-pivot operator, so no interpreter or materializer code paths change.
 
-/// One epoch's branch mask, derived entirely from the epoch seed.
+/// One candidate's branch weighting, derived entirely from its seed.
 package struct SwarmMask: Sendable {
     /// The epoch's identity; per-site masks derive from it and the site fingerprint, so the mask needs no site registry and is independent of encounter order.
     package let epochSeed: UInt64
@@ -13,44 +13,14 @@ package struct SwarmMask: Sendable {
         self.epochSeed = epochSeed
     }
 
-    /// The mask for one derivation index: the root seed and index mix through SplitMix64 so consecutive indices share no structure. The activated path passes a per-attempt index (a fresh mask every attempt); the binary path passes an epoch index (`mutationAttempts / swarmEpochAttempts`).
+    /// The mask for one derivation index: the root seed and index mix through SplitMix64 so consecutive indices share no structure. The mutation loop passes a per-candidate index, so every candidate gets a fresh weighting.
     package static func forIndex(_ index: Int, rootSeed: UInt64) -> SwarmMask {
         SwarmMask(epochSeed: splitMix64(rootSeed &+ 0x9E37_79B9_7F4A_7C15 &* UInt64(index &+ 1)))
     }
 
-    /// Returns the allowed branch identifiers at a pick site, or nil when the site is unmasked this epoch.
+    /// Returns a per-branch activation weight in [0, 1) at a pick site, or nil when the site is unweighted. A continuous weight rather than a binary allow-or-exclude, so mutated children reach command mixes at specific ratios rather than include-or-exclude subsets.
     ///
-    /// Half of all sites stay uniform each epoch, and each branch of a masked site survives with probability ½ (at least one always survives). Sites with fingerprint 0 are never masked — without a fingerprint the site cannot be told apart from every other unfingerprinted site, and one accidental shared mask across unrelated picks is worse than no mask.
-    package func allowedBranches(fingerprint: UInt64, branchCount: UInt64) -> [UInt64]? {
-        guard fingerprint != 0, branchCount > 1 else {
-            return nil
-        }
-        var siteState = Self.splitMix64(epochSeed ^ fingerprint)
-        // Site masked at all this epoch?
-        guard siteState & 1 == 1 else {
-            return nil
-        }
-        var allowed: [UInt64] = []
-        allowed.reserveCapacity(Int(branchCount))
-        for branch in 0 ..< branchCount {
-            siteState = Self.splitMix64(siteState)
-            if siteState & 1 == 1 {
-                allowed.append(branch)
-            }
-        }
-        if allowed.isEmpty {
-            // Every branch masked: keep one, chosen by the same deterministic stream.
-            allowed.append(Self.splitMix64(siteState) % branchCount)
-        }
-        if allowed.count == Int(branchCount) {
-            return nil
-        }
-        return allowed
-    }
-
-    /// Returns a per-branch activation weight in [0, 1) at a pick site, or nil when the site is unweighted. The weights are the activated-swarm generalisation of ``allowedBranches(fingerprint:branchCount:)``: where the binary mask gives each branch a weight of 0 or 1, this gives a continuous weight, so mutated children reach command mixes at specific ratios rather than binary include-or-exclude subsets.
-    ///
-    /// Every masked site is weighted every epoch — the weights themselves provide the roaming, so there is no half-of-sites-uniform skip. Sites with fingerprint 0 stay unweighted for the same reason they stay unmasked: an unfingerprinted site cannot be distinguished from any other, and one accidental shared weighting is worse than none.
+    /// Every fingerprinted site is weighted every time: the weights themselves provide the roaming, so there is no half-of-sites-uniform skip. Sites with fingerprint 0 stay unweighted for the same reason they stay unmasked: an unfingerprinted site cannot be distinguished from any other, and one accidental shared weighting is worse than none.
     package func branchWeights(fingerprint: UInt64, branchCount: UInt64) -> [Double]? {
         guard fingerprint != 0, branchCount > 1 else {
             return nil
@@ -188,28 +158,6 @@ package struct SwarmMask: Sendable {
     /// One uniform draw in [0, 1) from a 64-bit value (its top 53 bits).
     private static func unit(_ value: UInt64) -> Double {
         Double(value >> 11) / Double(1 << 53)
-    }
-
-    /// Rewrites every disallowed branch selection in `sequence` to an allowed one drawn from the run PRNG, leaving allowed selections and all other entries untouched.
-    ///
-    /// The pivoted branch's content resolves through the guided materializer's PRNG fallback, the same degradation path the branch-pivot mutation already exercises.
-    package func apply(to sequence: ChoiceSequence, prng: inout Xoshiro256) -> ChoiceSequence {
-        var result = sequence
-        for index in result.indices {
-            guard case let .branch(branch) = result[index],
-                  let allowed = allowedBranches(fingerprint: branch.fingerprint, branchCount: branch.branchCount),
-                  allowed.contains(branch.id) == false
-            else {
-                continue
-            }
-            let replacement = allowed[Int(prng.next(upperBound: UInt64(allowed.count)))]
-            result[index] = .branch(.init(
-                id: replacement,
-                branchCount: branch.branchCount,
-                fingerprint: branch.fingerprint
-            ))
-        }
-        return result
     }
 
     /// SplitMix64: the standard 64-bit finalizer, here the whole derivation chain from seed to per-site mask bits.

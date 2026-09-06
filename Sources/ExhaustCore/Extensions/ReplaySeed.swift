@@ -102,7 +102,7 @@ public enum ReplaySeed: Sendable {
         return (seed: seed, iteration: nil)
     }
 
-    /// Encodes a covering-array seed, 0-indexed screening row, and optional tier length (for example, row 0 becomes `"3RT5GH8KM2-U1"`, and row 6 of a length-5 tier becomes `"3RT5GH8KM2-U7L5"`).
+    /// Encodes a covering array seed, 0-indexed screening row, and optional tier length (for example, row 0 becomes `"3RT5GH8KM2-U1"`, and row 6 of a length-5 tier becomes `"3RT5GH8KM2-U7L5"`).
     ///
     /// The `U` marker distinguishes a screening replay from a sampling one: it is not a valid Crockford Base32 digit and has no typo fallback mapping, so `"SEED-U3"` can never be mistaken for `"SEED-3"`. The `L` tier marker does have a Crockford typo fallback (`L` decodes as `1`), but it is safe here because it only ever appears inside the decimal row suffix, which Base32 decoding never sees. The row is 1-indexed on the wire so `"-U0"` is never emitted. The seed is required because the covering array's row ordering depends on it. The tier length is present for spec screening, where each sequence-length tier has its own covering array and the row is local to it.
     package static func encodeScreeningRow(seed: UInt64, row: Int, tierLength: Int?) -> String {
@@ -110,7 +110,7 @@ public enum ReplaySeed: Sendable {
         return "\(encode(seed))-U\(row + 1)\(tierSuffix)"
     }
 
-    /// Decodes a screening replay string into its covering-array seed, 0-indexed row, and optional tier length.
+    /// Decodes a screening replay string into its covering array seed, 0-indexed row, and optional tier length.
     ///
     /// Returns `nil` unless the string is a Base32 seed, a dash, `U`, a positive row number, and optionally `L` followed by a positive tier length.
     package static func decodeScreeningRow(_ string: String) -> (seed: UInt64, row: Int, tierLength: Int?)? {

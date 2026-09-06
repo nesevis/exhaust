@@ -109,28 +109,6 @@ struct BitSetTests {
         #expect(BitSet(capacity: 64).isSubset(of: first))
     }
 
-    @Test("Jaccard similarity matches hand-computed ratios")
-    func jaccardSimilarity() {
-        var first = BitSet(capacity: 64)
-        first.insert(1)
-        first.insert(2)
-        first.insert(3)
-        var second = BitSet(capacity: 64)
-        second.insert(2)
-        second.insert(3)
-        second.insert(4)
-
-        // Intersection {2, 3}, union {1, 2, 3, 4}.
-        #expect(first.jaccardSimilarity(to: second) == 0.5)
-        #expect(first.jaccardSimilarity(to: first) == 1.0)
-        #expect(BitSet(capacity: 64).jaccardSimilarity(to: BitSet(capacity: 64)) == 1.0)
-
-        var empty = BitSet(capacity: 64)
-        #expect(empty.jaccardSimilarity(to: first) == 0.0)
-        empty.insert(60)
-        #expect(empty.jaccardSimilarity(to: first) == 0.0)
-    }
-
     @Test("forEachIndex visits indices in ascending order")
     func forEachIndexOrder() {
         var bitSet = BitSet(capacity: 300)

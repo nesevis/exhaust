@@ -1,5 +1,10 @@
 // MARK: - Reducer Configuration
 
+/// Wraps one reduction probe's property invocation, receiving the candidate sequence that probe is testing.
+///
+/// The reducer drives the property at candidates its host never produced, so a host that wants to observe each invocation (mark it in flight, time it, log it) cannot identify the probe from outside; the sequence is how the wrapper knows which one it is around.
+package typealias ProbeWrapper = @Sendable (ChoiceSequence, () -> Bool) -> Bool
+
 package extension Interpreters {
     /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
     struct ReducerConfiguration: Sendable {
@@ -18,17 +23,24 @@ package extension Interpreters {
         /// Tuning constants for the scheduler's internal heuristics.
         package let tuning: SchedulerTuning
 
+        /// Wraps every probe's property invocation, receiving the candidate sequence that probe is testing.
+        ///
+        /// Nil for a host that does not observe individual probes, which is the default. The one shipping client is the fuzz loop's crash breadcrumb, which marks the probe's own sequence as in flight so an abnormal termination names it rather than the last search candidate.
+        package var probeWrapper: ProbeWrapper?
+
         /// Creates a configuration with the given stall budget and optional wall-clock deadline.
         package init(
             maxStalls: Int,
             wallClockDeadlineNanoseconds: UInt64 = 0,
             enabledEncoders: Set<EncoderName>? = nil,
-            tuning: SchedulerTuning = .init()
+            tuning: SchedulerTuning = .init(),
+            probeWrapper: ProbeWrapper? = nil
         ) {
             self.maxStalls = maxStalls
             self.wallClockDeadlineNanoseconds = wallClockDeadlineNanoseconds
             self.enabledEncoders = enabledEncoders
             self.tuning = tuning
+            self.probeWrapper = probeWrapper
         }
     }
 }

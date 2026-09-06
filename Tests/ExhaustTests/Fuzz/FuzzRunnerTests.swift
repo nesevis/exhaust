@@ -133,7 +133,7 @@ struct FuzzRunnerTests {
         #expect(result.counts.mutationAttempts >= 500)
         // The empty-corpus fallback sampled fresh values and seeded the corpus.
         #expect(result.corpusEntryCount > 0)
-        #expect(result.mutableTierCount > 0)
+        #expect(result.parentCount > 0)
     }
 
     @Test("Structurally distinct failures with one symptom form distinct clusters")
@@ -267,6 +267,39 @@ struct FuzzRunnerTests {
         #expect(result.edgeDoubletonCount == 0)
     }
 
+    @Test("Coverage estimates use only cases represented in the incidence matrix")
+    func coverageEstimatesExcludeInconclusiveCases() {
+        let source = SyntheticCoverageSource<Int>(edgeCount: 1024, edges: { value in
+            [abs(value) % 1024]
+        })
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 100_000 as ClosedRange<Int>),
+            property: { value in value.isMultiple(of: 2) ? .pass : .inconclusive },
+            source: source,
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 17,
+                skipScreening: true,
+                attemptLimit: 80
+            )
+        )
+        let result = runner.run()
+        let report = FuzzReport(result: result)
+
+        #expect(result.counts.inconclusiveAttempts > 0)
+        #expect(result.incidenceSampleCount > 0)
+        #expect(result.incidenceSampleCount < result.counts.evaluatedSearchCases)
+        #expect(report.coverage.incidenceSamples == result.incidenceSampleCount)
+        #expect(report.coverage.estimatedReachableEdges == CoverageEstimators.iChao2ReachableEdges(
+            covered: result.coveredEdgeCount,
+            singletons: result.edgeSingletonCount,
+            doubletons: result.edgeDoubletonCount,
+            tripletons: result.edgeTripletonCount,
+            quadrupletons: result.edgeQuadrupletonCount,
+            attempts: result.incidenceSampleCount
+        ))
+    }
+
     @Test("Path defaults produce identical output across refactors")
     func pathRegressionGuard() {
         let property: @Sendable (Int) -> FuzzVerdict = { value in
@@ -294,6 +327,31 @@ struct FuzzRunnerTests {
         #expect(result.counts.totalAttempts >= 1500)
         for cluster in result.clusters {
             #expect(cluster.reducedCount >= 1)
+        }
+    }
+
+    @Test("Duplicate skips are charged to the arms that produced them and the report sums them")
+    func duplicateSkipAttribution() {
+        // A tiny domain makes rebuilding an already evaluated sequence the common case in every arm, so the aggregate is nonzero and every skip has an owner.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
+            property: { _ in .pass },
+            source: bucketedSource(),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                attemptLimit: 2000
+            )
+        )
+        let result = runner.run()
+        #expect(result.counts.duplicateCandidatesSkipped > 0)
+
+        let skips = FuzzReport(result: result).attempts.duplicateSkips
+        let arms = [skips.freshDraw, skips.mutationChild, skips.reflectionInjection, skips.graftInjection, skips.comparandSubstitution]
+        let sum = arms.reduce(0, +)
+        #expect(sum == result.counts.duplicateCandidatesSkipped)
+        for origin in CandidateOrigin.allCases {
+            #expect(result.counts[duplicateSkipsFor: origin] >= 0)
         }
     }
 

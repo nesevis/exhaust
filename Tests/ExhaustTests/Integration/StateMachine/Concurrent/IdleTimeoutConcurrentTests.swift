@@ -29,16 +29,43 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("blockingAwait bails with nil when the awaited work never returns to the drain lane")
+    @Test("blockingAwait bails when the awaited work never returns to the drain lane, and says whether cancellation took")
     func blockingAwaitBailsWhenWorkSuspendsOffTheDrainLane() async {
-        // The work suspends far longer than the idle bound and its continuation does not feed the single drain lane, so without the bound the loop would spin a core forever. `blockingAwait` must return nil instead. The test completing (rather than hanging) is itself the regression guard.
-        let result: Bool? = await __ExhaustRuntime.dispatchToGCD {
+        // The work suspends far longer than the idle bound and its continuation does not feed the single drain lane, so without the bound the loop would spin a core forever. The test completing (rather than hanging) is itself the regression guard.
+        let outcome = await __ExhaustRuntime.dispatchToGCD {
             __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: 20) {
                 try? await Task.sleep(for: .milliseconds(500))
                 return true
             }
         }
-        #expect(result == nil)
+        #expect(outcome.value == nil)
+        // `Task.sleep` honours cancellation, so the cancellation drain reaches it and nothing is left running.
+        #expect(outcome.disposition == .timedOutQuiesced)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Work that ignores cancellation is reported as still running and handed off for cleanup", .timeLimit(.minutes(1)))
+    func blockingAwaitReportsUncancellableWorkAsEscaped() async throws {
+        let suspendedWork = CancellationIgnoringSystemUnderTest()
+        let reference = WeakReference<BridgeLifetimeToken>()
+        let outcome = await __ExhaustRuntime.dispatchToGCD {
+            __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: 20) {
+                let token = BridgeLifetimeToken()
+                reference.value = token
+                await suspendedWork.wait()
+                withExtendedLifetime(token) {}
+                return true
+            }
+        }
+        #expect(outcome.value == nil)
+        #expect(outcome.disposition == .timedOutEscaped)
+
+        try #require(reference.value != nil)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            reference.value?.onDeinit = { continuation.resume() }
+            suspendedWork.resume()
+        }
+        #expect(reference.value == nil)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -353,6 +380,17 @@ final class CancellationIgnoringSystemUnderTest: @unchecked Sendable {
         for continuation in pending {
             continuation.resume()
         }
+    }
+}
+
+/// Signals when the escaped bridge task releases its capture.
+///
+/// The callback is assigned while the task is suspended and read only during deinitialization after that suspension resumes, so its unsynchronized access cannot overlap.
+private final class BridgeLifetimeToken: @unchecked Sendable {
+    nonisolated(unsafe) var onDeinit: (@Sendable () -> Void)?
+
+    deinit {
+        onDeinit?()
     }
 }
 

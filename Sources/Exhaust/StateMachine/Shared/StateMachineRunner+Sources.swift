@@ -34,13 +34,15 @@ extension __ExhaustRuntime {
         }
     }
 
-    /// The one async sequential executor loop, returning a verdict: the async twin of ``syncSequentialVerdictProperty(_:)``, bridging through `_blockingAwaitSemaphore` and preserving the thrown error as the failure symptom. ``asyncSequentialProperty(specInit:)`` derives the Bool probe from this, so the two can never disagree on what passes.
+    /// The one async sequential executor loop, returning a verdict: the async twin of ``syncSequentialVerdictProperty(_:)``, preserving the thrown error as the failure symptom. ``asyncSequentialProperty(specInit:)`` derives the Bool probe from this, so the two can never disagree on what passes.
+    ///
+    /// Bridges through ``blockingAwait(_:)`` rather than the semaphore directly, which is what makes the spec's work observable to a `trace-pc-guard` build. That recorder writes to a thread-local context bound to the runner's own lane, and the semaphore hands the work to the cooperative pool and puts the lane to sleep, so every edge fires on a thread with no binding and is dropped. The drain loop the bridge selects on macOS 15 and later runs the continuations on the waiting lane instead. Below that the semaphore is still the only option, and the coverage-guided spec path refuses the combination up front rather than searching blind.
     static func asyncSequentialVerdictProperty<Spec: AsyncStateMachineSpec>(
         specInit: @escaping () -> Spec
     ) -> @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict {
         nonisolated(unsafe) let specInit = specInit
         return { candidate in
-            let verdict: FuzzVerdict? = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+            let verdict: FuzzVerdict = blockingAwait {
                 let spec = specInit()
                 if let setupError = await spec.applySetup(candidate.setupStep) {
                     return FuzzVerdict.fail(.thrown(setupError))
@@ -57,8 +59,7 @@ extension __ExhaustRuntime {
                 }
                 return FuzzVerdict.pass
             }
-            // Unreachable with a nil timeout; kept as the fail-safe direction the Bool probe has always had.
-            return verdict ?? .fail(.returnedFalse)
+            return verdict
         }
     }
 
@@ -154,7 +155,7 @@ extension __ExhaustRuntime {
     ///
     /// The analysis is deliberately budget-independent. Passing the screening budget as a composite threshold would make the factor domains vary with the budget, and a `{seed}-U{row}L{length}` replay runs under a different budget than discovery did: the covering array would differ and the replay would land on another row.
     ///
-    /// A deterministic setup generator (a zero-parameter `@Setup`, whose generator is a bare `.just`) has no parameters for the analysis to extract, so it contributes a zero-factor block whose `buildTree` always yields the one tree the generator materializes. The block carries no covering-array budget, but it keeps the invariant that every with-setup screening candidate receives a setup tree — without it, screening probes would run against an unconfigured spec.
+    /// A deterministic setup generator (a zero-parameter `@Setup`, whose generator is a bare `.just`) has no parameters for the analysis to extract, so it contributes a zero-factor block whose `buildTree` always yields the one tree the generator materializes. The block carries no covering array budget, but it keeps the invariant that every with-setup screening candidate receives a setup tree — without it, screening probes would run against an unconfigured spec.
     static func setupScreeningFactors<Spec: StateMachineSpecBase>(
         for _: Spec.Type
     ) -> ScreeningLeadingFactors? {
@@ -227,7 +228,7 @@ extension __ExhaustRuntime {
     }
 }
 
-/// An independent block of covering-array factors belonging to a different generator than the screening row's.
+/// An independent block of covering array factors belonging to a different generator than the screening row's.
 ///
 /// The factors join the row's covering array so interactions between the two blocks are covered, but the block's slice of each row is replayed through its own generator rather than folded into the row's fallback tree.
 struct ScreeningLeadingFactors {

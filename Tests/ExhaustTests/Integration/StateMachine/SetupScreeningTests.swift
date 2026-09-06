@@ -6,7 +6,7 @@ import Testing
 
 @Suite("@Setup arguments join the screening covering array", .tags(.stateMachine))
 struct SetupScreeningTests {
-    @Test("Each setup argument becomes its own covering-array factor")
+    @Test("Each setup argument becomes its own covering array factor")
     func setupArgumentsBecomeSeparateFactors() throws {
         let factors = try #require(__ExhaustRuntime.setupScreeningFactors(for: TwoArgumentSetupSpec.self))
         // One factor per argument: the `Int` range and the array, the latter as a composite (length, elements) factor.
@@ -71,7 +71,7 @@ struct SetupScreeningTests {
 
     @Test("A deterministic setup is applied during screening probes")
     func deterministicSetupAppliedDuringScreening() async {
-        // A zero-parameter @Setup synthesizes a deterministic generator, which has no parameters for the covering-array
+        // A zero-parameter @Setup synthesizes a deterministic generator, which has no parameters for the covering array
         // analysis to extract. Screening must still apply it: this spec only fails when a probe runs before setup.
         let result = await #execute(
             DeterministicSetupSpec.self,

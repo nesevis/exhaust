@@ -59,7 +59,7 @@ package extension __ExhaustRuntime {
 
     // MARK: - Screening Phase
 
-    /// Runs the structured covering-array phase, returning early on first failure.
+    /// Runs the structured covering array phase, returning early on first failure.
     static func runScreeningPhase<Output>(
         context: PipelineContext<Output>,
         screeningBudget: UInt64,
@@ -539,7 +539,7 @@ package extension __ExhaustRuntime {
                 let startIndex = UInt64(laneIndex) * baseIterationsPerLane
                 let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
                 nonisolated(unsafe) let batchResult = withLaneSuppression(
-                    context.absorbedIssues,
+                    unsafeContext.absorbedIssues,
                     collectingSinksInto: laneSinks
                 ) {
                     runSamplingBatch(

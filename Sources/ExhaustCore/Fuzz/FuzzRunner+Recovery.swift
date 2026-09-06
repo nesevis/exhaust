@@ -11,13 +11,17 @@ extension FuzzRunner {
             return
         }
         progressWriter = FuzzProgressWriter(store: persistence.store)
-        breadcrumb = FuzzBreadcrumb(fileURL: persistence.store.breadcrumbFileURL)
+        breadcrumb = FuzzBreadcrumb(
+            fileURL: persistence.store.breadcrumbFileURL,
+            recordsCandidateSequence: configuration.recordsTrapCandidate
+        )
         breadcrumb?.clear()
         pcTableHashAtStart = SancovRuntime.pcTableHash()
         lastCheckpointNanoseconds = startNanoseconds
 
         if let document = persistence.resumeDocument {
             priorConsumedNanoseconds = document.metadata.consumedNanoseconds
+            priorAttempts = document.metadata.attemptsConsumed
             restore(from: document)
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -63,7 +67,7 @@ extension FuzzRunner {
         lastCheckpointNanoseconds = now
 
         let metadata = checkpointMetadata(now: now)
-        let clusters = inventory.snapshot()
+        let clusters = faults.inventory.snapshot()
         let entries = corpus.entries
         let epoch = reportEpochNanoseconds
         writer.submit {
@@ -81,6 +85,7 @@ extension FuzzRunner {
             seed: configuration.seed,
             budgetNanoseconds: priorConsumedNanoseconds + configuration.budgetNanoseconds,
             consumedNanoseconds: priorConsumedNanoseconds + (now - startNanoseconds),
+            attemptsConsumed: attemptTimelineIndex,
             lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
             pcTableHash: pcTableHashAtStart,
             edgeCount: source.edgeCount
@@ -92,74 +97,72 @@ extension FuzzRunner {
         let epoch = reportEpochNanoseconds
         return FuzzProgressDocument(
             metadata: checkpointMetadata(now: now),
-            clusters: inventory.snapshot().map { FuzzProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
+            clusters: faults.inventory.snapshot().map { FuzzProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
             snapshot: corpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
         )
     }
 
-    /// Rebuilds the corpus and inventory from a predecessor's document.
+    /// Rebuilds the corpus and inventory from a predecessor's document, re-judging every restored item against the current build.
     ///
-    /// Every entry is re-materialized in `.exact` mode — the tree is not persisted and mutations need it as the guided fallback. When the PC-table hash and edge count match the predecessor's, cached hits are trusted; otherwise each entry is re-attributed with one instrumented evaluation against the new edge ordering, and cluster signatures (stale edge indices) are dropped. Entries the current generator can no longer materialize are silently pruned — exactly the right pruning after a code change.
+    /// A resume document exists only after an abnormal termination, so the run reading it is usually the run after a fix. Nothing persisted is taken on trust: every entry and every cluster is materialized and evaluated once, and the live verdict, hits, symptom, description, and cluster key replace the recorded ones. The PC-table hash fingerprints the control-flow graph, not behaviour, so a matching hash says nothing about whether the property still answers the same way; a changed constant, dependency, or ambient value moves the verdict and the covered edges while leaving the hash identical.
+    ///
+    /// What survives is one assumption: a cluster that still fails with the same reduced form is the same fault, and keeps its counts and timestamps. Clusters that now pass are dropped; entries that now fail are dispatched through the ordinary failure path so they reduce, classify, and report, after the whole corpus is back, because reduction checkpoints and a checkpoint taken mid-restore would overwrite the predecessor's document with a partial corpus. Entries the current generator can no longer materialize are silently pruned — exactly the right pruning after a code change.
     private func restore(from document: FuzzProgressDocument) {
-        let signaturesValid = document.metadata.pcTableHash == pcTableHashAtStart
-            && document.metadata.edgeCount == source.edgeCount
-
         var restoredClusters: [FaultCluster] = []
         for record in document.clusters {
+            // A re-judge can be the invocation whose async work escapes its bound, and that work keeps running and keeps recording coverage. What is already restored stands; nothing further is judged against a process the escaped work is still writing to.
+            guard forcedTermination == nil else {
+                break
+            }
             guard let sequence = ChoiceSequenceCodec.decode(record.reducedSequence),
                   let phase = FuzzPhase(rawValue: record.discoveringPhase)
             else {
                 continue
             }
-            let signatures: [BitSet] = signaturesValid
-                ? record.signatureIndices.map { indices in
-                    var signature = BitSet(capacity: source.edgeCount)
-                    for index in indices where index >= 0 && index < source.edgeCount {
-                        signature.insert(index)
-                    }
-                    return signature
-                }
-                : []
+            guard let judged = rejudge(sequence) else {
+                continue
+            }
+            let (value, tree, verdict, hits) = judged
+            guard case let .fail(symptom) = verdict else {
+                continue
+            }
+            var signature = BitSet(capacity: source.edgeCount)
+            for (edge, _) in hits {
+                signature.insert(edge)
+            }
             restoredClusters.append(FaultCluster(
                 restoredID: restoredClusters.count,
                 reducedSequence: sequence,
-                reducedDescription: record.reducedDescription,
-                reducedKey: record.reducedKey,
-                signatures: signatures,
-                symptoms: Set(record.symptoms.map(FailureSymptom.init(kind:))),
+                reducedDescription: renderValue(value),
+                // Rekeyed from the materialized tree: the key derivation is a function of the generator, so the predecessor's key can no longer be the identity later classifications compare against. Two predecessor clusters can land on one key here, which `FaultInventory.restore(clusters:)` folds.
+                reducedKey: ChoiceSequence.flatten(tree, skipBindInners: true).clusterKey,
+                signatures: [signature],
+                symptoms: [symptom],
                 instanceCount: record.instanceCount,
                 reducedCount: record.reducedCount,
                 firstSeenNanoseconds: reportEpochNanoseconds + record.firstSeenNanoseconds,
                 lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
-                firstSeenAttempt: record.firstSeenAttempt ?? 0,
-                unnormalizedMemberCount: record.unnormalizedMemberCount ?? 0,
+                firstSeenAttempt: record.firstSeenAttempt,
+                unnormalizedMemberCount: record.unnormalizedMemberCount,
                 discoveringPhase: phase
             ))
         }
-        inventory.restore(clusters: restoredClusters)
+        faults.inventory.restore(clusters: restoredClusters)
 
+        var restoredFailures: [RestoredFailure] = []
         for record in document.snapshot {
+            guard forcedTermination == nil else {
+                break
+            }
             guard let sequence = ChoiceSequenceCodec.decode(record.sequence),
                   let phase = FuzzPhase(rawValue: record.phase)
             else {
                 continue
             }
-            let result = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact)
-            guard case let .success(anyValue, tree, _) = result, let value = anyValue as? Output else {
+            guard let (value, tree, verdict, hits) = rejudge(sequence) else {
                 continue
             }
-            let hits: [(edge: Int, hitCount: UInt8)]
-            if signaturesValid {
-                hits = zip(record.hitEdges, record.hitCounts).map { (edge: $0.0, hitCount: $0.1) }
-            } else {
-                // Attribution only — a failing entry's cluster was already restored, so no failure dispatch here.
-                let (_, reattributed) = attribute(value) { value in
-                    counts.recoveryInvocations += 1
-                    return property(value)
-                }
-                hits = reattributed
-            }
-            _ = corpus.offer(
+            let admission = corpus.offer(
                 sequence: sequence,
                 tree: tree,
                 hits: hits,
@@ -167,9 +170,70 @@ extension FuzzRunner {
                 generation: record.generation,
                 phase: phase,
                 isBoundaryDerived: record.isBoundaryDerived,
-                propertyFailed: record.propertyFailed,
-                propertyDiscarded: record.propertyDiscarded ?? false
+                propertyFailed: verdict.isFailure,
+                propertyDiscarded: verdict.isDiscard
+            )
+            if verdict.isFailure {
+                restoredFailures.append(RestoredFailure(
+                    candidate: EvaluatedFuzzCandidate(
+                        value: value,
+                        tree: tree,
+                        sequence: sequence,
+                        sequenceHash: ZobristHash.hash(of: sequence),
+                        verdict: verdict,
+                        hits: hits
+                    ),
+                    phase: phase,
+                    coverageNovel: admission.isAdmitted,
+                    // An entry the predecessor recorded as failing is already in the restored counts, and reducing it back into its cluster would tally it twice. One that passed for the predecessor and fails now is this build's own evidence and counts.
+                    countsAsInstance: record.propertyFailed == false
+                ))
+            }
+        }
+
+        // A resumed run is a new search seeded with the predecessor's findings, not a continuation of it: the PRNG position, the reduction gate, and the bandit weights are not persisted. The re-offers above bumped the incidence counts without running an attempt, so the estimators start from this run's own evidence rather than a mixture of two.
+        corpus.resetIncidenceStatistics()
+
+        for failure in restoredFailures {
+            guard forcedTermination == nil else {
+                break
+            }
+            handleFailure(
+                failure.candidate,
+                parentIndex: nil,
+                phase: failure.phase,
+                coverageNovel: failure.coverageNovel,
+                // The predecessors' attempt total: after every index they recorded, so a carried-over cluster keeps its discovery index, and before this run's first attempt.
+                attemptIndex: attemptTimelineIndex,
+                countsAsInstance: failure.countsAsInstance
             )
         }
+    }
+
+    /// A restored entry that fails on the current build, held until the corpus is whole so its reduction's checkpoints record a complete snapshot.
+    private struct RestoredFailure {
+        let candidate: EvaluatedFuzzCandidate<Output>
+        let phase: FuzzPhase
+        let coverageNovel: Bool
+        let countsAsInstance: Bool
+    }
+
+    /// Materializes one persisted sequence and evaluates it once against the current build.
+    ///
+    /// The single evaluation is the contract: a stateful or flaky property can answer differently on a second call, and every consumer here (the verdict, the symptom, the signature, the corpus hits) has to describe the same run. Taking the persisted hits instead would seed the corpus with signatures for paths the current build no longer takes, and taking the persisted verdict would put a now-failing entry into the P(hit | pass) denominator.
+    ///
+    /// - Returns: Nil when the current generator can no longer materialize the sequence, which prunes the record.
+    private func rejudge(
+        _ sequence: ChoiceSequence
+    ) -> (value: Output, tree: ChoiceTree, verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)])? {
+        let result = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact)
+        guard case let .success(anyValue, tree, _) = result, let value = anyValue as? Output else {
+            return nil
+        }
+        let (verdict, hits) = attribute(value) { value in
+            counts.invocations.record(.recovery, invocations: 1)
+            return judge(value, candidateHash: ZobristHash.hash(of: sequence), kind: .recovery, sequence: sequence)
+        }
+        return (value, tree, verdict, hits)
     }
 }

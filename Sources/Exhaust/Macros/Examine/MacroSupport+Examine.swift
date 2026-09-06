@@ -105,7 +105,7 @@ private extension __ExhaustRuntime {
 
     /// Resolves an optional replay seed to a sampling seed, reporting an error for anything else.
     ///
-    /// Screening seeds are rejected rather than ignored: they address a covering-array row that `#examine` cannot replay, and honoring their seed digits as a sampling seed would silently validate a different stream than the one the seed names.
+    /// Screening seeds are rejected rather than ignored: they address a covering array row that `#examine` cannot replay, and honoring their seed digits as a sampling seed would silently validate a different stream than the one the seed names.
     static func resolveExamineReplaySeed(
         _ replaySeed: ReplaySeed?,
         fileID: StaticString,
@@ -121,7 +121,7 @@ private extension __ExhaustRuntime {
                 return .seeded(seed)
             case .valueScreening, .specScreening:
                 reportError(
-                    "Screening replay seeds (with a U row marker) address a covering-array row and cannot seed #examine. Pass the run seed from a prior report.",
+                    "Screening replay seeds (with a U row marker) address a covering array row and cannot seed #examine. Pass the run seed from a prior report.",
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
