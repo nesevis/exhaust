@@ -239,25 +239,35 @@ package enum SancovSymbolizer {
             guard mangled.isEmpty == false else {
                 return [:]
             }
+
+            // Give the child a completed file rather than feeding a pipe from another GCD block. The caller reads stdout synchronously, so an asynchronous pipe writer would create a forward-progress cycle under a parallel test run: when the global queue has no spare worker, the writer cannot close stdin, swift-demangle cannot exit, and this thread cannot finish reading stdout.
+            let input = Data((mangled.joined(separator: "\n") + "\n").utf8)
+            let inputURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("exhaust-swift-demangle-\(UUID().uuidString)")
+            let inputHandle: FileHandle
+            do {
+                try input.write(to: inputURL, options: .atomic)
+                inputHandle = try FileHandle(forReadingFrom: inputURL)
+            } catch {
+                try? FileManager.default.removeItem(at: inputURL)
+                return [:]
+            }
+            defer {
+                inputHandle.closeFile()
+                try? FileManager.default.removeItem(at: inputURL)
+            }
+
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
             process.arguments = ["swift-demangle", "-simplified"]
-            let stdin = Pipe()
             let stdout = Pipe()
-            process.standardInput = stdin
+            process.standardInput = inputHandle
             process.standardOutput = stdout
-            process.standardError = Pipe()
+            process.standardError = FileHandle.nullDevice
             do {
                 try process.run()
             } catch {
                 return [:]
-            }
-            // Written off the reading thread: the tool emits as it consumes, so writing every name before reading any output can fill the stdout pipe and block both sides. The pipe is a class, so the handle travels into the closure without a Sendable claim.
-            let input = Data((mangled.joined(separator: "\n") + "\n").utf8)
-            let writer = stdin.fileHandleForWriting
-            DispatchQueue.global().async {
-                writer.write(input)
-                writer.closeFile()
             }
             let data = stdout.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()

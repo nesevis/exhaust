@@ -4,7 +4,7 @@ import Testing
 
 /// The process-global comparison ring under the concurrent access it is built for: the inline-8bit-counter model has no per-run context, so every thread of an instrumented system under test writes to one ring while the run's lane drains it.
 ///
-/// Not a `.threads` spec: that mode replays every candidate ordering on a fresh instance of the system under test, and the ring is a process singleton with no fresh instance to give it. The property is stated directly instead, over `concurrentPerform`, which returns only when every writer and the drainer have finished, so the outcome is decided before anything is asserted and no wall clock is involved.
+/// Not a `.threads` spec: that mode replays every candidate ordering on a fresh instance of the system under test, and the ring is a process singleton with no fresh instance to give it. The property is stated directly instead, using dedicated writer threads so their progress never depends on spare capacity in the same GCD pool as the waiting test runner.
 ///
 /// Run under ThreadSanitizer (`swift test --sanitize=thread`) to check the exclusion itself; without it these still pin the observable contract, which is that a drain returns whole records and never a mix of two.
 @Suite("Comparison ring under concurrent writers", .serialized)
@@ -21,24 +21,47 @@ struct ComparisonRingConcurrencyTests {
             ComparisonRuntime.reset()
         }
 
-        // Each writer pairs a value with itself, so any record whose two operands disagree is a torn one. The drainer keeps draining while any writer is still going and once more after the last one finishes, so every run drains at least once and the final count is the whole ring.
-        let writersRemaining = SendableBox(writers)
+        // Each writer pairs a value with itself, so any record whose two operands disagree is a torn one. A concurrentPerform iteration must not wait for its siblings — libdispatch may run them serially — so writers get dedicated threads and the test thread remains the drainer.
+        let ready = DispatchGroup()
+        let finished = DispatchGroup()
+        let start = DispatchSemaphore(value: 0)
         let torn = SendableBox(0)
-        DispatchQueue.concurrentPerform(iterations: writers + 1) { iteration in
-            guard iteration > 0 else {
-                repeat {
-                    ComparisonRuntime.forEachRecord { _, first, second in
-                        if first != second {
-                            torn.withValue { $0 += 1 }
-                        }
-                    }
-                } while writersRemaining.value > 0
-                return
+        var writerThreads: [Thread] = []
+        for writer in 1 ... writers {
+            ready.enter()
+            finished.enter()
+            let thread = Thread {
+                ready.leave()
+                start.wait()
+                for _ in 0 ..< recordsPerWriter {
+                    TracePCGuardCoverageSource.fireComparisonForTesting(UInt64(writer), UInt64(writer))
+                }
+                finished.leave()
             }
-            for _ in 0 ..< recordsPerWriter {
-                TracePCGuardCoverageSource.fireComparisonForTesting(UInt64(iteration), UInt64(iteration))
+            writerThreads.append(thread)
+            thread.start()
+        }
+        ready.wait()
+        for _ in 0 ..< writers {
+            start.signal()
+        }
+
+        repeat {
+            ComparisonRuntime.forEachRecord { _, first, second in
+                if first != second {
+                    torn.withValue { $0 += 1 }
+                }
             }
-            writersRemaining.withValue { $0 -= 1 }
+            // The ring uses a deliberately tiny spin lock. Backing off keeps this stress reader from unfairly reacquiring it before a writer can make progress.
+            Thread.sleep(forTimeInterval: 0.0001)
+        } while finished.wait(timeout: .now()) == .timedOut
+        withExtendedLifetime(writerThreads) {
+            // The last snapshot is after every writer, so it observes the settled ring.
+            ComparisonRuntime.forEachRecord { _, first, second in
+                if first != second {
+                    torn.withValue { $0 += 1 }
+                }
+            }
         }
 
         #expect(torn.value == 0)
