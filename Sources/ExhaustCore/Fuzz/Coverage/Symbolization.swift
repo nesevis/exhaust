@@ -231,6 +231,13 @@ package enum SancovSymbolizer {
         }
     #endif
 
+    /// One parsed line of `atos` output: the symbol name it printed, and the file and line when it carried source information.
+    private struct AtosLine {
+        let name: String?
+        let file: String?
+        let line: Int?
+    }
+
     #if os(macOS)
         /// Renders mangled names the way the debugger does, through one `swift-demangle -simplified` spawn per report. Returns only the names it could render; a missing tool or a failed spawn leaves every name to the full demangling.
         ///
@@ -285,13 +292,6 @@ package enum SancovSymbolizer {
                 names[name] = stripSpecialization(simplified)
             }
             return names
-        }
-
-        /// One parsed line of `atos` output: the symbol name it printed, and the file and line when it carried source information.
-        private struct AtosLine {
-            let name: String?
-            let file: String?
-            let line: Int?
         }
 
         /// Runs `atos` once for one image and parses each address's line: the name before ` (in `, and the file and line when present. Failures leave every address absent.

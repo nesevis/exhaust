@@ -6,6 +6,37 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-07
+
+### Added
+
+- `#exhaust` properties that use `#expect` or `#require` for assertions fail the run when assertions fired inside the property but the pipeline found no counterexample, naming the unobserved assertion and its location. An assertion reached through a function call, a stored closure, or a nested closure is absorbed by the suppression scope but invisible to the detection rewrite, so without this diagnostic a failing assertion silently disappears.
+- `FuzzTermination.uncontainedAsyncWork`: a `.tasks` spec run whose timed-out async work outlives cancellation stops early rather than measuring later attempts against escaped coverage.
+- `FuzzReport.SymbolLocation` exposes the demangled symbol, module, file, and line of a discriminating edge as fields rather than a composed string.
+- `FuzzReport.Attempts.duplicatesSkipped` and `FuzzReport.Attempts.DuplicateSkips` report how many candidates each producer skipped as recent duplicates.
+- `FuzzReport.Attempts.operandEnergyRetirements` and related counters report comparand-substitution energy bookkeeping.
+
+### Changed
+
+- `FuzzReport` now groups its metrics into `Attempts`, `Invocations`, `Coverage`, and `Timing` nested types. `TimingBreakdown` is now `Timing`.
+- `FuzzReport.FaultCluster.discriminatingEdges` carries `SymbolLocation` instead of a formatted string, folds duplicate source locations within one function, and drops compiler-generated symbols. `necessaryEdgeCount` and `nearMissEdgeIndices` are removed.
+- `#explore(…, time:)` deduplicates candidates by Zobrist hash before invoking the property, so a mutation that reproduces a recently evaluated sequence skips it. Per-arm skip counts appear in the summary.
+- `#explore(…, time:)` retires comparand-substitution sources whose barren draws exhaust an energy allowance that scales with the tag group's slot count, so a source that stops yielding stops drawing budget.
+- `#explore(…, time:)` locks the counter-mode comparison ring so concurrent `trace-pc-guard` runs in one process do not corrupt each other's operand records.
+- `#explore(…, time:)` prefers exact materialisation for every candidate, falling back to guided only when exact cannot build the sequence.
+- `#explore(…, time:)` drives screening rows through the same evaluate path as sampling and mutation, so attempt accounting, the duplicate check, and the breadcrumb apply uniformly.
+- The sync-async bridge cancels timed-out work and drains briefly to distinguish quiesced (stopped) from escaped (still running). `BoundedAwaitOutcome` replaces the bare optional.
+- `#explore(Spec.self, time:)` keeps an async sequential spec's continuations on the coverage-bound lane, so `trace-pc-guard` sees the work on platforms at or above macOS 15.
+### Fixed
+
+- Symbol demangling under contention no longer exhausts threads; the demangler is called outside the lock.
+- A precedence bug in the materialiser applied the wrong handler to certain edge case sequences.
+- Async cleanup in the fuzz loop could skip finalisation, leaving attempt counts and corpus state inconsistent across resumes.
+- Attempt indices now carry across crash-recovery resumes, so `FaultCluster.firstSeenAttempt` reflects the original discovery rather than restarting from zero.
+- The operand energy table enforces its non-zero key invariant, preventing a zero key from silently evicting live entries.
+
+## [1.1.0] - 2026-09-03
+
 ### Added
 
 - `#explore(…, time:)` accepts `trace-pc-guard` instrumentation (`-sanitize-coverage=edge,trace-pc-guard,pc-table`) beside `inline-8bit-counters`. Runs under `trace-pc-guard` keep their edges and comparison operands in the run's own context, so instrumented tests in one process run concurrently without serialising on the process-global counter table. When a build carries both, the counters are used because they record on every executor.
@@ -55,5 +86,7 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/nesevis/exhaust/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/nesevis/exhaust/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/nesevis/exhaust/releases/tag/v1.0.0
