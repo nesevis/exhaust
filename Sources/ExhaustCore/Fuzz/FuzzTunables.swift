@@ -77,6 +77,16 @@ package enum FuzzTunables {
     /// Barren draws a comparand-substitution key gets before it is retired, and the allowance a yielding draw restores it to. A yield is a corpus admission or a failure: the arm can be worth its attempts through faults that light no new edge, so admission alone would retire it too early.
     package static let comparandOperandEnergy: UInt8 = 16
 
+    /// Barren draws allowed per value slot of the chosen tag group, and the allowance's cap. A draw samples one subset of the group's slots, so the candidates a source can reach grow with the group: 15 for four slots, 255 for eight, 3,796 for twelve. A fixed 16 samples a four-slot group exhaustively and a twelve-slot group at 0.4%, which retires exactly the sources whose walk is longest, the multi-slot agreement preconditions of IFC's memory operations. Scaling the allowance with the group spends draws where a draw can still be new; the floor is the fixed allowance, the cap bounds the walk a run will fund for one source; 255 was measured against it on the IFC memory-operation probe (2026-09-07) and found nothing the lower cap missed.
+    package static let comparandOperandEnergyPerSlot = 8
+    package static let comparandOperandEnergyCap: UInt8 = 128
+
+    /// The allowance for a source drawn against a tag group of `slotCount` value entries.
+    package static func comparandOperandEnergy(forSlotCount slotCount: Int) -> UInt8 {
+        let scaled = slotCount * comparandOperandEnergyPerSlot
+        return UInt8(min(max(scaled, Int(comparandOperandEnergy)), Int(comparandOperandEnergyCap)))
+    }
+
     /// Floor of the adaptive fresh-draw mixture: the probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick while the corpus is admitting. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost, so a healthy corpus keeps only a background rate.
     package static let freshMixtureFloor = 0.05
 

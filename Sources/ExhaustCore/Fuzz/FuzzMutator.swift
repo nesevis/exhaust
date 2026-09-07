@@ -29,6 +29,9 @@ package enum FuzzMutator {
 
         /// The distinct tags occurring at those positions, in first-seen order. Comparand substitution reads it to choose a tag group before walking any position, so a retired operand costs a handful of encoding checks instead of a pass over the whole sequence.
         package let tags: [TypeTag]
+
+        /// Value entries carrying each tag, parallel to ``tags``. Comparand substitution sizes an operand's energy allowance from it: the subsets a draw can reach grow with the group, so a fixed allowance retires a large group's sources before the walk has sampled them.
+        package let tagSlotCounts: [Int]
         fileprivate let branchIndices: [Int]
         fileprivate let bindRegions: [BindRegion]
         package let problematicValues: [CatalogKey: [UInt64]]
@@ -66,6 +69,7 @@ package enum FuzzMutator {
 
         var valueIndices: [Int] = []
         var tags: [TypeTag] = []
+        var tagSlotCounts: [Int] = []
         var branchIndices: [Int] = []
         var bindOpenIndices: [Int] = []
         var problematicValues: [CatalogKey: [UInt64]] = [:]
@@ -79,8 +83,11 @@ package enum FuzzMutator {
                 case let .value(entry):
                     valueIndices.append(index)
                     // Linear membership: a sequence carries a handful of distinct tags, so a set would cost more to build than the scan saves.
-                    if tags.contains(entry.choice.tag) == false {
+                    if let tagIndex = tags.firstIndex(of: entry.choice.tag) {
+                        tagSlotCounts[tagIndex] += 1
+                    } else {
                         tags.append(entry.choice.tag)
+                        tagSlotCounts.append(1)
                     }
                     guard includingBoundaryCatalog else {
                         break
@@ -133,6 +140,7 @@ package enum FuzzMutator {
         return Layout(
             valueIndices: valueIndices,
             tags: tags,
+            tagSlotCounts: tagSlotCounts,
             branchIndices: branchIndices,
             bindRegions: bindRegions,
             problematicValues: problematicValues

@@ -80,12 +80,15 @@ extension FuzzRunner {
         }
         let tag = encodableTags[Int(prng.next(upperBound: UInt64(encodableTags.count)))]
         let key = Self.comparandKey(word: word, parentHash: parent.hash, tag: tag)
-        guard operandEnergy.hasEnergy(key, initial: FuzzTunables.comparandOperandEnergy) else {
+        // The allowance follows the tag group's size, read off the layout so a retired source still costs no walk; the same value is recomputed at every charge, so the table stores no allowance.
+        let slotCount = layout.tags.firstIndex(of: tag).map { layout.tagSlotCounts[$0] } ?? 1
+        let allowance = FuzzTunables.comparandOperandEnergy(forSlotCount: slotCount)
+        guard operandEnergy.hasEnergy(key, initial: allowance) else {
             return false
         }
         guard let mutated = comparandSubstitutionCandidate(parent: parent, layout: layout, tag: tag, word: word) else {
             // No slot of this group can take the operand. Charged as a barren draw, or the key would be redrawn and walked forever without ever reaching the evaluation that spends its energy.
-            operandEnergy.note(key, yielded: false, initial: FuzzTunables.comparandOperandEnergy)
+            operandEnergy.note(key, yielded: false, initial: allowance)
             return false
         }
 
@@ -101,7 +104,7 @@ extension FuzzRunner {
             // A yield is admission or a failure. Admission alone would retire the arm too early: its purpose is to satisfy a precondition that a fault sits behind, and satisfying one need not light an edge the corpus admits for.
             yielded = evaluation.admission.isAdmitted || evaluation.verdict?.isFailure == true
         }
-        operandEnergy.note(key, yielded: yielded, initial: FuzzTunables.comparandOperandEnergy)
+        operandEnergy.note(key, yielded: yielded, initial: allowance)
         return true
     }
 
