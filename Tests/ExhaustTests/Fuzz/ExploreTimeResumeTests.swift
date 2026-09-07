@@ -72,15 +72,17 @@ struct ExploreTimeResumeTests {
         )
         try store.write(document)
 
-        // The predecessor died evaluating a mutation of the first snapshot entry. Written through the real breadcrumb so the slot layout, checksum, and commit marker are the ones a live run produces.
-        let parentHash = ZobristHash.hash(of: sequences[0])
-        let predecessorBreadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL, recordsCandidateSequence: true))
-        predecessorBreadcrumb.record(
-            candidateHash: 0xABCD,
-            parentHash: parentHash,
-            kind: .search,
-            sequence: sequences[0]
-        )
+        // The predecessor died evaluating a mutation of the first snapshot entry. Written through the real breadcrumb so the slot layout, checksum, and commit marker are the ones a live run produces. Scoped so the mapping is released before the run deletes the directory.
+        do {
+            let parentHash = ZobristHash.hash(of: sequences[0])
+            let predecessorBreadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL, recordsCandidateSequence: true))
+            predecessorBreadcrumb.record(
+                candidateHash: 0xABCD,
+                parentHash: parentHash,
+                kind: .search,
+                sequence: sequences[0]
+            )
+        }
 
         let context = FuzzPersistenceContext(store: store, resumeEnabled: true)
         #expect(context.resumeDocument != nil)

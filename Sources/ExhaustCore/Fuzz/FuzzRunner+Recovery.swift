@@ -51,6 +51,7 @@ extension FuzzRunner {
         }
         progressWriter?.flush()
         breadcrumb?.clear()
+        breadcrumb = nil
         persistence.store.removeAll()
     }
 

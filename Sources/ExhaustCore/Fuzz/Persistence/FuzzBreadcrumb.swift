@@ -239,6 +239,16 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
         }
     }
 
+    /// Reads the raw mapped bytes as a contiguous array.
+    package func mappedBytes() -> [UInt8] {
+        [UInt8](UnsafeBufferPointer(start: mapping.assumingMemoryBound(to: UInt8.self), count: Self.mappingSize))
+    }
+
+    /// Writes `byte` at `offset` in the mapping. Intended for crash-corruption tests that simulate torn writes.
+    package func corruptByte(at offset: Int, with byte: UInt8) {
+        mapping.storeBytes(of: byte, toByteOffset: offset, as: UInt8.self)
+    }
+
     /// FNV-1a over the payload, so a slot torn partway through its bytes fails to validate even when its length and marker survived.
     private static func checksum(of payload: [UInt8]) -> UInt32 {
         var hash: UInt32 = 0x811C_9DC5

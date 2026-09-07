@@ -59,10 +59,11 @@ struct BreadcrumbSidecarTests {
 
             // Corrupt whichever slot holds the newer record, one field boundary at a time. The older record is still intact in the other slot, and that is what a resumed run must read.
             for offset in [0, 8, 16, 24, 32, 36, 40, 48, 60] {
-                var bytes = try [UInt8](Data(contentsOf: url))
+                let bytes = breadcrumb.mappedBytes()
                 let newer = newerSlotIndex(in: bytes)
-                bytes[newer * FuzzBreadcrumb.slotSize + offset] ^= 0xFF
-                try Data(bytes).write(to: url)
+                let byteOffset = newer * FuzzBreadcrumb.slotSize + offset
+                let original = bytes[byteOffset]
+                breadcrumb.corruptByte(at: byteOffset, with: original ^ 0xFF)
 
                 let survivor = try #require(
                     FuzzBreadcrumb.readSurvivor(fileURL: url),
@@ -81,11 +82,12 @@ struct BreadcrumbSidecarTests {
             breadcrumb.record(candidateHash: 2, kind: .search, sequence: choiceSequence(of: 6))
 
             // The marker survives from the last complete write while the payload beneath it is half of the next one. Only the checksum catches this, which is why the length and the marker are not enough on their own.
-            var bytes = try [UInt8](Data(contentsOf: url))
+            let bytes = breadcrumb.mappedBytes()
             let newer = newerSlotIndex(in: bytes)
-            bytes[newer * FuzzBreadcrumb.slotSize + FuzzBreadcrumb.slotSize - 1] ^= 0xFF
-            bytes[newer * FuzzBreadcrumb.slotSize + 50] ^= 0xFF
-            try Data(bytes).write(to: url)
+            let tailOffset = newer * FuzzBreadcrumb.slotSize + FuzzBreadcrumb.slotSize - 1
+            let midOffset = newer * FuzzBreadcrumb.slotSize + 50
+            breadcrumb.corruptByte(at: tailOffset, with: bytes[tailOffset] ^ 0xFF)
+            breadcrumb.corruptByte(at: midOffset, with: bytes[midOffset] ^ 0xFF)
 
             let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: url))
             #expect(survivor.candidateHash == 1)
