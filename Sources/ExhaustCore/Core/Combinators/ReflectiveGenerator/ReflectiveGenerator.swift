@@ -106,6 +106,46 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
         )).wrapped(isReflective: false)
     }
 
+    /// Chains this generator with a dependent generator, building the dependent generator once per distinct key.
+    ///
+    /// Use this instead of ``bind(caching:fileID:line:column:)`` when the output is not `Hashable` (a tuple, a type with a non-hashable payload), or when its equality is finer than the dependency: only part of the value decides which dependent generator to build, so keying on that part keeps one entry where whole-value keying would keep thousands.
+    ///
+    /// ```swift
+    /// let rows = #gen(.string(), .int(in: 0 ... 3)) { (text: $0, order: $1) }
+    /// let generator = rows.bind(cachingBy: \.order) { row in columnGen(width: row.order) }
+    /// ```
+    ///
+    /// `transform` runs on the first value drawn for each key, and the generator it returns serves every later value sharing that key. Reading a property outside the key path is therefore a determinism bug: it pins the dependent generator to whichever value happened to arrive first. The cache is unbounded, so choose a key path whose domain is small.
+    ///
+    /// - Parameters:
+    ///   - keyPath: A key path to the property that decides which dependent generator to build.
+    ///   - transform: A pure function that takes the generated value and returns the dependent generator; called once per distinct key.
+    /// - Returns: A generator that sequences the two computations.
+    public func bind<NewOutput, CacheKey: Hashable & Sendable>(
+        cachingBy keyPath: KeyPath<Output, CacheKey> & Sendable,
+        _ transform: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
+        // The same node `bind(_:fileID:line:column:)` builds, constructed here so the table can hold erased generators: going through `bind` would erase the cached typed generator on every draw.
+        let built = BuiltGeneratorTable<CacheKey>()
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { input in
+                    let value = input as! Output
+                    return try built.generator(for: value[keyPath: keyPath]) { try transform(value).gen.erase() }
+                },
+                backward: nil,
+                inputType: Output.self,
+                outputType: NewOutput.self
+            ),
+            inner: gen.erase()
+        )).wrapped(isReflective: false)
+    }
+
     /// Applies a forward-only transform to the generated value.
     ///
     /// Reduction is unaffected because the reducer operates on the choice sequence, not the transformed output. `#exhaust(…, reflecting:)` cannot pass through this transform. For reflection support, use ``mapped(forward:backward:)`` or ``#gen`` with a trailing closure.

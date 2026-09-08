@@ -77,6 +77,50 @@ struct CachingBindTests {
 
         #expect(reduced == 10)
     }
+
+    @Test("Key path variant builds the dependent generator once per distinct key")
+    func keyPathVariantBuildsTheDependentGeneratorOncePerDistinctKey() {
+        let counter = ConstructionCounter()
+        let rows = #gen(.int(in: 0 ... 3), .int(in: 0 ... 100)) { (order: $0, noise: $1) }
+        let generator = rows.bind(cachingBy: \.order) { row in
+            counter.increment(row.order)
+            return .int(in: 0 ... row.order)
+        }
+
+        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: 400))) { value in
+            (0 ... 3).contains(value)
+        }
+
+        #expect(counter.distinctValues == [0, 1, 2, 3])
+        #expect(counter.count == 4)
+    }
+
+    @Test("Key path variant draws the same values as a plain bind under the same seed")
+    func keyPathVariantDrawsTheSameValuesAsAPlainBindUnderTheSameSeed() {
+        func collect(caching: Bool) -> [Int] {
+            let recorder = ValueRecorder()
+            let rows = #gen(.int(in: 1 ... 5), .int(in: 0 ... 100)) { (width: $0, noise: $1) }
+            let generator: ReflectiveGenerator<Int> = switch caching {
+                case true: rows.bind(cachingBy: \.width) { row in .int(in: 0 ... row.width * 1000) }
+                case false: rows.bind { row in .int(in: 0 ... row.width * 1000) }
+            }
+            #exhaust(
+                #gen(generator),
+                .budget(.custom(screening: 0, sampling: 100)),
+                .replay(ReplaySeed.numeric(1337))
+            ) { value in
+                recorder.append(value)
+                return true
+            }
+            return recorder.values
+        }
+
+        let cached = collect(caching: true)
+        let plain = collect(caching: false)
+
+        #expect(cached.isEmpty == false)
+        #expect(cached == plain)
+    }
 }
 
 // MARK: - Helpers
