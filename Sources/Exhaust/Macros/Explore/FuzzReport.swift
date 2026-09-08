@@ -223,6 +223,22 @@ public struct FuzzReport: Sendable {
         /// Search candidates skipped before the property ran because the run had recently evaluated the same choice sequence. Counted in the phase tallies, not in ``evaluated``.
         public let duplicatesSkipped: Int
 
+        /// Mutation candidates that reached the property, by the operator that produced them.
+        ///
+        /// Keyed by arm name — `low`, `medium`, `high`, `splice`, `swap`, `shuffle`, `move`, `lockstepDelta`, `twinSplice`, `typedCrossover`. A child can carry several operators and each is credited, so these sum to more than ``mutation`` on a run whose candidates combine arms.
+        ///
+        /// The counterpart of the reduction phase's ``ExhaustReport/encoderProbes``: without it the ten operators are one undifferentiated bucket, and no rate can be read for the one operator a workload actually needs.
+        public let mutationArmAttempts: [String: Int]
+
+        /// Of those, the ones the property declined to judge. An operator whose candidates are mostly discards is spending the run's budget on a precondition it cannot satisfy.
+        public let mutationArmDiscarded: [String: Int]
+
+        /// Of those, the ones the property passed.
+        public let mutationArmPassed: [String: Int]
+
+        /// Of those, the ones the property failed.
+        public let mutationArmFailed: [String: Int]
+
         /// The same skips split by the arm that produced the candidate, so a duplicate rate can be read per arm.
         ///
         /// The arms rebuild already-evaluated inputs at very different rates, and an aggregate cannot say which one is spending its attempts on work the run has already done. Divide an arm's count by its attempt tally for the rate: the injection arms have their own tallies, sampling has ``sampling``, and ordinary mutation children are ``mutation`` less the injection tallies.
@@ -477,6 +493,23 @@ public struct FuzzReport: Sendable {
         return Double(attempts.evaluated) / seconds
     }
 
+    /// The mutation arms a run actually used, in the shape the reduction phase reports its encoders: `arm=a<attempts>/p<passed>/f<failed>/d<discards>/<discard %>`.
+    ///
+    /// Empty when the run reached no mutation candidate, so a sampling-only arm prints nothing rather than ten zeroes. An arm missing from a run that had a mutation phase was never picked, which is itself the reading: the bandit learns from admissions, so an operator whose gains carry no new coverage is selected out even where it is the only one that can reach the fault.
+    public var mutationArmSummary: String {
+        let arms = attempts.mutationArmAttempts.keys.sorted {
+            attempts.mutationArmAttempts[$0, default: 0] > attempts.mutationArmAttempts[$1, default: 0]
+        }
+        return arms.map { name in
+            let total = attempts.mutationArmAttempts[name, default: 0]
+            let passed = attempts.mutationArmPassed[name, default: 0]
+            let failed = attempts.mutationArmFailed[name, default: 0]
+            let discarded = attempts.mutationArmDiscarded[name, default: 0]
+            let discardPercentage = total > 0 ? discarded * 100 / total : 0
+            return "\(name)=a\(total)/p\(passed)/f\(failed)/d\(discarded)/\(discardPercentage)%"
+        }.joined(separator: " ")
+    }
+
     /// Renders the run's fault inventory as the multi-line text a failing run reports to the terminal.
     ///
     /// When the run clustered faults, this is the string `#explore(time:)` records as the test failure, so a run under `.suppress(.issueReporting)` can still assert on what a developer would have read. A run that stopped because of a configuration or instrumentation problem reports that separately, and none of that text appears here. Suspect edges appear in their compact form (`integrityCheck (Parser.swift:121)`), not as raw symbolizer output. The wording is diagnostic text and changes between releases, so match substrings rather than whole lines.
@@ -582,6 +615,10 @@ package extension FuzzReport {
             discardedByMaterializer: counts.discardedAttempts,
             screeningRejected: counts.screeningRejectedAttempts,
             duplicatesSkipped: counts.duplicateCandidatesSkipped,
+            mutationArmAttempts: MutationArm.tally(counts.mutationArms) { ledger, arm in ledger.count(arm: arm) },
+            mutationArmDiscarded: MutationArm.tally(counts.mutationArms) { ledger, arm in ledger.count(arm: arm, outcome: .discard) },
+            mutationArmPassed: MutationArm.tally(counts.mutationArms) { ledger, arm in ledger.count(arm: arm, outcome: .pass) },
+            mutationArmFailed: MutationArm.tally(counts.mutationArms) { ledger, arm in ledger.count(arm: arm, outcome: .fail) },
             duplicateSkips: DuplicateSkips(
                 freshDraw: counts[duplicateSkipsFor: .freshSample],
                 mutationChild: counts[duplicateSkipsFor: .mutationChild],
@@ -676,6 +713,10 @@ package extension FuzzReport {
                 discardedByMaterializer: 0,
                 screeningRejected: 0,
                 duplicatesSkipped: 0,
+                mutationArmAttempts: [:],
+                mutationArmDiscarded: [:],
+                mutationArmPassed: [:],
+                mutationArmFailed: [:],
                 duplicateSkips: .zero,
                 evaluated: 0,
                 discardedByProperty: 0,

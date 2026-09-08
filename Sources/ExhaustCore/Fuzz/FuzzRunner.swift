@@ -486,11 +486,12 @@ package final class FuzzRunner<Output> {
         }
     }
 
-    /// Whether the estimated chance that the next attempt covers a new edge has fallen below ``FuzzTunables/saturationNextEdgeProbability``.
-    ///
-    /// The estimate is scoped to what this generator and property can reach, so it answers "is there anything left for this search to find" rather than "is there anything left in the module". A run with no singletons estimates no undiscovered edges and reads as saturated, which is the intended reading: nothing has been seen exactly once, so nothing suggests more remains.
-    ///
-    /// The estimator is denominated in incidences; the mean edges an attempt covers converts it to the per-attempt figure the threshold and the report both speak in.
+    // Whether the estimated chance that the next attempt covers a new edge has fallen below ``FuzzTunables/saturationNextEdgeProbability``.
+    //
+    // The estimate is scoped to what this generator and property can reach, so it answers "is there anything left for this search to find" rather than "is there anything left in the module". A run with no singletons estimates no undiscovered edges and reads as saturated, which is the intended reading: nothing has been seen exactly once, so nothing suggests more remains.
+    //
+    // The estimator is denominated in incidences; the mean edges an attempt covers converts it to the per-attempt figure the threshold and the report both speak in.
+
     private func isSaturated() -> Bool {
         let attempts = corpus.incidenceSampleCount
         let incidenceTotal = corpus.incidenceTotal
@@ -719,8 +720,11 @@ package final class FuzzRunner<Output> {
             verdict: verdict,
             hits: hits
         )
-        if admission.isAdmitted, configuration.experiments.banditBands {
-            for arm in MutationArm.allCases where candidate.armsMask & (1 << UInt32(arm.rawValue)) != 0 {
+        // Credit every arm in the mask, whatever the verdict: the bandit only learns from admissions, but the report has to be able to say what an arm spent its attempts on, including the discards an admission-only tally never sees.
+        let outcome = FuzzAttemptOutcome(verdict)
+        for arm in MutationArm.allCases where candidate.armsMask & (1 << UInt32(arm.rawValue)) != 0 {
+            counts.mutationArms.record(arm: arm, outcome: outcome)
+            if admission.isAdmitted, configuration.experiments.banditBands {
                 bandit.reward(arm)
             }
         }

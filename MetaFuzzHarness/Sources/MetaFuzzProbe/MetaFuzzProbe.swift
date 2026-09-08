@@ -90,6 +90,7 @@ struct MetaFuzzProbe: ParsableCommand {
             "metafuzz: probe corpus \(report.coverage.corpusEntryCount) entries, \(report.coverage.parentCount) mutable tier; "
                 + "edge singletons \(report.coverage.singletons), doubletons \(report.coverage.doubletons)"
         )
+        print("metafuzz: probe arms \(report.mutationArmSummary.isEmpty ? "none (no mutation candidate)" : report.mutationArmSummary)")
         print(
             "metafuzz: probe seed \(report.seed) (replay with --seed \(report.seed)); "
                 + "termination \(describe(report.termination))"

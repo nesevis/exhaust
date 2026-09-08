@@ -104,3 +104,20 @@ package struct MutationBandit: Sendable {
         cachedProbabilities = Self.probabilities(over: weights)
     }
 }
+
+package extension MutationArm {
+    /// Builds a name-keyed tally over the arm inventory, dropping arms that produced nothing so a report shows only the operators a run actually used.
+    static func tally(
+        _ ledger: MutationArmLedger,
+        _ value: (MutationArmLedger, MutationArm) -> Int
+    ) -> [String: Int] {
+        var result: [String: Int] = [:]
+        for arm in MutationArm.allCases {
+            let count = value(ledger, arm)
+            if count > 0 {
+                result[String(describing: arm)] = count
+            }
+        }
+        return result
+    }
+}

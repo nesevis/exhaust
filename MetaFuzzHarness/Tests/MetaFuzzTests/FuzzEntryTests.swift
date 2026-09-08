@@ -50,6 +50,7 @@ private func printProbeMetrics(_ report: FuzzReport) {
             + "mutation \(percentage(timing.mutationOverhead))% · "
             + "reduction \(percentage(timing.reduction))% · other \(percentage(timing.other))%"
     )
+    print("metafuzz: probe arms \(report.mutationArmSummary.isEmpty ? "none (no mutation candidate)" : report.mutationArmSummary)")
 }
 
 // MARK: - Findings Directory

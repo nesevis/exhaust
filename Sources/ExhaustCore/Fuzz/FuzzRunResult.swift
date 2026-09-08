@@ -192,6 +192,39 @@ package enum FuzzAttemptOutcome: Int, CaseIterable, Sendable {
     }
 }
 
+/// Every mutation candidate's outcome, by the arm that produced it.
+///
+/// Separate from ``FuzzAttemptLedger`` rather than a fourth dimension of it, because a candidate's arms are a mask and not a single value: one child can carry several operators and each is credited, so the two tables have different row counts for the same run. The reduction phase reports the same shape per encoder, so an arm's discard rate reads the way an encoder's rejection rate does.
+///
+/// Scoped to candidates that reached the property. A candidate the materializer rejected or the duplicate cache skipped never reaches the crediting site, and its arms are counted in neither table; ``FuzzRunCounts/subscript(duplicateSkipsFor:)`` answers the duplicate question per producer.
+package struct MutationArmLedger: Sendable, Equatable {
+    private static let outcomeCount = FuzzAttemptOutcome.allCases.count
+    private var table: [Int]
+
+    package init() {
+        table = Array(repeating: 0, count: MutationArm.allCases.count * Self.outcomeCount)
+    }
+
+    package mutating func record(arm: MutationArm, outcome: FuzzAttemptOutcome) {
+        table[arm.rawValue * Self.outcomeCount + outcome.rawValue] += 1
+    }
+
+    /// Candidates this arm produced that reached the property, whatever the verdict.
+    package func count(arm: MutationArm) -> Int {
+        let base = arm.rawValue * Self.outcomeCount
+        return table[base ..< (base + Self.outcomeCount)].reduce(0, +)
+    }
+
+    package func count(arm: MutationArm, outcome: FuzzAttemptOutcome) -> Int {
+        table[arm.rawValue * Self.outcomeCount + outcome.rawValue]
+    }
+
+    /// Whether any arm produced anything, so a report can omit the section entirely on a run with no mutation phase.
+    package var isEmpty: Bool {
+        table.allSatisfy { $0 == 0 }
+    }
+}
+
 /// Every candidate opportunity of a `time:` run, by phase, producer, and outcome.
 ///
 /// One table replaces the per-phase and per-producer tallies the loop used to increment by hand at six different sites. Every candidate carries its phase and origin, so ``FuzzRunner/evaluate(_:)`` and the producers record exactly one outcome per opportunity, and every figure the report prints is a sum over some slice of the table.
@@ -281,6 +314,9 @@ package struct FuzzRunCounts: Sendable {
 
     /// Property invocations outside search attempts: pruning, reduction, normalization, classification, and recovery. Aggregate counts only; their verdicts are consumed where they happen.
     package var invocations = RunLedger()
+
+    /// Mutation candidates that reached the property, by the arm that produced them and the verdict they reached.
+    package var mutationArms = MutationArmLedger()
 
     package init() {}
 

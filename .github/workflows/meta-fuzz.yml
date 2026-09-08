@@ -96,8 +96,9 @@ jobs:
             # concentrates budget, so two runs settle in regions with different per-case cost. The
             # corpus line and the inventory's coverage lines say whether a throughput gap is the
             # search reaching less code or the same code costing more, and the seed line makes the
-            # run replayable.
-            for field in throughput corpus seed; do
+            # run replayable. The arms line is the per-operator ledger: which mutation arms the
+            # bandit kept picking, and what each spent its attempts on.
+            for field in throughput corpus arms seed; do
               grep "^metafuzz: probe ${field} " "$PROBE_OUTPUT" | tail -1 | sed 's/^metafuzz: /- /' >> "$GITHUB_STEP_SUMMARY"
             done
           else

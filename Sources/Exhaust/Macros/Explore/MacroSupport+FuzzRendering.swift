@@ -77,6 +77,9 @@ extension __ExhaustRuntime {
         if report.coverage.parentProfile.parentCount > 0 {
             lines.append(renderParentProfileLine(report.coverage.parentProfile, entryCount: report.coverage.corpusEntryCount))
         }
+        if report.mutationArmSummary.isEmpty == false {
+            lines.append("Mutation arms (attempts/passed/failed/discarded): \(report.mutationArmSummary)")
+        }
         if report.attempts.discardedByProperty > 0 {
             lines.append(
                 "Discarded: \(report.attempts.discardedByProperty) of \(report.attempts.evaluated) evaluated cases threw a skip error; coverage-novel discards stay in the corpus as mutation parents at \(Int((FuzzTunables.discardParentEnergy * 100).rounded()))% weight."
