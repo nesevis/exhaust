@@ -6,6 +6,17 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-09
+
+### Added
+
+- `FuzzReport.Attempts.mutationArmAttempts`, `mutationArmPassed`, `mutationArmFailed`, and `mutationArmDiscarded` tally every mutation operator's attempts by outcome, and `FuzzReport.mutationArmSummary` renders them in the reduction phase's per-encoder form. The line appears in the `explore-time-summary.txt` attachment, so an operator the bandit stopped picking is visible rather than inferred.
+- `bind(cachingBy:)` chains a dependent generator keyed by a `Hashable` property of the output, building it once per distinct key, for outputs that are not themselves `Hashable`.
+
+### Fixed
+
+- `#explore(…, time:)` dropped every failure and corpus admission that came from a fresh draw of a generator with a size-scaled length (a default `.array()`, a string) unless the draw was made at size 100. The exact-rebuild parity check compared the length's size-derived valid range, which differs between the draw and the rebuild, so the failure was held without a cluster, `.failFast` never fired, and the corpus could only be seeded by mutation children. Introduced in 1.2.0 with exact materialisation.
+
 ## [1.2.0] - 2026-09-07
 
 ### Added
@@ -86,7 +97,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/nesevis/exhaust/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/nesevis/exhaust/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/nesevis/exhaust/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/nesevis/exhaust/releases/tag/v1.0.0
