@@ -771,10 +771,12 @@ package final class FuzzRunner<Output> {
 
     /// Rebuilds a candidate's tree by exact materialization of its stored sequence.
     ///
-    /// The flat pass emits the complete sequence, and exact mode re-derives everything the flattening drops (`getSize` leaves, inactive branches, bind structure) from the generator walk, so the seed and the fallback tree that produced the candidate are not needed again. A nil return means exact mode rejected a sequence the materializer itself emitted, or its tree re-flattened differently; the caller discards the attempt rather than storing a placeholder tree. Measured 2026-09-06 on IFC and STLC: no such divergence, endpoints identical to the seed-and-fallback replay it replaced.
+    /// The flat pass emits the complete sequence, and exact mode re-derives everything the flattening drops (`getSize` leaves, inactive branches, bind structure) from the generator walk, so the seed and the fallback tree that produced the candidate are not needed again. A nil return means exact mode rejected a sequence the materializer itself emitted, or its tree re-flattened differently; the caller discards the attempt rather than storing a placeholder tree.
+    ///
+    /// The comparison ignores size-derived length ranges: a fresh draw made at size *s* records `0 ... s` on a default `.array()`'s sequence marker, and the exact rebuild at size 100 records `0 ... 100` for the same choices. Comparing those as identity rejected every fresh draw not made at size 100, which held those draws' failures unreduced with no cluster and kept them out of the corpus.
     private func rebuildTree(for sequence: ChoiceSequence) -> ChoiceTree? {
         guard case let .success(_, tree, _) = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact),
-              ChoiceSequence.flatten(tree) == sequence
+              ChoiceSequence.flatten(tree).matchesIgnoringDerivedLengthRanges(sequence)
         else {
             ExhaustLog.error(
                 category: .propertyTest,

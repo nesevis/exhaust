@@ -227,6 +227,55 @@ struct InterpreterFlatEmissionTests {
         try assertFlatDrawMatchesTreeDraw(gen)
     }
 
+    // MARK: - Exact rebuild across sizes
+
+    @Test("Fresh flat draws of a size-scaled array rebuild exactly at every size")
+    func sizeScaledArrayRebuildsExactly() throws {
+        // A default array draws its length from `0 ... size`, so the sequence marker's valid range records the run's size while the exact rebuild records size 100. The fuzz loop's tree rebuild has to accept that difference: rejecting it dropped every fresh draw not made at size 100.
+        let elementGen: Generator<Int> = Gen.choose(in: -100 ... 100, scaling: .exponential)
+        let gen = Gen.zip(Gen.arrayOf(Gen.zip(elementGen, elementGen)), elementGen)
+        let erased = gen.erase()
+        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337, maxRuns: 120)
+        var run = 0
+        while let (_, sequence) = try interpreter.nextFlat() {
+            defer { run += 1 }
+            guard case let .success(_, tree, _) = Materializer.materializeAny(erased, prefix: sequence, mode: .exact) else {
+                Issue.record("run \(run): exact materialization rejected a sequence the flat draw emitted")
+                continue
+            }
+            let reflattened = ChoiceSequence.flatten(tree)
+            #expect(
+                reflattened.matchesIgnoringDerivedLengthRanges(sequence),
+                "run \(run): rebuilt tree \(reflattened.shortString) does not match the draw \(sequence.shortString)"
+            )
+            #expect(
+                reflattened.compactMap(\.value) == sequence.compactMap(\.value),
+                "run \(run): rebuilt tree changed a choice value"
+            )
+        }
+        #expect(run == 120)
+    }
+
+    @Test("Derived-range comparison still rejects a changed value or explicit range")
+    func derivedRangeComparisonStaysStrict() {
+        let base: ChoiceSequence = [
+            .sequence(true, validRange: 0 ... 5, isLengthExplicit: false),
+            .value(.init(choice: ChoiceValue(3, tag: .int), validRange: 0 ... 10, isRangeExplicit: true)),
+            .sequence(false, validRange: 0 ... 5, isLengthExplicit: false),
+        ]
+        var widerDerivedRange = base
+        widerDerivedRange[0] = .sequence(true, validRange: 0 ... 100, isLengthExplicit: false)
+        #expect(base.matchesIgnoringDerivedLengthRanges(widerDerivedRange))
+
+        var changedValue = base
+        changedValue[1] = .value(.init(choice: ChoiceValue(4, tag: .int), validRange: 0 ... 10, isRangeExplicit: true))
+        #expect(base.matchesIgnoringDerivedLengthRanges(changedValue) == false)
+
+        var explicitRange = base
+        explicitRange[0] = .sequence(true, validRange: 0 ... 100, isLengthExplicit: true)
+        #expect(base.matchesIgnoringDerivedLengthRanges(explicitRange) == false)
+    }
+
     // MARK: - Dedup and metamorphic sites
 
     @Test("Unique over a sequence hash matches flattened tree and keeps its retry path")

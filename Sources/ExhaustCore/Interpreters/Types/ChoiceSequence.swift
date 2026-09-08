@@ -29,6 +29,30 @@ package extension ChoiceSequence {
         ZobristHash.operativeHash(of: self)
     }
 
+    /// Whether the two sequences carry the same choices and structure, treating a size derived length range as metadata rather than identity.
+    ///
+    /// A default `.array()` draws its length from `0 ... size`, so the `.sequence` marker's valid range records the size the draw was made at. Exact rebuilds and reduction materialize at size 100, so the same choices re-flatten with `0 ... 100` on that marker. Plain equality reads that as a different sequence and rejects every fresh draw not made at size 100. This comparison keeps explicit length ranges and every value entry exact and ignores only the derived range.
+    func matchesIgnoringDerivedLengthRanges(_ other: ChoiceSequence) -> Bool {
+        guard count == other.count else {
+            return false
+        }
+
+        for (lhs, rhs) in zip(self, other) {
+            switch (lhs, rhs) {
+                case let (.sequence(lhsOpen, validRange: _, isLengthExplicit: false), .sequence(rhsOpen, validRange: _, isLengthExplicit: false)):
+                    guard lhsOpen == rhsOpen else {
+                        return false
+                    }
+                default:
+                    guard lhs == rhs else {
+                        return false
+                    }
+            }
+        }
+
+        return true
+    }
+
     /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
