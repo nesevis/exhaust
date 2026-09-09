@@ -153,12 +153,17 @@ extension Materializer {
             guard exhausted == false, position < effectiveEnd else {
                 return nil
             }
-            guard case .zip(true) = entries[position] else {
+            // A `.just` entry is emitted but never consumed by the cursor (`skipGroups` steps over it), so a zip that follows one, as the bound of a `.lazy` bind does, is parsed from the first entry past it.
+            var openPosition = position
+            while openPosition < effectiveEnd, case .just = entries[openPosition] {
+                openPosition += 1
+            }
+            guard openPosition < effectiveEnd, case .zip(true) = entries[openPosition] else {
                 return nil
             }
             var ends: [Int] = []
             ends.reserveCapacity(count)
-            var start = position + 1
+            var start = openPosition + 1
             for _ in 0 ..< count {
                 guard let end = entries.subtreeEnd(startingAt: start) else {
                     return nil
