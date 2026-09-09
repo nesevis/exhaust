@@ -50,7 +50,7 @@ extension ChoiceGraphScheduler {
         // Upstream: pure binary search over the bind-inner leaf, no inline linear scan or cross-zero phases. ``GraphValueEncoder``'s extra phases are wasted in a bound value context — every upstream probe spawns one lift and a full downstream search, so the standalone encoder's recovery strategies multiply the cost without finding more failures.
         //
         // Downstream: choose encoder based on bound subtree dimensionality.
-        // Single-leaf bound subtrees use binary search — the covering encoder requires ≥ 2 parameters for pairwise covering and falls through with zero probes for large single-parameter domains. Binary search converges in O(log domain) steps and correctly handles the cross-zero phase for signed types, finding the minimum failing value directly.
+        // Single-leaf bound subtrees use binary search: with one dependent value the lifted state is assumed to sit on a monotone slice between the value and its target, and binary search converges to the smallest failing value in O(log domain) steps, handling the cross-zero phase for signed types. The covering encoder would instead sample the range ends, which discovers a failure but does not minimize it.
         // Multi-leaf bound subtrees use BoundValueCoveringEncoder to discover failures across combinations.
         let downstreamEncoder: EncoderDispatch = bindScope.downstreamNodeIDs.count == 1
             ? .binarySearch(GraphBinarySearchEncoder())
@@ -76,6 +76,24 @@ extension ChoiceGraphScheduler {
             totalProbeCap: totalProbeCap,
             lift: lift
         ))
+    }
+
+    /// Builds a ``GraphBindPivotEncoder`` whose lift materializes through `gen` in guided mode.
+    ///
+    /// The encoder reads the bind, the pick, and the target branch from the dispatched scope on ``GraphEncoder/start(scope:)``; only the generator has to be captured here. Guided mode is what carries the previous bound subtree's leaf values across the pivot wherever their ranges still admit them, so the covering search starts from the closest assignment the generator can reproduce.
+    static func makeBindPivotEncoder(gen: AnyGenerator) -> EncoderDispatch {
+        .bindPivot(GraphBindPivotEncoder(lift: { candidate, fallbackTree in
+            guard case let .success(_, freshTree, _) = Materializer.materializeAny(
+                gen,
+                prefix: candidate,
+                mode: .guided(seed: 0, fallbackTree: fallbackTree),
+                fallbackTree: fallbackTree,
+                materializePicks: true
+            ) else {
+                return nil
+            }
+            return freshTree
+        }))
     }
 
     /// Lifts an upstream probe into a downstream ``EncoderInput`` for the bound value composition.

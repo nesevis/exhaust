@@ -139,7 +139,7 @@ extension ReductionMachine {
             )
             convergence.gate.markDispatched(fingerprint)
         } else {
-            encoder = ChoiceGraphScheduler.selectEncoder(for: transformation.operation)
+            encoder = ChoiceGraphScheduler.selectEncoder(for: transformation.operation, gen: gen)
         }
 
         encoder.start(scope: scope)

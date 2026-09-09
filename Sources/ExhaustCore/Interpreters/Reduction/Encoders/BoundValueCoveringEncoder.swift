@@ -4,9 +4,10 @@
 ///
 /// Unlike per-coordinate minimizers, this encoder does not assume the current state already fails the property. It searches the bound value space for ANY assignment that fails — the right strategy for the downstream slot of a ``GraphComposedEncoder``, where the lifted state may pass the property and a failure needs to be discovered.
 ///
-/// Two regimes based on the subtree leaves' total domain size:
+/// Three regimes based on the subtree leaves' total domain size:
 /// - **Small domains** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
-/// - **Large domains** (2 or more parameters): pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
+/// - **Large domains, 2 or more parameters**: pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
+/// - **Large domain, one parameter**: the ends of the range, alternating lowest and highest and working inward, up to ``coveringBudget`` rows. Pairwise covering needs two parameters, and a range that a lift has just widened fails at its edges when it fails at all: the values the previous configuration could not express are the ones farthest from where it sat.
 package struct BoundValueCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .boundValueSearch
 
@@ -91,7 +92,9 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
 
         if totalSpace <= Self.exhaustiveThreshold {
             exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
-        } else if valuePositions.count >= 2 {
+        } else if valuePositions.count == 1 {
+            exhaustiveProbes = buildRangeEndRows(domainSize: totalSpace)
+        } else {
             // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
             // Cap each domain to coveringBudget: we emit at most that many rows, so larger domains add no useful coverage and would produce enormous allocations (for example, Unicode scalar domains of ~1.1M values would create O(domain²) coverage matrices).
             let cappedDomains = valuePositions.map {
@@ -174,6 +177,26 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
             product = result
         }
         return product
+    }
+
+    /// Builds rows for a single parameter whose domain exceeds the exhaustive threshold: the lowest value, the highest, the second lowest, the second highest, and so on, until ``coveringBudget`` rows or the ends meet.
+    private func buildRangeEndRows(domainSize: UInt64) -> [CoveringArrayRow] {
+        var rows: [CoveringArrayRow] = []
+        rows.reserveCapacity(Self.coveringBudget)
+        var step: UInt64 = 0
+        while rows.count < Self.coveringBudget {
+            let low = step
+            let high = domainSize &- 1 &- step
+            guard low <= high else {
+                break
+            }
+            rows.append(CoveringArrayRow(values: [low]))
+            if high != low, rows.count < Self.coveringBudget {
+                rows.append(CoveringArrayRow(values: [high]))
+            }
+            step &+= 1
+        }
+        return rows
     }
 
     /// Builds exhaustive rows in shortlex order (leftmost coordinate changes slowest).

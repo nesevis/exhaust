@@ -120,7 +120,7 @@ extension ReductionMachine {
             guard exploitTransformation.operation.isValid(in: graph) else {
                 continue
             }
-            if case .minimize(.boundValue) = exploitTransformation.operation {
+            guard exploitTransformation.operation.requiresGenerator == false else {
                 continue
             }
 
@@ -133,7 +133,7 @@ extension ReductionMachine {
                 warmStartRecords: warmStarts
             )
 
-            var exploitEncoder = ChoiceGraphScheduler.selectEncoder(for: exploitTransformation.operation)
+            var exploitEncoder = ChoiceGraphScheduler.selectEncoder(for: exploitTransformation.operation, gen: gen)
             exploitEncoder.start(scope: exploitScope)
 
             captureDispatchBaseline()

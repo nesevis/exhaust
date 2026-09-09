@@ -6,6 +6,16 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+### Added
+
+- Reduction pivots picks inside a bind's inner and re-searches the dependent subtree. A generator that draws a selector through `.oneOf` and binds a dependent generator to it (a type that selects a term generator, a shape that selects a body) used to stop one branch above its minimum: changing the selector regenerates the dependent subtree, and the old values carried into it rarely fail the property, while bound value search only handles a numeric selector. The reducer now lifts each alternative selector branch through the generator, enumerates the regenerated subtree's values, and also tries each same-family subterm of the old subtree in the new subtree's place, so a counterexample can drop a wrapper and change the type it was selected under in one move. Bound value search is no longer proposed for a bind whose inner is not a single value, where it could never run.
+
+### Fixed
+
+- Reduction left counterexamples from a generator using `.lazy` at their first failing size. The unit inner of a `.lazy` bind leaves an entry the exact decoder did not step over, so a zip directly under `.lazy` never decoded from the prefix and every value probe inside it was rejected before the property ran.
+- Reduction ended in the same cycle it released bind-inner search when every value was already at its target, so bind-inner scopes were deferred and then never dispatched. The release is now followed by one more cycle whenever it adds scopes.
+- Branch promotion across recursion depths read a base case's layout from unselected alternatives and wrapped only the promoted family's leaves, so a recursive generator whose base case has a different shape at the top level, or whose recursion runs through a second generator, kept the extra level. Layouts are read per branch from active nodes and each bare leaf is wrapped with the family its slot expects.
+
 ## [1.2.1] - 2026-09-09
 
 ### Added

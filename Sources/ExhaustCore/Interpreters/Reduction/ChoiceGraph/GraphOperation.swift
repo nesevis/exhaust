@@ -47,12 +47,23 @@ enum GraphOperation {
             case .minimize(.valueLeaves): .valueSearch
             case .minimize(.floatLeaves): .floatSearch
             case .minimize(.boundValue): .boundValueSearch
+            case .minimize(.bindPivot): .bindPivot
             case .minimize(.laneCollapse): .laneCollapse
             case .exchange(.redistribution): .redistribution
             case .exchange(.tandem): .lockstep
             case .exchange(.relation): .relationSearch
             case .permute: .siblingSwap
             case .reorder: .numericReorder
+        }
+    }
+
+    /// Whether this operation's encoder is built with the generator in hand at dispatch time, because its probes are lifted through a materialization. Such operations are skipped by the relax round, which has no generator to give them.
+    var requiresGenerator: Bool {
+        switch self {
+            case .minimize(.boundValue), .minimize(.bindPivot):
+                true
+            default:
+                false
         }
     }
 
@@ -72,19 +83,24 @@ enum GraphOperation {
         }
     }
 
-    /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. All other operations return 0.
+    /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. Bind pivot mixes the pick's node ID in as well, because its affected set is the bind alone and one bind inner can hold several picks with the same branch identifiers. All other operations return 0.
     var scopeSubDiscriminator: UInt64 {
         if case let .replace(.branchPivot(_, targetBranchID)) = self {
             return targetBranchID
+        }
+        if case let .minimize(.bindPivot(scope)) = self {
+            return scope.targetBranchID ^ (UInt64(scope.pickNodeID) &* 0x9E37_79B9_7F4A_7C15)
         }
         return 0
     }
 
     /// Invokes `body` for each node ID whose position range is affected by this operation. Used by ``CandidateRejectionCache`` to compute position-scoped Zobrist hashes inline.
     ///
-    /// Returns `false` for search-based operations (minimize, exchange) and covering-aligned removal where the affected set is nondeterministic or not applicable.
+    /// Returns `false` for search-based operations (minimize, exchange) and covering-aligned removal where the affected set is nondeterministic or not applicable. Bind pivot is the exception among minimize scopes: its candidate is a function of the bind's current entries, and the bind's range covers the pick, so the bind alone is its affected set. Reporting the pick as well would XOR its positions a second time and cancel them out of the hash.
     func forEachAffectedNodeID(_ body: (Int) -> Void) -> Bool {
         switch self {
+            case let .minimize(.bindPivot(scope)):
+                body(scope.bindNodeID)
             case let .remove(scope):
                 switch scope {
                     case let .elements(elementScope):
@@ -178,6 +194,11 @@ extension GraphOperation {
                 }
                 return scope.receiverSequenceNodeID < graph.nodes.count
                     && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
+            case let .minimize(.bindPivot(scope)):
+                return scope.bindNodeID < graph.nodes.count
+                    && graph.nodes[scope.bindNodeID].positionRange != nil
+                    && scope.pickNodeID < graph.nodes.count
+                    && graph.nodes[scope.pickNodeID].positionRange != nil
             case .minimize, .exchange, .reorder:
                 return true
         }

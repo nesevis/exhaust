@@ -15,6 +15,9 @@ package enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Joint search over a bind-inner value and the parameters it controls. Composes an upstream search on the controlling value with a downstream search on the dependent subtree. Each upstream candidate triggers a full downstream exploration, so this encoder is deferred to stall cycles where cheaper encoders have failed.
     case boundValueSearch
 
+    /// Pivots a pick inside a bind's inner subtree, regenerates the bound subtree through the generator, and enumerates the regenerated subtree's leaf values for a failing assignment. Bound value search cannot serve a pick-shaped inner because its upstream is a numeric search; this encoder is the structural counterpart, with the same downstream covering search.
+    case bindPivot
+
     /// Shifts value between type-compatible parameters to find a simpler combination. When two parameters sum to a constant that the property depends on, redistribution searches for the split closest to zero on both sides.
     case redistribution
 
