@@ -112,7 +112,7 @@ enum MinimizationQuery {
             }
         }
 
-        // Bound value: one scope per bind node with an active inner child.
+        // Bound value and bind pivot: one scope per bind node with an active inner child, and one bind pivot per alternative branch of every pick in the inner subtree, ungated. Both wait for the bind-inner deferral to lift.
         guard deferBindInner == false else { return scopes }
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
@@ -122,11 +122,30 @@ enum MinimizationQuery {
             let boundChildID = node.children[metadata.boundChildIndex]
             guard graph.nodes[innerChildID].positionRange != nil else { continue }
 
+            let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
+            if boundSubtreeSize > 0 {
+                // No leaf-count gate on the alternatives, unlike branch pivot: an inner branch with more leaves can still shorten the sequence when the bound subtree it selects is smaller, and only the lifted candidate's length can tell. The encoder gates on that.
+                for pickNodeID in collectActivePicks(from: innerChildID, graph: graph) {
+                    guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else { continue }
+                    for index in 0 ..< Int(pickMetadata.branchCount) {
+                        let branchID = UInt64(index)
+                        guard branchID != pickMetadata.selectedID else { continue }
+                        scopes.append(.bindPivot(BindPivotScope(
+                            bindNodeID: nodeID,
+                            pickNodeID: pickNodeID,
+                            targetBranchID: branchID,
+                            boundSubtreeSize: boundSubtreeSize
+                        )))
+                    }
+                }
+            }
+
+            // Bound value search needs a `chooseBits` inner: the classifier lifts the inner's range endpoints, and any other inner kind is unclassifiable and never dispatched.
+            guard case .chooseBits = graph.nodes[innerChildID].kind else { continue }
             let downstreamNodeIDs = collectDescendantLeaves(
                 from: boundChildID,
                 graph: graph
             )
-            let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
             scopes.append(.boundValue(BoundValueScope(
                 bindNodeID: findParentBind(of: innerChildID, graph: graph) ?? innerChildID,
                 upstreamLeafNodeID: innerChildID,
@@ -136,6 +155,37 @@ enum MinimizationQuery {
         }
 
         return scopes
+    }
+
+    /// Whether releasing the bind-inner deferral would add at least one scope: a bind-inner leaf off its target, a bind with a `chooseBits` inner, or a bind whose inner holds a pick. Returns on the first hit; the machine asks this once per run, at the release, to decide whether the released scopes deserve a cycle.
+    static func hasDeferredScopes(graph: ChoiceGraph) -> Bool {
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            switch node.kind {
+                case let .chooseBits(metadata):
+                    let annotation = node.scopeAnnotation
+                    guard annotation.isBindInner, annotation.isDepthControl == false, annotation.isLaneControl == false else { continue }
+                    if metadata.value.bitPattern64 != metadata.value.reductionTarget(in: metadata.validRange) {
+                        return true
+                    }
+                case let .bind(metadata):
+                    guard node.children.count >= 2 else { continue }
+                    let innerChildID = node.children[metadata.innerChildIndex]
+                    let boundChildID = node.children[metadata.boundChildIndex]
+                    guard graph.nodes[innerChildID].positionRange != nil else { continue }
+                    if case .chooseBits = graph.nodes[innerChildID].kind {
+                        return true
+                    }
+                    if (graph.nodes[boundChildID].positionRange?.count ?? 0) > 0,
+                       collectActivePicks(from: innerChildID, graph: graph).isEmpty == false
+                    {
+                        return true
+                    }
+                default:
+                    continue
+            }
+        }
+        return false
     }
 
     // MARK: - Private Helpers
@@ -163,6 +213,27 @@ enum MinimizationQuery {
         while let current = stack.popLast() {
             let node = graph.nodes[current]
             if case .chooseBits = node.kind, node.positionRange != nil {
+                result.append(current)
+            }
+            stack.append(contentsOf: node.children)
+        }
+        return result
+    }
+
+    /// Active pick nodes in the containment subtree under `rootNodeID`, including `rootNodeID` itself. Inactive branch alternatives have nil position ranges and are not descended into, since a pick below an unselected branch cannot be pivoted in place.
+    private static func collectActivePicks(
+        from rootNodeID: Int,
+        graph: ChoiceGraph
+    ) -> [Int] {
+        var result: [Int] = []
+        var stack = [rootNodeID]
+        while let current = stack.popLast() {
+            let node = graph.nodes[current]
+            guard node.positionRange != nil else { continue }
+            if case let .pick(metadata) = node.kind,
+               metadata.branchCount >= 2,
+               node.children.count == Int(metadata.branchCount)
+            {
                 result.append(current)
             }
             stack.append(contentsOf: node.children)

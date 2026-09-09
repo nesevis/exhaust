@@ -11,6 +11,7 @@ indirect enum EncoderDispatch {
     case binarySearch(GraphBinarySearchEncoder)
     case boundValueCovering(GraphBoundValueCoveringEncoder)
     case composed(GraphComposedEncoder)
+    case bindPivot(GraphBindPivotEncoder)
 }
 
 extension EncoderDispatch: GraphEncoder {
@@ -27,6 +28,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .binarySearch(encoder): encoder.name
             case let .boundValueCovering(encoder): encoder.name
             case let .composed(encoder): encoder.name
+            case let .bindPivot(encoder): encoder.name
         }
     }
 
@@ -65,6 +67,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .composed(encoder):
                 encoder.start(scope: scope)
                 self = .composed(encoder)
+            case var .bindPivot(encoder):
+                encoder.start(scope: scope)
+                self = .bindPivot(encoder)
         }
     }
 
@@ -114,6 +119,10 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .composed(encoder)
                 return result
+            case var .bindPivot(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .bindPivot(encoder)
+                return result
         }
     }
 
@@ -130,6 +139,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .binarySearch(encoder): encoder.hadReplacementShortlexRejection
             case let .boundValueCovering(encoder): encoder.hadReplacementShortlexRejection
             case let .composed(encoder): encoder.hadReplacementShortlexRejection
+            case let .bindPivot(encoder): encoder.hadReplacementShortlexRejection
         }
     }
 
@@ -146,6 +156,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .binarySearch(encoder): encoder.convergenceRecords
             case let .boundValueCovering(encoder): encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
+            case let .bindPivot(encoder): encoder.convergenceRecords
         }
     }
 
@@ -184,6 +195,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .composed(encoder):
                 encoder.flushPartialConvergence()
                 self = .composed(encoder)
+            case var .bindPivot(encoder):
+                encoder.flushPartialConvergence()
+                self = .bindPivot(encoder)
         }
     }
 

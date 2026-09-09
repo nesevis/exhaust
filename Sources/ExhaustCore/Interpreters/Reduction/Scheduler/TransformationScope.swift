@@ -103,6 +103,9 @@ enum MinimizationScope {
     /// Joint upstream/downstream minimization along a bind dependency edge. Each upstream probe on the controlling value triggers a full downstream search on the dependent subtree. Modelled as a single scope because the upstream and downstream are tightly interleaved at the probe level.
     case boundValue(BoundValueScope)
 
+    /// Pivot a pick inside a bind's inner subtree and search the regenerated bound subtree's leaves for a failing assignment. The inner pick is structural, so the bound subtree cannot be carried over; it is regenerated through the generator and its leaves are then enumerated, which is what lets a value that the previous inner had pinned to a singleton range take a different value under the new inner.
+    case bindPivot(BindPivotScope)
+
     /// Drive lane-control chooseBits values to zero (move commands into the sequential prefix). Leaves are ordered by sequence position so the prefix grows from the front. Each leaf is a binary decision — zero (prefix) or unchanged (concurrent lane). Dispatched under ``EncoderName/laneCollapse`` so the ``ReducerConfiguration/enabledEncoders`` filter can stage it as an isolated pass before structural or value reduction.
     case laneCollapse(ValueMinimizationScope)
 }
@@ -156,6 +159,21 @@ struct BoundValueScope {
     let downstreamNodeIDs: [Int]
 
     /// The bound subtree's position count (value yield of the compound).
+    let boundSubtreeSize: Int
+}
+
+/// Scope for a pick pivot inside a bind's inner subtree, with a covering search over the regenerated bound subtree.
+struct BindPivotScope {
+    /// The bind whose inner subtree holds the pick.
+    let bindNodeID: Int
+
+    /// The pick to pivot. Lies in the bind's inner subtree, possibly below further nesting.
+    let pickNodeID: Int
+
+    /// The branch to select at ``pickNodeID``.
+    let targetBranchID: UInt64
+
+    /// The bound subtree's position count before the pivot. Used for dispatch priority.
     let boundSubtreeSize: Int
 }
 

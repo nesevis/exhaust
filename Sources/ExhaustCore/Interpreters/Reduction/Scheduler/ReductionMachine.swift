@@ -157,6 +157,9 @@ package struct ReductionMachine: ProbeSessionState {
     var anyAccepted: Bool = false
     var hadReplacementShortlexRejection: Bool = false
 
+    /// True from the post-cycle action that releases the bind-inner deferral until the next cycle begins, when the release adds at least one scope. The termination check reads it so the cycle that releases the deferral is followed by one more, without consulting the stall budget or the convergence check: the deferred scopes were never built into any source, so the stall that released them says nothing about whether they would accept, and a run whose leaves are all at target would otherwise terminate as converged without ever dispatching them. The deferral is released once per run, so the bypass is bounded to one cycle.
+    var deferralReleasedThisCycle: Bool = false
+
     /// True once any pass in the run accepted a probe. Unlike ``anyAccepted``, never reset: a run that terminates with this still false could not improve the input even once, which is the silent-stall presentation the stall diagnostic warns about.
     var anyAcceptanceEverOccurred: Bool = false
 
@@ -298,6 +301,7 @@ package struct ReductionMachine: ProbeSessionState {
         scopeRejectionCache.clearCoarse()
         hadReplacementShortlexRejection = false
         anyAccepted = false
+        deferralReleasedThisCycle = false
         sequenceBeforeCycle = sequence
 
         phase = .buildSources
@@ -367,6 +371,8 @@ package struct ReductionMachine: ProbeSessionState {
                 }
                 return .relaxRoundCompleted(improved: improved)
             case .releaseDeferral:
+                // Only worth a cycle when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none, and the extra cycle would replay the structural sources for nothing.
+                deferralReleasedThisCycle = MinimizationQuery.hasDeferredScopes(graph: graph)
                 ChoiceGraphScheduler.logReducer("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
                     "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
                 ])
@@ -378,9 +384,11 @@ package struct ReductionMachine: ProbeSessionState {
 
     private mutating func stepCheckTermination() -> Transition {
         let structurallyImproved = sequence.count < sequenceBeforeCycle.count
-        if structurallyImproved == false,
-           anyAccepted == false,
-           allValuesConverged()
+        if deferralReleasedThisCycle {
+            phase = .beginCycle
+        } else if structurallyImproved == false,
+                  anyAccepted == false,
+                  allValuesConverged()
         {
             phase = .reorderPass
         } else if convergence.stallBudget > 0 {

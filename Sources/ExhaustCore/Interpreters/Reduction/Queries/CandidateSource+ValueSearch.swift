@@ -22,6 +22,8 @@ extension CandidateSourceBuilder {
                     }
                 case let .boundValue(bindScope):
                     bindScope.boundSubtreeSize
+                case let .bindPivot(pivotScope):
+                    pivotScope.boundSubtreeSize
                 case .laneCollapse:
                     0
             }
@@ -35,6 +37,9 @@ extension CandidateSourceBuilder {
                     15 * (bindScope.downstreamNodeIDs.count == 1
                         ? 16
                         : min(64, bindScope.downstreamNodeIDs.count * 8))
+                case .bindPivot:
+                    // One lift materialization plus a bounded covering enumeration.
+                    1 + BoundValueCoveringEncoder.coveringBudget / 2
                 case .laneCollapse:
                     0
             }

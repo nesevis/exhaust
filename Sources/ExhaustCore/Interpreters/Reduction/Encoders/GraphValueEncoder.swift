@@ -247,6 +247,9 @@ struct GraphValueEncoder: GraphEncoder {
             case .laneCollapse:
                 assertionFailure("laneCollapse scopes must route through GraphLaneCollapseEncoder, not GraphValueEncoder")
                 mode = .idle
+            case .bindPivot:
+                assertionFailure("bindPivot scopes must route through GraphBindPivotEncoder, not GraphValueEncoder")
+                mode = .idle
             case let .floatLeaves(floatScope):
                 startFloat(scope: floatScope, sequence: sequence, graph: graph)
             case .boundValue:

@@ -73,6 +73,30 @@ extension GraphStructuralEncoder {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ProjectedMutation? {
+        guard let pivoted = Self.branchPivotCandidate(
+            pickNodeID: pickNodeID,
+            targetBranchID: targetBranchID,
+            sequence: sequence,
+            graph: graph
+        ) else { return nil }
+        candidate = pivoted
+        guard candidate.shortLexPrecedes(sequence) else {
+            hadReplacementShortlexRejection = true
+            return nil
+        }
+        return .branchSelected(
+            pickNodeID: pickNodeID,
+            newSelectedID: targetBranchID
+        )
+    }
+
+    /// The sequence with the pick's span replaced by the target branch's content, every leaf of that content at its reduction target. Nil when the pick, its range, or the target branch cannot be resolved. No ordering gate: callers decide whether the candidate has to precede `sequence` on its own or after a lift.
+    static func branchPivotCandidate(
+        pickNodeID: Int,
+        targetBranchID: UInt64,
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) -> ChoiceSequence? {
         guard pickNodeID < graph.nodes.count else { return nil }
         guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else {
             return nil
@@ -108,16 +132,9 @@ extension GraphStructuralEncoder {
         }
         replacement.append(.group(false))
 
-        candidate = sequence
+        var candidate = sequence
         candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
-        guard candidate.shortLexPrecedes(sequence) else {
-            hadReplacementShortlexRejection = true
-            return nil
-        }
-        return .branchSelected(
-            pickNodeID: pickNodeID,
-            newSelectedID: targetBranchID
-        )
+        return candidate
     }
 
     /// Replaces the ancestor's range with the descendant's content.
