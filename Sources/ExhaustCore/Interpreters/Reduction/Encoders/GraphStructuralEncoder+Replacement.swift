@@ -206,9 +206,9 @@ extension GraphStructuralEncoder {
 
     /// Collects depth-0 base case positions and their wrapping kinds for the donor's subtree.
     ///
-    /// Two-phase approach: first reads, per selected arm, which pick family occupies each zip slot from the active non-innermost picks of the donor's family (where the slot layout is directly observable), then applies those layouts at innermost picks. A slot that holds a pick at the observed depth but a bare leaf at the innermost depth is a base case, and it is wrapped with the leaf branch of the family the slot expects. That family need not be the donor's own: a recursive generator whose arms zip children of two mutually recursive families bottoms out in each slot with that slot's family's leaf.
+    /// Two-phase approach: first reads, per arm, which pick family occupies each zip slot, then applies those layouts at innermost picks of the donor's family. A slot that holds a pick at the observed depth but a bare leaf at the innermost depth is a base case, and it is wrapped with the leaf branch of the family the slot expects. That family need not be the donor's own: a recursive generator whose arms zip children of two mutually recursive families bottoms out in each slot with that slot's family's leaf.
     ///
-    /// Only active nodes are traversed. The graph carries every branch alternative, and an inactive arm of the same pick can zip the same families in a different order, so a layout read from it wraps the wrong slot.
+    /// A layout is read from every branch alternative of every pick in the family, keyed by branch identifier, because the graph carries the inactive alternatives and an arm's layout is the same wherever it appears. Keying by arm is what matters: two arms of one pick can zip the same families in a different order, and a layout read from the wrong arm wraps the wrong slot. The innermost pick's own zip is read from its active branch only.
     private static func depthZeroLeafExpansions(
         donorNodeID: Int,
         fingerprint: UInt64,
@@ -218,9 +218,17 @@ extension GraphStructuralEncoder {
         let allGroupPicks = graph.selfSimilarityGroups[fingerprint] ?? []
         for pickID in allGroupPicks {
             guard case let .pick(pickMeta) = graph.nodes[pickID].kind else { continue }
-            guard let slotFamilies = zipSlotFamilies(pickID: pickID, fingerprint: fingerprint, graph: graph) else { continue }
-            guard slotFamilies.values.contains(fingerprint) else { continue }
-            branchSlotFamilies[pickMeta.selectedID] = slotFamilies
+            let node = graph.nodes[pickID]
+            for (childIndex, childID) in node.children.enumerated() {
+                guard childIndex < pickMeta.branchElements.count,
+                      case let .branch(branch) = pickMeta.branchElements[childIndex]
+                else { continue }
+                if branchSlotFamilies[branch.id] != nil { continue }
+                guard let zipID = zip(below: childID, fingerprint: fingerprint, graph: graph, activeOnly: false) else { continue }
+                let slotFamilies = slotFamilies(ofZip: zipID, graph: graph)
+                guard slotFamilies.values.contains(fingerprint) else { continue }
+                branchSlotFamilies[branch.id] = slotFamilies
+            }
         }
 
         var allPicks: [Int] = []
@@ -272,13 +280,13 @@ extension GraphStructuralEncoder {
         }
     }
 
-    /// Returns the active zip reached from a pick through its selected branch and any binds, or nil when there is none.
-    private static func activeZip(below pickID: Int, fingerprint: UInt64, graph: ChoiceGraph) -> Int? {
-        var stack = Array(graph.nodes[pickID].children)
+    /// Returns the zip reached from a node through any binds, or nil when there is none. Same-family picks are not entered, so the zip found is the one directly below the starting node's arm.
+    private static func zip(below startID: Int, fingerprint: UInt64, graph: ChoiceGraph, activeOnly: Bool) -> Int? {
+        var stack = [startID]
         while stack.isEmpty == false {
             let nodeID = stack.removeLast()
             let node = graph.nodes[nodeID]
-            guard node.positionRange != nil else { continue }
+            if activeOnly, node.positionRange == nil { continue }
             if case let .pick(metadata) = node.kind, metadata.fingerprint == fingerprint {
                 continue
             } else if case let .bind(bindMeta) = node.kind {
@@ -292,13 +300,18 @@ extension GraphStructuralEncoder {
         return nil
     }
 
-    /// Returns, for the active zip below a pick, the fingerprint of the pick family occupying each zip slot, or nil if no zip is found. A slot holding anything other than a pick is absent. An empty result means the pick is innermost (no recursive children).
-    private static func zipSlotFamilies(
-        pickID: Int,
-        fingerprint: UInt64,
-        graph: ChoiceGraph
-    ) -> [Int: UInt64]? {
-        guard let zipID = activeZip(below: pickID, fingerprint: fingerprint, graph: graph) else { return nil }
+    /// Returns the active zip reached from a pick through its selected branch and any binds, or nil when there is none.
+    private static func activeZip(below pickID: Int, fingerprint: UInt64, graph: ChoiceGraph) -> Int? {
+        for childID in graph.nodes[pickID].children {
+            if let zipID = zip(below: childID, fingerprint: fingerprint, graph: graph, activeOnly: true) {
+                return zipID
+            }
+        }
+        return nil
+    }
+
+    /// The fingerprint of the pick family occupying each slot of a zip. A slot holding anything other than a pick is absent, so an empty result means the zip is innermost (no recursive children).
+    private static func slotFamilies(ofZip zipID: Int, graph: ChoiceGraph) -> [Int: UInt64] {
         var families: [Int: UInt64] = [:]
         for (index, childID) in graph.nodes[zipID].children.enumerated() {
             if case let .pick(childMeta) = graph.nodes[childID].kind {
@@ -306,6 +319,16 @@ extension GraphStructuralEncoder {
             }
         }
         return families
+    }
+
+    /// Returns, for the active zip below a pick, the fingerprint of the pick family occupying each zip slot, or nil if no zip is found.
+    private static func zipSlotFamilies(
+        pickID: Int,
+        fingerprint: UInt64,
+        graph: ChoiceGraph
+    ) -> [Int: UInt64]? {
+        guard let zipID = activeZip(below: pickID, fingerprint: fingerprint, graph: graph) else { return nil }
+        return slotFamilies(ofZip: zipID, graph: graph)
     }
 
     /// Determines the wrapping kind for an innermost pick's base cases, or nil if no expansion is needed.
