@@ -60,12 +60,17 @@ package struct CorpusEntry: Sendable {
     let coveredRunFirstEdge: Bool
 
     /// Multiplier on the entry's parent-selection score from failures among its children. 1 when no child failed; see ``FuzzTunables`` for the provisional and cluster-aware values.
+    /// Mutation candidates drawn from this entry since it last produced an admission, or since it was admitted if it never has.
+    ///
+    /// The spacing an entry sustains is what says whether the corpus is still filling: a parent that admits every few dozen draws is on new ground, one that has gone tens of thousands of draws without admitting has been mined out. A run-level gap between admissions cannot separate those, because it mixes every parent's productivity together.
+    package fileprivate(set) var candidatesSinceAdmission = 0
+
     var failureBoost: Double = 1.0
 }
 
 /// Which tier an admitted entry landed in.
 ///
-/// The split is a length guard for the champion archive. Convergence says nothing about an entry's worth as a parent: the stored sequence is the materializer's complete output whatever share of it the PRNG supplied. What it does track is length. A child that fell through to the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Admitting every entry as a parent was measured on IFC (`fuzz-loop-experiments-2026-09-06.md`): the parent pool shrank 4.5%, its mean length fell 4.1%, and covered edges fell 3.1% while the corpus stayed flat. The tier keeps those entries' coverage credit and denies them cells.
+/// The split is a length guard for the champion archive. Convergence says nothing about an entry's worth as a parent: the stored sequence is the materializer's complete output whatever share of it the PRNG supplied. What it does track is length. A child that fell through to the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Admitting every entry as a parent shrank the parent pool 4.5%, its mean length fell 4.1%, and covered edges fell 3.1% while the corpus stayed flat. The tier keeps those entries' coverage credit and denies them cells.
 package enum CorpusTier: Sendable, Equatable {
     /// Eligible for parent selection and for champion cells.
     case mutable
@@ -228,7 +233,7 @@ package final class FuzzCorpus {
 
     // MARK: - Champion Archive
 
-    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier entries. A discovery-tier entry keeps its coverage credit but claims no cells: such entries are short, shortlex favours them, and letting them claim cells evicted the longer incumbents and cost IFC 3.1% of covered edges when measured (see ``CorpusTier``). The archive itself is net-beneficial; the same measurement found that turning it off costs a further 1.9% coverage and 37% throughput, because parents drawn from the whole corpus are 3.5 times longer.
+    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier entries. A discovery-tier entry keeps its coverage credit but claims no cells: such entries are short, shortlex favours them, and letting them claim cells evicted the longer incumbents and cost 3.1% of covered edges (see ``CorpusTier``). The archive itself is net-beneficial; the same measurement found that turning it off costs a further 1.9% coverage and 37% throughput, because parents drawn from the whole corpus are 3.5 times longer.
 
     /// The entry index holding each edge's cell, or nil while the edge is uncovered (or its champion was quarantined).
     private var edgeChampions: [Int?]
@@ -658,6 +663,26 @@ package final class FuzzCorpus {
         let targets = MutationTargets(tree: entries[index].tree)
         entries[index].mutationTargets = targets
         return targets
+    }
+
+    /// Counts one mutation candidate drawn from the entry at `index`.
+    package func noteCandidateDrawn(fromParentAt index: Int) {
+        guard entries.indices.contains(index) else {
+            return
+        }
+        entries[index].candidatesSinceAdmission += 1
+    }
+
+    /// Reports the spacing the entry at `index` sustained before this admission and resets its counter.
+    ///
+    /// - Returns: Candidates drawn from that parent since its previous admission, or nil when the index names no entry.
+    package func takeSpacing(forParentAt index: Int) -> Int? {
+        guard entries.indices.contains(index) else {
+            return nil
+        }
+        let spacing = entries[index].candidatesSinceAdmission
+        entries[index].candidatesSinceAdmission = 0
+        return spacing
     }
 
     // MARK: - Donor Index

@@ -13,7 +13,7 @@ package struct OperandEnergyTable {
     // MARK: - Live Sources
 
     //
-    // Open-addressed with a bounded linear probe. Replacement on first collision was measured at 48% of seatings on the Etna IFC type-based workload, and every one of those restored the evicted source's allowance — retirement undone by collision rather than by yielding. A perfect hash does not fix that: 12,738 keys in 65,536 slots put ~9.7% of keys on an occupied slot by the birthday bound alone, so the structure was wrong, not the mixing. Probing seats elsewhere instead, and only a window full of other keys evicts.
+    // Open-addressed with a bounded linear probe. Replacement on first collision reached 48% of seatings on an instruction-sequence workload, and every one of those restored the evicted source's allowance — retirement undone by collision rather than by yielding. A perfect hash does not fix that: 12,738 keys in 65,536 slots put ~9.7% of keys on an occupied slot by the birthday bound alone, so the structure was wrong, not the mixing. Probing seats elsewhere instead, and only a window full of other keys evicts.
 
     private var keys: [UInt64]
     private var sinceYield: [UInt8]

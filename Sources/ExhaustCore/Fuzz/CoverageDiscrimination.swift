@@ -58,7 +58,7 @@ package struct PassingSample: Sendable {
 ///
 /// The failing sample is the cluster's post-reduction signatures rather than raw failing attempts: reduction strips incidental coverage (setup, logging, branches taken by coincidence), so the reduced signature has much higher signal density. The passing sample is the corpus's passing entries, a coverage-novelty-biased sample, which is fine for ranking: bias toward diverse passing paths widens the denominator's coverage rather than distorting which edges only failures hit.
 ///
-/// Ranking is the one analysis. A necessary-edge intersection and a near-miss differential (the necessary edges the closest passing signatures lack) were measured on 2026-09-06 and named nothing a reader acts on: on IFC the near-miss set pointed at the validity checks that rejected almost-failing runs, never at the mutated rule the ranking already found.
+/// Ranking is the one analysis. A necessary-edge intersection and a near-miss differential (the necessary edges the closest passing signatures lack) name nothing a reader acts on: the near-miss set points at the validity checks that reject almost-failing runs, never at the faulty code the ranking already found.
 package enum CoverageDiscrimination {
     /// Computes the discrimination results for one cluster against the passing corpus.
     ///

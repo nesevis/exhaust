@@ -40,7 +40,9 @@ struct FuzzCandidate<Output>: ~Copyable {
     /// The parent's sequence hash for the crash breadcrumb; 0 without a parent.
     let parentHash: UInt64
     /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; 0 outside the arm inventory.
-    let armsMask: UInt32
+    let armsMask: MutationArmSet
+    /// The probability the credited arm was drawn with, renormalized over the arms eligible for its parent. The bandit's importance weight divides by this, so it has to be the probability the draw ran at rather than the unconditional one. Zero outside the arm inventory.
+    let drawProbability: Double
     /// Whether the candidate is a covering array row, admitted for its boundary values without coverage novelty.
     let isBoundaryDerived: Bool
 }
@@ -119,8 +121,18 @@ package final class FuzzRunner<Output> {
     var prng: Xoshiro256
     var bandit = MutationBandit()
 
+    /// Per-window arm counts written to a CSV for offline analysis, or nil when `EXHAUST_ARM_TRACE` is unset. See ``MutationArmTrace``.
+    var armTrace: MutationArmTrace?
+
+    /// Arms the generator's structure has been shown to admit, accumulated across inspected admissions. Nil until the first inspection, while the whole inventory is still open.
+    var sightedArms: MutationArmSet?
+    /// Attempts opened when the previous admission landed, so the gap between admissions measures how fast the corpus is still filling.
+    var attemptsAtPreviousAdmission = 0
+
     /// The non-splice arms the fixed distribution draws from, assembled once at init from the experiment knobs.
     var fixedDrawArms: [MutationArm] = []
+    /// The knob-enabled inventory as a set: what a full repertoire has to cover, and which corpus-dependent eligibility checks are worth running.
+    var enabledArms = MutationArmSet.none
 
     /// Comparison operands harvested from the system under test, drawn on during mutation. Stays empty when the source does not harvest or the build lacks `trace-cmp` instrumentation, so reads cost nothing.
     var comparisonPool = ComparisonPool()
@@ -231,6 +243,14 @@ package final class FuzzRunner<Output> {
         }
         bandit = MutationBandit(arms: arms)
         fixedDrawArms = arms.filter { $0 != .splice }
+        enabledArms = arms.reduce(into: MutationArmSet.none) { set, arm in
+            set.insert(arm)
+        }
+        armTrace = MutationArmTrace(
+            directory: FuzzTunables.armTraceDirectory,
+            windowSize: FuzzTunables.armTraceWindow,
+            seed: configuration.seed
+        )
     }
 
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
@@ -435,7 +455,8 @@ package final class FuzzRunner<Output> {
                 origin: .screeningRow,
                 parentIndex: nil,
                 parentHash: 0,
-                armsMask: 0,
+                armsMask: MutationArmSet.none,
+                drawProbability: 0,
                 isBoundaryDerived: true
             ))
             checkpointIfDue()
@@ -606,12 +627,13 @@ package final class FuzzRunner<Output> {
                 if terminationDue() != nil {
                     break
                 }
-                let (mutated, armsMask) = nextCandidate(from: parent, parentIndex: parentIndex)
+                let draw = nextCandidate(from: parent, parentIndex: parentIndex)
                 if let child = childCandidate(
-                    from: mutated,
+                    from: draw.candidate,
                     parent: parent,
                     parentIndex: parentIndex,
-                    armsMask: armsMask,
+                    armsMask: draw.armsMask,
+                    drawProbability: draw.drawProbability,
                     origin: .mutationChild
                 ) {
                     evaluate(child)
@@ -637,7 +659,8 @@ package final class FuzzRunner<Output> {
         from mutated: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,
-        armsMask: UInt32,
+        armsMask: MutationArmSet,
+        drawProbability: Double,
         origin: CandidateOrigin
     ) -> FuzzCandidate<Output>? {
         let guidedSeed = prng.next()
@@ -663,6 +686,7 @@ package final class FuzzRunner<Output> {
             parentIndex: parentIndex,
             parentHash: parent.hash,
             armsMask: armsMask,
+            drawProbability: drawProbability,
             isBoundaryDerived: false
         )
     }
@@ -722,12 +746,36 @@ package final class FuzzRunner<Output> {
         )
         // Credit every arm in the mask, whatever the verdict: the bandit only learns from admissions, but the report has to be able to say what an arm spent its attempts on, including the discards an admission-only tally never sees.
         let outcome = FuzzAttemptOutcome(verdict)
-        for arm in MutationArm.allCases where candidate.armsMask & (1 << UInt32(arm.rawValue)) != 0 {
+        for arm in MutationArm.allCases where candidate.armsMask.contains(arm) {
             counts.mutationArms.record(arm: arm, outcome: outcome)
-            if admission.isAdmitted, configuration.experiments.banditBands {
-                bandit.reward(arm)
+            counts.mutationArms.recordParity(
+                arm: arm,
+                admitted: admission.isAdmitted,
+                isEven: attemptTimelineIndex.isMultiple(of: 2)
+            )
+            if admission.isAdmitted {
+                // Recorded whether or not the bandit is on, so the two arms of a bandit-against-fixed comparison report the same reward signal.
+                counts.mutationArms.recordAdmission(arm: arm)
+                if configuration.experiments.banditBands {
+                    bandit.reward(arm, drawProbability: candidate.drawProbability)
+                }
             }
         }
+        if admission.isAdmitted, let parentIndex = candidate.parentIndex,
+           let spacing = corpus.takeSpacing(forParentAt: parentIndex)
+        {
+            diagnostics.recordAdmissionSpacing(spacing)
+        }
+        if admission.isAdmitted, configuration.experiments.armAdmissibility {
+            noteStructuralAdmissibility(of: candidate.sequence, parentIndex: candidate.parentIndex)
+        }
+        armTrace?.note(
+            attemptIndex: attemptTimelineIndex,
+            ledger: counts.mutationArms,
+            bandit: bandit,
+            admissible: sightedArms ?? .all,
+            diagnostics: diagnostics
+        )
         return FuzzEvaluation(admission: admission, verdict: verdict)
     }
 
@@ -768,7 +816,8 @@ package final class FuzzRunner<Output> {
             origin: .freshSample,
             parentIndex: nil,
             parentHash: 0,
-            armsMask: 0,
+            armsMask: MutationArmSet.none,
+            drawProbability: 0,
             isBoundaryDerived: false
         ))
     }

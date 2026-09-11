@@ -15,7 +15,9 @@ struct MutationBanditTests {
     func rewardsShiftWeights() {
         var bandit = MutationBandit()
         for _ in 0 ..< 50 {
-            bandit.reward(.medium)
+            // An unrestricted round, so the draw probability is the unconditional one.
+            let drawProbability = bandit.probability(of: .medium)
+            bandit.reward(.medium, drawProbability: drawProbability)
         }
         let probabilities = bandit.probabilities
         // The exploration mixture caps any arm at 0.925; fifty rewards get most of the way there.
@@ -32,7 +34,8 @@ struct MutationBanditTests {
     func explorationFloor() {
         var bandit = MutationBandit()
         for _ in 0 ..< 10000 {
-            bandit.reward(.splice)
+            let drawProbability = bandit.probability(of: .splice)
+            bandit.reward(.splice, drawProbability: drawProbability)
         }
         let probabilities = bandit.probabilities
         let floor = MutationBandit.explorationRate / Double(probabilities.count)
@@ -46,7 +49,7 @@ struct MutationBanditTests {
     @Test("Picks follow the cumulative distribution deterministically")
     func pickIsDeterministic() {
         var bandit = MutationBandit()
-        bandit.reward(.high)
+        bandit.reward(.high, drawProbability: bandit.probability(of: .high))
         let first = (0 ..< 10).map { step in bandit.pick(random: Double(step) / 10) }
         let second = (0 ..< 10).map { step in bandit.pick(random: Double(step) / 10) }
         #expect(first == second)

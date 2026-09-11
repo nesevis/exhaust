@@ -35,6 +35,11 @@ package enum FuzzMutator {
         fileprivate let branchIndices: [Int]
         fileprivate let bindRegions: [BindRegion]
         package let problematicValues: [CatalogKey: [UInt64]]
+
+        /// Whether the sequence contains a bind region, which is the whole of what ``FuzzMutator/splice(recipient:donor:recipientLayout:donorLayout:prng:)`` needs from the recipient. Exposed as a bit rather than the regions themselves so a scheduler can ask whether the operator can fire without reaching into the layout's internals.
+        package var hasBindRegion: Bool {
+            bindRegions.isEmpty == false
+        }
     }
 
     package struct CatalogKey: Hashable, Sendable {

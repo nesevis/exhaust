@@ -23,6 +23,53 @@ package struct MutationTargets: Sendable {
     /// The graph's self-similarity fingerprints in ascending order, so typed crossover's per-draw walk is a fixed order without sorting dictionary keys on every call.
     let sortedFingerprints: [UInt64]
 
+    /// The arms whose first guard this entry's own tables satisfy: the sibling-span operators, the lockstep delta, and the twin splice.
+    ///
+    /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
+    package private(set) var structuralArms: MutationArmSet
+
+    /// Whether any swappable sibling group has at least `minimumSize` members, which is the first guard of every sibling-span operator.
+    ///
+    /// The second guard, that the group's cached position ranges still fit the candidate, is a staleness check rather than an applicability one and cannot be answered from the parent alone.
+    package func hasSwappableGroup(minimumSize: Int) -> Bool {
+        for scope in permutationScopes {
+            for group in scope.swappableGroups where group.count >= minimumSize {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Whether a tandem group has the two leaves the lockstep delta needs. A scope whose groups are all singletons passes the scope check and fails at the draw.
+    package var hasTandemGroup: Bool {
+        guard let tandem else {
+            return false
+        }
+        return tandem.groups.contains { $0.leaves.count >= 2 }
+    }
+
+    /// Whether a twin group has the two spans the twin splice copies between.
+    package var hasTwinGroup: Bool {
+        twinSpanGroups.contains { $0.count >= 2 }
+    }
+
+    /// Whether any fingerprint has both a recipient in this parent and a donor span elsewhere in the corpus.
+    ///
+    /// The only precondition here that depends on the corpus rather than the parent, so it cannot be cached at admission: a fingerprint gains donors as other entries are admitted.
+    package func hasCrossoverDonor(corpus: FuzzCorpus) -> Bool {
+        for fingerprint in sortedFingerprints {
+            guard let recipients = graph.selfSimilarityGroups[fingerprint],
+                  recipients.isEmpty == false,
+                  let donors = corpus.donorSpansByFingerprint[fingerprint],
+                  donors.isEmpty == false
+            else {
+                continue
+            }
+            return true
+        }
+        return false
+    }
+
     /// Builds the targeting tables for one entry's tree.
     ///
     /// Relation scopes are convergence-gated and always empty on a fresh graph, so they are not cached. Construction consumes no PRNG draws, so seeded replay streams are unchanged.
@@ -39,6 +86,22 @@ package struct MutationTargets: Sendable {
         permutationScopes = PermutationQuery.build(graph: graph)
         twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
         sortedFingerprints = graph.selfSimilarityGroups.keys.sorted()
+        structuralArms = .none
+        var structural = MutationArmSet.none
+        if hasSwappableGroup(minimumSize: 2) {
+            structural.insert(.swap)
+            structural.insert(.shuffle)
+        }
+        if hasSwappableGroup(minimumSize: 3) {
+            structural.insert(.move)
+        }
+        if hasTandemGroup {
+            structural.insert(.lockstepDelta)
+        }
+        if hasTwinGroup {
+            structural.insert(.twinSplice)
+        }
+        structuralArms = structural
     }
 }
 
@@ -174,7 +237,7 @@ extension FuzzMutator {
     /// Discriminates zip children the generator drew from the same site, so twin spans can be spliced onto one another.
     ///
     /// Picks and binds match by their site fingerprint. Sequences match by element type tag rather than shape, so twins of different lengths (two instruction lists) still group. Leaves match by type tag, zips by child count.
-    private enum TwinKey: Hashable {
+    enum TwinKey: Hashable {
         case pick(UInt64)
         case bind(UInt64)
         case value(TypeTag)
@@ -216,7 +279,7 @@ extension FuzzMutator {
     }
 
     /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, untagged sequences).
-    private static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
+    static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
         switch node.kind {
             case let .pick(metadata):
                 .pick(metadata.fingerprint)

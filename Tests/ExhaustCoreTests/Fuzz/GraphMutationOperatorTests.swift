@@ -430,8 +430,8 @@ struct GraphMutationOperatorTests {
             #expect(MutationArm.bandArms.contains(arm))
         }
         let before = bandOnly.probabilities
-        bandOnly.reward(.swap)
-        bandOnly.reward(.lockstepDelta)
+        bandOnly.reward(.swap, drawProbability: bandOnly.probability(of: .swap))
+        bandOnly.reward(.lockstepDelta, drawProbability: bandOnly.probability(of: .lockstepDelta))
         #expect(bandOnly.probabilities == before)
 
         var full = MutationBandit(arms: MutationArm.allCases)
@@ -443,7 +443,7 @@ struct GraphMutationOperatorTests {
             }
         }
         #expect(sawGraphArm)
-        full.reward(.swap)
+        full.reward(.swap, drawProbability: full.probability(of: .swap))
         #expect(full.probabilities[MutationArm.swap.rawValue] > full.probabilities[MutationArm.shuffle.rawValue])
     }
 }

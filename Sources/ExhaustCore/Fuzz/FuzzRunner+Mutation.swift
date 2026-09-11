@@ -1,21 +1,115 @@
 // Candidate production for the fuzz loop: arm selection and the swarm rewrite.
 
+/// One produced candidate and the accounting the bandit needs to credit it on admission.
+struct MutationDraw {
+    let candidate: ChoiceSequence
+    /// The arm to credit, which is the arm drawn unless its operator missed and a band absorbed the attempt.
+    let armsMask: MutationArmSet
+    /// The probability the credited arm was drawn with, renormalized over the arms eligible for this parent. Zero outside the bandit.
+    let drawProbability: Double
+}
+
 extension FuzzRunner {
     // MARK: - Candidate Production
 
-    /// Produces one mutated candidate from `parent` plus the bitmask of the ``MutationArm`` that shaped it (for bandit credit on admission). Two steps in sequence: one arm drawn from the enabled inventory, then the swarm rewrite of the result's branch selections.
-    func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
-        var (candidate, armsMask) = inventoryCandidate(from: parent, parentIndex: parentIndex)
+    /// Produces one mutated candidate from `parent`. Two steps in sequence: one arm drawn from the eligible inventory, then the swarm rewrite of the result's branch selections.
+    func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> MutationDraw {
+        let draw = inventoryCandidate(from: parent, parentIndex: parentIndex)
         switch configuration.experiments.swarmMode {
             case .off:
-                break
+                swarmDerivationIndex += 1
+                return draw
             case .activated:
                 // Per-candidate weights, so the activation distribution roams every produced candidate rather than every epoch.
                 let mask = SwarmMask.forIndex(swarmDerivationIndex, rootSeed: configuration.seed)
-                candidate = mask.applyActivated(to: candidate, scratch: &swarmScratch, prng: &prng)
+                swarmDerivationIndex += 1
+                return MutationDraw(
+                    candidate: mask.applyActivated(to: draw.candidate, scratch: &swarmScratch, prng: &prng),
+                    armsMask: draw.armsMask,
+                    drawProbability: draw.drawProbability
+                )
         }
-        swarmDerivationIndex += 1
-        return (candidate, armsMask)
+    }
+
+    /// The arms this parent's draw may choose from: the operators that can fire on it, narrowed further by the operators the generator has been shown to admit.
+    ///
+    /// A parent that can target an arm is itself proof the generator admits it, so the repertoire widens here as well as at an inspected admission. Without that, a structural sample taken before this parent joined the corpus could keep excluding an operator the search is holding a usable target for.
+    private func eligibleSet(parent: CorpusEntry, parentIndex: Int) -> MutationArmSet {
+        if configuration.experiments.armEligibility {
+            // The per-parent answer is the sharper of the two and a subset of the repertoire, so intersecting with the repertoire would return this set again. With both knobs on, the repertoire is measurement rather than a gate.
+            return eligibleArms(parent: parent, parentIndex: parentIndex)
+        }
+        guard configuration.experiments.armAdmissibility, let sightedArms else {
+            return .all
+        }
+        return sightedArms
+    }
+
+    /// Selects the arm for one candidate: the bandit, or the fixed distribution, drawn from the eligible set.
+    ///
+    /// The probability travels with the arm because the bandit already has it in hand when it draws, and only the bandit consumes it. The fixed scheduler reports zero, which ``MutationBandit/reward(_:drawProbability:)`` treats as no reward.
+    private func drawArm(eligible: MutationArmSet) -> (arm: MutationArm, probability: Double) {
+        if configuration.experiments.banditBands {
+            return bandit.draw(random: randomUnit(), eligible: eligible) ?? (.high, 0)
+        }
+        return (fixedDistributionArm(eligible: eligible), 0)
+    }
+
+    /// Re-materializes one admitted sequence with its picks expanded and unions the operators the resulting structure admits into the run's repertoire.
+    ///
+    /// The corpus stores trees materialized without picks, so an entry's own graph describes the path it took: an unselected branch carries no subtree, and an operator that only applies inside one looks inapplicable. Expanding the picks gives every alternative full structure, so what ``MutationArmRepertoire`` reports is the generator's repertoire rather than one draw's.
+    ///
+    /// The repertoire only grows, and every source of evidence is positive. An operator the structure admits is a property of the generator, not of the entry that revealed it, so a later entry whose own shape lacks it proves nothing and cannot retract it. Absence is never proof either: one entry's expansion does not descend into picks nested inside the alternatives it expanded, nor into a bind's bound region, so an operator can be reachable and go unsighted here. What the admitting parent can target is folded in for the same reason, and read here rather than at the draw so it costs one lookup per inspection rather than one per candidate. Until the first inspection the whole inventory stays open.
+    ///
+    /// Sampled at admissions rather than per draw, and only once admissions have slowed to ``FuzzTunables/armAdmissibilitySlowdown`` attempts apart, because it costs one materialization and one graph walk. While the corpus is filling fast that cost lands most often and buys least.
+    func noteStructuralAdmissibility(of sequence: ChoiceSequence, parentIndex: Int?) {
+        // The repertoire only grows, so once it covers the inventory no inspection can change a draw.
+        if let sightedArms, sightedArms.intersection(enabledArms) == enabledArms {
+            return
+        }
+        let gap = counts.totalAttempts - attemptsAtPreviousAdmission
+        attemptsAtPreviousAdmission = counts.totalAttempts
+        guard gap >= FuzzTunables.armAdmissibilitySlowdown else {
+            return
+        }
+        // The parent's own tables, read here rather than at the draw: an arm this parent can target is proof the generator admits it, and this costs one read per inspected admission instead of one per candidate.
+        if let parentIndex, corpus.entries.indices.contains(parentIndex), sightedArms != nil {
+            let parent = corpus.entries[parentIndex]
+            sightedArms = sightedArms?.union(eligibleArms(parent: parent, parentIndex: parentIndex))
+        }
+        guard case let .success(_, tree, _) = Materializer.materializeAny(
+            erasedGen,
+            prefix: sequence,
+            mode: .exact,
+            materializePicks: true,
+            collectDecodingReport: false
+        ) else {
+            return
+        }
+        let graph = ChoiceGraphBuilder.build(from: tree)
+        let repertoire = sightedArms ?? .bands
+        sightedArms = repertoire.union(MutationArmRepertoire.sighted(in: graph))
+    }
+
+    /// The arms whose operators can fire on this parent, as a bit set of ``MutationArm`` raw values.
+    ///
+    /// Each precondition is the operator's own first guard. The structural ones are cached on the parent's ``MutationTargets`` at admission, so the set costs one union plus the two corpus-dependent checks, and the donor search is skipped outright when the crossover arm is not in the inventory. What it cannot predict is the second guard of the sibling-span operators, that a group's cached position ranges still fit the candidate — that is staleness rather than applicability, and it is why gating cannot drive `swap` and `shuffle` misses to zero.
+    ///
+    /// The three bands are unconditionally eligible. ``FuzzMutator/mutate(_:intensity:layout:prng:)`` falls back within and across them, so a band has no shape it can fail on: the medium band's branch pivot deletes a block when the sequence carries no branch marker, and the low band hands off to it when there are no values to perturb. Gating them on the shape they prefer would remove a working operator, and on a generator with no pick site it would remove the only arm that duplicates or replaces a block.
+    private func eligibleArms(parent: CorpusEntry, parentIndex: Int) -> MutationArmSet {
+        var eligible = MutationArmSet.bands
+        let layout = parent.mutationLayout
+        if layout?.hasBindRegion == true, corpus.parentIndices.count > 1 {
+            eligible.insert(.splice)
+        }
+        guard let targets = corpus.mutationTargets(forParentAt: parentIndex) else {
+            return eligible
+        }
+        eligible = eligible.union(targets.structuralArms)
+        if enabledArms.contains(.typedCrossover), targets.hasCrossoverDonor(corpus: corpus) {
+            eligible.insert(.typedCrossover)
+        }
+        return eligible
     }
 
     /// Draws one splice donor uniformly from the parent domain.
@@ -32,10 +126,12 @@ extension FuzzRunner {
     /// The inventory mutation path: one child from one operator, drawn from the bandit's distribution or, with the bandit off, the fixed one over the enabled inventory.
     ///
     /// One operator per child, never a stack. Exhaust's band operators are each already multi-perturbation (a low step moves up to three values, a high step corrupts a quarter of the sequence), and composing several per child was measured on `DeepParser` (2026-07-11) as neutral-to-worse: AFL-depth stacks destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%), and shallower stacks were worse on attempts-to-fault. A single operator also keeps the bandit's reward honest, since the arm credited is the arm that produced the child.
-    private func inventoryCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
-        let experiments = configuration.experiments
+    private func inventoryCandidate(from parent: CorpusEntry, parentIndex: Int) -> MutationDraw {
         let layout = parent.mutationLayout
-        let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
+        corpus.noteCandidateDrawn(fromParentAt: parentIndex)
+        let eligible = eligibleSet(parent: parent, parentIndex: parentIndex)
+        let (arm, drawProbability) = drawArm(eligible: eligible)
+        counts.mutationArms.recordDraw(arm: arm)
         var candidate = parent.sequence
         switch arm {
             case .low:
@@ -63,14 +159,23 @@ extension FuzzRunner {
                 }
         }
         if candidate != parent.sequence {
-            return (candidate, 1 << UInt32(arm.rawValue))
+            return MutationDraw(
+                candidate: candidate,
+                armsMask: MutationArmSet(arm),
+                drawProbability: drawProbability
+            )
         }
         // The arm found nothing to do (no usable bind region or donor, no targetable group, a no-op band step) and the corpus would reject the duplicate. Fall back to one band mutation so the attempt always explores; the band is credited, not the arm that missed.
+        counts.mutationArms.recordMiss(arm: arm)
+        // A miss is an observed zero, not an absence of observation. Without this the arm's turn never closes, its reward window stays empty, and the phase test keeps reading the optimistic initial index of an arm that has never been able to fire.
         let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
         let intensity = MutationIntensity.allCases[Int(intensityDraw)]
-        return (
-            FuzzMutator.mutate(candidate, intensity: intensity, prng: &prng),
-            1 << UInt32(MutationArm(intensity: intensity).rawValue)
+        let band = MutationArm(intensity: intensity)
+        // The band's own conditional probability, not the missed arm's: the band is what the credit lands on, so it is the arm whose importance weight has to be undone.
+        return MutationDraw(
+            candidate: FuzzMutator.mutate(candidate, intensity: intensity, prng: &prng),
+            armsMask: MutationArmSet(band),
+            drawProbability: configuration.experiments.banditBands ? bandit.probability(of: band, eligible: eligible) : 0
         )
     }
 
@@ -108,11 +213,28 @@ extension FuzzRunner {
         }
     }
 
-    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining enabled inventory (the three bands, plus the arms the `graphMutation` and `pairMutation` knobs add).
-    private func fixedDistributionArm() -> MutationArm {
-        if randomUnit() < FuzzTunables.spliceProbability {
+    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining eligible inventory (the three bands, plus the arms the `graphMutation` and `pairMutation` knobs add).
+    ///
+    /// The splice draw is consumed whether or not splice is eligible, so the PRNG stream advances the same amount per call and a gated run and an ungated one stay comparable attempt for attempt.
+    private func fixedDistributionArm(eligible: MutationArmSet) -> MutationArm {
+        let spliceDraw = randomUnit()
+        if eligible.contains(.splice), spliceDraw < FuzzTunables.spliceProbability {
             return .splice
         }
-        return fixedDrawArms[Int(prng.next(upperBound: UInt64(fixedDrawArms.count)))]
+        var eligibleCount = 0
+        for arm in fixedDrawArms where eligible.contains(arm) {
+            eligibleCount += 1
+        }
+        guard eligibleCount > 0 else {
+            return .high
+        }
+        var offset = Int(prng.next(upperBound: UInt64(eligibleCount)))
+        for arm in fixedDrawArms where eligible.contains(arm) {
+            if offset == 0 {
+                return arm
+            }
+            offset -= 1
+        }
+        return .high
     }
 }

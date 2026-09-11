@@ -10,7 +10,7 @@ package enum FuzzTunables {
 
     /// Convergence threshold τ separating the mutable tier from the discovery tier.
     ///
-    /// The tier is a length guard for the champion archive, not a judgement of the entry as a parent. A child that resolved mostly through the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Measured 2026-09-06 (`fuzz-loop-experiments-2026-09-06.md`): admitting every entry as a parent cost IFC 3.1% of covered edges and 4.5% of its parent pool while the corpus stayed flat, with parent length down 4.1%. Keeping low-convergence entries out of the archive holds the pool off the shortlex floor.
+    /// The tier is a length guard for the champion archive, not a judgement of the entry as a parent. A child that resolved mostly through the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Measured 2026-09-06 (`fuzz-loop-experiments-2026-09-06.md`): admitting every entry as a parent cost 3.1% of covered edges and 4.5% of the parent pool while the corpus stayed flat, with parent length down 4.1%. Keeping low-convergence entries out of the archive holds the pool off the shortlex floor.
     package static let mutableTierConvergenceThreshold = 0.5
 
     /// Weight of the novelty bonus term (α) in parent selection.
@@ -40,8 +40,21 @@ package enum FuzzTunables {
 
     // MARK: - Phase 1 (Screening)
 
-    /// Rows the screening pass may draw from the covering array before sampling begins. The pass has never detected a fault on the Etna register machine, but its boundary rows seed the only fully populated memories the corpus sees, so the number trades a few hundred milliseconds against reach into memory-operation faults; 1,000 keeps most of that reach at a tenth of the original 10,000's cost. `EXHAUST_SCREENING_BUDGET` overrides it for measurement.
+    /// Rows the screening pass may draw from the covering array before sampling begins. The pass rarely detects a fault on its own, but its boundary rows seed the only fully populated memories the corpus sees, so the number trades a few hundred milliseconds against reach into memory-operation faults; 1,000 keeps most of that reach at a tenth of the original 10,000's cost. `EXHAUST_SCREENING_BUDGET` overrides it for measurement.
     package static let screeningBudget: UInt64 = ProcessInfo.processInfo.environment["EXHAUST_SCREENING_BUDGET"].flatMap(UInt64.init) ?? 1000
+
+    // MARK: - Measurement
+
+    /// Directory the mutation-arm window trace writes into, or nil when `EXHAUST_ARM_TRACE` is unset and no trace is kept. Off by default because the rows are only useful to an offline analysis, and a run nobody is analyzing should not pay for the file.
+    package static let armTraceDirectory: String? = ProcessInfo.processInfo.environment["EXHAUST_ARM_TRACE"]
+
+    /// Attempts per row of the mutation-arm trace, overridden by `EXHAUST_ARM_TRACE_WINDOW`. A minute of searching evaluates tens of thousands of attempts, so 2,000 leaves enough windows in a run for a window-to-window comparison while keeping each window's admission counts above single digits.
+    package static let armTraceWindow: Int = ProcessInfo.processInfo.environment["EXHAUST_ARM_TRACE_WINDOW"].flatMap(Int.init) ?? 2000
+
+    /// Attempts that must separate two admissions before structural admissibility starts sampling.
+    ///
+    /// While the corpus is filling, admissions arrive every few attempts and each would pay for a materialization with picks, and the inventory is least worth narrowing then because the search has barely seen the generator. Past this spacing, sampling is rare and an arm that has never been sighted has had a real chance to appear.
+    package static let armAdmissibilitySlowdown = 2000
 
     // MARK: - Phase 2 (Random Sampling) Stopping
 
@@ -77,7 +90,7 @@ package enum FuzzTunables {
     /// Barren draws a comparand-substitution key gets before it is retired, and the allowance a yielding draw restores it to. A yield is a corpus admission or a failure: the arm can be worth its attempts through faults that light no new edge, so admission alone would retire it too early.
     package static let comparandOperandEnergy: UInt8 = 16
 
-    /// Barren draws allowed per value slot of the chosen tag group, and the allowance's cap. A draw samples one subset of the group's slots, so the candidates a source can reach grow with the group: 15 for four slots, 255 for eight, 3,796 for twelve. A fixed 16 samples a four-slot group exhaustively and a twelve-slot group at 0.4%, which retires exactly the sources whose walk is longest, the multi-slot agreement preconditions of IFC's memory operations. Scaling the allowance with the group spends draws where a draw can still be new; the floor is the fixed allowance, the cap bounds the walk a run will fund for one source; 255 was measured against it on the IFC memory-operation probe (2026-09-07) and found nothing the lower cap missed.
+    /// Barren draws allowed per value slot of the chosen tag group, and the allowance's cap. A draw samples one subset of the group's slots, so the candidates a source can reach grow with the group: 15 for four slots, 255 for eight, 3,796 for twelve. A fixed 16 samples a four-slot group exhaustively and a twelve-slot group at 0.4%, which retires exactly the sources whose walk is longest, the multi-slot agreement preconditions of memory-operation faults. Scaling the allowance with the group spends draws where a draw can still be new; the floor is the fixed allowance, the cap bounds the walk a run will fund for one source; 255 was measured against it on memory-operation faults and found nothing the lower cap missed.
     package static let comparandOperandEnergyPerSlot = 8
     package static let comparandOperandEnergyCap: UInt8 = 128
 
@@ -109,7 +122,7 @@ package enum FuzzTunables {
     /// Discriminating source locations reported per cluster. Beyond a handful, the ranking's tail is noise against small failing samples.
     package static let discriminatingEdgeLimit = 5
 
-    /// Ranked edges handed to the report per cluster before it folds them by source location and keeps ``discriminatingEdgeLimit``. One function usually ranks at several offsets (one IFC cluster ranked a single getter at five), so the pool has to be wider than the printed list for the list to name more than one or two functions.
+    /// Ranked edges handed to the report per cluster before it folds them by source location and keeps ``discriminatingEdgeLimit``. One function usually ranks at several offsets (one cluster ranked a single getter at five), so the pool has to be wider than the printed list for the list to name more than one or two functions.
     package static let discriminatingEdgeCandidateLimit = 40
 
     // MARK: - Reduction Backpressure
@@ -148,7 +161,7 @@ package enum FuzzTunables {
 
     /// Budget at or above which the crash breadcrumb records each candidate's own choice sequence, so a resumed run can show the trapping input instead of naming it by hash and quarantining its parent.
     ///
-    /// The recording costs about 8% of candidate throughput at any budget, because the encode and the copy into the slot run inside every property invocation's bracket (on the Etna IFC type-based workload, property time went from 0.8 to 4.1 microseconds per evaluated case). What the budget changes is the value of having the input: a short run is cheap to reproduce by running it again, and a long campaign is not.
+    /// The recording costs about 8% of candidate throughput at any budget, because the encode and the copy into the slot run inside every property invocation's bracket, which on a cheap property can take it from under one microsecond per evaluated case to several. What the budget changes is the value of having the input: a short run is cheap to reproduce by running it again, and a long campaign is not.
     ///
     /// - Note: Throughput therefore steps down at this boundary. A run just under it searches about 8% faster than one just over.
     package static let trapCandidateBudgetFloor: UInt64 = 10 * 60 * 1_000_000_000
@@ -165,7 +178,7 @@ package enum FuzzTunables {
 
 /// Per-run switches for the mechanisms a benchmark arm can still hold off.
 ///
-/// A knob exists only while its off path is worth measuring against: the arm inventory (bandit, graph, and pair operators) and the swarm rewrite. Mechanisms whose off path lost its last measurement (uniform parent selection, the binary swarm mask, the power schedule, campaigns, the reseed burst, the fixed escape cadence, and the knob-off variants of normalization, candidate dedup, and the champion archive) were deleted rather than left switchable. In-package tests reach the knobs through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
+/// A knob exists only while its off path is worth measuring against: the arm inventory (bandit, graph, and pair operators) and the swarm rewrite. Mechanisms whose off path lost its last measurement (uniform parent selection, the binary swarm mask, the power schedule, campaigns, the reseed burst, the fixed escape cadence, and the knob-off variants of normalization, candidate dedup, and the champion archive) were deleted rather than left switchable. In-package tests reach the knobs through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, parsed once at run start via ``parse(environmentValue:)``.
 package struct FuzzExperiments: Sendable, Equatable {
     /// Bandit-tuned mutation band weights over the enabled arm inventory, rewarded by corpus admission.
     package var banditBands = true
@@ -175,6 +188,16 @@ package struct FuzzExperiments: Sendable, Equatable {
 
     /// Pair mutation operators: the twin splice (copy one zip twin's span over its sibling's, creating structural agreement) and the typed crossover (replace a pick subtree with a same-fingerprint span from a different corpus entry). Adds the two arms to the pick inventory the same way `graphMutation` adds its four.
     package var pairMutation = true
+
+    /// Whether an arm is offered to the pick only when its operator's precondition holds for the parent.
+    ///
+    /// Applicability is a property of the (arm, parent) pair, and no reward signal carries it: a miss earns nothing and is penalized for nothing, so a permanently inapplicable arm keeps its share of the draws for the whole run. Which arm that is depends on the generator's shape — a register machine offers `splice` no bind region, a term grammar offers `move` no sibling group of three — so the inventory has to be narrowed against the structure rather than against a fixed list. Applies to whichever scheduler is selecting.
+    package var armEligibility = false
+
+    /// Whether the arm inventory is narrowed to what the generator's structure admits, sampled at corpus admissions.
+    ///
+    /// A corpus entry's tree is materialized with `materializePicks: false`, so its graph describes the one path the entry took, not the shapes the generator can produce. Re-materializing an admitted entry with picks gives every branch alternative a full subtree, which turns "no bind region on this path" into "this generator's structure has no bind region" — the difference between a guess and a fact about whether `splice` can ever fire.
+    package var armAdmissibility = false
 
     /// How swarm generation rewrites a mutated child's branch selections.
     package enum SwarmMode: String, Sendable {
@@ -213,6 +236,8 @@ package struct FuzzExperiments: Sendable, Equatable {
     package static var knobs: [(name: String, keyPath: WritableKeyPath<FuzzExperiments, Bool>)] {
         [
             ("banditBands", \.banditBands),
+            ("armEligibility", \.armEligibility),
+            ("armAdmissibility", \.armAdmissibility),
             ("graphMutation", \.graphMutation),
             ("pairMutation", \.pairMutation),
         ]
