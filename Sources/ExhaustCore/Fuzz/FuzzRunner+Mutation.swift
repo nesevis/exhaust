@@ -101,7 +101,7 @@ extension FuzzRunner {
             return eligible
         }
         eligible = eligible.union(targets.structuralArms)
-        if enabledArms.contains(.typedCrossover), targets.hasCrossoverDonor(corpus: corpus) {
+        if enabledArms.contains(.typedCrossover), targets.hasCrossoverDonor(corpus: corpus, parentIndex: parentIndex) {
             eligible.insert(.typedCrossover)
         }
         return eligible

@@ -59,15 +59,15 @@ package struct MutationTargets: Sendable {
         twinSpanGroups.contains { $0.count >= 2 }
     }
 
-    /// Whether any fingerprint has both a recipient in this parent and a donor span elsewhere in the corpus.
+    /// Whether any fingerprint has both a recipient in this parent and a donor span from a different entry in the corpus.
     ///
-    /// The only precondition here that depends on the corpus rather than the parent, so it cannot be cached at admission: a fingerprint gains donors as other entries are admitted.
-    package func hasCrossoverDonor(corpus: FuzzCorpus) -> Bool {
+    /// The only precondition here that depends on the corpus rather than the parent, so it cannot be cached at admission: a fingerprint gains donors as other entries are admitted. Excludes the parent's own spans because ``FuzzMutator/typedCrossover(_:parentHash:targets:corpus:prng:)`` rejects self-donation.
+    package func hasCrossoverDonor(corpus: FuzzCorpus, parentIndex: Int) -> Bool {
         for fingerprint in sortedFingerprints {
             guard let recipients = graph.selfSimilarityGroups[fingerprint],
                   recipients.isEmpty == false,
                   let donors = corpus.donorSpansByFingerprint[fingerprint],
-                  donors.isEmpty == false
+                  donors.contains(where: { $0.entryIndex != parentIndex })
             else {
                 continue
             }
@@ -99,10 +99,11 @@ package struct MutationTargets: Sendable {
             let node = graph.nodes[nodeID]
             guard case let .sequence(metadata) = node.kind else { continue }
             let lower = metadata.lengthConstraint?.lowerBound ?? 0
-            if metadata.elementCount >= 2 || (metadata.elementCount >= 1 && UInt64(metadata.elementCount - 1) >= lower) {
+            if metadata.elementCount >= 1, UInt64(metadata.elementCount - 1) >= lower {
                 deletable.append(nodeID)
             }
-            if metadata.elementCount >= 1 {
+            let upper = metadata.lengthConstraint?.upperBound ?? UInt64.max
+            if metadata.elementCount >= 1, UInt64(metadata.elementCount + 1) <= upper {
                 duplicable.append(nodeID)
             }
         }

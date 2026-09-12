@@ -189,7 +189,13 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
             let current = choice.bitPattern64
             if tag.isFloatingPoint {
                 guard let range = validRange, isRangeExplicit else {
-                    return .max
+                    let finite = tag.greatestFiniteDoubleMagnitude
+                    let current = choice.decodedDoubleValue
+                    let room = upward ? finite - current : current - -finite
+                    guard room > 0 else {
+                        return 0
+                    }
+                    return room < Double(UInt64.max) ? UInt64(room) : .max
                 }
                 let currentDecoded = choice.decodedDoubleValue
                 let boundDecoded = ChoiceValue(upward ? range.upperBound : range.lowerBound, tag: tag).decodedDoubleValue
