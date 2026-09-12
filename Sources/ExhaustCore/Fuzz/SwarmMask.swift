@@ -73,7 +73,6 @@ package struct SwarmMask: Sendable {
         prng: inout Xoshiro256
     ) -> ChoiceSequence {
         var result = sequence
-        // All entries from one pick site share a fingerprint, so a sequence typically repeats a handful of fingerprints many times. Weights are deterministic from the fingerprint, so memoize them and their sum for the call. The PRNG is untouched, so a pinned seed still replays.
         scratch.sites.removeAll(keepingCapacity: true)
         scratch.weights.removeAll(keepingCapacity: true)
         for index in result.indices {
