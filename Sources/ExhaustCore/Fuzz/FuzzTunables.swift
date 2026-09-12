@@ -191,7 +191,7 @@ package struct FuzzExperiments: Sendable, Equatable {
 
     /// Whether an arm is offered to the pick only when its operator's precondition holds for the parent.
     ///
-    /// Applicability is a property of the (arm, parent) pair, and no reward signal carries it: a miss earns nothing and is penalized for nothing, so a permanently inapplicable arm keeps its share of the draws for the whole run. Which arm that is depends on the generator's shape — a register machine offers `splice` no bind region, a term grammar offers `move` no sibling group of three — so the inventory has to be narrowed against the structure rather than against a fixed list. Applies to whichever scheduler is selecting.
+    /// Before each draw, the parent's structural tables (bind regions, sibling groups, tandem groups, twin spans, typed donors) determine which operators can fire. The bandit draws only from that subset, so draws that would have picked a dead arm pick a live one instead. The three bands are unconditionally eligible.
     package var armEligibility = false
 
     /// Whether the arm inventory is narrowed to what the generator's structure admits, sampled at corpus admissions.

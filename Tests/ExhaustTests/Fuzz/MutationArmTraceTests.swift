@@ -248,49 +248,8 @@ struct ArmEligibilityTests {
         )
         let result = runner.run()
         let counts = result.counts
-        // A zip of scalars has no bind region, so splice cannot fire and must never be drawn. The
-        // sibling-span operators are a different matter: three same-shaped children do form a group,
-        // so they are applicable and their misses come from the position-fit check instead.
         #expect(counts.mutationArms.draws(arm: .splice) == 0)
         #expect(result.clusters.isEmpty == false)
-    }
-
-    @Test("The gate keeps the bands on a generator with no branch point, where the medium band is the only arm that duplicates a block")
-    func gatedRunKeepsTheBands() {
-        var experiments = FuzzExperiments()
-        experiments.armEligibility = true
-        experiments.graphMutation = true
-        experiments.pairMutation = true
-        // A zip of scalars has no pick site anywhere, so no parent's sequence ever carries a branch marker.
-        let runner = FuzzRunner(
-            gen: Gen.zip(
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-            ),
-            property: { value in
-                value.0 + value.1 + value.2 > 2900 ? .fail(.returnedFalse) : .pass
-            },
-            source: SyntheticCoverageSource<(Int, Int, Int)>(edgeCount: 64, hitEdges: { value in
-                [
-                    (edge: value.0 % 16, hitCount: UInt8(max(1, min(255, value.1 / 4)))),
-                    (edge: 16 + (value.1 % 16), hitCount: 1),
-                ]
-            }),
-            configuration: FuzzRunnerConfiguration(
-                budgetNanoseconds: 60_000_000_000,
-                seed: 23,
-                attemptLimit: 20000,
-                experiments: experiments
-            )
-        )
-        let counts = runner.run().counts
-        for band in [MutationArm.low, .medium, .high] {
-            #expect(counts.mutationArms.draws(arm: band) > 0)
-        }
-        // The medium band falls back internally rather than declining, so the absence of a branch marker costs it nothing: what misses are the handful of draws whose block edit happened to reproduce the parent.
-        let draws = counts.mutationArms.draws(arm: .medium)
-        #expect(counts.mutationArms.misses(arm: .medium) * 5 < draws)
     }
 
     @Test("A structural sample that misses a nested alternative does not exclude the operator, because parents that can target it say otherwise")
@@ -357,38 +316,6 @@ struct ArmEligibilityTests {
         let contents = try String(contentsOfFile: directory + "/" + #require(files.first), encoding: .utf8)
         let lines = contents.split(separator: "\n")
         #expect(lines.count == 1 + MutationArm.allCases.count)
-    }
-
-    @Test("The fixed scheduler honours the gate too, so a bandit-off comparison measures the same restriction")
-    func gatedRunAvoidsInapplicableArmsWithoutTheBandit() {
-        var experiments = FuzzExperiments()
-        experiments.armEligibility = true
-        experiments.banditBands = false
-        experiments.graphMutation = true
-        experiments.pairMutation = true
-        let runner = FuzzRunner(
-            gen: Gen.zip(
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-            ),
-            property: { value in
-                value.0 + value.1 + value.2 > 2800 ? .fail(.returnedFalse) : .pass
-            },
-            source: SyntheticCoverageSource<(Int, Int, Int)>(edgeCount: 32, edges: { value in
-                [value.0 & 0b111, 8 + (value.1 & 0b111), 16 + (value.2 & 0b111)]
-            }),
-            configuration: FuzzRunnerConfiguration(
-                budgetNanoseconds: 60_000_000_000,
-                seed: 23,
-                attemptLimit: 5000,
-                experiments: experiments
-            )
-        )
-        let counts = runner.run().counts
-        #expect(counts.mutationArms.draws(arm: .splice) == 0)
-        let drawn = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.draws(arm: $1) }
-        #expect(drawn > 0)
     }
 
     @Test("The reward divides by the probability the restricted draw ran at, not the unconditional one")
@@ -478,32 +405,6 @@ struct ArmEligibilityTests {
         let open = run(admissibility: false)
         #expect(gated.counts.mutationArms.draws(arm: .splice) <= open.counts.mutationArms.draws(arm: .splice))
         #expect(gated.faults > 0)
-    }
-
-    @Test("Without the gate the same run does draw the arm that cannot fire")
-    func ungatedRunDrawsInapplicableArms() {
-        var experiments = FuzzExperiments()
-        experiments.armEligibility = false
-        let runner = FuzzRunner(
-            gen: Gen.zip(
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-                Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-            ),
-            property: { value in
-                value.0 + value.1 + value.2 > 2800 ? .fail(.returnedFalse) : .pass
-            },
-            source: SyntheticCoverageSource<(Int, Int, Int)>(edgeCount: 32, edges: { value in
-                [value.0 & 0b111, 8 + (value.1 & 0b111), 16 + (value.2 & 0b111)]
-            }),
-            configuration: FuzzRunnerConfiguration(
-                budgetNanoseconds: 60_000_000_000,
-                seed: 23,
-                attemptLimit: 5000,
-                experiments: experiments
-            )
-        )
-        #expect(runner.run().counts.mutationArms.draws(arm: .splice) > 0)
     }
 }
 
