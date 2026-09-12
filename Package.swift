@@ -145,6 +145,7 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 "ExhaustCore",
+                "ExhaustMetaFuzz",
                 .product(name: "Benchmark", package: "swift-benchmark"),
             ],
             swiftSettings: strictConcurrencySettings + [
