@@ -118,14 +118,14 @@ package final class FuzzRunner<Output> {
     /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
     package let corpus: FuzzCorpus
     var faults = FaultPipeline()
-    var prng: Xoshiro256
+    package var prng: Xoshiro256
     var bandit = MutationBandit()
 
     /// Per-window arm counts written to a CSV for offline analysis, or nil when `EXHAUST_ARM_TRACE` is unset. See ``MutationArmTrace``.
     var armTrace: MutationArmTrace?
 
     /// Arms the generator's structure has been shown to admit, accumulated across inspected admissions. Nil until the first inspection, while the whole inventory is still open.
-    var sightedArms: MutationArmSet?
+    package var sightedArms: MutationArmSet?
     /// Attempts opened when the previous admission landed, so the gap between admissions measures how fast the corpus is still filling.
     var attemptsAtPreviousAdmission = 0
 
@@ -236,7 +236,7 @@ package final class FuzzRunner<Output> {
         prng = Xoshiro256(seed: configuration.seed)
         var arms = MutationArm.bandArms
         if configuration.experiments.graphMutation {
-            arms += [.swap, .shuffle, .move, .lockstepDelta]
+            arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication]
         }
         if configuration.experiments.pairMutation {
             arms += [.twinSplice, .typedCrossover]

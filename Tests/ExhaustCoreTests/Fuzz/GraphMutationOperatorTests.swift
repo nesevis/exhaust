@@ -565,3 +565,77 @@ private func valueMultiset(of sequence: ChoiceSequence) -> [UInt64] {
     }
     return patterns.sorted()
 }
+
+// MARK: - Headroom Tests
+
+@Suite("Value headroom")
+struct ValueHeadroomTests {
+    @Test("Unsigned integer at the middle of a range has headroom in both directions")
+    func unsignedMiddle() {
+        let current = UInt(50).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == 40)
+        #expect(value.headroom(upward: false, tag: .uint) == 40)
+    }
+
+    @Test("Unsigned integer at the upper bound has zero upward headroom")
+    func unsignedAtUpperBound() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(UInt(90).bitPattern64, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == 0)
+        #expect(value.headroom(upward: false, tag: .uint) == 80)
+    }
+
+    @Test("Unsigned integer at the lower bound has zero downward headroom")
+    func unsignedAtLowerBound() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(UInt(10).bitPattern64, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == 80)
+        #expect(value.headroom(upward: false, tag: .uint) == 0)
+    }
+
+    @Test("Signed integer headroom respects the XOR encoding")
+    func signedHeadroom() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(Int(3).bitPattern64, tag: .int),
+            validRange: Int(-7).bitPattern64 ... Int(7).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .int) == 4)
+        #expect(value.headroom(upward: false, tag: .int) == 10)
+    }
+
+    @Test("Non-explicit range yields max headroom for the bit pattern")
+    func nonExplicitRange() {
+        let current = UInt(50).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: false
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == UInt64.max - current)
+        #expect(value.headroom(upward: false, tag: .uint) == current)
+    }
+
+    @Test("Nil range yields max headroom for the bit pattern")
+    func nilRange() {
+        let current = UInt(50).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .uint),
+            validRange: nil,
+            isRangeExplicit: false
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == UInt64.max - current)
+        #expect(value.headroom(upward: false, tag: .uint) == current)
+    }
+}

@@ -23,6 +23,12 @@ package struct MutationTargets: Sendable {
     /// The graph's self-similarity fingerprints in ascending order, so typed crossover's per-draw walk is a fixed order without sorting dictionary keys on every call.
     let sortedFingerprints: [UInt64]
 
+    /// Sequence nodes with two or more elements, eligible for element deletion. Each entry is the node ID of a sequence whose elements can be individually removed.
+    let deletableSequenceNodeIDs: [Int]
+
+    /// Sequence nodes with one or more elements, eligible for element duplication.
+    let duplicableSequenceNodeIDs: [Int]
+
     /// The arms whose first guard this entry's own tables satisfy: the sibling-span operators, the lockstep delta, and the twin splice.
     ///
     /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
@@ -86,6 +92,23 @@ package struct MutationTargets: Sendable {
         permutationScopes = PermutationQuery.build(graph: graph)
         twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
         sortedFingerprints = graph.selfSimilarityGroups.keys.sorted()
+
+        var deletable: [Int] = []
+        var duplicable: [Int] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .sequence(metadata) = node.kind else { continue }
+            let lower = metadata.lengthConstraint?.lowerBound ?? 0
+            if metadata.elementCount >= 2 || (metadata.elementCount >= 1 && UInt64(metadata.elementCount - 1) >= lower) {
+                deletable.append(nodeID)
+            }
+            if metadata.elementCount >= 1 {
+                duplicable.append(nodeID)
+            }
+        }
+        deletableSequenceNodeIDs = deletable
+        duplicableSequenceNodeIDs = duplicable
+
         structuralArms = .none
         var structural = MutationArmSet.none
         if hasSwappableGroup(minimumSize: 2) {
@@ -101,11 +124,17 @@ package struct MutationTargets: Sendable {
         if hasTwinGroup {
             structural.insert(.twinSplice)
         }
+        if deletable.isEmpty == false {
+            structural.insert(.elementDeletion)
+        }
+        if duplicable.isEmpty == false {
+            structural.insert(.elementDuplication)
+        }
         structuralArms = structural
     }
 }
 
-extension FuzzMutator {
+package extension FuzzMutator {
     // MARK: - Sibling-Span Operators
 
     /// Exchanges two same-shaped sibling spans from one swap-eligible group.
@@ -216,9 +245,25 @@ extension FuzzMutator {
         guard entries.count >= 2 else {
             return nil
         }
-        let shiftUpward = prng.next(upperBound: 2) == 0
-        let exponent = prng.next(upperBound: FuzzTunables.lockstepDeltaExponentLimit)
-        let delta = 1 &+ prng.next(upperBound: 1 << exponent)
+        var headroomUp: UInt64 = .max
+        var headroomDown: UInt64 = .max
+        for entry in entries {
+            guard case let .value(value) = entry.entry else {
+                return nil
+            }
+            headroomUp = min(headroomUp, value.headroom(upward: true, tag: group.typeTag))
+            headroomDown = min(headroomDown, value.headroom(upward: false, tag: group.typeTag))
+        }
+        guard headroomUp > 0 || headroomDown > 0 else {
+            return nil
+        }
+        let shiftUpward = switch (headroomUp, headroomDown) {
+            case (0, _): false
+            case (_, 0): true
+            default: prng.next(upperBound: 2) == 0
+        }
+        let maxDelta = shiftUpward ? headroomUp : headroomDown
+        let delta = 1 + prng.next(upperBound: maxDelta)
         guard let shifted = candidate.shiftingGroup(
             entries: entries,
             tag: group.typeTag,
@@ -232,12 +277,74 @@ extension FuzzMutator {
         return shifted.candidate
     }
 
+    // MARK: - Sequence Element Operators
+
+    /// Deletes one element from a random sequence node, producing a shorter candidate.
+    ///
+    /// Returns nil when no sequence node has deletable elements or the chosen element's positions do not fit the candidate.
+    static func deleteSequenceElement(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        let eligible = targets.deletableSequenceNodeIDs
+        guard eligible.isEmpty == false else {
+            return nil
+        }
+        let nodeID = eligible[Int(prng.next(upperBound: UInt64(eligible.count)))]
+        guard case let .sequence(metadata) = targets.graph.nodes[nodeID].kind,
+              metadata.childPositionRanges.isEmpty == false
+        else {
+            return nil
+        }
+        let elementIndex = Int(prng.next(upperBound: UInt64(metadata.childPositionRanges.count)))
+        let range = metadata.childPositionRanges[elementIndex]
+        guard range.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.removeSubrange(range.lowerBound ... range.upperBound)
+        return result
+    }
+
+    /// Duplicates one element from a random sequence node, producing a longer candidate.
+    ///
+    /// Copies the element's full choice span and inserts it after the last element in the same sequence. Returns nil when no sequence node has elements or the chosen element's positions do not fit the candidate.
+    static func duplicateSequenceElement(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        let eligible = targets.duplicableSequenceNodeIDs
+        guard eligible.isEmpty == false else {
+            return nil
+        }
+        let nodeID = eligible[Int(prng.next(upperBound: UInt64(eligible.count)))]
+        guard case let .sequence(metadata) = targets.graph.nodes[nodeID].kind,
+              metadata.childPositionRanges.isEmpty == false
+        else {
+            return nil
+        }
+        let elementIndex = Int(prng.next(upperBound: UInt64(metadata.childPositionRanges.count)))
+        let sourceRange = metadata.childPositionRanges[elementIndex]
+        guard sourceRange.upperBound < candidate.count else {
+            return nil
+        }
+        let lastElementRange = metadata.childPositionRanges[metadata.childPositionRanges.count - 1]
+        guard lastElementRange.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.insert(contentsOf: candidate[sourceRange.lowerBound ... sourceRange.upperBound], at: lastElementRange.upperBound + 1)
+        return result
+    }
+
     // MARK: - Twin Detection
 
     /// Discriminates zip children the generator drew from the same site, so twin spans can be spliced onto one another.
     ///
     /// Picks and binds match by their site fingerprint. Sequences match by element type tag rather than shape, so twins of different lengths (two instruction lists) still group. Leaves match by type tag, zips by child count.
-    enum TwinKey: Hashable {
+    internal enum TwinKey: Hashable {
         case pick(UInt64)
         case bind(UInt64)
         case value(TypeTag)
@@ -248,7 +355,7 @@ extension FuzzMutator {
     /// Computes the twin-span groups of every zip node: position ranges of siblings sharing a twin key, in position order, groups ordered by first position.
     ///
     /// Group and member ordering is explicit rather than dictionary order so seeded runs replay identically across processes.
-    static func twinSpanGroups(graph: ChoiceGraph) -> [[ClosedRange<Int>]] {
+    internal static func twinSpanGroups(graph: ChoiceGraph) -> [[ClosedRange<Int>]] {
         var groups: [[ClosedRange<Int>]] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
@@ -279,7 +386,7 @@ extension FuzzMutator {
     }
 
     /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, untagged sequences).
-    static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
+    internal static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
         switch node.kind {
             case let .pick(metadata):
                 .pick(metadata.fingerprint)

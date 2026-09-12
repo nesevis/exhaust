@@ -184,6 +184,30 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
             return validRange == choice.tag.bitPatternRange
         }
 
+        /// The maximum delta that ``ChoiceSequence/shiftingGroup`` can apply in the given direction without leaving the valid range. For integers, a bit-pattern distance (the XOR encoding preserves distances). For floats, a numeric distance consumed as `Double(delta)` by the shift.
+        package func headroom(upward: Bool, tag: TypeTag) -> UInt64 {
+            let current = choice.bitPattern64
+            if tag.isFloatingPoint {
+                guard let range = validRange, isRangeExplicit else {
+                    return .max
+                }
+                let currentDecoded = choice.decodedDoubleValue
+                let boundDecoded = ChoiceValue(upward ? range.upperBound : range.lowerBound, tag: tag).decodedDoubleValue
+                let room = upward ? boundDecoded - currentDecoded : currentDecoded - boundDecoded
+                guard room > 0 else {
+                    return 0
+                }
+                return room < Double(UInt64.max) ? UInt64(room) : .max
+            }
+            if let range = validRange, isRangeExplicit {
+                if upward {
+                    return current <= range.upperBound ? range.upperBound - current : 0
+                }
+                return current >= range.lowerBound ? current - range.lowerBound : 0
+            }
+            return upward ? UInt64.max - current : current
+        }
+
         public func hash(into hasher: inout Hasher) {
             hasher.combine(choice)
         }

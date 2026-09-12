@@ -20,6 +20,8 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case lockstepDelta = 7
     case twinSplice = 8
     case typedCrossover = 9
+    case elementDeletion = 10
+    case elementDuplication = 11
 
     /// The inventory with the targeting knobs off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so this is the raw-value prefix of the inventory.
     package static let bandArms: [MutationArm] = [.low, .medium, .high, .splice]

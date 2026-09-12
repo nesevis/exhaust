@@ -28,7 +28,14 @@ enum MutationArmRepertoire {
                     sighted.insert(.splice)
                 case .zip:
                     sighted = sighted.union(zipSightings(of: node, in: graph))
-                case .sequence, .just:
+                case let .sequence(metadata):
+                    if metadata.elementCount >= 2 {
+                        sighted.insert(.elementDeletion)
+                    }
+                    if metadata.elementCount >= 1 {
+                        sighted.insert(.elementDuplication)
+                    }
+                case .just:
                     continue
             }
         }
