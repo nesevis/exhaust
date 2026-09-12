@@ -1,8 +1,9 @@
 // MARK: - Mutation Arm Gate Cost Benchmarks
 
 //
-// Times the admissibility gate mechanism in nanoseconds per draw on frozen corpora,
-// comparing control (no gate) against admissibility (repertoire-gated draws).
+// Times the admissibility gate mechanism on frozen corpora, comparing control
+// (no gate) against admissibility (repertoire-gated draws). Both arms share
+// one corpus so parent shapes, learned weights, and corpus size are identical.
 
 import Benchmark
 import Exhaust
@@ -53,14 +54,7 @@ private func registerShapeBenchmarks<Output>(
     edgeCount: Int,
     hitEdges: @escaping @Sendable (Output) -> [(edge: Int, hitCount: UInt8)]
 ) {
-    let controlRunner = buildFrozenCorpus(
-        generator: generator,
-        edgeCount: edgeCount,
-        seed: 1337,
-        armAdmissibility: false,
-        hitEdges: hitEdges
-    )
-    let admissibilityRunner = buildFrozenCorpus(
+    let sharedRunner = buildFrozenCorpus(
         generator: generator,
         edgeCount: edgeCount,
         seed: 1337,
@@ -68,40 +62,48 @@ private func registerShapeBenchmarks<Output>(
         hitEdges: hitEdges
     )
 
-    let controlParents = controlRunner.corpus.parentIndices
-    let admParents = admissibilityRunner.corpus.parentIndices
+    let parents = sharedRunner.corpus.parentIndices
 
-    benchmark("Gate \(name): control nextCandidate") {
-        controlRunner.prng = Xoshiro256(seed: 42_424_242)
+    benchmark("Gate \(name): nextCandidate") {
+        sharedRunner.prng = Xoshiro256(seed: 42_424_242)
         for iteration in 0 ..< drawsPerIteration {
-            let parentIndex = controlParents[iteration % controlParents.count]
-            let parent = controlRunner.corpus.entries[parentIndex]
-            _ = controlRunner.nextCandidate(from: parent, parentIndex: parentIndex)
+            let parentIndex = parents[iteration % parents.count]
+            let parent = sharedRunner.corpus.entries[parentIndex]
+            let draw = sharedRunner.nextCandidate(from: parent, parentIndex: parentIndex)
+            benchmarkSink = UInt64(draw.candidate.count)
         }
     }
 
-    benchmark("Gate \(name): admissibility nextCandidate") {
-        admissibilityRunner.prng = Xoshiro256(seed: 42_424_242)
-        for iteration in 0 ..< drawsPerIteration {
-            let parentIndex = admParents[iteration % admParents.count]
-            let parent = admissibilityRunner.corpus.entries[parentIndex]
-            _ = admissibilityRunner.nextCandidate(from: parent, parentIndex: parentIndex)
-        }
-    }
-
-    benchmark("Gate \(name): drawArm ungated") {
-        controlRunner.prng = Xoshiro256(seed: 99)
+    benchmark("Gate \(name): drawArm selection") {
+        sharedRunner.prng = Xoshiro256(seed: 99)
         for _ in 0 ..< drawsPerIteration {
-            _ = controlRunner.drawArm(eligible: .all)
+            let arm = sharedRunner.drawArm(eligible: .all)
+            benchmarkSink = UInt64(arm.rawValue)
+        }
+    }
+
+    benchmark("Gate \(name): drawArm gated") {
+        sharedRunner.prng = Xoshiro256(seed: 99)
+        let eligible = sharedRunner.sightedArms ?? .all
+        for _ in 0 ..< drawsPerIteration {
+            let arm = sharedRunner.drawArm(eligible: eligible)
+            benchmarkSink = UInt64(arm.rawValue)
         }
     }
 
     benchmark("Gate \(name): sightedArms lookup") {
         for _ in 0 ..< drawsPerIteration {
-            let sighted = admissibilityRunner.sightedArms
-            if let sighted {
-                blackhole(sighted.rawValue)
-            }
+            benchmarkSink = UInt64(sharedRunner.sightedArms?.rawValue ?? 0)
+        }
+    }
+
+    benchmark("Gate \(name): eligibility check") {
+        sharedRunner.prng = Xoshiro256(seed: 42_424_242)
+        for iteration in 0 ..< drawsPerIteration {
+            let parentIndex = parents[iteration % parents.count]
+            let parent = sharedRunner.corpus.entries[parentIndex]
+            let eligible = sharedRunner.eligibleSet(for: parent, parentIndex: parentIndex)
+            benchmarkSink = UInt64(eligible.rawValue)
         }
     }
 }
@@ -119,6 +121,7 @@ private func buildFrozenCorpus<Output>(
     experiments.graphMutation = true
     experiments.pairMutation = true
     experiments.armAdmissibility = armAdmissibility
+    experiments.armEligibility = true
     let runner = FuzzRunner(
         gen: generator.gen,
         property: { (_: Output) in .pass },
@@ -147,7 +150,5 @@ private func hashBasedEdges<Value: Hashable>(edgeCount: Int) -> @Sendable (Value
     }
 }
 
-@inline(never)
-private func blackhole(_ value: some Any) {
-    withExtendedLifetime(value) {}
-}
+/// Written to from benchmark loops to prevent dead-code elimination.
+nonisolated(unsafe) var benchmarkSink: UInt64 = 0

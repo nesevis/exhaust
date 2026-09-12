@@ -32,7 +32,7 @@ extension FuzzRunner {
     }
 
     /// The arms this parent's draw may choose from: the operators that can fire on it, narrowed further by the operators the generator has been shown to admit.
-    private func eligibleSet(parent: CorpusEntry, parentIndex: Int) -> MutationArmSet {
+    package func eligibleSet(for parent: CorpusEntry, parentIndex: Int) -> MutationArmSet {
         if configuration.experiments.armEligibility {
             return eligibleArms(parent: parent, parentIndex: parentIndex)
         }
@@ -124,7 +124,7 @@ extension FuzzRunner {
     private func inventoryCandidate(from parent: CorpusEntry, parentIndex: Int) -> MutationDraw {
         let layout = parent.mutationLayout
         corpus.noteCandidateDrawn(fromParentAt: parentIndex)
-        let eligible = eligibleSet(parent: parent, parentIndex: parentIndex)
+        let eligible = eligibleSet(for: parent, parentIndex: parentIndex)
         let arm = drawArm(eligible: eligible)
         counts.mutationArms.recordDraw(arm: arm)
         var candidate = parent.sequence
