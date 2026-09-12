@@ -234,26 +234,24 @@ package extension FuzzMutator {
         }
         var entries: [(index: Int, entry: ChoiceSequenceValue)] = []
         entries.reserveCapacity(group.leaves.count)
+        var headroomUp: UInt64 = .max
+        var headroomDown: UInt64 = .max
         for leaf in group.leaves {
-            // A member the candidate cannot address makes the whole group unshiftable, not a smaller group.
             guard let range = targets.graph.nodes[leaf.nodeID].positionRange,
                   range.lowerBound < candidate.count
             else {
                 return nil
             }
-            entries.append((index: range.lowerBound, entry: candidate[range.lowerBound]))
-        }
-        guard entries.count >= 2 else {
-            return nil
-        }
-        var headroomUp: UInt64 = .max
-        var headroomDown: UInt64 = .max
-        for entry in entries {
-            guard case let .value(value) = entry.entry else {
+            let element = candidate[range.lowerBound]
+            guard case let .value(value) = element else {
                 return nil
             }
             headroomUp = min(headroomUp, value.headroom(upward: true, tag: group.typeTag))
             headroomDown = min(headroomDown, value.headroom(upward: false, tag: group.typeTag))
+            entries.append((index: range.lowerBound, entry: element))
+        }
+        guard entries.count >= 2 else {
+            return nil
         }
         guard headroomUp > 0 || headroomDown > 0 else {
             return nil
@@ -495,11 +493,9 @@ package extension FuzzMutator {
         minimumSize: Int,
         prng: inout Xoshiro256
     ) -> [Int]? {
-        var eligible: [[Int]] = []
         var totalWeight: UInt64 = 0
         for scope in scopes {
             for group in scope.swappableGroups where group.count >= minimumSize {
-                eligible.append(group)
                 totalWeight += UInt64(group.count)
             }
         }
@@ -507,14 +503,18 @@ package extension FuzzMutator {
             return nil
         }
         var remaining = prng.next(upperBound: totalWeight)
-        for group in eligible {
-            let weight = UInt64(group.count)
-            if remaining < weight {
-                return group
+        var last: [Int]?
+        for scope in scopes {
+            for group in scope.swappableGroups where group.count >= minimumSize {
+                let weight = UInt64(group.count)
+                if remaining < weight {
+                    return group
+                }
+                remaining -= weight
+                last = group
             }
-            remaining -= weight
         }
-        return eligible[eligible.count - 1]
+        return last
     }
 
     /// Picks one range group with two or more members, weighted by member count.
@@ -530,14 +530,16 @@ package extension FuzzMutator {
             return nil
         }
         var remaining = prng.next(upperBound: totalWeight)
+        var last: [ClosedRange<Int>]?
         for group in groups where group.count >= 2 {
             let weight = UInt64(group.count)
             if remaining < weight {
                 return group
             }
             remaining -= weight
+            last = group
         }
-        return groups[groups.count - 1]
+        return last
     }
 
     /// Picks one tandem group with two or more leaves, weighted by leaf count.
@@ -553,14 +555,16 @@ package extension FuzzMutator {
             return nil
         }
         var remaining = prng.next(upperBound: totalWeight)
+        var last: TandemGroup?
         for group in scope.groups where group.leaves.count >= 2 {
             let weight = UInt64(group.leaves.count)
             if remaining < weight {
                 return group
             }
             remaining -= weight
+            last = group
         }
-        return scope.groups[scope.groups.count - 1]
+        return last
     }
 
     /// Resolves a sibling group's node IDs to position ranges sorted by position, or nil when any member is inactive or extends past the candidate.

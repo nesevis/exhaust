@@ -217,6 +217,9 @@ extension FuzzRunner {
         if eligible.contains(.splice), spliceDraw < FuzzTunables.spliceProbability {
             return .splice
         }
+        if eligible == .all, fixedDrawArms.isEmpty == false {
+            return fixedDrawArms[Int(prng.next(upperBound: UInt64(fixedDrawArms.count)))]
+        }
         var eligibleCount = 0
         for arm in fixedDrawArms where eligible.contains(arm) {
             eligibleCount += 1

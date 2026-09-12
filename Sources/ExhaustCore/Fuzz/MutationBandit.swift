@@ -156,11 +156,13 @@ package struct MutationBandit: Sendable {
 
     private func pickIndex(random: Double) -> Int {
         var remaining = random
-        for (index, probability) in cachedProbabilities.enumerated() {
+        var index = 0
+        for probability in cachedProbabilities {
             remaining -= probability
             if remaining < 0 {
                 return index
             }
+            index += 1
         }
         return arms.count - 1
     }
