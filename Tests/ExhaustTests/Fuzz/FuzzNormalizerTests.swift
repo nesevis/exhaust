@@ -6,16 +6,16 @@ import Testing
 struct FuzzNormalizerTests {
     /// A mask-gate property: fails while the low two bits are both set. The kind of gate whose
     /// reduction residuals (171, 43, 11) all normalize to the canonical 3.
-    private static let maskProperty: @Sendable (Int) -> FuzzVerdict = { value in
+    private static let maskProperty: @Sendable (UInt) -> FuzzVerdict = { value in
         value & 0b11 == 0b11 ? .fail(.returnedFalse) : .pass
     }
 
     @Test("A stalled mask-gate residual is re-driven to the canonical minimal value")
     func maskGateResidualNormalizes() {
         var cache: [UInt64: ChoiceSequence?] = [:]
-        let normalized: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
+        let normalized: FuzzNormalizer.NormalizedForm<UInt>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
-            erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase(),
+            erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<UInt>).erase(),
             symptom: .returnedFalse,
             property: { value, _ in Self.maskProperty(value) },
             cache: &cache
@@ -27,13 +27,13 @@ struct FuzzNormalizerTests {
     func cacheHitSkipsProbing() {
         var cache: [UInt64: ChoiceSequence?] = [:]
         let evaluationCount = SendableBox<Int>(0)
-        let countingProperty: @Sendable (Int) -> FuzzVerdict = { value in
+        let countingProperty: @Sendable (UInt) -> FuzzVerdict = { value in
             evaluationCount.withValue { $0 += 1 }
             return Self.maskProperty(value)
         }
-        let erased = Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase()
+        let erased = Gen.choose(in: 0 ... 255 as ClosedRange<UInt>).erase()
 
-        let first: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
+        let first: FuzzNormalizer.NormalizedForm<UInt>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
@@ -44,7 +44,7 @@ struct FuzzNormalizerTests {
         #expect(first?.value == 3)
         #expect(probesForFirst > 0)
 
-        let second: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
+        let second: FuzzNormalizer.NormalizedForm<UInt>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
@@ -58,11 +58,11 @@ struct FuzzNormalizerTests {
     @Test("An already-canonical form normalizes to nothing and caches the negative result")
     func canonicalFormIsANoOp() {
         var cache: [UInt64: ChoiceSequence?] = [:]
-        let equalityProperty: @Sendable (Int) -> FuzzVerdict = { value in
+        let equalityProperty: @Sendable (UInt) -> FuzzVerdict = { value in
             value == 171 ? .fail(.returnedFalse) : .pass
         }
-        let erased = Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase()
-        let outcome: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
+        let erased = Gen.choose(in: 0 ... 255 as ClosedRange<UInt>).erase()
+        let outcome: FuzzNormalizer.NormalizedForm<UInt>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
@@ -81,16 +81,16 @@ struct FuzzNormalizerTests {
     @Test("A probe that slips to a different symptom is rejected")
     func symptomSlippageIsRejected() {
         // 171 fails with A; every simpler bit pattern that still fails does so with B. Normalization must keep 171 rather than slip the cluster onto B's fault.
-        let slippingProperty: @Sendable (Int) -> FuzzVerdict = { value in
+        let slippingProperty: @Sendable (UInt) -> FuzzVerdict = { value in
             if value == 171 {
                 return .fail(FailureSymptom(kind: "A"))
             }
             return value & 0b11 == 0b11 ? .fail(FailureSymptom(kind: "B")) : .pass
         }
         var cache: [UInt64: ChoiceSequence?] = [:]
-        let outcome: FuzzNormalizer.NormalizedForm<Int>? = FuzzNormalizer.normalize(
+        let outcome: FuzzNormalizer.NormalizedForm<UInt>? = FuzzNormalizer.normalize(
             reducedSequence: singleValueSequence(171),
-            erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase(),
+            erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<UInt>).erase(),
             symptom: FailureSymptom(kind: "A"),
             property: { value, _ in slippingProperty(value) },
             cache: &cache
@@ -132,13 +132,11 @@ struct FuzzNormalizerTests {
 
 // MARK: - Helpers
 
-/// A one-entry sequence matching what `Gen.choose(in: 0 ... 255 as ClosedRange<Int>)` flattens to. `Int` choices use offset-binary bit patterns (2⁶³ + value), so unsigned pattern order matches signed value order; the valid range pins the offset bit, which is what keeps the normalizer's bit-clearing from ever leaving the declared domain.
 private func singleValueSequence(_ value: UInt64) -> ChoiceSequence {
-    let offset = UInt64(1) << 63
-    return [
+    [
         .value(ChoiceSequenceValue.Value(
-            choice: ChoiceValue(offset + value, tag: .int),
-            validRange: offset ... offset + 255,
+            choice: ChoiceValue(value, tag: .uint),
+            validRange: 0 ... 255,
             isRangeExplicit: true
         )),
     ]
