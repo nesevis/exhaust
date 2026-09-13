@@ -192,12 +192,12 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Whether an arm is offered to the pick only when its operator's precondition holds for the parent.
     ///
     /// Before each draw, the parent's structural tables (bind regions, sibling groups, tandem groups, twin spans, typed donors) determine which operators can fire. The bandit draws only from that subset, so draws that would have picked a dead arm pick a live one instead. The three bands are unconditionally eligible.
-    package var armEligibility = false
+    package var armEligibility = true
 
     /// Whether the arm inventory is narrowed to what the generator's structure admits, sampled at corpus admissions.
     ///
     /// A corpus entry's tree is materialized with `materializePicks: false`, so its graph describes the one path the entry took, not the shapes the generator can produce. Re-materializing an admitted entry with picks gives every branch alternative a full subtree, which turns "no bind region on this path" into "this generator's structure has no bind region" — the difference between a guess and a fact about whether `splice` can ever fire.
-    package var armAdmissibility = false
+    package var armAdmissibility = true
 
     /// How swarm generation rewrites a mutated child's branch selections.
     package enum SwarmMode: String, Sendable {
