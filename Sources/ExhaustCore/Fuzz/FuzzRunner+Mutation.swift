@@ -56,9 +56,8 @@ extension FuzzRunner {
     ///
     /// The repertoire only grows, and every source of evidence is positive. An operator the structure admits is a property of the generator, not of the entry that revealed it, so a later entry whose own shape lacks it proves nothing and cannot retract it. Absence is never proof either: one entry's expansion does not descend into picks nested inside the alternatives it expanded, nor into a bind's bound region, so an operator can be reachable and go unsighted here. What the admitting parent can target is folded in for the same reason, and read here rather than at the draw so it costs one lookup per inspection rather than one per candidate. Until the first inspection the whole inventory stays open.
     ///
-    /// Sampled at admissions rather than per draw, and only once admissions have slowed to ``FuzzTunables/armAdmissibilitySlowdown`` attempts apart, because it costs one materialization and one graph walk. While the corpus is filling fast that cost lands most often and buys least.
-    package func noteStructuralAdmissibility(of sequence: ChoiceSequence, parentIndex: Int?) {
-        // The repertoire only grows, so once it covers the inventory no inspection can change a draw.
+    /// Sampled at admissions rather than per draw, and only once admissions have slowed to ``FuzzTunables/armAdmissibilitySlowdown`` attempts apart. When the admitted entry already has a full tree (pick-materialised, from ``FuzzCorpus/upgradeToFullTree(at:fullTree:)``), its graph is read directly and no re-materialisation is needed. The fallback re-materialisation covers entries that were admitted without a full tree.
+    package func noteStructuralAdmissibility(of sequence: ChoiceSequence, parentIndex: Int?, admittedIndex: Int) {
         if let sightedArms, sightedArms.intersection(enabledArms) == enabledArms {
             return
         }
@@ -67,10 +66,13 @@ extension FuzzRunner {
         guard gap >= FuzzTunables.armAdmissibilitySlowdown else {
             return
         }
-        // The parent's own tables, read here rather than at the draw: an arm this parent can target is proof the generator admits it, and this costs one read per inspected admission instead of one per candidate.
         if let parentIndex, corpus.entries.indices.contains(parentIndex), sightedArms != nil {
             let parent = corpus.entries[parentIndex]
             sightedArms = sightedArms?.union(eligibleArms(parent: parent, parentIndex: parentIndex))
+        }
+        if let targets = corpus.entries[admittedIndex].mutationTargets {
+            sightedArms = (sightedArms ?? .bands).union(MutationArmRepertoire.sighted(in: targets.graph))
+            return
         }
         guard case let .success(_, tree, _) = Materializer.materializeAny(
             erasedGen,
@@ -82,8 +84,7 @@ extension FuzzRunner {
             return
         }
         let graph = ChoiceGraphBuilder.build(from: tree)
-        let repertoire = sightedArms ?? .bands
-        sightedArms = repertoire.union(MutationArmRepertoire.sighted(in: graph))
+        sightedArms = (sightedArms ?? .bands).union(MutationArmRepertoire.sighted(in: graph))
     }
 
     /// The arms whose operators can fire on this parent, as a bit set of ``MutationArm`` raw values.

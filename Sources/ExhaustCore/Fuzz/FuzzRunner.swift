@@ -766,8 +766,22 @@ package final class FuzzRunner<Output> {
         {
             diagnostics.recordAdmissionSpacing(spacing)
         }
-        if admission.isAdmitted, configuration.experiments.armAdmissibility {
-            noteStructuralAdmissibility(of: candidate.sequence, parentIndex: candidate.parentIndex)
+        if case let .admitted(admittedIndex, .mutable) = admission,
+           configuration.experiments.pairMutation,
+           let targets = corpus.entries[admittedIndex].mutationTargets,
+           targets.sortedFingerprints.isEmpty == false
+        {
+            if case let .success(_, fullTree, _) = Materializer.materializeAny(
+                erasedGen,
+                prefix: candidate.sequence,
+                mode: .exact,
+                materializePicks: true
+            ) {
+                corpus.upgradeToFullTree(at: admittedIndex, fullTree: fullTree)
+            }
+        }
+        if case let .admitted(admittedIndex, _) = admission, configuration.experiments.armAdmissibility {
+            noteStructuralAdmissibility(of: candidate.sequence, parentIndex: candidate.parentIndex, admittedIndex: admittedIndex)
         }
         armTrace?.note(
             attemptIndex: attemptTimelineIndex,

@@ -11,7 +11,7 @@ package struct CorpusEntry: Sendable {
     /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
     ///
     /// `ChoiceSequence.flatten(tree)` equals `sequence` for every admitted entry: the admission paths either construct `sequence` that way or assert the equality before offering. Read `sequence` rather than re-flattening.
-    package let tree: ChoiceTree
+    package fileprivate(set) var tree: ChoiceTree
 
     /// The graph and scope caches the graph-targeted mutation operators resolve their positions through.
     ///
@@ -685,12 +685,26 @@ package final class FuzzCorpus {
         return spacing
     }
 
+    /// Replaces the stored tree with a pick-materialised tree and rebuilds the targeting tables from it.
+    ///
+    /// Called after mutable-tier admission so the graph carries inactive branch layouts for ``GraphStructuralEncoder/expandDepthZeroLeaves(_:donorNodeID:donorRangeStart:graph:)``. Only entries whose targets were already built (the eager path under `pairMutation`) pay the rebuild; entries on the lazy path see the full tree when targets are built on first parent draw.
+    package func upgradeToFullTree(at index: Int, fullTree: ChoiceTree) {
+        entries[index].tree = fullTree
+        if entries[index].mutationTargets != nil {
+            let targets = MutationTargets(tree: fullTree)
+            entries[index].mutationTargets = targets
+            removeDonorSpans(forEntryAt: index)
+            registerDonorSpans(forEntryAt: index, graph: targets.graph)
+        }
+    }
+
     // MARK: - Donor Index
 
     /// One donor span for typed crossover: a pick subtree's position range within the sequence of the entry at `entryIndex`.
     struct DonorSpan {
         let entryIndex: Int
         let range: ClosedRange<Int>
+        let donorNodeID: Int
     }
 
     /// Pick-subtree spans of parent-eligible entries, keyed by pick-site fingerprint. Rows are admission-time facts about immutable sequences, so a row stays valid for the entry's lifetime; an entry's rows are removed when it leaves parent selection (champion dethroning or quarantine) so the donor set tracks the parent-selection domain.
@@ -709,7 +723,7 @@ package final class FuzzCorpus {
                     continue
                 }
                 donorSpansByFingerprint[fingerprint, default: []].append(
-                    DonorSpan(entryIndex: index, range: range)
+                    DonorSpan(entryIndex: index, range: range, donorNodeID: nodeID)
                 )
                 didRegister = true
             }

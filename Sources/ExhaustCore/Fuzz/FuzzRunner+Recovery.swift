@@ -174,6 +174,20 @@ extension FuzzRunner {
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard
             )
+            if case let .admitted(admittedIndex, .mutable) = admission,
+               configuration.experiments.pairMutation,
+               let targets = corpus.entries[admittedIndex].mutationTargets,
+               targets.sortedFingerprints.isEmpty == false
+            {
+                if case let .success(_, fullTree, _) = Materializer.materializeAny(
+                    erasedGen,
+                    prefix: sequence,
+                    mode: .exact,
+                    materializePicks: true
+                ) {
+                    corpus.upgradeToFullTree(at: admittedIndex, fullTree: fullTree)
+                }
+            }
             if verdict.isFailure {
                 restoredFailures.append(RestoredFailure(
                     candidate: EvaluatedFuzzCandidate(

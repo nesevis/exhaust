@@ -293,7 +293,7 @@ struct ArmEligibilityTests {
         runner.sightedArms = MutationArmSet.bands
         runner.attemptsAtPreviousAdmission = 0
         #expect(runner.counts.totalAttempts >= FuzzTunables.armAdmissibilitySlowdown)
-        runner.noteStructuralAdmissibility(of: parent.sequence, parentIndex: parentIndex)
+        runner.noteStructuralAdmissibility(of: parent.sequence, parentIndex: parentIndex, admittedIndex: parentIndex)
         let widened = try #require(runner.sightedArms)
         #expect(widened.contains(.swap))
     }
