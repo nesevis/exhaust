@@ -48,12 +48,12 @@ enum MutationArmRepertoire {
 
     /// The sibling-span and twin operators one zip node admits.
     ///
-    /// Children are grouped twice under the two keys the operators themselves group by: ``PermutationQuery``'s shape partition for the span operators, and ``FuzzMutator/twinKey(of:)`` for the twin splice. Depth- and lane-control children are skipped here for the same reason those queries skip them, so a group of recursion markers is not mistaken for a swappable group.
+    /// Children are grouped twice under the two keys the operators themselves group by: ``PermutationQuery/NodeShapeKey`` for the span operators, and ``FuzzMutator/twinKey(of:)`` for the twin splice. Depth- and lane-control children are skipped here for the same reason those queries skip them, so a group of recursion markers is not mistaken for a swappable group.
     private static func zipSightings(of node: ChoiceGraphNode, in graph: ChoiceGraph) -> MutationArmSet {
         guard node.children.count >= 2 else {
             return .none
         }
-        var shapeCounts: [StructuralShape: Int] = [:]
+        var shapeCounts: [PermutationQuery.NodeShapeKey: Int] = [:]
         var twinCounts: [FuzzMutator.TwinKey: Int] = [:]
         for childID in node.children {
             let child = graph.nodes[childID]
@@ -62,7 +62,7 @@ enum MutationArmRepertoire {
             else {
                 continue
             }
-            shapeCounts[shape(of: child), default: 0] += 1
+            shapeCounts[PermutationQuery.nodeShapeKey(child), default: 0] += 1
             if let key = FuzzMutator.twinKey(of: child) {
                 twinCounts[key, default: 0] += 1
             }
@@ -81,36 +81,5 @@ enum MutationArmRepertoire {
             sighted.insert(.twinSplice)
         }
         return sighted
-    }
-
-    // MARK: - Shape Key
-
-    /// The partition ``PermutationQuery`` groups swappable siblings by, recomputed here because that query's own key is private to it and reachable only through scopes that have already dropped the inactive branches this walk exists to see.
-    ///
-    /// The two must agree: a coarser key here would sight `swap` on a parent the operator then cannot target, and a finer one would gate out a group the operator would have swapped.
-    private enum StructuralShape: Hashable {
-        case value
-        case sequence(elementCount: Int)
-        case zip(childCount: Int)
-        case bind
-        case pick(branchCount: UInt64)
-        case just
-    }
-
-    private static func shape(of node: ChoiceGraphNode) -> StructuralShape {
-        switch node.kind {
-            case .chooseBits:
-                .value
-            case let .sequence(metadata):
-                .sequence(elementCount: metadata.elementCount)
-            case .zip:
-                .zip(childCount: node.children.count)
-            case .bind:
-                .bind
-            case let .pick(metadata):
-                .pick(branchCount: metadata.branchCount)
-            case .just:
-                .just
-        }
     }
 }

@@ -93,21 +93,18 @@ package struct MutationTargets: Sendable {
         twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
         sortedFingerprints = graph.selfSimilarityGroups.keys.sorted()
 
-        var deletable: [Int] = []
+        let removalScopes = RemovalQuery.elementRemovalScopes(graph: graph)
+        deletableSequenceNodeIDs = removalScopes.compactMap { $0.targets.first?.sequenceNodeID }
+
         var duplicable: [Int] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .sequence(metadata) = node.kind else { continue }
-            let lower = metadata.lengthConstraint?.lowerBound ?? 0
-            if metadata.elementCount >= 1, UInt64(metadata.elementCount - 1) >= lower {
-                deletable.append(nodeID)
-            }
             let upper = metadata.lengthConstraint?.upperBound ?? UInt64.max
             if metadata.elementCount >= 1, UInt64(metadata.elementCount + 1) <= upper {
                 duplicable.append(nodeID)
             }
         }
-        deletableSequenceNodeIDs = deletable
         duplicableSequenceNodeIDs = duplicable
 
         structuralArms = .none
@@ -125,7 +122,7 @@ package struct MutationTargets: Sendable {
         if hasTwinGroup {
             structural.insert(.twinSplice)
         }
-        if deletable.isEmpty == false {
+        if deletableSequenceNodeIDs.isEmpty == false {
             structural.insert(.elementDeletion)
         }
         if duplicable.isEmpty == false {

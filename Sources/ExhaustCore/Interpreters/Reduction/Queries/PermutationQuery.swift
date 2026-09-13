@@ -52,8 +52,8 @@ enum PermutationQuery {
 
     /// Lightweight shape discriminant for grouping siblings by structural kind.
     ///
-    /// Derived from graph node metadata rather than the ``ChoiceTree``. Matches the grouping logic in ``GraphSwapEncoder``.
-    private enum NodeShapeKey: Hashable {
+    /// Derived from graph node metadata rather than the ``ChoiceTree``. Both ``PermutationQuery`` and ``MutationArmRepertoire`` group by this key, so it lives here as the single definition.
+    package enum NodeShapeKey: Hashable {
         case value
         case sequence(elementCount: Int)
         case emptySequence
@@ -64,7 +64,7 @@ enum PermutationQuery {
     }
 
     /// Computes the shape key for a graph node.
-    private static func nodeShapeKey(_ node: ChoiceGraphNode) -> NodeShapeKey {
+    package static func nodeShapeKey(_ node: ChoiceGraphNode) -> NodeShapeKey {
         switch node.kind {
             case .chooseBits:
                 return .value
