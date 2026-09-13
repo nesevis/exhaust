@@ -57,7 +57,7 @@ extension FuzzRunner {
     /// The repertoire only grows, and every source of evidence is positive. An operator the structure admits is a property of the generator, not of the entry that revealed it, so a later entry whose own shape lacks it proves nothing and cannot retract it. Absence is never proof either: one entry's expansion does not descend into picks nested inside the alternatives it expanded, nor into a bind's bound region, so an operator can be reachable and go unsighted here. What the admitting parent can target is folded in for the same reason, and read here rather than at the draw so it costs one lookup per inspection rather than one per candidate. Until the first inspection the whole inventory stays open.
     ///
     /// Sampled at admissions rather than per draw, and only once admissions have slowed to ``FuzzTunables/armAdmissibilitySlowdown`` attempts apart. When the admitted entry already has a full tree (pick-materialised, from ``FuzzCorpus/upgradeToFullTree(at:fullTree:)``), its graph is read directly and no re-materialisation is needed. The fallback re-materialisation covers entries that were admitted without a full tree.
-    package func noteStructuralAdmissibility(of sequence: ChoiceSequence, parentIndex: Int?, admittedIndex: Int) {
+    package func noteStructuralAdmissibility(of _: ChoiceSequence, parentIndex: Int?, admittedIndex: Int) {
         if let sightedArms, sightedArms.intersection(enabledArms) == enabledArms {
             return
         }
@@ -74,16 +74,7 @@ extension FuzzRunner {
             sightedArms = (sightedArms ?? .bands).union(MutationArmRepertoire.sighted(in: targets.graph))
             return
         }
-        guard case let .success(_, tree, _) = Materializer.materializeAny(
-            erasedGen,
-            prefix: sequence,
-            mode: .exact,
-            materializePicks: true,
-            collectDecodingReport: false
-        ) else {
-            return
-        }
-        let graph = ChoiceGraphBuilder.build(from: tree)
+        let graph = ChoiceGraphBuilder.build(from: corpus.entries[admittedIndex].tree)
         sightedArms = (sightedArms ?? .bands).union(MutationArmRepertoire.sighted(in: graph))
     }
 

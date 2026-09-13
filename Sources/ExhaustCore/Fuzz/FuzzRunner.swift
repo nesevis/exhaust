@@ -703,7 +703,7 @@ package final class FuzzRunner<Output> {
         }
         let (verdict, hits) = evaluateInBracket(
             candidate.value,
-            recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: candidate.sequence)
+            recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: breadcrumb != nil ? candidate.sequence : nil)
         )
 
         var deferredTreeRebuild: (() -> ChoiceTree?)?
@@ -769,7 +769,8 @@ package final class FuzzRunner<Output> {
         if case let .admitted(admittedIndex, .mutable) = admission,
            configuration.experiments.pairMutation,
            let targets = corpus.entries[admittedIndex].mutationTargets,
-           targets.sortedFingerprints.isEmpty == false
+           targets.sortedFingerprints.isEmpty == false,
+           counts.totalAttempts - attemptsAtPreviousAdmission >= FuzzTunables.armAdmissibilitySlowdown
         {
             if case let .success(_, fullTree, _) = Materializer.materializeAny(
                 erasedGen,

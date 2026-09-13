@@ -476,21 +476,25 @@ package extension FuzzMutator {
             return nil
         }
         let donorSequence = corpus.entries[donor.entryIndex].sequence
-        let donorEntries = Array(donorSequence[donor.range.lowerBound ... donor.range.upperBound])
-        let graftEntries: [ChoiceSequenceValue]
-        if let donorGraph = corpus.entries[donor.entryIndex].mutationTargets?.graph {
-            graftEntries = GraphStructuralEncoder.expandDepthZeroLeaves(
+        if let donorGraph = corpus.entries[donor.entryIndex].mutationTargets?.graph,
+           donorGraph.selfSimilarityGroups[chosen.fingerprint] != nil
+        {
+            let donorEntries = Array(donorSequence[donor.range.lowerBound ... donor.range.upperBound])
+            let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
                 donorEntries,
                 donorNodeID: donor.donorNodeID,
                 donorRangeStart: donor.range.lowerBound,
                 graph: donorGraph
             )
-        } else {
-            graftEntries = donorEntries
+            var result = candidate
+            result.replaceSubrange(target.lowerBound ... target.upperBound, with: expanded)
+            return result
         }
-        var result = candidate
-        result.replaceSubrange(target.lowerBound ... target.upperBound, with: graftEntries)
-        return result
+        return candidate.graftingSpan(
+            from: donorSequence,
+            at: donor.range,
+            onto: target
+        )
     }
 
     // MARK: - Scope Selection
