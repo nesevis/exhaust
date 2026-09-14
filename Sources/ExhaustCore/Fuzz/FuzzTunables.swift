@@ -121,14 +121,20 @@ package enum FuzzTunables {
         return UInt8(min(max(scaled, Int(comparandOperandEnergy)), Int(comparandOperandEnergyCap)))
     }
 
-    /// Floor of the adaptive fresh-draw mixture: the probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick while the corpus is admitting. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost, so a healthy corpus keeps only a background rate.
-    package static let freshMixtureFloor = 0.05
+    /// Floor of the fresh-draw mixture: the least probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost, so a corpus the mutator is growing keeps only this background rate. `EXHAUST_FRESH_FLOOR` overrides it for measurement.
+    package static let freshMixtureFloor: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_FLOOR"].flatMap(Double.init) ?? 0.05
 
-    /// Cap of the adaptive fresh-draw mixture, reached when the corpus has admitted nothing for a full ramp. The default sits at the measured dose-response knee: on basin-fragmented workloads a starved run climbs to spending most of its budget on fresh draws, matching the exploration share FuzzChick reaches through queue starvation.
-    package static let freshMixtureCap = 0.6
+    /// Cap of the fresh-draw mixture: the most a run spends on the generator, taken in full only when neither producer is seeding parents. Under the adaptive rule the operating point is set by the producers' admission rates and the cap is a ceiling on it (STLC sits near it, IFC near the floor); under the starvation ramp the cap is the operating point of every coverage-guided run, since the corpus starves faster than any ramp. `EXHAUST_FRESH_CAP` overrides it for measurement.
+    package static let freshMixtureCap: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_CAP"].flatMap(Double.init) ?? 0.8
 
-    /// Attempts without a corpus admission over which the mixture climbs linearly from floor to cap.
-    package static let freshMixtureRampAttempts = 2000.0
+    /// Whether the fresh-draw mixture adapts to the producers' parent-admission rates rather than ramping on attempts since any admission. The share is the fresh producer's portion of mutable-tier admissions per attempt, fresh draws against mutation children and injections, clamped to the floor and cap; when neither has seeded a parent within a window the run is starved and takes the cap. Measured 2026-09-14/15 against fixed caps of 0.2 and 0.6: the fixed caps are wrong in opposite directions (fresh draws never witness on IFC and are the only witness path for STLC's hard tasks), and the adaptive rule is the first configuration to hold both. `EXHAUST_FRESH_ADAPTIVE=0` restores the ramp for comparison.
+    package static let freshMixtureAdaptive: Bool = ProcessInfo.processInfo.environment["EXHAUST_FRESH_ADAPTIVE"] != "0"
+
+    /// Attempts over which the adaptive mixture averages each producer's parent-admission rate. Parents arrive every few thousand attempts at best, so the window has to hold many arrivals for the rates to mean anything; a run whose two producers together seed fewer than one parent per window is starved and takes the cap. `EXHAUST_FRESH_WINDOW` overrides it for measurement.
+    package static let freshMixtureAdaptiveWindow: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_WINDOW"].flatMap(Double.init) ?? 100_000
+
+    /// Attempts without a corpus admission over which the starvation ramp climbs linearly from floor to cap, in effect only with ``freshMixtureAdaptive`` off. The length has no measurable effect on the share spent between 500 and 25,000 attempts, since admissions are rarer than any of them on a coverage-guided run. `EXHAUST_FRESH_RAMP` overrides it for measurement.
+    package static let freshMixtureRampAttempts: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_RAMP"].flatMap(Double.init) ?? 2000.0
 
     // MARK: - Crash Recovery
 

@@ -168,6 +168,12 @@ package final class FuzzRunner<Output> {
     /// Evaluated attempts since the corpus last admitted an entry, driving the adaptive fresh-draw mixture. Reset on every admission. Package-visible so tests can pin the ramp against a driven counter.
     package var attemptsSinceAdmission = 0
 
+    /// Mutable-tier admissions per attempt of the mutation phase's two producer classes, each an exponential moving average over ``FuzzTunables/freshMixtureAdaptiveWindow`` of its own attempts: fresh generator draws, and mutation children with the injections. What the adaptive mixture divides between. Package-visible so tests can drive them.
+    package var freshAdmissionRate = 0.0
+    package var mutationAdmissionRate = 0.0
+    /// Mutation-phase attempts the two rates have seen. Until a full window has been observed the rates are not evidence, and the mixture holds the floor rather than reading an empty window as starvation.
+    package var mixtureObservations = 0
+
     /// The later of the two discoveries, falling back to the run's start before anything is found.
     ///
     /// This is what the mutation phase measures its plateau against. Corpus admission is the wrong signal for it: a candidate also enters on a new hit-count bucket for an edge already covered, so admissions keep arriving long after the run has stopped finding anything, and the window ends up timing something nobody cares about.
@@ -686,12 +692,42 @@ package final class FuzzRunner<Output> {
 
     /// The fresh-draw mixture in effect for the current iteration.
     ///
-    /// The ramp climbs linearly from ``FuzzTunables/freshMixtureFloor`` to ``FuzzTunables/freshMixtureCap`` as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant.
+    /// Under ``FuzzTunables/freshMixtureAdaptive`` the share is the fresh producer's portion of the two producers' parent-admission rates, clamped to ``FuzzTunables/freshMixtureFloor`` and ``FuzzTunables/freshMixtureCap``: a corpus the mutator is growing keeps the mixture near the floor however slowly it grows, and one only the generator can grow gets the generator. The cap is taken in full only when neither producer has seeded a parent within a window, FuzzChick's empty-queue case. Before a full window has been observed the rates are not evidence and the share is the floor. With the rule off the share follows ``rampFreshMixture(attemptsSinceAdmission:)``.
     package func currentFreshMixture(attemptsSinceAdmission: Int) -> Double {
+        guard FuzzTunables.freshMixtureAdaptive else {
+            return rampFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission)
+        }
+        let floor = FuzzTunables.freshMixtureFloor
+        let cap = FuzzTunables.freshMixtureCap
+        let window = FuzzTunables.freshMixtureAdaptiveWindow
+        guard Double(mixtureObservations) >= window else {
+            return floor
+        }
+        let total = freshAdmissionRate + mutationAdmissionRate
+        guard total >= 1 / window else {
+            return cap
+        }
+        return min(cap, max(floor, freshAdmissionRate / total))
+    }
+
+    /// The starvation ramp: climbs linearly from the floor to the cap as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant. On a coverage-guided run admissions come rarer than the ramp, so this sits at the cap for most of a run whichever producer is admitting; the adaptive rule replaces it by default.
+    package func rampFreshMixture(attemptsSinceAdmission: Int) -> Double {
         let floor = FuzzTunables.freshMixtureFloor
         let cap = FuzzTunables.freshMixtureCap
         let progress = min(1, Double(attemptsSinceAdmission) / FuzzTunables.freshMixtureRampAttempts)
         return floor + (cap - floor) * progress
+    }
+
+    /// Feeds one mutation-phase attempt's outcome into the producer admission rates behind the adaptive mixture.
+    package func noteMixtureOutcome(origin: CandidateOrigin, admitted: Bool) {
+        mixtureObservations += 1
+        let rate = 1 / FuzzTunables.freshMixtureAdaptiveWindow
+        let observation = admitted ? 1.0 : 0.0
+        if origin == .freshSample {
+            freshAdmissionRate += rate * (observation - freshAdmissionRate)
+        } else {
+            mutationAdmissionRate += rate * (observation - mutationAdmissionRate)
+        }
     }
 
     /// Materializes a mutated sequence into a child candidate through guided materialization, or nil when the materializer rejects it, which is recorded as the attempt's outcome.
@@ -805,6 +841,14 @@ package final class FuzzRunner<Output> {
             verdict: verdict,
             hits: hits
         )
+        if candidate.phase == .mutation {
+            // Mutable-tier admissions only: a discovery-tier entry never becomes a parent, and fresh draws land there often enough on a saturated corpus that counting them would keep the generator's share high where its draws grow nothing the search can use.
+            var seededParent = false
+            if case .admitted(_, .mutable) = admission {
+                seededParent = true
+            }
+            noteMixtureOutcome(origin: candidate.origin, admitted: seededParent)
+        }
         // A provenance the gate did not consume must not attach to a later failure from outside the loop.
         pendingLineage = nil
         // Credit every arm in the mask, whatever the verdict: the bandit only learns from admissions, but the report has to be able to say what an arm spent its attempts on, including the discards an admission-only tally never sees.
@@ -837,6 +881,7 @@ package final class FuzzRunner<Output> {
            targets.sortedFingerprints.isEmpty == false,
            counts.totalAttempts - attemptsAtPreviousAdmission >= FuzzTunables.armAdmissibilitySlowdown
         {
+            // The stored sequence, not the candidate's: under a prune hook the corpus holds the pruned form, and a full tree materialised from the longer original would give the donor index spans past the end of the entry's sequence.
             if case let .success(_, fullTree, _) = Materializer.materializeAny(
                 erasedGen,
                 prefix: corpus.entries[admittedIndex].sequence,
@@ -895,7 +940,6 @@ package final class FuzzRunner<Output> {
             phase: phase,
             origin: .freshSample,
             parentIndex: nil,
-            // The stored sequence, not the candidate's: under a prune hook the corpus holds the pruned form, and a full tree materialised from the longer original would give the donor index spans past the end of the entry's sequence.
             parentHash: 0,
             armsMask: MutationArmSet.none,
             drawProbability: 0,

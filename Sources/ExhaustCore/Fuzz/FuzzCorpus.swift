@@ -723,6 +723,7 @@ package final class FuzzCorpus {
     /// Registers the entry's active pick subtrees as crossover donors. A span is registered only if it lies within the entry's stored sequence, which is what typed crossover slices; a graph built from a tree that flattens longer than the stored sequence would otherwise hand out spans past its end.
     private func registerDonorSpans(forEntryAt index: Int, graph: ChoiceGraph) {
         var fingerprints: [UInt64] = []
+        let sequenceCount = entries[index].sequence.count
         for (fingerprint, nodeIDs) in graph.selfSimilarityGroups {
             var didRegister = false
             for nodeID in nodeIDs {
@@ -759,7 +760,6 @@ package final class FuzzCorpus {
     /// Applies the immediate densification boost when a child of `parentIndex` fails, before reduction classifies the failure.
     package func applyProvisionalFailureBoost(toParentAt parentIndex: Int) {
         setFailureBoost(FuzzTunables.provisionalFailureBoost, at: parentIndex)
-        let sequenceCount = entries[index].sequence.count
     }
 
     /// Replaces the provisional boost once the dispatched reduction has classified the failure.
