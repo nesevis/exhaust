@@ -174,7 +174,8 @@ package extension Materializer {
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
         precomputedSeed: UInt64? = nil,
-        collectDecodingReport: Bool = true
+        collectDecodingReport: Bool = true,
+        reseedRanges: [ClosedRange<Int>] = []
     ) -> FlatResult {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -205,6 +206,7 @@ package extension Materializer {
         )
         context.flatOutput = ChoiceSequence()
         context.flatOutput!.reserveCapacity(64)
+        context.reseedRanges = reseedRanges
 
         do {
             guard let (value, _) = try generateRecursive(
@@ -281,6 +283,17 @@ extension Materializer {
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
+        // A value reseed: the prefix is jumped past the marked span and the cursor is suspended for exactly this node's walk, with no fallback tree, so the span is drawn fresh at its own site and the prefix resumes after it. Checked before the switch because the marked node may sit under transparent wrappers that dispatch at the same position; whichever dispatches first takes the reseed and the nested ones see the cursor already suspended.
+        if context.nextReseedIndex < context.reseedRanges.count,
+           context.cursor.suspended == false,
+           context.cursor.isAtStart(of: context.reseedRanges[context.nextReseedIndex])
+        {
+            context.cursor.jump(past: context.reseedRanges[context.nextReseedIndex])
+            context.nextReseedIndex += 1
+            context.cursor.suspended = true
+            defer { context.cursor.suspended = false }
+            return try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: nil)
+        }
         // Fuse switch to avoid overhead of copying `operation`
         switch gen {
             case let .pure(value):
@@ -510,6 +523,9 @@ extension Materializer {
         ///
         /// The generation-side deadline samples on element index, which retry loops never advance: a filter over a scalar can spin ``__ExhaustRuntime/maxFilterRuns`` times without passing a single checkpoint, and nested filters multiply that. Retry counts do not compose, so the bound that does has to be a clock.
         var deadlineNanoseconds: UInt64 = 0
+        /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order by the dispatch hook in ``generateRecursive(_:with:context:fallbackTree:)``.
+        var reseedRanges: [ClosedRange<Int>] = []
+        var nextReseedIndex = 0
 
         /// Whether flat emission is active right now (a buffer exists and no discarded-tree sub-walk has suspended it).
         @inline(__always)

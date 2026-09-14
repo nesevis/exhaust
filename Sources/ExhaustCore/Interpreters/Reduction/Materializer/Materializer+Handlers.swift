@@ -141,7 +141,7 @@ extension Materializer {
                     context.decodingReport?.record(tier: .fallbackTree)
                 } else {
                     randomBits = context.prng.next(in: min ... max)
-                    context.decodingReport?.record(tier: .prng)
+                    context.decodingReport?.record(tier: context.cursor.suspended ? .reseeded : .prng)
                 }
 
             case .generate:

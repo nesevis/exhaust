@@ -43,6 +43,18 @@ enum MutationArmRepertoire {
         if leafTagCounts.values.contains(where: { $0 >= 2 }) {
             sighted.insert(.lockstepDelta)
         }
+        if graph.nodes.contains(where: { node in
+            switch node.kind {
+                case .chooseBits:
+                    node.scopeAnnotation.isDepthControl == false && node.scopeAnnotation.isLaneControl == false && node.scopeAnnotation.isBindInner == false
+                case .pick:
+                    node.scopeAnnotation.isBindInner == false
+                default:
+                    false
+            }
+        }) {
+            sighted.insert(.valueReseed)
+        }
         return sighted
     }
 

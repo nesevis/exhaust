@@ -7,6 +7,8 @@ package struct MutationDraw {
     package let armsMask: MutationArmSet
     /// The probability the credited arm was drawn with, renormalized over the arms eligible for this parent. Zero outside the bandit.
     package let drawProbability: Double
+    /// Spans of the candidate the materialiser should draw fresh, from a value reseed. Empty for every other arm; the candidate itself is the parent's sequence when this is not.
+    package var reseedRanges: [ClosedRange<Int>] = []
 }
 
 extension FuzzRunner {
@@ -26,7 +28,8 @@ extension FuzzRunner {
                 return MutationDraw(
                     candidate: mask.applyActivated(to: draw.candidate, scratch: &swarmScratch, prng: &prng),
                     armsMask: draw.armsMask,
-                    drawProbability: draw.drawProbability
+                    drawProbability: draw.drawProbability,
+                    reseedRanges: draw.reseedRanges
                 )
         }
     }
@@ -120,7 +123,14 @@ extension FuzzRunner {
         let arm = drawArm(eligible: eligible)
         counts.mutationArms.recordDraw(arm: arm)
         var candidate = parent.sequence
+        var reseedRanges: [ClosedRange<Int>] = []
         switch arm {
+            case .valueReseed:
+                if let targets = corpus.mutationTargets(forParentAt: parentIndex),
+                   let ranges = FuzzMutator.valueReseed(candidate, targets: targets, prng: &prng)
+                {
+                    reseedRanges = ranges
+                }
             case .low:
                 candidate = FuzzMutator.mutate(candidate, intensity: .low, layout: layout, prng: &prng)
             case .medium:
@@ -145,11 +155,12 @@ extension FuzzRunner {
                     candidate = spliced
                 }
         }
-        if candidate != parent.sequence {
+        if candidate != parent.sequence || reseedRanges.isEmpty == false {
             return MutationDraw(
                 candidate: candidate,
                 armsMask: MutationArmSet(arm),
-                drawProbability: bandit.probability(of: arm, eligible: eligible)
+                drawProbability: bandit.probability(of: arm, eligible: eligible),
+                reseedRanges: reseedRanges
             )
         }
         counts.mutationArms.recordMiss(arm: arm)
@@ -196,7 +207,7 @@ extension FuzzRunner {
                 return FuzzMutator.deleteSequenceElement(candidate, targets: targets, prng: &prng)
             case .elementDuplication:
                 return FuzzMutator.duplicateSequenceElement(candidate, targets: targets, prng: &prng)
-            case .low, .medium, .high, .splice:
+            case .low, .medium, .high, .splice, .valueReseed:
                 return nil
         }
     }

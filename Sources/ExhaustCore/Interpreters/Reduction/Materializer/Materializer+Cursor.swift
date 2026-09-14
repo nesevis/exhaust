@@ -26,13 +26,40 @@ extension Materializer {
         /// Cached end position — updated on scope push/pop.
         private var effectiveEnd: Int
 
+        /// While set, every read returns nothing and every skip is a no-op, without marking the cursor exhausted. A value reseed sets it for the walk of one subtree whose entries the cursor has already jumped past, so the subtree draws from the PRNG and the entries after it are still read from the prefix.
+        var suspended = false
+
         static var empty: Cursor {
             Cursor(from: ChoiceSequence())
         }
 
         /// Whether the cursor can never produce another entry: already marked exhausted or positioned past the final entry. Spent is monotonic within a walk; the position never decreases except through ``rewind(to:)``, which a backtrack audition uses to hand every arm the same prefix, and popping a scope cannot revive entries behind it. Zip scoping consults this to skip span computation whose only effect would be limiting reads that fail regardless.
         var isSpent: Bool {
-            exhausted || position >= entries.count
+            suspended || exhausted || position >= entries.count
+        }
+
+        // MARK: - Value reseed
+
+        /// Whether the next content entry the cursor would read is the first entry of `range`, looking past transparent markers the same way ``skipGroups()`` does without moving.
+        func isAtStart(of range: ClosedRange<Int>) -> Bool {
+            guard suspended == false, exhausted == false else {
+                return false
+            }
+            var probe = position
+            while probe < range.lowerBound, probe < effectiveEnd {
+                switch entries[probe] {
+                    case .group, .zip, .bind, .just:
+                        probe &+= 1
+                    default:
+                        return false
+                }
+            }
+            return probe == range.lowerBound && probe < effectiveEnd
+        }
+
+        /// Moves the cursor to the entry after `range`, so a reseeded subtree's own entries are never read and the prefix resumes where the subtree ended.
+        mutating func jump(past range: ClosedRange<Int>) {
+            position = min(range.upperBound &+ 1, entries.count)
         }
 
         init(from sequence: consuming ChoiceSequence) {
@@ -95,6 +122,7 @@ extension Materializer {
 
         /// Advances past group-open, bind-open, and just markers to the first content node (value, branch, or sequence marker). Called before consuming an entry so that transparent structural wrappers do not block the cursor.
         mutating func skipGroups() {
+            guard suspended == false else { return }
             while position < effectiveEnd {
                 switch entries[position] {
                     case .group, .zip, .bind, .just:
@@ -107,7 +135,7 @@ extension Materializer {
 
         /// Advances past one group-open or zip-open marker without consuming an inner generator's opening marker.
         mutating func skipGroupOpen() {
-            guard exhausted == false, position < effectiveEnd else {
+            guard suspended == false, exhausted == false, position < effectiveEnd else {
                 return
             }
             switch entries[position] {
@@ -122,7 +150,7 @@ extension Materializer {
         ///
         /// The bind handler calls this before entering its inner generator so a nested zip computes child scopes from the zip's own group-open position.
         mutating func skipBindOpen() {
-            guard exhausted == false, position < effectiveEnd else {
+            guard suspended == false, exhausted == false, position < effectiveEnd else {
                 return
             }
             if case .bind(true) = entries[position] {
@@ -134,6 +162,7 @@ extension Materializer {
         ///
         /// Called in ``handleZip(_:continuation:inputValue:context:calleeFallback:continuationFallback:)`` after each child's scope is popped, so that `childStartPosition` reflects the start of the next child's entries rather than the closing markers of the completed child. This prevents the next child's scope from being computed too tightly: without this call, a getSize-bind child (whose `.group(false)` close marker is left unconsumed) causes the following child to receive a scope that excludes its own value entry.
         mutating func skipGroupCloses() {
+            guard suspended == false else { return }
             while position < effectiveEnd {
                 switch entries[position] {
                     case .group(false), .zip(false), .bind(false):
@@ -150,7 +179,7 @@ extension Materializer {
         ///
         /// Zips are fixed-arity: no mutation or reduction changes a zip's child count, so a well-formed prefix carries exactly `count` subtrees between the zip's group markers and the candidate's own markers delimit each child. This makes the prefix the authoritative scope source. The fallback tree cannot serve that role: its untagged group shape is ambiguous for two-generator zips whose first child is itself a two-child group (a monadic bind, a two-branch pick), and scoping from the wrong reading rejected honest sequences in exact mode.
         func zipChildSubtreeEnds(count: Int) -> [Int]? {
-            guard exhausted == false, position < effectiveEnd else {
+            guard suspended == false, exhausted == false, position < effectiveEnd else {
                 return nil
             }
             // A `.just` entry is emitted but never consumed by the cursor (`skipGroups` steps over it), so a zip that follows one, as the bound of a `.lazy` bind does, is parsed from the first entry past it.
@@ -181,7 +210,7 @@ extension Materializer {
 
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
         mutating func tryConsumeValue(expecting expected: TypeTag? = nil) -> ChoiceSequenceValue.Value? {
-            guard exhausted == false else { return nil }
+            guard suspended == false, exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -214,7 +243,7 @@ extension Materializer {
 
         /// Reads and returns the next branch-selection entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a branch. Marks the cursor as exhausted on type mismatch.
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
-            guard exhausted == false else { return nil }
+            guard suspended == false, exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -234,7 +263,7 @@ extension Materializer {
 
         /// Reads the sequence-open marker and extracts the element count by scanning forward for top-level entries until the matching sequence-close. Returns nil and marks the cursor as exhausted if the next entry is not a sequence-open marker.
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
-            guard exhausted == false else { return nil }
+            guard suspended == false, exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -254,7 +283,7 @@ extension Materializer {
         }
 
         mutating func skipSequenceClose() {
-            guard exhausted == false else { return }
+            guard suspended == false, exhausted == false else { return }
             skipGroups()
             guard position < effectiveEnd else { return }
             if case .sequence(false, _, _) = entries[position] {

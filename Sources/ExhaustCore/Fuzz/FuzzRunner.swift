@@ -236,7 +236,7 @@ package final class FuzzRunner<Output> {
         prng = Xoshiro256(seed: configuration.seed)
         var arms = MutationArm.bandArms
         if configuration.experiments.graphMutation {
-            arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication]
+            arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication, .valueReseed]
         }
         if configuration.experiments.pairMutation {
             arms += [.twinSplice, .typedCrossover]
@@ -634,7 +634,8 @@ package final class FuzzRunner<Output> {
                     parentIndex: parentIndex,
                     armsMask: draw.armsMask,
                     drawProbability: draw.drawProbability,
-                    origin: .mutationChild
+                    origin: .mutationChild,
+                    reseedRanges: draw.reseedRanges
                 ) {
                     evaluate(child)
                 }
@@ -661,13 +662,15 @@ package final class FuzzRunner<Output> {
         parentIndex: Int,
         armsMask: MutationArmSet,
         drawProbability: Double,
-        origin: CandidateOrigin
+        origin: CandidateOrigin,
+        reseedRanges: [ClosedRange<Int>] = []
     ) -> FuzzCandidate<Output>? {
         let guidedSeed = prng.next()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
             prefix: mutated,
-            mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
+            mode: .guided(seed: guidedSeed, fallbackTree: parent.tree),
+            reseedRanges: reseedRanges
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.attempts.record(.mutation, origin, .rejectedByMaterializer)

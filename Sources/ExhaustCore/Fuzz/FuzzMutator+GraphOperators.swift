@@ -29,6 +29,20 @@ package struct MutationTargets: Sendable {
     /// Sequence nodes with one or more elements, eligible for element duplication.
     let duplicableSequenceNodeIDs: [Int]
 
+    /// One site a value reseed may draw fresh: an independent chooseBits leaf or pick node, with its span and the sites that contain it.
+    struct ReseedSite {
+        let nodeID: Int
+        let range: ClosedRange<Int>
+        /// Indices into ``MutationTargets/reseedSites`` of the sites whose spans contain this one, so an antichain draw can reject a nested pair without walking the graph.
+        let containingSiteIndices: [Int]
+    }
+
+    /// Every site a value reseed may target, ascending by position. Leaves and picks under a bind's inner subtree are excluded: a fresh value there regenerates the bound region, which is the cascade the reseed exists to avoid.
+    let reseedSites: [ReseedSite]
+
+    /// Indices into ``reseedSites`` of the sites no other site contains, which is what "reseed all" draws: the maximal antichain, covering every reseedable span once.
+    let maximalReseedSiteIndices: [Int]
+
     /// The arms whose first guard this entry's own tables satisfy: the sibling-span operators, the lockstep delta, and the twin splice.
     ///
     /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
@@ -107,6 +121,45 @@ package struct MutationTargets: Sendable {
         }
         duplicableSequenceNodeIDs = duplicable
 
+        var siteNodeIDs: [Int] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard node.positionRange != nil, node.scopeAnnotation.isBindInner == false else { continue }
+            switch node.kind {
+                case .chooseBits:
+                    guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false else { continue }
+                case .pick:
+                    break
+                default:
+                    continue
+            }
+            siteNodeIDs.append(nodeID)
+        }
+        siteNodeIDs.sort { graph.nodes[$0].positionRange!.lowerBound < graph.nodes[$1].positionRange!.lowerBound }
+        var siteIndexByNodeID: [Int: Int] = [:]
+        for (index, nodeID) in siteNodeIDs.enumerated() {
+            siteIndexByNodeID[nodeID] = index
+        }
+        var sites: [ReseedSite] = []
+        sites.reserveCapacity(siteNodeIDs.count)
+        var maximal: [Int] = []
+        for (index, nodeID) in siteNodeIDs.enumerated() {
+            var containing: [Int] = []
+            var ancestor = graph.nodes[nodeID].parent
+            while let current = ancestor {
+                if let siteIndex = siteIndexByNodeID[current] {
+                    containing.append(siteIndex)
+                }
+                ancestor = graph.nodes[current].parent
+            }
+            sites.append(ReseedSite(nodeID: nodeID, range: graph.nodes[nodeID].positionRange!, containingSiteIndices: containing))
+            if containing.isEmpty {
+                maximal.append(index)
+            }
+        }
+        reseedSites = sites
+        maximalReseedSiteIndices = maximal
+
         structuralArms = .none
         var structural = MutationArmSet.none
         if hasSwappableGroup(minimumSize: 2) {
@@ -127,6 +180,9 @@ package struct MutationTargets: Sendable {
         }
         if duplicable.isEmpty == false {
             structural.insert(.elementDuplication)
+        }
+        if sites.isEmpty == false {
+            structural.insert(.valueReseed)
         }
         structuralArms = structural
     }
@@ -333,6 +389,60 @@ package extension FuzzMutator {
         var result = candidate
         result.insert(contentsOf: candidate[sourceRange.lowerBound ... sourceRange.upperBound], at: lastElementRange.upperBound + 1)
         return result
+    }
+
+    // MARK: - Value Reseed
+
+    /// Chooses the spans a value reseed draws fresh: one, two, or three independent sites weighted by span, or every maximal site, each with equal probability.
+    ///
+    /// The candidate is left untouched; the materialiser redraws the returned spans at their own sites with the cursor and fallback withheld, so a leaf takes a fresh in-range value and a pick a fresh branch and subtree, while everything outside the spans is read from the parent. Sites are drawn without nesting, so the spans are disjoint. Returns nil when the parent has no site or every span is out of the candidate's bounds.
+    static func valueReseed(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> [ClosedRange<Int>]? {
+        let sites = targets.reseedSites
+        guard sites.isEmpty == false else {
+            return nil
+        }
+        let countDraw = prng.next(upperBound: 4)
+        var chosen: [Int] = []
+        if countDraw == 3 {
+            chosen = targets.maximalReseedSiteIndices
+        } else {
+            let wanted = Int(countDraw) + 1
+            var totalWeight: UInt64 = 0
+            for site in sites {
+                totalWeight += UInt64(site.range.count)
+            }
+            // Bounded rejection: a draw nested in or containing a chosen site is discarded, and the loop stops after a fixed number of draws so PRNG consumption stays bounded per call.
+            var draws = 0
+            while chosen.count < wanted, draws < wanted * 4 {
+                draws += 1
+                var remaining = prng.next(upperBound: totalWeight)
+                var pick = sites.count - 1
+                for (index, site) in sites.enumerated() {
+                    let weight = UInt64(site.range.count)
+                    if remaining < weight {
+                        pick = index
+                        break
+                    }
+                    remaining -= weight
+                }
+                if chosen.contains(pick) { continue }
+                if sites[pick].containingSiteIndices.contains(where: { chosen.contains($0) }) { continue }
+                if chosen.contains(where: { sites[$0].containingSiteIndices.contains(pick) }) { continue }
+                chosen.append(pick)
+            }
+        }
+        var ranges: [ClosedRange<Int>] = []
+        ranges.reserveCapacity(chosen.count)
+        for index in chosen.sorted() {
+            let range = sites[index].range
+            guard range.upperBound < candidate.count else { continue }
+            ranges.append(range)
+        }
+        return ranges.isEmpty ? nil : ranges
     }
 
     // MARK: - Twin Detection

@@ -9,6 +9,8 @@ package enum ResolutionTier: UInt8, Sendable {
     case fallbackTree = 1
     /// Value generated from PRNG — no prefix or fallback data available.
     case prng = 2
+    /// Drawn fresh from the PRNG on purpose, at a site a value reseed marked: the caller asked for this draw, so it counts as resolved rather than as a fall-through.
+    case reseeded = 3
 }
 
 /// Diagnostics collected during a single materialization pass.
@@ -18,6 +20,7 @@ package struct DecodingReport: Sendable {
     private var exactCarryForwardCount = 0
     private var fallbackTreeCount = 0
     private var prngCount = 0
+    private var reseededCount = 0
 
     /// Records that one coordinate was resolved at the given tier.
     mutating func record(tier: ResolutionTier) {
@@ -28,12 +31,14 @@ package struct DecodingReport: Sendable {
                 fallbackTreeCount += 1
             case .prng:
                 prngCount += 1
+            case .reseeded:
+                reseededCount += 1
         }
     }
 
     /// Total number of coordinates resolved across all tiers.
     var totalCount: Int {
-        exactCarryForwardCount + fallbackTreeCount + prngCount
+        exactCarryForwardCount + fallbackTreeCount + prngCount + reseededCount
     }
 
     /// Coordinates resolved from the fallback tree. The filter retry gate reads the delta to detect row-identity consumption, which must stay single-shot.
@@ -62,7 +67,7 @@ package struct DecodingReport: Sendable {
     package var convergence: Double {
         let total = totalCount
         guard total > 0 else { return 0.0 }
-        return Double(exactCarryForwardCount + fallbackTreeCount) / Double(total)
+        return Double(exactCarryForwardCount + fallbackTreeCount + reseededCount) / Double(total)
     }
 
     /// Minimum convergence required for a convergence point to be considered reliable enough to cache.
