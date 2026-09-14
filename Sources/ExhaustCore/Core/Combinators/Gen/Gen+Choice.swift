@@ -106,10 +106,12 @@ package extension Gen {
             collection.isEmpty == false,
             "Cannot choose from an empty collection"
         )
-        // Use Gen.contramap directly rather than .mapped because the backward closure throws and .mapped propagates that via rethrows (from FreerMonad.bind), which would force this function to be marked throws — even though the throw only happens at reflection time, never during construction.
         let count = collection.count
-        return Gen.contramap(
-            { (element: C.Element) throws -> Int in
+        return Gen.isomorphed(
+            Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1)),
+            // Round-robin indexing, so the lookup does not fail when reducing.
+            forward: { collection[$0 % count] },
+            backward: { element in
                 guard let index = collection.firstIndex(of: element) else {
                     throw ReflectionError
                         .couldNotReflectOnSequenceElement(
@@ -117,11 +119,8 @@ package extension Gen {
                         )
                 }
                 return index
-            },
-            Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
-                // We're using round-robin indexing here so that the lookup does not fail when reducing
-                .map { collection[$0 % count] }
-        )
+            }
+        ).gen
     }
 
     /// Generates a random element from a collection without requiring `Equatable` conformance.

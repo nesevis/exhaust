@@ -634,9 +634,19 @@ extension Materializer {
         // Unwrap a forward-inert contramap layer once, before the loop: materialization ignores the backward transform, so character-style elements (contramap over chooseBits) can take the fused loop below as long as the wrapper's continuation is applied to each element.
         var fusedElementGen = elementGen
         var contramapContinuation: ((Any) throws -> AnyGenerator)?
-        if case let .impure(.contramap(_, innerGen), continuation: outerContinuation) = elementGen {
-            fusedElementGen = innerGen
-            contramapContinuation = outerContinuation
+        var wrapperForward: ((Any) throws -> Any)?
+        switch elementGen {
+            case let .impure(.contramap(_, innerGen), continuation: outerContinuation):
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+            case let .impure(.transform(.isomorph(forward, _, _, _), innerGen), continuation: outerContinuation),
+                 let .impure(.transform(.map(forward, _, _, _), innerGen), continuation: outerContinuation):
+                // A transparent transform wrapper peels the same way as a contramap, with its forward applied to each element before the wrapper's own continuation.
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+                wrapperForward = forward
+            default:
+                break
         }
 
         var elementIndex = 0
@@ -704,9 +714,10 @@ extension Materializer {
                 ) else { return nil }
                 let result: Any
                 let element: ChoiceTree
+                let wrappedResult = try wrapperForward?(innerResult) ?? innerResult
                 if let contramapContinuation {
                     guard let continued = try runContinuation(
-                        result: innerResult, calleeChoiceTree: innerTree, calleeStart: elementStart,
+                        result: wrappedResult, calleeChoiceTree: innerTree, calleeStart: elementStart,
                         continuation: contramapContinuation, inputValue: inputValue,
                         context: &context, continuationFallback: nil
                     ) else { return nil }

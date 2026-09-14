@@ -34,6 +34,9 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     /// Carried at composition rather than recomputed: the ``FreerMonad`` spine hides its tail behind continuations, so it cannot be folded after the fact. Each combinator states its claim through ``FreerMonad/wrapped(isReflective:)``, ANDing the flags of the generators it combines — a forward-only transform or an information-discarding factory contributes `false` and the flag is monotone, never recovering. A `true` reading is a promise that ``Interpreters/reflect(_:with:where:)`` can decompose a value through this generator; a `false` reading means it cannot, so callers such as comparison-operand injection can skip the attempt. Over-claiming is safe: reflection still returns nil on a value it cannot decompose, so the flag is an optimization, not a correctness gate. Combinators whose layers are produced by closures at generation time (``recursive(base:depthRange:extend:)``, ``getSize(_:)``) cannot inspect those layers at construction and over-claim deliberately.
     package let isReflective: Bool
 
+    /// Set only when `gen` is exactly one `.map` or `.isomorph` transform node with an identity continuation, so a following ``map(_:)`` can compose its forward into that node instead of stacking another. Every other construction leaves it nil.
+    package var fusable: FusableTransform?
+
     /// Wraps an already-constructed generator.
     ///
     /// `isReflective` has no default so every construction site states whether reflection can decompose values through the wrapped generator; a silent default here is how an over-claim slips into a whole family of factories.
@@ -159,15 +162,34 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     public func map<NewOutput>(
         _ transform: @Sendable @escaping (Output) throws -> NewOutput
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        Gen.liftF(.transform(
+        if let fusable {
+            let innerForward = fusable.forward
+            let composed: (Any) throws -> Any = { try transform(innerForward($0) as! Output) }
+            var fused: ReflectiveGenerator<NewOutput> = Gen.liftF(.transform(
+                kind: .map(
+                    forward: composed,
+                    backward: nil,
+                    inputType: fusable.inputType,
+                    outputType: NewOutput.self
+                ),
+                inner: fusable.inner
+            )).wrapped(isReflective: false)
+            fused.fusable = FusableTransform(forward: composed, inner: fusable.inner, inputType: fusable.inputType)
+            return fused
+        }
+        let forward: (Any) throws -> Any = { try transform($0 as! Output) }
+        let inner = gen.erase()
+        var mapped: ReflectiveGenerator<NewOutput> = Gen.liftF(.transform(
             kind: .map(
-                forward: { try transform($0 as! Output) },
+                forward: forward,
                 backward: nil,
                 inputType: Output.self,
                 outputType: NewOutput.self
             ),
-            inner: gen.erase()
+            inner: inner
         )).wrapped(isReflective: false)
+        mapped.fusable = FusableTransform(forward: forward, inner: inner, inputType: Output.self)
+        return mapped
     }
 }
 
@@ -197,5 +219,20 @@ extension ReflectiveGenerator: CustomStringConvertible {
     public var description: String {
         let synthesized = isSynthesized ? " (synthesized)" : ""
         return "ReflectiveGenerator<\(Output.self)>\(synthesized)"
+    }
+}
+
+/// The one transform node a ``ReflectiveGenerator`` is known to consist of, recorded so a following forward-only map can fold into it.
+///
+/// `@unchecked Sendable` for the same reason as ``ReflectiveGenerator``: the closure is the transform node's own `@Sendable` forward and the inner generator is the same indirect enum the wrapper already carries.
+package struct FusableTransform: @unchecked Sendable {
+    package let forward: (Any) throws -> Any
+    package let inner: AnyGenerator
+    package let inputType: Any.Type
+
+    package init(forward: @escaping (Any) throws -> Any, inner: AnyGenerator, inputType: Any.Type) {
+        self.forward = forward
+        self.inner = inner
+        self.inputType = inputType
     }
 }

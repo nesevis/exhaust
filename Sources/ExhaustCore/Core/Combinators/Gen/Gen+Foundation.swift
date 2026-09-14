@@ -338,11 +338,14 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
         isRangeExplicit: true,
         typeTagPayload: .character(problematicIndices: srs.problematicIndices)
     )
-    let innerGen = Generator<Character>.impure(operation: operation) { result in
-        try .pure(Character(srs.scalar(at: Int(chooseBitsBitPattern(result)))))
+    let indexGen = Generator<UInt64>.impure(operation: operation) { result in
+        try .pure(chooseBitsBitPattern(result))
     }
-    return Gen.contramap(
-        { (char: Character) throws -> UInt32 in
+    // One `.isomorph` over the index draw rather than a contramap over a character-producing leaf: the sequence interpreters peel the wrapper and apply its forward per element, and the string batch converter produces characters directly.
+    return Gen.isomorphed(
+        indexGen,
+        forward: { Character(srs.scalar(at: Int($0))) },
+        backward: { (char: Character) throws -> UInt64 in
             guard let scalar = char.unicodeScalars.first else {
                 throw ReflectionError.couldNotReflectOnSequenceElement(
                     "Character has no scalars"
@@ -354,10 +357,9 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
                     range: "ScalarRangeSet(\(srs.scalarCount) scalars)"
                 )
             }
-            return UInt32(srs.index(of: scalar))
-        },
-        innerGen
-    )
+            return UInt64(srs.index(of: scalar))
+        }
+    ).gen
 }
 
 /// Builds a string generator directly from a pre-computed ``ScalarRangeSet``.

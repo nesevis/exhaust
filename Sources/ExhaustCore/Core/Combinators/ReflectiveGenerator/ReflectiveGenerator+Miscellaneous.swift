@@ -218,24 +218,26 @@ public extension ReflectiveGenerator {
         failure: ReflectiveGenerator<Failure>
     ) -> ReflectiveGenerator<Result<Success, Failure>> {
         Gen.pick(choices: [
-            (1, Gen.contramap(
-                { (result: Result<Success, Failure>) throws -> Success in
+            (1, Gen.isomorphed(
+                success.gen,
+                forward: { Result<Success, Failure>.success($0) },
+                backward: { result in
                     guard case let .success(value) = result else {
                         throw ReflectionError.contramapWasWrongType
                     }
                     return value
-                },
-                success.gen.map { Result<Success, Failure>.success($0) }
-            )),
-            (1, Gen.contramap(
-                { (result: Result<Success, Failure>) throws -> Failure in
+                }
+            ).gen),
+            (1, Gen.isomorphed(
+                failure.gen,
+                forward: { Result<Success, Failure>.failure($0) },
+                backward: { result in
                     guard case let .failure(error) = result else {
                         throw ReflectionError.contramapWasWrongType
                     }
                     return error
-                },
-                failure.gen.map { Result<Success, Failure>.failure($0) }
-            )),
+                }
+            ).gen),
         ]).wrapped(isReflective: success.isReflective && failure.isReflective)
     }
 }

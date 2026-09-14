@@ -803,12 +803,19 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         // Unwrap a forward-inert contramap layer before matching so character generators and similar wrappers can use the fused chooseBits loop.
         var fusedElementGen = elementGen
         var contramapContinuation: ((Any) throws -> AnyGenerator)?
-        if case let .impure(
-            operation: .contramap(_, innerGen),
-            continuation: outerContinuation
-        ) = elementGen {
-            fusedElementGen = innerGen
-            contramapContinuation = outerContinuation
+        var wrapperForward: ((Any) throws -> Any)?
+        switch elementGen {
+            case let .impure(operation: .contramap(_, innerGen), continuation: outerContinuation):
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+            case let .impure(operation: .transform(.isomorph(forward, _, _, _), innerGen), continuation: outerContinuation),
+                 let .impure(operation: .transform(.map(forward, _, _, _), innerGen), continuation: outerContinuation):
+                // A transparent transform wrapper peels the same way as a contramap, with its forward applied to each element before the wrapper's own continuation.
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+                wrapperForward = forward
+            default:
+                break
         }
 
         // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element. Unscaled direct elements already optimize well under WMO; include them only when fusing away the contramap dispatch as well.
@@ -904,6 +911,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     continuation: elementContinuation, context: &context
                 ) else {
                     return nil
+                }
+                if let wrapperForward {
+                    result = try wrapperForward(result)
                 }
                 if let contramapContinuation {
                     // The wrapper's callee is the whole element span, so its pair group opens at the element's start.

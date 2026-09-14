@@ -97,7 +97,7 @@ public extension __ExhaustRuntime {
         }
 
         // The macro expands an initializer call to the forward closure and derives the backward from the same member labels, so the pair inverts by construction of the expansion and the `.isomorph` guarantee `Gen.zipped` relies on holds without user involvement.
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in
                 var index = 0
@@ -112,8 +112,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     /// Zips generators through a qualified enum-case or static-factory call, validating the output shape during reflection.
@@ -149,7 +150,7 @@ public extension __ExhaustRuntime {
         }
 
         // The macro expands an enum case constructor to the forward closure and a pattern match over the same case to the backward, so the pair inverts by construction of the expansion. A `nil` from the pattern match means the value is a different case: a normal rejection during pick-branch probing, surfaced as a throw.
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in
                 var index = 0
@@ -164,8 +165,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     /// Builds the backward extraction for a qualified enum-case call, shared by every arity.
@@ -208,7 +210,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1) },
             unpack: { output in
@@ -216,8 +218,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZip<T0, T1, NewOutput>(
@@ -229,7 +232,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1) },
             unpack: { output in
@@ -237,8 +240,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZipEnumCase<T0, T1, Output>(
@@ -262,11 +266,12 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in (values[0] as! T0, values[1] as! T1) },
-            unpack: { packed in [packed.0 as Any, packed.1 as Any] }
-        ).wrapped(isReflective: allReflective)
+            unpack: { packed in [packed.0 as Any, packed.1 as Any] },
+            isReflective: allReflective
+        )
     }
 
     // MARK: Arity 3
@@ -281,7 +286,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2) },
             unpack: { output in
@@ -289,8 +294,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZip<T0, T1, T2, NewOutput>(
@@ -303,7 +309,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2) },
             unpack: { output in
@@ -311,8 +317,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZipEnumCase<T0, T1, T2, Output>(
@@ -338,11 +345,12 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2) },
-            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any] }
-        ).wrapped(isReflective: allReflective)
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any] },
+            isReflective: allReflective
+        )
     }
 
     // MARK: Arity 4
@@ -358,7 +366,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3) },
             unpack: { output in
@@ -366,8 +374,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZip<T0, T1, T2, T3, NewOutput>(
@@ -381,7 +390,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3) },
             unpack: { output in
@@ -389,8 +398,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZipEnumCase<T0, T1, T2, T3, Output>(
@@ -418,11 +428,12 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3) },
-            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any] }
-        ).wrapped(isReflective: allReflective)
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any] },
+            isReflective: allReflective
+        )
     }
 
     // MARK: Arity 5
@@ -439,7 +450,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4) },
             unpack: { output in
@@ -447,8 +458,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZip<T0, T1, T2, T3, T4, NewOutput>(
@@ -463,7 +475,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4) },
             unpack: { output in
@@ -471,8 +483,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZipEnumCase<T0, T1, T2, T3, T4, Output>(
@@ -502,11 +515,12 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4) },
-            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any, packed.4 as Any] }
-        ).wrapped(isReflective: allReflective)
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any, packed.4 as Any] },
+            isReflective: allReflective
+        )
     }
 
     // MARK: Arity 6
@@ -524,7 +538,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase(), gen5.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective && gen5.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4, values[5] as! T5) },
             unpack: { output in
@@ -532,8 +546,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZip<T0, T1, T2, T3, T4, T5, NewOutput>(
@@ -549,7 +564,7 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase(), gen5.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective && gen5.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4, values[5] as! T5) },
             unpack: { output in
@@ -557,8 +572,9 @@ public extension __ExhaustRuntime {
                     throw ReflectionError.contramapWasWrongType
                 }
                 return values
-            }
-        ).wrapped(isReflective: allReflective)
+            },
+            isReflective: allReflective
+        )
     }
 
     static func _macroZipEnumCase<T0, T1, T2, T3, T4, T5, Output>(
@@ -590,11 +606,12 @@ public extension __ExhaustRuntime {
         let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase(), gen5.gen.erase()]
         let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective && gen5.isReflective
 
-        return Gen.zipped(
+        return Gen.zippedReflective(
             erased,
             pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4, values[5] as! T5) },
-            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any, packed.4 as Any, packed.5 as Any] }
-        ).wrapped(isReflective: allReflective)
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any, packed.4 as Any, packed.5 as Any] },
+            isReflective: allReflective
+        )
     }
 
     // MARK: - Scalar conversion overloads
