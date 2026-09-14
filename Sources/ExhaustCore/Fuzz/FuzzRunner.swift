@@ -251,6 +251,9 @@ package final class FuzzRunner<Output> {
             if FuzzTunables.smallDomainEnumerationEnabled {
                 arms.append(.smallDomainEnumeration)
             }
+            if FuzzTunables.elementTransplantEnabled {
+                arms.append(.elementTransplant)
+            }
         }
         if configuration.experiments.pairMutation {
             arms += [.twinSplice, .typedCrossover]

@@ -34,6 +34,8 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case suffixReseed = 16
     /// Writes every other value of one small-domain chooseBits leaf into the parent, one child per value, so the whole domain of a label-like leaf is tried in one draw. See ``FuzzMutator/enumerateSmallDomain(_:targets:prng:)``.
     case smallDomainEnumeration = 17
+    /// Inserts a run of elements from one sequence into another sequence of the same element site, either copying the run or moving it (removing it from the donor). See ``FuzzMutator/transplantElementRun(_:targets:mode:prng:)``.
+    case elementTransplant = 18
 
     /// The inventory with the targeting knobs off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so this is the raw-value prefix of the inventory.
     package static let bandArms: [MutationArm] = [.low, .medium, .high, .splice]

@@ -87,6 +87,9 @@ package enum FuzzTunables {
     /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
     package static let discardParentEnergy = 1.0 / 3.0
 
+    /// Whether the element transplant is in the arm inventory. `EXHAUST_ELEMENT_TRANSPLANT=0` removes it for a same-binary comparison.
+    package static let elementTransplantEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_ELEMENT_TRANSPLANT"] != "0"
+
     /// Largest valid range a chooseBits leaf may have for the small-domain enumeration to enumerate it: a leaf with this many patterns or fewer yields one child per alternative value. Ten covers enum-like leaves (labels, small tag sets, booleans) and single digits while keeping a draw to at most nine evaluations; `EXHAUST_SMALL_DOMAIN_LIMIT` overrides it for measurement, and each unit raises the cost of a draw by one evaluation.
     package static let smallDomainLimit: UInt64 = ProcessInfo.processInfo.environment["EXHAUST_SMALL_DOMAIN_LIMIT"].flatMap(UInt64.init) ?? 10
 

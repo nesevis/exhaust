@@ -160,7 +160,7 @@ extension FuzzRunner {
                 candidate = FuzzMutator.mutate(candidate, intensity: .medium, layout: layout, prng: &prng)
             case .high:
                 candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
-            case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover, .elementDeletion, .elementDuplication, .runDeletion, .runDuplication, .runCopy:
+            case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover, .elementDeletion, .elementDuplication, .runDeletion, .runDuplication, .runCopy, .elementTransplant:
                 if let targeted = graphArmCandidate(arm, candidate, parent: parent, parentIndex: parentIndex) {
                     candidate = targeted
                 }
@@ -237,6 +237,10 @@ extension FuzzRunner {
                 return FuzzMutator.duplicateElementRun(candidate, targets: targets, prng: &prng)
             case .runCopy:
                 return FuzzMutator.copyElementRun(candidate, targets: targets, prng: &prng)
+            case .elementTransplant:
+                // Copy or move at even odds: the same arm, since both need the same pair of sequences and differ only in whether the donor keeps its run.
+                let mode: FuzzMutator.TransplantMode = prng.next(upperBound: 2) == 0 ? .copy : .move
+                return FuzzMutator.transplantElementRun(candidate, targets: targets, mode: mode, prng: &prng)
             case .low, .medium, .high, .splice, .valueReseed, .suffixReseed, .smallDomainEnumeration:
                 return nil
         }

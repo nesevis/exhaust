@@ -47,6 +47,14 @@ enum MutationArmRepertoire {
         if leafTagCounts.values.contains(where: { $0 >= 2 }) {
             sighted.insert(.lockstepDelta)
         }
+        var sequenceKeyCounts: [FuzzMutator.TwinKey: Int] = [:]
+        for node in graph.nodes {
+            guard case .sequence = node.kind, let key = FuzzMutator.twinKey(of: node, in: graph) else { continue }
+            sequenceKeyCounts[key, default: 0] += 1
+        }
+        if sequenceKeyCounts.values.contains(where: { $0 >= 2 }) {
+            sighted.insert(.elementTransplant)
+        }
         if graph.nodes.contains(where: { node in
             switch node.kind {
                 case .chooseBits:

@@ -49,6 +49,9 @@ package struct MutationTargets: Sendable {
     /// Indices into ``reseedSites`` the enumeration has already walked for this entry. An enumeration is exhaustive for its site, so a second draw of the same site can only reproduce children the run has already hashed; each is a full materialization spent on a duplicate. Marked by ``FuzzCorpus/markEnumerated(siteIndex:forParentAt:)``.
     fileprivate(set) var enumeratedSiteIndices: Set<Int> = []
 
+    /// Sequence nodes grouped by element site: every group holds two or more sequences whose elements come from one pick site or one leaf tag, so a run of one is a valid run of another. An empty untagged sequence joins the pick-sequence group when the graph has exactly one. What the element transplant draws donor and target from.
+    package let transplantGroups: [[Int]]
+
     /// The arms whose first guard this entry's own tables satisfy: the sibling-span operators, the lockstep delta, and the twin splice.
     ///
     /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
@@ -201,6 +204,31 @@ package struct MutationTargets: Sendable {
         }
         smallDomainSiteIndices = enumerable
 
+        var sequencesByKey: [FuzzMutator.TwinKey: [Int]] = [:]
+        var emptyUntagged: [Int] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .sequence(metadata) = node.kind, node.positionRange != nil, metadata.childPositionRanges.count == metadata.elementCount else { continue }
+            if let key = FuzzMutator.twinKey(of: node, in: graph) {
+                sequencesByKey[key, default: []].append(nodeID)
+            } else if metadata.elementTypeTag == nil, node.children.isEmpty {
+                emptyUntagged.append(nodeID)
+            }
+        }
+        let pickSequenceKeys = sequencesByKey.keys.filter { if case .pickSequence = $0 { return true } else { return false } }
+        if pickSequenceKeys.count == 1, let key = pickSequenceKeys.first {
+            sequencesByKey[key, default: []].append(contentsOf: emptyUntagged)
+        }
+        func start(_ nodeID: Int) -> Int {
+            graph.nodes[nodeID].positionRange?.lowerBound ?? 0
+        }
+        var groups: [[Int]] = []
+        for members in sequencesByKey.values where members.count >= 2 {
+            groups.append(members.sorted { start($0) < start($1) })
+        }
+        groups.sort { start($0[0]) < start($1[0]) }
+        transplantGroups = groups
+
         structuralArms = .none
         var structural = MutationArmSet.none
         if hasSwappableGroup(minimumSize: 2) {
@@ -240,6 +268,9 @@ package struct MutationTargets: Sendable {
         }) {
             structural.insert(.runCopy)
             structural.insert(.suffixReseed)
+        }
+        if transplantGroups.isEmpty == false {
+            structural.insert(.elementTransplant)
         }
         structuralArms = structural
     }
@@ -384,6 +415,86 @@ package extension FuzzMutator {
             return nil
         }
         return shifted.candidate
+    }
+
+    // MARK: - Element Transplant
+
+    /// Whether a transplanted run is copied from the donor or moved out of it.
+    enum TransplantMode {
+        case copy
+        case move
+    }
+
+    /// Inserts a run of elements from one sequence node into another sequence of the same element site, at an element boundary of the target. `copy` leaves the donor as it was; `move` removes the run from it. The run length respects the target's length upper bound and, for a move, the donor's lower bound; the two sequences must not nest. Returns nil when the parent has no two sequences of one site, or no run fits.
+    ///
+    /// Run copy and duplication grow or rewrite one sequence from itself; this is the cross-sequence form, so an argument list can receive a term from another application's list and a mirrored composite's instruction list can receive instructions from the other half's. Both sequences were drawn at one site, so the entries carry over unchanged and the child rides the ordinary guided-materialization path.
+    static func transplantElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        mode: TransplantMode,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let group = pickGroup(targets.transplantGroups, prng: &prng) else {
+            return nil
+        }
+        let graph = targets.graph
+        let donorIndex = Int(prng.next(upperBound: UInt64(group.count)))
+        let offset = 1 + Int(prng.next(upperBound: UInt64(group.count - 1)))
+        let donorID = group[donorIndex]
+        let targetID = group[(donorIndex + offset) % group.count]
+        guard case let .sequence(donor) = graph.nodes[donorID].kind,
+              case let .sequence(target) = graph.nodes[targetID].kind,
+              let donorRange = graph.nodes[donorID].positionRange,
+              let targetRange = graph.nodes[targetID].positionRange,
+              donorRange.overlaps(targetRange) == false,
+              donor.elementCount >= 1,
+              donorRange.upperBound < candidate.count, targetRange.upperBound < candidate.count
+        else {
+            return nil
+        }
+        // The run must fit the target's upper bound and, when moved, leave the donor at or above its lower bound.
+        let targetUpper = target.lengthConstraint?.upperBound ?? UInt64.max
+        var limit = donor.elementCount
+        if targetUpper != UInt64.max {
+            limit = min(limit, Int(max(0, targetUpper - UInt64(target.elementCount))))
+        }
+        if mode == .move, let donorLower = donor.lengthConstraint?.lowerBound {
+            limit = min(limit, donor.elementCount - Int(min(UInt64(donor.elementCount), donorLower)))
+        }
+        guard limit >= 1 else {
+            return nil
+        }
+        let length = runLength(upTo: limit, prng: &prng)
+        let start = Int(prng.next(upperBound: UInt64(donor.elementCount - length + 1)))
+        let first = donor.childPositionRanges[start]
+        let last = donor.childPositionRanges[start + length - 1]
+        let run = Array(candidate[first.lowerBound ... last.upperBound])
+        // Insertion boundary in the target: before element k, or after the last element (before the close marker).
+        let boundary = Int(prng.next(upperBound: UInt64(target.elementCount + 1)))
+        let insertAt = boundary < target.elementCount ? target.childPositionRanges[boundary].lowerBound : targetRange.upperBound
+        var result = candidate
+        switch mode {
+            case .copy:
+                result.insert(contentsOf: run, at: insertAt)
+            case .move:
+                // Edit the higher position first so the lower one's indices still address the original candidate.
+                if first.lowerBound > insertAt {
+                    result.removeSubrange(first.lowerBound ... last.upperBound)
+                    result.insert(contentsOf: run, at: insertAt)
+                } else {
+                    result.insert(contentsOf: run, at: insertAt)
+                    result.removeSubrange(first.lowerBound ... last.upperBound)
+                }
+        }
+        return result
+    }
+
+    /// One group drawn uniformly, or nil when there are none.
+    private static func pickGroup(_ groups: [[Int]], prng: inout Xoshiro256) -> [Int]? {
+        guard groups.isEmpty == false else {
+            return nil
+        }
+        return groups[Int(prng.next(upperBound: UInt64(groups.count)))]
     }
 
     // MARK: - Small-Domain Enumeration
@@ -729,11 +840,13 @@ package extension FuzzMutator {
     /// Discriminates zip children the generator drew from the same site, so twin spans can be spliced onto one another.
     ///
     /// Picks and binds match by their site fingerprint. Sequences match by element type tag rather than shape, so twins of different lengths (two instruction lists) still group. Leaves match by type tag, zips by child count.
-    internal enum TwinKey: Hashable {
+    enum TwinKey: Hashable {
         case pick(UInt64)
         case bind(UInt64)
         case value(TypeTag)
         case elementSequence(TypeTag)
+        /// A homogeneous sequence whose elements are all picks of one fingerprint: an instruction list, a list of terms. Two such sequences are interchangeable whatever arms their elements selected, so one can be copied over the other whole.
+        case pickSequence(UInt64)
         case zip(childCount: Int)
     }
 
@@ -770,7 +883,22 @@ package extension FuzzMutator {
         return groups
     }
 
-    /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, untagged sequences).
+    /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, sequences that are neither tagged nor homogeneous picks).
+    static func twinKey(of node: ChoiceGraphNode, in graph: ChoiceGraph) -> TwinKey? {
+        if case let .sequence(metadata) = node.kind, metadata.elementTypeTag == nil, node.children.isEmpty == false {
+            var fingerprint: UInt64?
+            for childID in node.children {
+                guard case let .pick(pick) = graph.nodes[childID].kind, fingerprint == nil || fingerprint == pick.fingerprint else {
+                    return nil
+                }
+                fingerprint = pick.fingerprint
+            }
+            return fingerprint.map { .pickSequence($0) }
+        }
+        return twinKey(of: node)
+    }
+
+    /// The twin key of one zip child from its own node alone, or nil for kinds with no twin identity (`just`, untagged sequences). ``twinKey(of:in:)`` also recognises homogeneous pick sequences, which need the children.
     internal static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
         switch node.kind {
             case let .pick(metadata):
