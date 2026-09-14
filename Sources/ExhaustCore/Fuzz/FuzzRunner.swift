@@ -839,7 +839,7 @@ package final class FuzzRunner<Output> {
         {
             if case let .success(_, fullTree, _) = Materializer.materializeAny(
                 erasedGen,
-                prefix: candidate.sequence,
+                prefix: corpus.entries[admittedIndex].sequence,
                 mode: .exact,
                 materializePicks: true
             ) {
@@ -895,6 +895,7 @@ package final class FuzzRunner<Output> {
             phase: phase,
             origin: .freshSample,
             parentIndex: nil,
+            // The stored sequence, not the candidate's: under a prune hook the corpus holds the pruned form, and a full tree materialised from the longer original would give the donor index spans past the end of the entry's sequence.
             parentHash: 0,
             armsMask: MutationArmSet.none,
             drawProbability: 0,

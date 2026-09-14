@@ -181,7 +181,7 @@ extension FuzzRunner {
             {
                 if case let .success(_, fullTree, _) = Materializer.materializeAny(
                     erasedGen,
-                    prefix: sequence,
+                    prefix: corpus.entries[admittedIndex].sequence,
                     mode: .exact,
                     materializePicks: true
                 ) {
