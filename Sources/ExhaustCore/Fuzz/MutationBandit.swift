@@ -32,6 +32,8 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case runCopy = 15
     /// Cuts a sequence node at an element and reseeds every independent site after the cut. See ``FuzzMutator/suffixReseed(_:targets:prng:)``.
     case suffixReseed = 16
+    /// Writes every other value of one small-domain chooseBits leaf into the parent, one child per value, so the whole domain of a label-like leaf is tried in one draw. See ``FuzzMutator/enumerateSmallDomain(_:targets:prng:)``.
+    case smallDomainEnumeration = 17
 
     /// The inventory with the targeting knobs off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so this is the raw-value prefix of the inventory.
     package static let bandArms: [MutationArm] = [.low, .medium, .high, .splice]
@@ -220,17 +222,18 @@ package struct MutationBandit: Sendable {
         return (arms[last], cachedProbabilities[last] / total)
     }
 
-    /// Credits an arm with one admission reward (x = 1), applying the EXP3 importance-weighted exponential update. Unrewarded picks need no call — a zero reward leaves EXP3 weights unchanged.
+    /// Credits an arm with an admission reward, applying the EXP3 importance-weighted exponential update. Unrewarded picks need no call — a zero reward leaves EXP3 weights unchanged.
     ///
     /// - Parameters:
     ///   - arm: The arm that produced the admitted candidate. An arm outside this bandit's inventory is ignored.
     ///   - drawProbability: The probability that draw ran at, from ``probability(of:eligible:)``. A non-positive value is ignored rather than divided by.
-    package mutating func reward(_ arm: MutationArm, drawProbability: Double) {
-        guard let index = arms.firstIndex(of: arm), drawProbability > 0 else {
+    ///   - magnitude: The reward x in (0, 1]: 1 for a draw that spent one evaluation, and 1/n for a draw that spent n, so arms are compared on admissions per evaluation rather than per draw. The reducer's dispatch weighs its encoders the same way, by accepts per probe.
+    package mutating func reward(_ arm: MutationArm, drawProbability: Double, magnitude: Double = 1) {
+        guard let index = arms.firstIndex(of: arm), drawProbability > 0, magnitude > 0 else {
             return
         }
         let armCount = Double(weights.count)
-        weights[index] *= exp(Self.explorationRate / (armCount * drawProbability))
+        weights[index] *= exp(Self.explorationRate * magnitude / (armCount * drawProbability))
         // Rescale before the exponential weights can overflow; the distribution is scale-invariant.
         let totalWeight = weights.reduce(0, +)
         if totalWeight > 1e12 {

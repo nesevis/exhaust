@@ -43,10 +43,37 @@ package struct MutationTargets: Sendable {
     /// Indices into ``reseedSites`` of the sites no other site contains, which is what "reseed all" draws: the maximal antichain, covering every reseedable span once.
     let maximalReseedSiteIndices: [Int]
 
+    /// Indices into ``reseedSites`` of the chooseBits leaves whose valid range holds ``FuzzTunables/smallDomainLimit`` patterns or fewer. What the enumeration arm walks; picks are never enumerated, since a branch alternative rebuilds its subtree and is a value reseed of the pick at several times the cost.
+    let smallDomainSiteIndices: [Int]
+
+    /// Indices into ``reseedSites`` the enumeration has already walked for this entry. An enumeration is exhaustive for its site, so a second draw of the same site can only reproduce children the run has already hashed; each is a full materialization spent on a duplicate. Marked by ``FuzzCorpus/markEnumerated(siteIndex:forParentAt:)``.
+    fileprivate(set) var enumeratedSiteIndices: Set<Int> = []
+
     /// The arms whose first guard this entry's own tables satisfy: the sibling-span operators, the lockstep delta, and the twin splice.
     ///
     /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
     package private(set) var structuralArms: MutationArmSet
+
+    /// Records that the enumeration walked `siteIndex`, so later draws on this entry skip it.
+    mutating func markEnumerated(siteIndex: Int) {
+        enumeratedSiteIndices.insert(siteIndex)
+    }
+
+    /// The entry a reseed site's value lives at: the leaf entry itself, or for a pick the branch marker, which sits behind the pick's opening group marker. Nil when the site's span no longer fits `sequence`.
+    static func sitePosition(of site: ReseedSite, in sequence: ChoiceSequence) -> Int? {
+        guard site.range.upperBound < sequence.count else {
+            return nil
+        }
+        for position in site.range {
+            switch sequence[position] {
+                case .value, .branch:
+                    return position
+                default:
+                    continue
+            }
+        }
+        return nil
+    }
 
     /// Whether any swappable sibling group has at least `minimumSize` members, which is the first guard of every sibling-span operator.
     ///
@@ -93,8 +120,12 @@ package struct MutationTargets: Sendable {
     /// Builds the targeting tables for one entry's tree.
     ///
     /// Relation scopes are convergence-gated and always empty on a fresh graph, so they are not cached. Construction consumes no PRNG draws, so seeded replay streams are unchanged.
-    init(tree: ChoiceTree) {
+    /// - Parameters:
+    ///   - tree: The entry's choice tree, whose graph every scope is built from.
+    ///   - sequence: The entry's flat sequence, read for each reseed site's current value and domain. Nil derives it from `tree`.
+    package init(tree: ChoiceTree, sequence: ChoiceSequence? = nil) {
         let graph = ChoiceGraphBuilder.build(from: tree)
+        let flat = sequence ?? ChoiceSequence.flatten(tree)
         var tandem: TandemScope?
         for exchangeScope in ExchangeQuery.build(graph: graph) {
             if case let .tandem(scope) = exchangeScope {
@@ -160,6 +191,16 @@ package struct MutationTargets: Sendable {
         reseedSites = sites
         maximalReseedSiteIndices = maximal
 
+        var enumerable: [Int] = []
+        for (index, site) in sites.enumerated() {
+            guard let position = Self.sitePosition(of: site, in: flat),
+                  case let .value(entry) = flat[position],
+                  let range = entry.validRange, range.count >= 2, range.count <= FuzzTunables.smallDomainLimit
+            else { continue }
+            enumerable.append(index)
+        }
+        smallDomainSiteIndices = enumerable
+
         structuralArms = .none
         var structural = MutationArmSet.none
         if hasSwappableGroup(minimumSize: 2) {
@@ -183,6 +224,9 @@ package struct MutationTargets: Sendable {
         }
         if sites.isEmpty == false {
             structural.insert(.valueReseed)
+        }
+        if enumerable.isEmpty == false {
+            structural.insert(.smallDomainEnumeration)
         }
         if deletableSequenceNodeIDs.isEmpty == false {
             structural.insert(.runDeletion)
@@ -340,6 +384,59 @@ package extension FuzzMutator {
             return nil
         }
         return shifted.candidate
+    }
+
+    // MARK: - Small-Domain Enumeration
+
+    /// Enumerates one small-domain leaf of the parent: every other value of a chooseBits leaf whose valid range holds at most ``FuzzTunables/smallDomainLimit`` patterns, one child per alternative, with the index of the site walked so the caller can mark it. Nil when the parent has no such leaf left to walk.
+    ///
+    /// The single-site arms redraw a site to one random value, so a four-valued label needs on average four draws of the right site before the wanted value comes up, on top of the draw that found the site. Enumerating the domain removes the value draw: the three alternatives cost three evaluations and are certain to include the wanted one. The site is drawn in proportion to its span, as a reseed draws. Children are written in place and ride the ordinary guided-materialization path.
+    static func enumerateSmallDomain(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> (children: [ChoiceSequence], siteIndex: Int)? {
+        let enumerable = targets.smallDomainSiteIndices.filter { targets.enumeratedSiteIndices.contains($0) == false }
+        guard enumerable.isEmpty == false else {
+            return nil
+        }
+        var totalWeight: UInt64 = 0
+        for index in enumerable {
+            totalWeight += UInt64(targets.reseedSites[index].range.count)
+        }
+        var remaining = prng.next(upperBound: totalWeight)
+        var chosen = enumerable[enumerable.count - 1]
+        for index in enumerable {
+            let weight = UInt64(targets.reseedSites[index].range.count)
+            if remaining < weight {
+                chosen = index
+                break
+            }
+            remaining -= weight
+        }
+        guard let position = MutationTargets.sitePosition(of: targets.reseedSites[chosen], in: candidate) else {
+            return nil
+        }
+        var children: [ChoiceSequence] = []
+        switch candidate[position] {
+            case let .value(entry):
+                guard let range = entry.validRange, range.count >= 2, range.count <= FuzzTunables.smallDomainLimit else {
+                    return nil
+                }
+                children.reserveCapacity(Int(range.count) - 1)
+                for pattern in range where pattern != entry.choice.bitPattern64 {
+                    var child = candidate
+                    child[position] = .value(ChoiceSequenceValue.Value(
+                        choice: ChoiceValue(pattern, tag: entry.choice.tag),
+                        validRange: entry.validRange,
+                        isRangeExplicit: entry.isRangeExplicit
+                    ))
+                    children.append(child)
+                }
+            default:
+                return nil
+        }
+        return children.isEmpty ? nil : (children, chosen)
     }
 
     // MARK: - Element Run Operators

@@ -9,6 +9,8 @@ package struct MutationDraw {
     package let drawProbability: Double
     /// Spans of the candidate the materialiser should draw fresh, from a value reseed. Empty for every other arm; the candidate itself is the parent's sequence when this is not.
     package var reseedRanges: [ClosedRange<Int>] = []
+    /// Further candidates from the same draw, evaluated after `candidate` under the same arm: the rest of a small-domain enumeration. Empty for every other arm.
+    package var alternatives: [ChoiceSequence] = []
 }
 
 extension FuzzRunner {
@@ -17,6 +19,11 @@ extension FuzzRunner {
     /// Produces one mutated candidate from `parent`. Two steps in sequence: one arm drawn from the eligible inventory, then the swarm rewrite of the result's branch selections.
     package func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> MutationDraw {
         let draw = inventoryCandidate(from: parent, parentIndex: parentIndex)
+        // An enumeration is a deliberate single-site edit whose children differ from the parent at exactly that site; a swarm rewrite of their branch selections would take that away and make the batch incomparable.
+        if draw.alternatives.isEmpty == false {
+            swarmDerivationIndex += 1
+            return draw
+        }
         switch configuration.experiments.swarmMode {
             case .off:
                 swarmDerivationIndex += 1
@@ -124,7 +131,16 @@ extension FuzzRunner {
         counts.mutationArms.recordDraw(arm: arm)
         var candidate = parent.sequence
         var reseedRanges: [ClosedRange<Int>] = []
+        var alternatives: [ChoiceSequence] = []
         switch arm {
+            case .smallDomainEnumeration:
+                if let targets = corpus.mutationTargets(forParentAt: parentIndex),
+                   let enumeration = FuzzMutator.enumerateSmallDomain(candidate, targets: targets, prng: &prng)
+                {
+                    candidate = enumeration.children[0]
+                    alternatives = Array(enumeration.children.dropFirst())
+                    corpus.markEnumerated(siteIndex: enumeration.siteIndex, forParentAt: parentIndex)
+                }
             case .valueReseed:
                 if let targets = corpus.mutationTargets(forParentAt: parentIndex),
                    let ranges = FuzzMutator.valueReseed(candidate, targets: targets, prng: &prng)
@@ -167,7 +183,8 @@ extension FuzzRunner {
                 candidate: candidate,
                 armsMask: MutationArmSet(arm),
                 drawProbability: bandit.probability(of: arm, eligible: eligible),
-                reseedRanges: reseedRanges
+                reseedRanges: reseedRanges,
+                alternatives: alternatives
             )
         }
         counts.mutationArms.recordMiss(arm: arm)
@@ -220,7 +237,7 @@ extension FuzzRunner {
                 return FuzzMutator.duplicateElementRun(candidate, targets: targets, prng: &prng)
             case .runCopy:
                 return FuzzMutator.copyElementRun(candidate, targets: targets, prng: &prng)
-            case .low, .medium, .high, .splice, .valueReseed, .suffixReseed:
+            case .low, .medium, .high, .splice, .valueReseed, .suffixReseed, .smallDomainEnumeration:
                 return nil
         }
     }

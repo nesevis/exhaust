@@ -508,7 +508,7 @@ package final class FuzzCorpus {
         }
         // Typed crossover is the one consumer that cannot wait for this entry's own first parent draw: its donor pool is corpus-wide, read by every *other* entry's crossover, so an entry that has not yet been mutated must already be donatable. That forces the graph build eagerly under `pairMutation` — the other targeting consumers defer.
         if isParentEligible, experiments.pairMutation {
-            let targets = MutationTargets(tree: tree)
+            let targets = MutationTargets(tree: tree, sequence: sequence)
             entries[index].mutationTargets = targets
             registerDonorSpans(forEntryAt: index, graph: targets.graph)
         }
@@ -648,6 +648,14 @@ package final class FuzzCorpus {
     /// Construction walks the whole graph four times, so it is deferred to the first draw that consumes it: a run with the targeting knobs off never builds one, and an entry admitted and evicted without ever being drawn as a parent never pays. Returns nil when no enabled experiment consumes the tables or the entry is not a mutation parent.
     ///
     /// Construction consumes no PRNG draws, so deferring it leaves seeded replay streams unchanged.
+    /// Records that the enumeration walked one site of the entry at `index`, so the arm does not spend a second draw reproducing the same children.
+    package func markEnumerated(siteIndex: Int, forParentAt index: Int) {
+        guard entries.indices.contains(index) else {
+            return
+        }
+        entries[index].mutationTargets?.markEnumerated(siteIndex: siteIndex)
+    }
+
     package func mutationTargets(forParentAt index: Int) -> MutationTargets? {
         guard consumesMutationTargets, entries.indices.contains(index) else {
             return nil
@@ -659,7 +667,7 @@ package final class FuzzCorpus {
         guard entries[index].mutationLayout != nil else {
             return nil
         }
-        let targets = MutationTargets(tree: entries[index].tree)
+        let targets = MutationTargets(tree: entries[index].tree, sequence: entries[index].sequence)
         entries[index].mutationTargets = targets
         return targets
     }
@@ -690,7 +698,7 @@ package final class FuzzCorpus {
     package func upgradeToFullTree(at index: Int, fullTree: ChoiceTree) {
         entries[index].tree = fullTree
         if entries[index].mutationTargets != nil {
-            let targets = MutationTargets(tree: fullTree)
+            let targets = MutationTargets(tree: fullTree, sequence: entries[index].sequence)
             entries[index].mutationTargets = targets
             removeDonorSpans(forEntryAt: index)
             registerDonorSpans(forEntryAt: index, graph: targets.graph)

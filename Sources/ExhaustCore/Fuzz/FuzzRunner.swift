@@ -130,6 +130,10 @@ package final class FuzzRunner<Output> {
     var pendingLineage: FuzzFailureLineage.Provenance?
     /// Reseed spans of the mutation child under evaluation, for the lineage row. Set by the mutation loop around each child evaluation, empty elsewhere.
     var currentReseedRanges: [ClosedRange<Int>] = []
+    /// Whether the bandit has been rewarded for the mutation draw in progress. Reset per draw by the mutation loop; a draw that yields several children (an enumeration) rewards at most once. Only mutation children carry an arm mask, so no other producer reaches the reward and the flag's value outside the loop is moot.
+    var drawRewarded = false
+    /// Evaluations the mutation draw in progress spends: 1 for every arm but an enumeration, which spends one per alternative. The bandit reward is scaled by its reciprocal, so an arm is judged on admissions per evaluation.
+    var currentDrawCost = 1
 
     /// Arms the generator's structure has been shown to admit, accumulated across inspected admissions. Nil until the first inspection, while the whole inventory is still open.
     package var sightedArms: MutationArmSet?
@@ -244,6 +248,9 @@ package final class FuzzRunner<Output> {
         var arms = MutationArm.bandArms
         if configuration.experiments.graphMutation {
             arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication, .valueReseed, .runDeletion, .runDuplication, .runCopy, .suffixReseed]
+            if FuzzTunables.smallDomainEnumerationEnabled {
+                arms.append(.smallDomainEnumeration)
+            }
         }
         if configuration.experiments.pairMutation {
             arms += [.twinSplice, .typedCrossover]
@@ -631,11 +638,15 @@ package final class FuzzRunner<Output> {
                 continue
             }
 
-            for _ in 0 ..< FuzzTunables.childrenPerParent {
+            var childrenSpent = 0
+            while childrenSpent < FuzzTunables.childrenPerParent {
                 if terminationDue() != nil {
                     break
                 }
                 let draw = nextCandidate(from: parent, parentIndex: parentIndex)
+                childrenSpent += 1
+                drawRewarded = false
+                currentDrawCost = 1 + draw.alternatives.count
                 if let child = childCandidate(
                     from: draw.candidate,
                     parent: parent,
@@ -648,6 +659,23 @@ package final class FuzzRunner<Output> {
                     currentReseedRanges = draw.reseedRanges
                     evaluate(child)
                     currentReseedRanges = []
+                }
+                // The rest of an enumeration. Each alternative is its own attempt and spends one of the parent's children, so an enumeration costs the parent the draws it would have spent anyway rather than adding to them; the bandit is rewarded at most once for the whole draw, see `drawRewarded`.
+                for alternative in draw.alternatives {
+                    if terminationDue() != nil {
+                        break
+                    }
+                    childrenSpent += 1
+                    if let child = childCandidate(
+                        from: alternative,
+                        parent: parent,
+                        parentIndex: parentIndex,
+                        armsMask: draw.armsMask,
+                        drawProbability: draw.drawProbability,
+                        origin: .mutationChild
+                    ) {
+                        evaluate(child)
+                    }
                 }
             }
         }
@@ -788,8 +816,10 @@ package final class FuzzRunner<Output> {
             if admission.isAdmitted {
                 // Recorded whether or not the bandit is on, so the two arms of a bandit-against-fixed comparison report the same reward signal.
                 counts.mutationArms.recordAdmission(arm: arm)
-                if configuration.experiments.banditBands {
-                    bandit.reward(arm, drawProbability: candidate.drawProbability)
+                // One reward per draw, scaled to the evaluations the draw spent: an enumeration evaluates several children at the draw's probability, and rewarding each in full would credit the arm as though it had been drawn that many times at that probability.
+                if configuration.experiments.banditBands, drawRewarded == false {
+                    drawRewarded = true
+                    bandit.reward(arm, drawProbability: candidate.drawProbability, magnitude: 1 / Double(currentDrawCost))
                 }
             }
         }

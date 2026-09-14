@@ -59,6 +59,20 @@ enum MutationArmRepertoire {
         }) {
             sighted.insert(.valueReseed)
         }
+        if graph.nodes.contains(where: { node in
+            guard node.scopeAnnotation.isBindInner == false else { return false }
+            switch node.kind {
+                case let .chooseBits(metadata):
+                    guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false,
+                          let range = metadata.validRange
+                    else { return false }
+                    return range.count >= 2 && range.count <= FuzzTunables.smallDomainLimit
+                default:
+                    return false
+            }
+        }) {
+            sighted.insert(.smallDomainEnumeration)
+        }
         return sighted
     }
 
