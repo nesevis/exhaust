@@ -663,12 +663,17 @@ extension Materializer {
                     elementIndex < fallbacks.count ? fallbacks[elementIndex] : nil
                 }
                 let (elementCalleeFallback, _) = decomposeNonGroupFallback(elementFallback)
+                // The batch skips generateRecursive, so the reseed check runs here per element; a targeted element is drawn with the cursor suspended and no fallback, as the dispatch path would.
+                let reseeding = context.enterReseedIfTargeted()
                 let resolved = try resolveChooseBits(
                     min: elementMin, max: elementMax, tag: elementTag,
                     isRangeExplicit: elementIsRangeExplicit,
                     scaling: elementScaling, typeTagPayload: elementTypeTagPayload,
-                    context: &context, calleeFallback: elementCalleeFallback
+                    context: &context, calleeFallback: reseeding ? nil : elementCalleeFallback
                 )
+                if reseeding {
+                    context.cursor.suspended = false
+                }
                 bits.append(resolved.bits)
                 if context.skipTree == false {
                     elements.append(resolved.tree)
@@ -704,14 +709,20 @@ extension Materializer {
                 }
                 let (elementCalleeFallback, elementContinuationFallback) = decomposeNonGroupFallback(elementFallback)
                 let elementStart = context.flatCount
-                guard let (innerResult, innerTree) = try handleChooseBits(
+                // The fused loop skips generateRecursive, so the reseed check runs here per element.
+                let reseeding = context.enterReseedIfTargeted()
+                let elementOutcome = try handleChooseBits(
                     min: elementMin, max: elementMax, tag: elementTag,
                     isRangeExplicit: elementIsRangeExplicit,
                     scaling: elementScaling, typeTagPayload: elementTypeTagPayload,
                     continuation: elementContinuation, inputValue: inputValue,
-                    context: &context, calleeFallback: elementCalleeFallback,
+                    context: &context, calleeFallback: reseeding ? nil : elementCalleeFallback,
                     continuationFallback: elementContinuationFallback
-                ) else { return nil }
+                )
+                if reseeding {
+                    context.cursor.suspended = false
+                }
+                guard let (innerResult, innerTree) = elementOutcome else { return nil }
                 let result: Any
                 let element: ChoiceTree
                 let wrappedResult = try wrapperForward?(innerResult) ?? innerResult

@@ -277,20 +277,27 @@ extension Materializer {
         return (tree, nil)
     }
 
+    /// Whether `gen` is a node a value reseed can target: a chooseBits leaf or a pick. Sequences, zips, binds, and transparent wrappers dispatch at the same position as their first site and must not take its reseed.
+    private static func isReseedSite(_ gen: AnyGenerator) -> Bool {
+        guard case let .impure(operation, _) = gen else {
+            return false
+        }
+        switch operation {
+            case .chooseBits, .pick:
+                return true
+            default:
+                return false
+        }
+    }
+
     static func generateRecursive(
         _ gen: AnyGenerator,
         with inputValue: Any,
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
-        // A value reseed: the prefix is jumped past the marked span and the cursor is suspended for exactly this node's walk, with no fallback tree, so the span is drawn fresh at its own site and the prefix resumes after it. Checked before the switch because the marked node may sit under transparent wrappers that dispatch at the same position; whichever dispatches first takes the reseed and the nested ones see the cursor already suspended.
-        if context.nextReseedIndex < context.reseedRanges.count,
-           context.cursor.suspended == false,
-           context.cursor.isAtStart(of: context.reseedRanges[context.nextReseedIndex])
-        {
-            context.cursor.jump(past: context.reseedRanges[context.nextReseedIndex])
-            context.nextReseedIndex += 1
-            context.cursor.suspended = true
+        // A value reseed: the prefix is jumped past the marked span and the cursor is suspended for exactly this node's walk, with no fallback tree, so the span is drawn fresh at its own site and the prefix resumes after it. Only a leaf or a pick may take a reseed: the start check skips structural markers, so an enclosing zip or sequence dispatching at the same position would otherwise take it and redraw every sibling with the target.
+        if isReseedSite(gen), context.enterReseedIfTargeted() {
             defer { context.cursor.suspended = false }
             return try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: nil)
         }
@@ -526,6 +533,20 @@ extension Materializer {
         /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order by the dispatch hook in ``generateRecursive(_:with:context:fallbackTree:)``.
         var reseedRanges: [ClosedRange<Int>] = []
         var nextReseedIndex = 0
+
+        /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
+        mutating func enterReseedIfTargeted() -> Bool {
+            guard nextReseedIndex < reseedRanges.count,
+                  cursor.suspended == false,
+                  cursor.isAtStart(of: reseedRanges[nextReseedIndex])
+            else {
+                return false
+            }
+            cursor.jump(past: reseedRanges[nextReseedIndex])
+            nextReseedIndex += 1
+            cursor.suspended = true
+            return true
+        }
 
         /// Whether flat emission is active right now (a buffer exists and no discarded-tree sub-walk has suspended it).
         @inline(__always)

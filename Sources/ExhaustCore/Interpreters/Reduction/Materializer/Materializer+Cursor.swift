@@ -42,8 +42,24 @@ extension Materializer {
 
         /// Whether the next content entry the cursor would read is the first entry of `range`, looking past transparent markers the same way ``skipGroups()`` does without moving.
         func isAtStart(of range: ClosedRange<Int>) -> Bool {
-            guard suspended == false, exhausted == false else {
+            guard suspended == false, exhausted == false, position < effectiveEnd else {
                 return false
+            }
+            if position >= range.lowerBound {
+                // Behind the span's opening markers: a pick's group marker is consumed by the enclosing scope before the pick itself dispatches, so the pick stands at its branch entry. Anything past the span's leading markers is inside it, not at its start.
+                guard position <= range.upperBound else {
+                    return false
+                }
+                var probe = range.lowerBound
+                while probe < position {
+                    switch entries[probe] {
+                        case .group, .zip, .bind, .just:
+                            probe &+= 1
+                        default:
+                            return false
+                    }
+                }
+                return true
             }
             var probe = position
             while probe < range.lowerBound, probe < effectiveEnd {

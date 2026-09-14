@@ -78,6 +78,43 @@ struct ValueReseedTests {
         }
     }
 
+    @Test("Reseeding the first leaf of a zip redraws that leaf alone")
+    func firstZipLeafReseedStaysLocal() throws {
+        let gen = leafZipGenerator()
+        let (parentSequence, parentTree) = try materializedParent(gen)
+        let targets = MutationTargets(tree: parentTree)
+        let site = try #require(targets.reseedSites.first)
+        // The zip dispatches at the position just before its first leaf, and a start check that skips the zip marker matches there; the reseed must wait for the leaf itself or the whole zip is redrawn.
+        for seed in UInt64(1) ... 20 {
+            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
+            #expect(child.count == parentSequence.count)
+            for index in child.indices where site.range.contains(index) == false {
+                #expect(child[index] == parentSequence[index], "entry \(index) outside the first leaf moved, seed \(seed)")
+            }
+        }
+    }
+
+    @Test("Reseeding an element of an array redraws it, through the sequence handler's own element loop")
+    func arrayElementReseedRedraws() throws {
+        let leaf: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1_000_000)
+        let gen: Generator<[UInt64]> = Gen.arrayOf(leaf, exactly: 3)
+        let (parentSequence, parentTree) = try materializedParent(gen)
+        let targets = MutationTargets(tree: parentTree)
+        let site = try #require(targets.reseedSites.dropFirst().first)
+        var changed = 0
+        for seed in UInt64(1) ... 40 {
+            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
+            #expect(child.count == parentSequence.count)
+            for index in child.indices where site.range.contains(index) == false {
+                #expect(child[index] == parentSequence[index], "entry \(index) outside the element moved, seed \(seed)")
+            }
+            if child[site.range.lowerBound] != parentSequence[site.range.lowerBound] {
+                changed += 1
+            }
+        }
+        #expect(changed > 0, "forty reseeds of an array element never redrew it")
+    }
+
     @Test("A leaf inside a bind inner is never a reseed site")
     func bindInnerLeavesAreExcluded() throws {
         let lengthGen: Generator<UInt64> = Gen.choose(in: UInt64(1) ... 4)
