@@ -124,6 +124,13 @@ package final class FuzzRunner<Output> {
     /// Per-window arm counts written to a CSV for offline analysis, or nil when `EXHAUST_ARM_TRACE` is unset. See ``MutationArmTrace``.
     var armTrace: MutationArmTrace?
 
+    /// Failing-child-beside-parent rows, or nil when `EXHAUST_FAILURE_LINEAGE` is unset. See ``FuzzFailureLineage``.
+    var failureLineage: FuzzFailureLineage?
+    /// Provenance of the failing candidate ``evaluate(_:)`` is about to dispatch, consumed by the gate outcome that writes its lineage row. Nil whenever the trace is off or the failure came from outside the search loop.
+    var pendingLineage: FuzzFailureLineage.Provenance?
+    /// Reseed spans of the mutation child under evaluation, for the lineage row. Set by the mutation loop around each child evaluation, empty elsewhere.
+    var currentReseedRanges: [ClosedRange<Int>] = []
+
     /// Arms the generator's structure has been shown to admit, accumulated across inspected admissions. Nil until the first inspection, while the whole inventory is still open.
     package var sightedArms: MutationArmSet?
     /// Attempts opened when the previous admission landed, so the gap between admissions measures how fast the corpus is still filling.
@@ -251,6 +258,7 @@ package final class FuzzRunner<Output> {
             windowSize: FuzzTunables.armTraceWindow,
             seed: configuration.seed
         )
+        failureLineage = FuzzFailureLineage(directory: FuzzTunables.failureLineageDirectory, seed: configuration.seed)
     }
 
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
@@ -637,7 +645,9 @@ package final class FuzzRunner<Output> {
                     origin: .mutationChild,
                     reseedRanges: draw.reseedRanges
                 ) {
+                    currentReseedRanges = draw.reseedRanges
                     evaluate(child)
+                    currentReseedRanges = []
                 }
             }
         }
@@ -709,6 +719,23 @@ package final class FuzzRunner<Output> {
             recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: breadcrumb != nil ? candidate.sequence : nil)
         )
 
+        if failureLineage != nil, case let .fail(symptom) = verdict {
+            pendingLineage = FuzzFailureLineage.Provenance(
+                attemptIndex: attemptTimelineIndex,
+                phase: candidate.phase,
+                origin: candidate.origin,
+                arms: candidate.armsMask,
+                reseedRanges: currentReseedRanges,
+                parentIndex: candidate.parentIndex,
+                parentHash: candidate.parentHash,
+                childHash: candidate.hash,
+                childSequence: candidate.sequence,
+                // The report renderer elides nested values; the row wants the whole term, since the failure usually sits several levels down.
+                childValue: String(reflecting: candidate.value),
+                symptom: symptom.kind
+            )
+        }
+
         var deferredTreeRebuild: (() -> ChoiceTree?)?
         if candidate.tree == nil {
             if corpus.wouldAdmit(hits: hits) || (prune != nil && verdict.isFailure) {
@@ -747,6 +774,8 @@ package final class FuzzRunner<Output> {
             verdict: verdict,
             hits: hits
         )
+        // A provenance the gate did not consume must not attach to a later failure from outside the loop.
+        pendingLineage = nil
         // Credit every arm in the mask, whatever the verdict: the bandit only learns from admissions, but the report has to be able to say what an arm spent its attempts on, including the discards an admission-only tally never sees.
         let outcome = FuzzAttemptOutcome(verdict)
         for arm in MutationArm.allCases where candidate.armsMask.contains(arm) {

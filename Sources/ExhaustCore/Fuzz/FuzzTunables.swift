@@ -48,6 +48,9 @@ package enum FuzzTunables {
     /// Directory the mutation-arm window trace writes into, or nil when `EXHAUST_ARM_TRACE` is unset and no trace is kept. Off by default because the rows are only useful to an offline analysis, and a run nobody is analyzing should not pay for the file.
     package static let armTraceDirectory: String? = ProcessInfo.processInfo.environment["EXHAUST_ARM_TRACE"]
 
+    /// Directory the failure lineage trace writes into, or nil when `EXHAUST_FAILURE_LINEAGE` is unset. One JSON line per failing search candidate pairs the child with the parent it was mutated from; see ``FuzzFailureLineage``.
+    package static let failureLineageDirectory: String? = ProcessInfo.processInfo.environment["EXHAUST_FAILURE_LINEAGE"]
+
     /// Attempts per row of the mutation-arm trace, overridden by `EXHAUST_ARM_TRACE_WINDOW`. A minute of searching evaluates tens of thousands of attempts, so 2,000 leaves enough windows in a run for a window-to-window comparison while keeping each window's admission counts above single digits.
     package static let armTraceWindow: Int = ProcessInfo.processInfo.environment["EXHAUST_ARM_TRACE_WINDOW"].flatMap(Int.init) ?? 2000
 

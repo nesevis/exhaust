@@ -33,6 +33,7 @@ extension FuzzRunner {
         // The boost is applied per gate arm rather than up front: a `.duplicate` is a failure the run already accounted for, and boosting on it would credit the same evidence twice while invalidating the tier's prefix sums for a score that does not move.
         switch faults.gate.admit(sequenceHash: failing.sequenceHash, symptom: symptom, coverageNovel: coverageNovel) {
             case .duplicate:
+                recordLineage(gate: "duplicate", clusterID: nil, isNewCluster: nil)
                 return
             case .recordUnreduced:
                 if let parentIndex {
@@ -44,6 +45,7 @@ extension FuzzRunner {
                     attemptIndex: attemptIndex,
                     countsAsInstance: countsAsInstance
                 )
+                recordLineage(gate: "unreduced", clusterID: nil, isNewCluster: nil)
             case let .reduce(isEscape):
                 if let parentIndex {
                     corpus.applyProvisionalFailureBoost(toParentAt: parentIndex)
@@ -58,6 +60,7 @@ extension FuzzRunner {
                             attemptIndex: attemptIndex,
                             countsAsInstance: countsAsInstance
                         )
+                        recordLineage(gate: "unreduced-divergent", clusterID: nil, isNewCluster: nil)
                         return
                     }
                     reductionTree = rebuilt
@@ -156,6 +159,11 @@ extension FuzzRunner {
             countsAsInstance: countsAsInstance
         )
         timing.reductionNanoseconds += monotonicNanoseconds() - reductionStart
+        recordLineage(
+            gate: wasEscape ? "reduce-escape" : "reduce",
+            clusterID: classification.clusterID,
+            isNewCluster: classification.isNewCluster
+        )
 
         if classification.isNewCluster {
             forceCheckpoint = true
@@ -177,5 +185,37 @@ extension FuzzRunner {
             )
         }
         checkpointIfDue()
+    }
+
+    /// Writes the pending lineage row, if the trace is on and ``evaluate(_:)`` stashed a provenance for this failure, and clears the stash. The parent is re-materialized exactly from its corpus sequence so the row shows the value the mutation started from.
+    private func recordLineage(gate: String, clusterID: Int?, isNewCluster: Bool?) {
+        guard let failureLineage, let provenance = pendingLineage else {
+            return
+        }
+        pendingLineage = nil
+        var parentSequence: ChoiceSequence?
+        var parentValue: String?
+        if let parentIndex = provenance.parentIndex, parentIndex < corpus.entries.count {
+            let parent = corpus.entries[parentIndex]
+            parentSequence = parent.sequence
+            if case let .success(value, _, _) = Materializer.materializeAny(
+                erasedGen,
+                prefix: parent.sequence,
+                mode: .exact,
+                fallbackTree: parent.tree,
+                skipTree: true,
+                collectDecodingReport: false
+            ) {
+                parentValue = String(reflecting: value)
+            }
+        }
+        failureLineage.record(
+            provenance,
+            parentSequence: parentSequence,
+            parentValue: parentValue,
+            gate: gate,
+            cluster: clusterID.map { "\($0)" },
+            isNewCluster: isNewCluster
+        )
     }
 }
