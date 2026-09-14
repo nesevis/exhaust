@@ -96,7 +96,7 @@ extension FuzzRunner {
     private func eligibleArms(parent: CorpusEntry, parentIndex: Int) -> MutationArmSet {
         var eligible = MutationArmSet.bands
         let layout = parent.mutationLayout
-        if layout?.hasBindRegion == true, corpus.parentIndices.count > 1 {
+        if FuzzTunables.spliceEnabled, layout?.hasBindRegion == true, corpus.parentIndices.count > 1 {
             eligible.insert(.splice)
         }
         guard let targets = corpus.mutationTargets(forParentAt: parentIndex) else {
@@ -246,12 +246,12 @@ extension FuzzRunner {
         }
     }
 
-    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining eligible inventory (the three bands, plus the arms the `graphMutation` and `pairMutation` knobs add).
+    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability while ``FuzzTunables/spliceEnabled`` holds, otherwise a uniform draw over the remaining eligible inventory (the three bands, plus the arms the `graphMutation` and `pairMutation` knobs add).
     ///
-    /// The splice draw is consumed whether or not splice is eligible, so the PRNG stream advances the same amount per call and a gated run and an ungated one stay comparable attempt for attempt.
+    /// The splice draw is consumed whether or not splice is eligible or enabled, so the PRNG stream advances the same amount per call and a gated run and an ungated one stay comparable attempt for attempt.
     private func fixedDistributionArm(eligible: MutationArmSet) -> MutationArm {
         let spliceDraw = randomUnit()
-        if eligible.contains(.splice), spliceDraw < FuzzTunables.spliceProbability {
+        if FuzzTunables.spliceEnabled, eligible.contains(.splice), spliceDraw < FuzzTunables.spliceProbability {
             return .splice
         }
         if eligible == .all, fixedDrawArms.isEmpty == false {

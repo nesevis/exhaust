@@ -38,6 +38,15 @@ package enum FuzzTunables {
     /// Probability that a mutation candidate is a bind-boundary splice with a random donor instead of a single-parent mutation. AFL's splicing yields roughly 10–15% of paths in extended runs; the starting weight matches.
     package static let spliceProbability = 0.125
 
+    /// Whether the bind-boundary splice arm is in the inventory. `EXHAUST_BLIND_MUTATORS=0` removes it with the other two blind operations for an ablation. The splice pairs any donor bind region with any recipient bind region by position alone, since the flat sequence's bind markers carry no site fingerprint; it fires only on generators with bind regions and was measured as a loss on F<: (2026-09-13), but the three blind operations together were worth 109 IFC solves over three seed sets (2026-09-15) through the corpus coverage they add, so they stay on by default.
+    package static let spliceEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_BLIND_MUTATORS"] != "0"
+
+    /// Whether the high band may delete its region outright rather than randomising the values in it. A deletion cut by index removes markers along with values, so the prefix stops parsing at the cut and the materialiser rebuilds the remainder from the fallback tree and the PRNG; that rebuild is what reaches parents the typed operators do not, measured on IFC as covered edges (489 against 475 per trial) and the eleven-mutant block (102 against 45 over three seed sets, 2026-09-15). `EXHAUST_BLIND_MUTATORS=0` turns it off with the other two.
+    package static let regionDeletionEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_BLIND_MUTATORS"] != "0"
+
+    /// Whether the medium band may delete, duplicate, or overwrite a block chosen by index, beside its branch pivot. A block cut by index crosses marker pairs, so the child is whatever the materialiser rebuilds past the cut; the typed forms (``MutationArm/elementDeletion``, ``MutationArm/elementDuplication``, ``MutationArm/typedCrossover``) make the same moves through the graph, but the blind cut is what copies a span across the two halves of a mirrored composite and it carries the IFC block (see ``regionDeletionEnabled``). `EXHAUST_BLIND_MUTATORS=0` turns it off with the other two.
+    package static let blockMovesEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_BLIND_MUTATORS"] != "0"
+
     // MARK: - Phase 1 (Screening)
 
     /// Rows the screening pass may draw from the covering array before sampling begins. The pass rarely detects a fault on its own, but its boundary rows seed the only fully populated memories the corpus sees, so the number trades a few hundred milliseconds against reach into memory-operation faults; 1,000 keeps most of that reach at a tenth of the original 10,000's cost. `EXHAUST_SCREENING_BUDGET` overrides it for measurement.

@@ -9,7 +9,7 @@
 
 /// The perturbation weight class of one fuzz mutation.
 ///
-/// Low preserves the parent's branch decisions and moves only leaf values; medium changes structure (block deletion, duplication, replacement, branch pivot); high corrupts a large region so the materializer falls through to PRNG for most of the resolution — effectively fresh sampling biased by the surviving fragments, useful for escaping local minima.
+/// Low preserves the parent's branch decisions and moves only leaf values; medium pivots a pick to another branch (and, while ``FuzzTunables/blockMovesEnabled`` holds, deletes, duplicates, or overwrites a block chosen by index); high randomises every value in a large region, keeping the parent's structure around a resampled interior (and, while ``FuzzTunables/regionDeletionEnabled`` holds, deletes the region outright on half of its draws).
 package enum MutationIntensity: CaseIterable, Sendable {
     case low
     case medium
@@ -295,14 +295,17 @@ package enum FuzzMutator {
 
     // MARK: - Medium Intensity: Structure
 
-    /// Applies one structural mutation: block deletion, block duplication, block replacement, or branch pivot.
+    /// Applies one structural mutation: a branch pivot, or, while ``FuzzTunables/blockMovesEnabled`` holds, a block deletion, duplication, or replacement on three of four draws.
+    ///
+    /// The move draw is consumed either way so the PRNG stream keeps its shape whether or not the block moves are enabled. With them off, every draw pivots, and a sequence with no pick site is returned unchanged, which the caller records as a miss.
     private static func mutateStructure(
         _ sequence: ChoiceSequence,
         branchIndices cachedBranchIndices: [Int]?,
         prng: inout Xoshiro256
     ) -> ChoiceSequence {
         var result = sequence
-        switch prng.next(upperBound: 4) {
+        let move = prng.next(upperBound: 4)
+        switch FuzzTunables.blockMovesEnabled ? move : 3 {
             case 0:
                 let block = randomBlock(in: result, maximumFraction: 0.25, prng: &prng)
                 result.removeSubrange(block)
@@ -327,8 +330,10 @@ package enum FuzzMutator {
                     branchIndices = discovered
                 }
                 guard branchIndices.isEmpty == false else {
-                    let block = randomBlock(in: result, maximumFraction: 0.25, prng: &prng)
-                    result.removeSubrange(block)
+                    if FuzzTunables.blockMovesEnabled {
+                        let block = randomBlock(in: result, maximumFraction: 0.25, prng: &prng)
+                        result.removeSubrange(block)
+                    }
                     break
                 }
                 let target = branchIndices[Int(prng.next(upperBound: UInt64(branchIndices.count)))]
@@ -348,11 +353,14 @@ package enum FuzzMutator {
 
     // MARK: - High Intensity: Region Corruption
 
-    /// Corrupts a large contiguous region: either deletes it outright or rewrites every value entry in it with full-range random bit patterns.
+    /// Corrupts a large contiguous region: rewrites every value entry in it with full-range random bit patterns, or, while ``FuzzTunables/regionDeletionEnabled`` holds, deletes it outright on half of the draws.
+    ///
+    /// The deletion draw is consumed either way so the PRNG stream keeps its shape whether or not deletion is enabled.
     private static func corruptRegion(_ sequence: ChoiceSequence, prng: inout Xoshiro256) -> ChoiceSequence {
         var result = sequence
         let block = randomBlock(in: result, minimumFraction: 0.25, maximumFraction: 0.75, prng: &prng)
-        if prng.next(upperBound: 2) == 0 {
+        let deletes = prng.next(upperBound: 2) == 0
+        if FuzzTunables.regionDeletionEnabled, deletes {
             result.removeSubrange(block)
         } else {
             for index in block {

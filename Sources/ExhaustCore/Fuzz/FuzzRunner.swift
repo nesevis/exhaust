@@ -245,7 +245,7 @@ package final class FuzzRunner<Output> {
         )
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
-        var arms = MutationArm.bandArms
+        var arms = MutationArm.bandArms.filter { FuzzTunables.spliceEnabled || $0 != .splice }
         if configuration.experiments.graphMutation {
             arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication, .valueReseed, .runDeletion, .runDuplication, .runCopy, .suffixReseed]
             if FuzzTunables.smallDomainEnumerationEnabled {
