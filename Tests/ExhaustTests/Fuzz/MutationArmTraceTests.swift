@@ -85,8 +85,8 @@ struct MutationArmTraceTests {
         #expect(experiments.armEligibility)
         #expect(experiments.armAdmissibility)
         #expect(experiments.banditBands)
-        #expect(FuzzExperiments.shipped.armEligibility == false)
-        #expect(FuzzExperiments.shipped.armAdmissibility == false)
+        #expect(FuzzExperiments.shipped.armEligibility)
+        #expect(FuzzExperiments.shipped.armAdmissibility)
     }
 
     @Test("The parity halves of a run's credited candidates sum to its totals")
