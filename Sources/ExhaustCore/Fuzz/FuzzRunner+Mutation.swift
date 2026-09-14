@@ -131,13 +131,20 @@ extension FuzzRunner {
                 {
                     reseedRanges = ranges
                 }
+            case .suffixReseed:
+                if let targets = corpus.mutationTargets(forParentAt: parentIndex),
+                   let cut = FuzzMutator.suffixReseed(candidate, targets: targets, prng: &prng)
+                {
+                    candidate = cut.candidate
+                    reseedRanges = cut.reseedRanges
+                }
             case .low:
                 candidate = FuzzMutator.mutate(candidate, intensity: .low, layout: layout, prng: &prng)
             case .medium:
                 candidate = FuzzMutator.mutate(candidate, intensity: .medium, layout: layout, prng: &prng)
             case .high:
                 candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
-            case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover, .elementDeletion, .elementDuplication:
+            case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover, .elementDeletion, .elementDuplication, .runDeletion, .runDuplication, .runCopy:
                 if let targeted = graphArmCandidate(arm, candidate, parent: parent, parentIndex: parentIndex) {
                     candidate = targeted
                 }
@@ -207,7 +214,13 @@ extension FuzzRunner {
                 return FuzzMutator.deleteSequenceElement(candidate, targets: targets, prng: &prng)
             case .elementDuplication:
                 return FuzzMutator.duplicateSequenceElement(candidate, targets: targets, prng: &prng)
-            case .low, .medium, .high, .splice, .valueReseed:
+            case .runDeletion:
+                return FuzzMutator.deleteElementRun(candidate, targets: targets, prng: &prng)
+            case .runDuplication:
+                return FuzzMutator.duplicateElementRun(candidate, targets: targets, prng: &prng)
+            case .runCopy:
+                return FuzzMutator.copyElementRun(candidate, targets: targets, prng: &prng)
+            case .low, .medium, .high, .splice, .valueReseed, .suffixReseed:
                 return nil
         }
     }

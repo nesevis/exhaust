@@ -184,6 +184,19 @@ package struct MutationTargets: Sendable {
         if sites.isEmpty == false {
             structural.insert(.valueReseed)
         }
+        if deletableSequenceNodeIDs.isEmpty == false {
+            structural.insert(.runDeletion)
+        }
+        if duplicableSequenceNodeIDs.isEmpty == false {
+            structural.insert(.runDuplication)
+        }
+        if graph.liveNodeIDs.contains(where: { nodeID in
+            if case let .sequence(metadata) = graph.nodes[nodeID].kind { return metadata.elementCount >= 2 }
+            return false
+        }) {
+            structural.insert(.runCopy)
+            structural.insert(.suffixReseed)
+        }
         structuralArms = structural
     }
 }
@@ -327,6 +340,175 @@ package extension FuzzMutator {
             return nil
         }
         return shifted.candidate
+    }
+
+    // MARK: - Element Run Operators
+
+    /// A log-uniform run length in `1 ... limit`: 1, 2, 4, and so on up to the largest power of two not above `limit`, each with equal probability, so short runs are the common case and long ones stay reachable.
+    private static func runLength(upTo limit: Int, prng: inout Xoshiro256) -> Int {
+        guard limit > 1 else {
+            return 1
+        }
+        var powers = 0
+        var span = 1
+        while span * 2 <= limit {
+            span *= 2
+            powers += 1
+        }
+        return 1 << Int(prng.next(upperBound: UInt64(powers + 1)))
+    }
+
+    /// Draws one sequence node with at least `minimumElements` elements, uniformly over the eligible nodes, and returns its metadata.
+    private static func pickSequenceNode(
+        from nodeIDs: [Int],
+        graph: ChoiceGraph,
+        minimumElements: Int,
+        prng: inout Xoshiro256
+    ) -> SequenceMetadata? {
+        let eligible = nodeIDs.filter { nodeID in
+            if case let .sequence(metadata) = graph.nodes[nodeID].kind {
+                return metadata.elementCount >= minimumElements && metadata.childPositionRanges.count == metadata.elementCount
+            }
+            return false
+        }
+        guard eligible.isEmpty == false else {
+            return nil
+        }
+        guard case let .sequence(metadata) = graph.nodes[eligible[Int(prng.next(upperBound: UInt64(eligible.count)))]].kind else {
+            return nil
+        }
+        return metadata
+    }
+
+    /// Removes a run of consecutive elements from one sequence node: the typed form of the medium band's block deletion, cutting on element boundaries so the prefix stays parseable.
+    ///
+    /// The run length is log-uniform up to what the node's lower length bound allows. Returns nil when no node has a removable run or the run's positions do not fit the candidate.
+    static func deleteElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let metadata = pickSequenceNode(from: targets.deletableSequenceNodeIDs, graph: targets.graph, minimumElements: 1, prng: &prng) else {
+            return nil
+        }
+        let lower = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+        let removable = metadata.elementCount - lower
+        guard removable >= 1 else {
+            return nil
+        }
+        let length = runLength(upTo: removable, prng: &prng)
+        let start = Int(prng.next(upperBound: UInt64(metadata.elementCount - length + 1)))
+        let first = metadata.childPositionRanges[start]
+        let last = metadata.childPositionRanges[start + length - 1]
+        guard last.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.removeSubrange(first.lowerBound ... last.upperBound)
+        return result
+    }
+
+    /// Repeats a run of consecutive elements of one sequence node in place: the typed form of the medium band's block duplication.
+    ///
+    /// The copy is inserted directly after the run, so a repeated instruction idiom lands where the blind duplication put it. Returns nil when no node can grow by the drawn run or the run's positions do not fit the candidate.
+    static func duplicateElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let metadata = pickSequenceNode(from: targets.duplicableSequenceNodeIDs, graph: targets.graph, minimumElements: 1, prng: &prng) else {
+            return nil
+        }
+        let upper = metadata.lengthConstraint?.upperBound ?? UInt64.max
+        let headroom = upper == UInt64.max ? metadata.elementCount : Int(min(UInt64(metadata.elementCount), upper - UInt64(metadata.elementCount)))
+        guard headroom >= 1 else {
+            return nil
+        }
+        let length = runLength(upTo: headroom, prng: &prng)
+        let start = Int(prng.next(upperBound: UInt64(metadata.elementCount - length + 1)))
+        let first = metadata.childPositionRanges[start]
+        let last = metadata.childPositionRanges[start + length - 1]
+        guard last.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.insert(contentsOf: candidate[first.lowerBound ... last.upperBound], at: last.upperBound + 1)
+        return result
+    }
+
+    /// Copies one run of a sequence node over a disjoint run of the same node: the typed form of the medium band's block overwrite, within one sequence.
+    ///
+    /// Both runs have the drawn length, so the sequence keeps its element count; the target's spans are replaced entry for entry with the source's, which may change the candidate's length when the elements are composites of different sizes. Returns nil when no node has two elements, or the runs do not fit the candidate.
+    static func copyElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        let sequenceNodeIDs = targets.graph.liveNodeIDs.filter { nodeID in
+            if case let .sequence(metadata) = targets.graph.nodes[nodeID].kind { return metadata.elementCount >= 2 }
+            return false
+        }
+        guard let metadata = pickSequenceNode(from: sequenceNodeIDs, graph: targets.graph, minimumElements: 2, prng: &prng) else {
+            return nil
+        }
+        let length = runLength(upTo: metadata.elementCount / 2, prng: &prng)
+        let starts = metadata.elementCount - length + 1
+        let source = Int(prng.next(upperBound: UInt64(starts)))
+        // The target is drawn uniformly over the starts whose run is disjoint from the source's, by counting them rather than rejecting: on a three-element list with runs of one there are exactly two, and a rejection loop that gives up leaves the arm missing on the lists where an overwrite matters most.
+        let excludedLow = max(0, source - length + 1)
+        let excludedHigh = min(starts - 1, source + length - 1)
+        let excludedCount = excludedHigh - excludedLow + 1
+        let validCount = starts - excludedCount
+        guard validCount >= 1 else {
+            return nil
+        }
+        var target = Int(prng.next(upperBound: UInt64(validCount)))
+        if target >= excludedLow {
+            target += excludedCount
+        }
+        let sourceRange = metadata.childPositionRanges[source].lowerBound ... metadata.childPositionRanges[source + length - 1].upperBound
+        let targetRange = metadata.childPositionRanges[target].lowerBound ... metadata.childPositionRanges[target + length - 1].upperBound
+        guard sourceRange.upperBound < candidate.count, targetRange.upperBound < candidate.count else {
+            return nil
+        }
+        return candidate.copyingSpan(from: sourceRange, onto: targetRange)
+    }
+
+    /// Cuts one sequence node at an element, dropping every element from there to its end, and reseeds every maximal independent site after the node: the typed form of the high band's region deletion.
+    ///
+    /// The blind cut dropped a quarter to three quarters of the sequence by index and left the materialiser to regenerate whatever followed from the fallback tree and the PRNG. Here the cut lands on an element boundary and the regeneration is explicit: the sites after the shortened node are reseeded at their own positions in the shortened candidate. Returns nil when no node has at least two elements above its lower length bound, or the cut does not fit the candidate.
+    static func suffixReseed(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> (candidate: ChoiceSequence, reseedRanges: [ClosedRange<Int>])? {
+        guard let metadata = pickSequenceNode(from: targets.deletableSequenceNodeIDs, graph: targets.graph, minimumElements: 2, prng: &prng) else {
+            return nil
+        }
+        let lower = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+        let keepAtLeast = max(lower, 1)
+        guard metadata.elementCount > keepAtLeast else {
+            return nil
+        }
+        let cut = keepAtLeast + Int(prng.next(upperBound: UInt64(metadata.elementCount - keepAtLeast)))
+        let first = metadata.childPositionRanges[cut]
+        let last = metadata.childPositionRanges[metadata.elementCount - 1]
+        guard last.upperBound < candidate.count else {
+            return nil
+        }
+        let removed = first.lowerBound ... last.upperBound
+        var result = candidate
+        result.removeSubrange(removed)
+        let shift = removed.count
+        var ranges: [ClosedRange<Int>] = []
+        for index in targets.maximalReseedSiteIndices {
+            let range = targets.reseedSites[index].range
+            guard range.lowerBound > removed.upperBound else { continue }
+            let shifted = (range.lowerBound - shift) ... (range.upperBound - shift)
+            guard shifted.upperBound < result.count else { continue }
+            ranges.append(shifted)
+        }
+        return (result, ranges)
     }
 
     // MARK: - Sequence Element Operators

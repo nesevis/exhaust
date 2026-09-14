@@ -236,7 +236,7 @@ package final class FuzzRunner<Output> {
         prng = Xoshiro256(seed: configuration.seed)
         var arms = MutationArm.bandArms
         if configuration.experiments.graphMutation {
-            arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication, .valueReseed]
+            arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication, .valueReseed, .runDeletion, .runDuplication, .runCopy, .suffixReseed]
         }
         if configuration.experiments.pairMutation {
             arms += [.twinSplice, .typedCrossover]

@@ -31,9 +31,13 @@ enum MutationArmRepertoire {
                 case let .sequence(metadata):
                     if metadata.elementCount >= 2 {
                         sighted.insert(.elementDeletion)
+                        sighted.insert(.runDeletion)
+                        sighted.insert(.runCopy)
+                        sighted.insert(.suffixReseed)
                     }
                     if metadata.elementCount >= 1 {
                         sighted.insert(.elementDuplication)
+                        sighted.insert(.runDuplication)
                     }
                 case .just:
                     continue

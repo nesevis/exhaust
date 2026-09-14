@@ -24,6 +24,14 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case elementDuplication = 11
     /// Redraws one or more independent leaves or pick subtrees of the parent from the PRNG at their own sites, keeping everything outside them. See ``FuzzMutator/valueReseed(_:targets:prng:)``.
     case valueReseed = 12
+    /// Removes a run of consecutive elements from one sequence node. See ``FuzzMutator/deleteElementRun(_:targets:prng:)``.
+    case runDeletion = 13
+    /// Repeats a run of consecutive elements of one sequence node in place. See ``FuzzMutator/duplicateElementRun(_:targets:prng:)``.
+    case runDuplication = 14
+    /// Copies one run of a sequence node over another run of the same node. See ``FuzzMutator/copyElementRun(_:targets:prng:)``.
+    case runCopy = 15
+    /// Cuts a sequence node at an element and reseeds every independent site after the cut. See ``FuzzMutator/suffixReseed(_:targets:prng:)``.
+    case suffixReseed = 16
 
     /// The inventory with the targeting knobs off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so this is the raw-value prefix of the inventory.
     package static let bandArms: [MutationArm] = [.low, .medium, .high, .splice]
