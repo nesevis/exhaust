@@ -57,6 +57,15 @@ package struct MutationTargets: Sendable {
     /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
     package private(set) var structuralArms: MutationArmSet
 
+    /// The number of patterns in a leaf's valid range when that is at most ``FuzzTunables/smallDomainLimit`` and at least two, or nil. Computed from the bounds' difference so a full-width range, whose count does not fit an `Int`, is answered rather than trapped on.
+    static func smallDomainSize(of range: ClosedRange<UInt64>) -> UInt64? {
+        let width = range.upperBound &- range.lowerBound
+        guard width >= 1, width < FuzzTunables.smallDomainLimit else {
+            return nil
+        }
+        return width + 1
+    }
+
     /// Records that the enumeration walked `siteIndex`, so later draws on this entry skip it.
     mutating func markEnumerated(siteIndex: Int) {
         enumeratedSiteIndices.insert(siteIndex)
@@ -198,7 +207,7 @@ package struct MutationTargets: Sendable {
         for (index, site) in sites.enumerated() {
             guard let position = Self.sitePosition(of: site, in: flat),
                   case let .value(entry) = flat[position],
-                  let range = entry.validRange, range.count >= 2, range.count <= FuzzTunables.smallDomainLimit
+                  let range = entry.validRange, Self.smallDomainSize(of: range) != nil
             else { continue }
             enumerable.append(index)
         }
@@ -531,10 +540,10 @@ package extension FuzzMutator {
         var children: [ChoiceSequence] = []
         switch candidate[position] {
             case let .value(entry):
-                guard let range = entry.validRange, range.count >= 2, range.count <= FuzzTunables.smallDomainLimit else {
+                guard let range = entry.validRange, let size = MutationTargets.smallDomainSize(of: range) else {
                     return nil
                 }
-                children.reserveCapacity(Int(range.count) - 1)
+                children.reserveCapacity(Int(size) - 1)
                 for pattern in range where pattern != entry.choice.bitPattern64 {
                     var child = candidate
                     child[position] = .value(ChoiceSequenceValue.Value(

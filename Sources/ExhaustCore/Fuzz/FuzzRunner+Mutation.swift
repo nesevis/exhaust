@@ -11,6 +11,8 @@ package struct MutationDraw {
     package var reseedRanges: [ClosedRange<Int>] = []
     /// Further candidates from the same draw, evaluated after `candidate` under the same arm: the rest of a small-domain enumeration. Empty for every other arm.
     package var alternatives: [ChoiceSequence] = []
+    /// Whether the draw is a small-domain enumeration, whose children are deliberate single-site edits and skip the swarm rewrite. Set for every enumeration, a two-value domain's single child included, since `alternatives` is empty for that one.
+    package var isEnumeration = false
 }
 
 extension FuzzRunner {
@@ -20,7 +22,7 @@ extension FuzzRunner {
     package func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> MutationDraw {
         let draw = inventoryCandidate(from: parent, parentIndex: parentIndex)
         // An enumeration is a deliberate single-site edit whose children differ from the parent at exactly that site; a swarm rewrite of their branch selections would take that away and make the batch incomparable.
-        if draw.alternatives.isEmpty == false {
+        if draw.isEnumeration {
             swarmDerivationIndex += 1
             return draw
         }
@@ -132,6 +134,7 @@ extension FuzzRunner {
         var candidate = parent.sequence
         var reseedRanges: [ClosedRange<Int>] = []
         var alternatives: [ChoiceSequence] = []
+        var isEnumeration = false
         switch arm {
             case .smallDomainEnumeration:
                 if let targets = corpus.mutationTargets(forParentAt: parentIndex),
@@ -139,6 +142,7 @@ extension FuzzRunner {
                 {
                     candidate = enumeration.children[0]
                     alternatives = Array(enumeration.children.dropFirst())
+                    isEnumeration = true
                     corpus.markEnumerated(siteIndex: enumeration.siteIndex, forParentAt: parentIndex)
                 }
             case .valueReseed:
@@ -184,7 +188,8 @@ extension FuzzRunner {
                 armsMask: MutationArmSet(arm),
                 drawProbability: bandit.probability(of: arm, eligible: eligible),
                 reseedRanges: reseedRanges,
-                alternatives: alternatives
+                alternatives: alternatives,
+                isEnumeration: isEnumeration
             )
         }
         counts.mutationArms.recordMiss(arm: arm)

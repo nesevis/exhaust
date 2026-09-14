@@ -74,7 +74,7 @@ enum MutationArmRepertoire {
                     guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false,
                           let range = metadata.validRange
                     else { return false }
-                    return range.count >= 2 && range.count <= FuzzTunables.smallDomainLimit
+                    return MutationTargets.smallDomainSize(of: range) != nil
                 default:
                     return false
             }

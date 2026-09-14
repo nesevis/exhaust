@@ -70,7 +70,54 @@ struct SmallDomainEnumerationTests {
     }
 }
 
+extension SmallDomainEnumerationTests {
+    @Test("An enumeration of a two-value leaf, which yields one child, still skips the swarm rewrite")
+    func binaryEnumerationKeepsBranches() throws {
+        let gen = binaryLeafWithPicksGenerator()
+        var interpreter = ValueAndChoiceTreeInterpreter(gen, seed: 5, maxRuns: 1)
+        let (_, tree) = try #require(try interpreter.next())
+        let parent = ChoiceSequence.flatten(tree)
+        // Shipped experiments: the swarm rewrite is active, so any enumeration child that reached it would have its branch selections pivoted.
+        let runner = FuzzRunner(
+            gen: gen,
+            property: { _ in .pass },
+            source: SyntheticCoverageSource<(UInt64, UInt64, UInt64)>(edgeCount: 8, hitEdges: { _ in [(edge: 0, hitCount: 1)] }),
+            configuration: FuzzRunnerConfiguration(budgetNanoseconds: 1_000_000_000, seed: 3, skipScreening: true, experiments: .shipped)
+        )
+        let admission = runner.corpus.offer(sequence: parent, tree: tree, hits: [(edge: 0, hitCount: 1)], convergence: 1.0, generation: 0, phase: .sampling)
+        guard case let .admitted(index, .mutable) = admission else {
+            Issue.record("parent was not admitted as a mutable entry: \(admission)")
+            return
+        }
+        let entry = runner.corpus.entries[index]
+        var enumerations = 0
+        var rewritten = 0
+        for _ in 0 ..< 400 where enumerations < 10 {
+            let draw = runner.nextCandidate(from: entry, parentIndex: index)
+            guard draw.isEnumeration else { continue }
+            enumerations += 1
+            let differing = draw.candidate.indices.filter { draw.candidate[$0] != parent[$0] }
+            if differing.count != 1 {
+                rewritten += 1
+            }
+        }
+        #expect(enumerations > 0, "no enumeration draw in 400 draws")
+        #expect(rewritten == 0, "\(rewritten) of \(enumerations) enumeration children differed from the parent at more than one entry")
+    }
+}
+
 // MARK: - Helpers
+
+/// One two-value leaf beside two three-arm picks: the enumeration has one alternative, and the picks are what a swarm rewrite would pivot.
+private func binaryLeafWithPicksGenerator() -> Generator<(UInt64, UInt64, UInt64)> {
+    let flag: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1)
+    let arm: Generator<UInt64> = Gen.pick(choices: [
+        (1, Gen.choose(in: UInt64(100) ... 199)),
+        (1, Gen.choose(in: UInt64(200) ... 299)),
+        (1, Gen.choose(in: UInt64(300) ... 399)),
+    ])
+    return Gen.zip(flag, arm, arm)
+}
 
 /// Two four-valued leaves and one wide leaf. The parent seed is scanned so the two small leaves hold different values.
 private func smallLeafGenerator() -> Generator<(UInt64, UInt64, UInt64)> {
