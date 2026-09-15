@@ -106,24 +106,32 @@ package extension Gen {
             continuation: { .pure($0) }
         )
         let arity = erased.count
-        let forward: (Any) throws -> Any = { anyValues in
+        let forward: (Any) throws -> Packed = { anyValues in
             try pack(zipComponents(anyValues, arity: arity))
+        }
+        let erasedForward: (Any) throws -> Any = forward
+        let backward: (Packed) throws -> Any = { try unpack($0) }
+        let erasedBackward: (Any) throws -> Any = { anyPacked in
+            guard let packed = anyPacked as? Packed else {
+                throw ReflectionError.contramapWasWrongType
+            }
+            return try backward(packed)
         }
         var wrapped: ReflectiveGenerator<Packed> = Gen.liftF(.transform(
             kind: .isomorph(
-                forward: forward,
-                backward: { anyPacked in
-                    guard let packed = anyPacked as? Packed else {
-                        throw ReflectionError.contramapWasWrongType
-                    }
-                    return try unpack(packed)
-                },
+                forward: erasedForward,
+                backward: erasedBackward,
                 inputType: [Any].self,
                 outputType: Packed.self
             ),
             inner: zipNode
         )).wrapped(isReflective: isReflective)
-        wrapped.fusable = FusableTransform(forward: forward, inner: zipNode, inputType: [Any].self)
+        wrapped.fusable = FusableTransform(
+            forward: forward,
+            backward: backward,
+            inner: zipNode,
+            inputType: [Any].self
+        )
         return wrapped
     }
 

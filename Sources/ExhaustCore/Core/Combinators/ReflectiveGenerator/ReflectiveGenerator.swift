@@ -35,7 +35,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     package let isReflective: Bool
 
     /// Set only when `gen` is exactly one `.map` or `.isomorph` transform node with an identity continuation, so a following ``map(_:)`` can compose its forward into that node instead of stacking another. Every other construction leaves it nil.
-    package var fusable: FusableTransform?
+    package var fusable: FusableTransform<Output>?
 
     /// Wraps an already-constructed generator.
     ///
@@ -164,31 +164,43 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         if let fusable {
             let innerForward = fusable.forward
-            let composed: (Any) throws -> Any = { try transform(innerForward($0) as! Output) }
+            let composed: (Any) throws -> NewOutput = { try transform(innerForward($0)) }
+            let erasedComposed: (Any) throws -> Any = composed
             var fused: ReflectiveGenerator<NewOutput> = Gen.liftF(.transform(
                 kind: .map(
-                    forward: composed,
+                    forward: erasedComposed,
                     backward: nil,
                     inputType: fusable.inputType,
                     outputType: NewOutput.self
                 ),
                 inner: fusable.inner
             )).wrapped(isReflective: false)
-            fused.fusable = FusableTransform(forward: composed, inner: fusable.inner, inputType: fusable.inputType)
+            fused.fusable = FusableTransform(
+                forward: composed,
+                backward: nil,
+                inner: fusable.inner,
+                inputType: fusable.inputType
+            )
             return fused
         }
-        let forward: (Any) throws -> Any = { try transform($0 as! Output) }
+        let forward: (Any) throws -> NewOutput = { try transform($0 as! Output) }
+        let erasedForward: (Any) throws -> Any = forward
         let inner = gen.erase()
         var mapped: ReflectiveGenerator<NewOutput> = Gen.liftF(.transform(
             kind: .map(
-                forward: forward,
+                forward: erasedForward,
                 backward: nil,
                 inputType: Output.self,
                 outputType: NewOutput.self
             ),
             inner: inner
         )).wrapped(isReflective: false)
-        mapped.fusable = FusableTransform(forward: forward, inner: inner, inputType: Output.self)
+        mapped.fusable = FusableTransform(
+            forward: forward,
+            backward: nil,
+            inner: inner,
+            inputType: Output.self
+        )
         return mapped
     }
 }
@@ -222,16 +234,23 @@ extension ReflectiveGenerator: CustomStringConvertible {
     }
 }
 
-/// The one transform node a ``ReflectiveGenerator`` is known to consist of, recorded so a following forward-only map can fold into it.
+/// The one value-transform node a ``ReflectiveGenerator`` is known to consist of, recorded so following maps can compose into it.
 ///
-/// `@unchecked Sendable` for the same reason as ``ReflectiveGenerator``: the closure is the transform node's own `@Sendable` forward and the inner generator is the same indirect enum the wrapper already carries.
-package struct FusableTransform: @unchecked Sendable {
-    package let forward: (Any) throws -> Any
+/// A nil `backward` means an earlier forward-only map already made the chain non-reflective. A bidirectional map composes backward functions in reverse order while a forward-only map deliberately drops the inverse. `@unchecked Sendable` is safe for the same reason as ``ReflectiveGenerator``: both closures come from the transform node's `@Sendable` API boundaries, and `inner` is the same indirect enum the wrapper already carries.
+package struct FusableTransform<Output>: @unchecked Sendable {
+    package let forward: (Any) throws -> Output
+    package let backward: ((Output) throws -> Any)?
     package let inner: AnyGenerator
     package let inputType: Any.Type
 
-    package init(forward: @escaping (Any) throws -> Any, inner: AnyGenerator, inputType: Any.Type) {
+    package init(
+        forward: @escaping (Any) throws -> Output,
+        backward: ((Output) throws -> Any)?,
+        inner: AnyGenerator,
+        inputType: Any.Type
+    ) {
         self.forward = forward
+        self.backward = backward
         self.inner = inner
         self.inputType = inputType
     }

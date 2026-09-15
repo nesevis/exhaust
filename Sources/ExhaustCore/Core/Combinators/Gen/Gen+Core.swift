@@ -51,25 +51,33 @@ package extension Gen {
         forward: @escaping (Inner) throws -> Output,
         backward: @escaping (Output) throws -> Inner
     ) -> IsomorphNode<Output> {
-        let erasedForward: (Any) throws -> Any = { try forward($0 as! Inner) }
+        let typedForward: (Any) throws -> Output = { try forward($0 as! Inner) }
+        let erasedForward: (Any) throws -> Any = typedForward
+        let typedBackward: (Output) throws -> Any = { try backward($0) }
+        let erasedBackward: (Any) throws -> Any = { anyOutput in
+            guard let output = anyOutput as? Output else {
+                throw ReflectionError.contramapWasWrongType
+            }
+            return try typedBackward(output)
+        }
         let erasedInner = inner.erase()
-        let gen: Generator<Output> = liftF(.transform(
+        let generator: Generator<Output> = liftF(.transform(
             kind: .isomorph(
                 forward: erasedForward,
-                backward: { anyOutput in
-                    guard let output = anyOutput as? Output else {
-                        throw ReflectionError.contramapWasWrongType
-                    }
-                    return try backward(output)
-                },
+                backward: erasedBackward,
                 inputType: Inner.self,
                 outputType: Output.self
             ),
             inner: erasedInner
         ))
         return IsomorphNode(
-            gen: gen,
-            fusable: FusableTransform(forward: erasedForward, inner: erasedInner, inputType: Inner.self)
+            gen: generator,
+            fusable: FusableTransform(
+                forward: typedForward,
+                backward: typedBackward,
+                inner: erasedInner,
+                inputType: Inner.self
+            )
         )
     }
 
@@ -140,7 +148,7 @@ package extension Gen {
 /// A freshly built `.isomorph` node with the record a ``ReflectiveGenerator`` needs to fuse a following forward-only map into it.
 package struct IsomorphNode<Output> {
     package let gen: Generator<Output>
-    package let fusable: FusableTransform
+    package let fusable: FusableTransform<Output>
 
     /// Wraps the node, carrying the fusion record.
     package func wrapped(isReflective: Bool) -> ReflectiveGenerator<Output> {

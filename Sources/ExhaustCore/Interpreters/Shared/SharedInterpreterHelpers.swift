@@ -43,7 +43,7 @@ package enum SharedInterpreterHelpers {
     /// Throws ``GeneratorError/generationDeadlineExceeded(seconds:)`` when the per-value deadline has passed. Checked on a sampled cadence — at sequence entry (element zero) and every 1024th element after — so the clock read stays off the per-element hot path while nested structures, which re-enter their element loops constantly, still hit the entry check. Skipped entirely when `deadlineNanoseconds` is zero (generation that is not deadline-bound, such as reducer replays).
     @inline(__always)
     static func checkGenerationDeadline(_ deadlineNanoseconds: UInt64, elementIndex: Int) throws {
-        guard deadlineNanoseconds > 0, elementIndex & 1023 == 0 else { return }
+        guard elementIndex & 1023 == 0, deadlineNanoseconds > 0 else { return }
         guard monotonicNanoseconds() > deadlineNanoseconds else { return }
         throw GeneratorError.generationDeadlineExceeded(
             seconds: Double(perValueGenerationBudgetNanoseconds) / 1_000_000_000

@@ -26,21 +26,71 @@ public extension ReflectiveGenerator {
         forward: @Sendable @escaping (Output) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Output
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        Gen.liftF(.transform(
-            kind: .map(
-                forward: { try forward($0 as! Output) },
-                backward: {
-                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection rather than a programmer error. Throw, as the previous contramap-based construction did, instead of trapping.
-                    guard let output = $0 as? NewOutput else {
+        let typedForward: (Any) throws -> NewOutput = { try forward($0 as! Output) }
+        let erasedForward: (Any) throws -> Any = typedForward
+        let typedBackward: (NewOutput) throws -> Any = { try backward($0) }
+        let erasedBackward: (Any) throws -> Any = { anyOutput in
+            // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection rather than a programmer error. Throw, as the previous contramap-based construction did, instead of trapping.
+            guard let output = anyOutput as? NewOutput else {
+                throw ReflectionError.contramapWasWrongType
+            }
+            return try typedBackward(output)
+        }
+
+        if let fusable {
+            let innerForward = fusable.forward
+            let composedForward: (Any) throws -> NewOutput = {
+                try forward(innerForward($0))
+            }
+            let erasedComposedForward: (Any) throws -> Any = composedForward
+            let composedBackward: ((NewOutput) throws -> Any)? = fusable.backward.map { innerBackward in
+                { output in
+                    try innerBackward(backward(output))
+                }
+            }
+            let erasedComposedBackward: ((Any) throws -> Any)? = composedBackward.map { composedBackward in
+                { anyOutput in
+                    guard let output = anyOutput as? NewOutput else {
                         throw ReflectionError.contramapWasWrongType
                     }
-                    return try backward(output)
-                },
+                    return try composedBackward(output)
+                }
+            }
+            var mapped: ReflectiveGenerator<NewOutput> = Gen.liftF(.transform(
+                kind: .map(
+                    forward: erasedComposedForward,
+                    backward: erasedComposedBackward,
+                    inputType: fusable.inputType,
+                    outputType: NewOutput.self
+                ),
+                inner: fusable.inner
+            )).wrapped(isReflective: isReflective)
+            mapped.fusable = FusableTransform(
+                forward: composedForward,
+                backward: composedBackward,
+                inner: fusable.inner,
+                inputType: fusable.inputType
+            )
+            return mapped
+        }
+
+        let inner = gen.erase()
+        var mapped: ReflectiveGenerator<NewOutput> = Gen.liftF(.transform(
+            kind: .map(
+                forward: erasedForward,
+                backward: erasedBackward,
                 inputType: Output.self,
                 outputType: NewOutput.self
             ),
-            inner: gen.erase()
+            inner: inner
         )).wrapped(isReflective: isReflective)
+        mapped.fusable = FusableTransform(
+            forward: typedForward,
+            backward: typedBackward,
+            inner: inner,
+            inputType: Output.self
+        )
+        return mapped
     }
 
     /// Adapts a generator to a new output type, using a key path as the inverse for reflection.
