@@ -21,7 +21,7 @@ package struct MutationDrawState {
 
 /// One produced candidate and the accounting the bandit needs to credit it on admission.
 package struct MutationDraw {
-    package let candidate: ChoiceSequence
+    package var candidate: ChoiceSequence
     /// The arm to credit, which is the arm drawn unless its operator missed and a band absorbed the attempt.
     package let armsMask: MutationArmSet
     /// The eligible set the arm was drawn from, so the bandit can compute the conditional probability at reward time instead of on every draw.
@@ -39,27 +39,14 @@ extension FuzzRunner {
 
     /// Produces one mutated candidate from `parent`. Two steps in sequence: one arm drawn from the eligible inventory, then the swarm rewrite of the result's branch selections.
     package func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> MutationDraw {
-        let draw = inventoryCandidate(from: parent, parentIndex: parentIndex)
+        var draw = inventoryCandidate(from: parent, parentIndex: parentIndex)
         // An enumeration is a deliberate single-site edit whose children differ from the parent at exactly that site; a swarm rewrite of their branch selections would take that away and make the batch incomparable.
-        if draw.isEnumeration {
-            swarmDerivationIndex += 1
-            return draw
+        if draw.isEnumeration == false, case .activated = configuration.experiments.swarmMode {
+            let mask = SwarmMask.forIndex(swarmDerivationIndex, rootSeed: configuration.seed)
+            mask.applyActivated(to: &draw.candidate, scratch: &swarmScratch, prng: &prng)
         }
-        switch configuration.experiments.swarmMode {
-            case .off:
-                swarmDerivationIndex += 1
-                return draw
-            case .activated:
-                // Per-candidate weights, so the activation distribution roams every produced candidate rather than every epoch.
-                let mask = SwarmMask.forIndex(swarmDerivationIndex, rootSeed: configuration.seed)
-                swarmDerivationIndex += 1
-                return MutationDraw(
-                    candidate: mask.applyActivated(to: draw.candidate, scratch: &swarmScratch, prng: &prng),
-                    armsMask: draw.armsMask,
-                    eligible: draw.eligible,
-                    reseedRanges: draw.reseedRanges
-                )
-        }
+        swarmDerivationIndex += 1
+        return draw
     }
 
     /// The arms this parent's draw may choose from: the operators that can fire on it, narrowed further by the operators the generator has been shown to admit.

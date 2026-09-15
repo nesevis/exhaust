@@ -73,10 +73,20 @@ package struct SwarmMask: Sendable {
         prng: inout Xoshiro256
     ) -> ChoiceSequence {
         var result = sequence
+        applyActivated(to: &result, scratch: &scratch, prng: &prng)
+        return result
+    }
+
+    /// In-place variant: rewrites branch selections directly in `sequence`, avoiding a copy when the caller already owns the value.
+    package func applyActivated(
+        to sequence: inout ChoiceSequence,
+        scratch: inout ActivationScratch,
+        prng: inout Xoshiro256
+    ) {
         scratch.sites.removeAll(keepingCapacity: true)
         scratch.weights.removeAll(keepingCapacity: true)
-        for index in result.indices {
-            guard case let .branch(branch) = result[index] else {
+        for index in sequence.indices {
+            guard case let .branch(branch) = sequence[index] else {
                 continue
             }
             var siteIndex = -1
@@ -124,13 +134,12 @@ package struct SwarmMask: Sendable {
                 total: site.total,
                 prng: &prng
             )
-            result[index] = .branch(.init(
+            sequence[index] = .branch(.init(
                 id: replacement,
                 branchCount: branch.branchCount,
                 fingerprint: branch.fingerprint
             ))
         }
-        return result
     }
 
     /// Draws a branch identifier from the weighted distribution held at `weights[offset ..< offset + count]`, falling back to a uniform draw when every weight is near zero. `total` is the pre-summed weight, passed by the caller so a sequence that repeats a site does not re-sum its ring per entry.
