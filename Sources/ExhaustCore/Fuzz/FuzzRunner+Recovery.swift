@@ -145,7 +145,8 @@ extension FuzzRunner {
                 lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
                 firstSeenAttempt: record.firstSeenAttempt,
                 unnormalizedMemberCount: record.unnormalizedMemberCount,
-                discoveringPhase: phase
+                discoveringPhase: phase,
+                discoveringOrigin: record.discoveringOrigin.flatMap(CandidateOrigin.init(rawValue:))
             ))
         }
         faults.inventory.restore(clusters: restoredClusters)
@@ -170,10 +171,25 @@ extension FuzzRunner {
                 convergence: record.convergence,
                 generation: record.generation,
                 phase: phase,
+                restoredRootPhase: record.rootPhase.flatMap(FuzzPhase.init(rawValue:)) ?? phase,
                 isBoundaryDerived: record.isBoundaryDerived,
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard
             )
+            if case let .admitted(admittedIndex, .mutable) = admission,
+               configuration.experiments.pairMutation,
+               let targets = corpus.entries[admittedIndex].mutationTargets,
+               targets.sortedFingerprints.isEmpty == false
+            {
+                if case let .success(_, fullTree, _) = Materializer.materializeAny(
+                    erasedGen,
+                    prefix: corpus.entries[admittedIndex].sequence,
+                    mode: .exact,
+                    materializePicks: true
+                ) {
+                    corpus.upgradeToFullTree(at: admittedIndex, fullTree: fullTree)
+                }
+            }
             if verdict.isFailure {
                 restoredFailures.append(RestoredFailure(
                     candidate: EvaluatedFuzzCandidate(
@@ -203,6 +219,8 @@ extension FuzzRunner {
                 failure.candidate,
                 parentIndex: nil,
                 phase: failure.phase,
+                // A restored entry's producer is not persisted; a cluster it creates records no source.
+                origin: nil,
                 coverageNovel: failure.coverageNovel,
                 // The predecessors' attempt total: after every index they recorded, so a carried-over cluster keeps its discovery index, and before this run's first attempt.
                 attemptIndex: attemptTimelineIndex,

@@ -93,6 +93,40 @@ package extension Gen {
     ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during screening analysis. Defaults to `false`.
     ///   - pack: Builds the result from the positional values. Must be the exact inverse of `unpack`, since the pair is declared as an isomorphism rather than a forward-only map.
     ///   - unpack: Decomposes a result back into positional values, throwing when the value does not match the shape `pack` produces.
+    /// ``zipped(_:isOpaque:pack:unpack:)`` wrapped as a ``ReflectiveGenerator`` that remembers its own transform node, so a forward-only map applied next folds into it rather than stacking a second node.
+    static func zippedReflective<Packed>(
+        _ erased: ContiguousArray<AnyGenerator>,
+        isOpaque: Bool = false,
+        pack: @escaping ([Any]) -> Packed,
+        unpack: @escaping (Packed) throws -> [Any],
+        isReflective: Bool
+    ) -> ReflectiveGenerator<Packed> {
+        let zipNode: AnyGenerator = .impure(
+            operation: .zip(erased, isOpaque: isOpaque),
+            continuation: { .pure($0) }
+        )
+        let arity = erased.count
+        let forward: (Any) throws -> Any = { anyValues in
+            try pack(zipComponents(anyValues, arity: arity))
+        }
+        var wrapped: ReflectiveGenerator<Packed> = Gen.liftF(.transform(
+            kind: .isomorph(
+                forward: forward,
+                backward: { anyPacked in
+                    guard let packed = anyPacked as? Packed else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return try unpack(packed)
+                },
+                inputType: [Any].self,
+                outputType: Packed.self
+            ),
+            inner: zipNode
+        )).wrapped(isReflective: isReflective)
+        wrapped.fusable = FusableTransform(forward: forward, inner: zipNode, inputType: [Any].self)
+        return wrapped
+    }
+
     static func zipped<Packed>(
         _ erased: ContiguousArray<AnyGenerator>,
         isOpaque: Bool = false,

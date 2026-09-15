@@ -429,7 +429,7 @@ public extension ReflectiveGenerator {
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Element: Hashable {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
-        return Gen.element(from: collection).wrapped(isReflective: true)
+        return Gen.elementNode(from: collection).wrapped(isReflective: true)
     }
 
     /// Picks a random element from a fixed collection.
@@ -446,7 +446,7 @@ public extension ReflectiveGenerator {
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
-        return Gen.element(from: collection).wrapped(isReflective: true)
+        return Gen.elementNode(from: collection).wrapped(isReflective: true)
     }
 
     /// Picks a random element from a fixed collection, identified by a hashable key path during reflection.
@@ -466,7 +466,7 @@ public extension ReflectiveGenerator {
         id path: KeyPath<C.Element, some Hashable>
     ) -> ReflectiveGenerator<C.Element> {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
-        return Gen.element(from: collection, id: path).wrapped(isReflective: true)
+        return Gen.elementNode(from: collection, id: path).wrapped(isReflective: true)
     }
 
     /// Picks a random element from a fixed collection, identified by an equatable key path during reflection.
@@ -486,6 +486,6 @@ public extension ReflectiveGenerator {
         id path: KeyPath<C.Element, some Equatable>
     ) -> ReflectiveGenerator<C.Element> {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
-        return Gen.element(from: collection, id: path).wrapped(isReflective: true)
+        return Gen.elementNode(from: collection, id: path).wrapped(isReflective: true)
     }
 }

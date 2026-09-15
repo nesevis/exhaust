@@ -174,7 +174,8 @@ package extension Materializer {
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
         precomputedSeed: UInt64? = nil,
-        collectDecodingReport: Bool = true
+        collectDecodingReport: Bool = true,
+        reseedRanges: [ClosedRange<Int>] = []
     ) -> FlatResult {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -205,6 +206,7 @@ package extension Materializer {
         )
         context.flatOutput = ChoiceSequence()
         context.flatOutput!.reserveCapacity(64)
+        context.reseedRanges = reseedRanges
 
         do {
             guard let (value, _) = try generateRecursive(
@@ -281,6 +283,11 @@ extension Materializer {
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
+        // A pick's reseed span includes its branch body and continuation, so suspend the cursor for the whole walk. Leaf reseeding is scoped inside resolveChooseBits and ends before its continuation. Enclosing wrappers must not take a reseed from a site at the same cursor position.
+        if case .impure(.pick, _) = gen, context.enterReseedIfTargeted() {
+            defer { context.cursor.suspended = false }
+            return try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: nil)
+        }
         // Fuse switch to avoid overhead of copying `operation`
         switch gen {
             case let .pure(value):
@@ -510,6 +517,23 @@ extension Materializer {
         ///
         /// The generation-side deadline samples on element index, which retry loops never advance: a filter over a scalar can spin ``__ExhaustRuntime/maxFilterRuns`` times without passing a single checkpoint, and nested filters multiply that. Retry counts do not compose, so the bound that does has to be a clock.
         var deadlineNanoseconds: UInt64 = 0
+        /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order at pick dispatch or leaf value resolution.
+        var reseedRanges: [ClosedRange<Int>] = []
+        var nextReseedIndex = 0
+
+        /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
+        mutating func enterReseedIfTargeted() -> Bool {
+            guard nextReseedIndex < reseedRanges.count,
+                  cursor.suspended == false,
+                  cursor.isAtStart(of: reseedRanges[nextReseedIndex])
+            else {
+                return false
+            }
+            cursor.jump(past: reseedRanges[nextReseedIndex])
+            nextReseedIndex += 1
+            cursor.suspended = true
+            return true
+        }
 
         /// Whether flat emission is active right now (a buffer exists and no discarded-tree sub-walk has suspended it).
         @inline(__always)

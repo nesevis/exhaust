@@ -397,9 +397,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // Unwrap a contramap layer before matching: forward generation ignores the backward transform, so contramap-wrapped elements (for example character generators) can take the fused loop below as long as the outer continuation is applied to each element.
         var fusedElementGen = elementGen
         var contramapContinuation: ((Any) throws -> AnyGenerator)?
-        if case let .impure(operation: .contramap(_, innerGen), continuation: outerContinuation) = elementGen {
-            fusedElementGen = innerGen
-            contramapContinuation = outerContinuation
+        var wrapperForward: ((Any) throws -> Any)?
+        switch elementGen {
+            case let .impure(operation: .contramap(_, innerGen), continuation: outerContinuation):
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+            case let .impure(operation: .transform(.isomorph(forward, _, _, _), innerGen), continuation: outerContinuation),
+                 let .impure(operation: .transform(.map(forward, _, _, _), innerGen), continuation: outerContinuation):
+                // A transparent transform wrapper peels the same way as a contramap, with its forward applied to each element before the wrapper's own continuation. A batch converter authored for the wrapped element already produces the post-forward value.
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+                wrapperForward = forward
+            default:
+                break
         }
         // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element. Unscaled elements take the same loop with their declared range.
         if case let .impure(
@@ -450,6 +460,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         return nil
                     }
                     element = value
+                }
+                if let wrapperForward {
+                    element = try wrapperForward(element)
                 }
                 if let contramapContinuation {
                     let outerGen = try contramapContinuation(element)

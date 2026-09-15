@@ -74,6 +74,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var instanceCount: Int
         package var reducedCount: Int
         package var discoveringPhase: String
+        /// The producer of the discovering candidate, by ``CandidateOrigin`` raw value. Absent in records written before it was kept, and for clusters recorded outside the search loop.
+        package var discoveringOrigin: Int?
         /// Run-relative timestamps (nanoseconds since the logical run's start), not raw monotonic readings — a resumed process has a different monotonic origin.
         package var firstSeenNanoseconds: UInt64
         package var lastSeenNanoseconds: UInt64
@@ -93,6 +95,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             instanceCount = cluster.instanceCount
             reducedCount = cluster.reducedCount
             discoveringPhase = cluster.discoveringPhase.rawValue
+            discoveringOrigin = cluster.discoveringOrigin?.rawValue
             firstSeenNanoseconds = cluster.firstSeenNanoseconds >= epochNanoseconds
                 ? cluster.firstSeenNanoseconds - epochNanoseconds
                 : 0
@@ -114,6 +117,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var convergence: Double
         package var generation: Int
         package var phase: String
+        /// The phase of the root this entry descends from. Absent in records written before it was kept; restore then falls back to the entry's own phase.
+        package var rootPhase: String?
         package var isBoundaryDerived: Bool
         package var propertyFailed: Bool
         /// Whether the property discarded this entry. Provenance only, like ``propertyFailed``: restore takes both from its own evaluation.
@@ -126,6 +131,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             convergence = entry.convergence
             generation = entry.generation
             phase = entry.phase.rawValue
+            rootPhase = entry.rootPhase.rawValue
             isBoundaryDerived = entry.isBoundaryDerived
             propertyFailed = entry.propertyFailed
             propertyDiscarded = entry.propertyDiscarded

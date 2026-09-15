@@ -166,15 +166,16 @@ package extension Gen {
             backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
         )
 
-        return Gen.contramap(
-            { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) },
-            pairGen.map { keys, values in
+        return Gen.isomorphed(
+            pairGen,
+            forward: { keys, values in
                 Dictionary(
                     Swift.zip(keys, values).map { ($0, $1) },
                     uniquingKeysWith: { first, _ in first }
                 )
-            }
-        )
+            },
+            backward: { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) }
+        ).gen
     }
 
     /// Generates sets of random values.
@@ -287,18 +288,18 @@ package extension Gen {
             ._bound(
                 forward: { startPosition -> Generator<AnyCollection.SubSequence> in
                     let maxLength = count - startPosition
-                    return Gen.contramap(
-                        { (subset: AnyCollection.SubSequence) -> Int in subset.count },
-                        Gen.chooseDerived(in: Int(1) ... maxLength)
-                            .map { length -> AnyCollection.SubSequence in
-                                let startIndex = indices[startPosition]
-                                let endIndexPos = min(startPosition + length, indices.count)
-                                let endIndex = endIndexPos < indices.count
-                                    ? indices[endIndexPos]
-                                    : collection.endIndex
-                                return collection[startIndex ..< endIndex]
-                            }
-                    )
+                    return Gen.isomorphed(
+                        Gen.chooseDerived(in: Int(1) ... maxLength),
+                        forward: { length -> AnyCollection.SubSequence in
+                            let startIndex = indices[startPosition]
+                            let endIndexPos = min(startPosition + length, indices.count)
+                            let endIndex = endIndexPos < indices.count
+                                ? indices[endIndexPos]
+                                : collection.endIndex
+                            return collection[startIndex ..< endIndex]
+                        },
+                        backward: { (subset: AnyCollection.SubSequence) -> Int in subset.count }
+                    ).gen
                 },
                 backward: { (subset: AnyCollection.SubSequence) -> Int in
                     indices.firstIndex(of: subset.startIndex) ?? 0
@@ -320,6 +321,18 @@ package extension Gen {
         }
     }
 
+    /// The `.isomorph` node behind every `element(from:)` overload: a uniform index draw whose forward reads the element and whose backward is the overload's own index lookup.
+    static func elementNode<Element>(
+        _ elements: ContiguousArray<Element>,
+        index: @escaping (Element) throws -> Int
+    ) -> IsomorphNode<Element> {
+        isomorphed(
+            Gen.choose(in: 0 ... (elements.count - 1)),
+            forward: { elements[$0] },
+            backward: index
+        )
+    }
+
     /// Picks a random element from a collection.
     ///
     /// Prefer this overload when elements conform to `Hashable` — reflection uses hash-based O(1) lookup to find the element's index.
@@ -329,6 +342,13 @@ package extension Gen {
     static func element<C: Collection>(
         from collection: C
     ) -> Generator<C.Element> where C.Element: Hashable {
+        elementNode(from: collection).gen
+    }
+
+    /// The node behind ``element(from:)-1`` for the `Hashable` overload, exposed so a wrapper can keep its fusion record.
+    static func elementNode<C: Collection>(
+        from collection: C
+    ) -> IsomorphNode<C.Element> where C.Element: Hashable {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
@@ -340,17 +360,14 @@ package extension Gen {
             indexMap[element] = offset
         }
 
-        return Gen.contramap(
-            { (element: C.Element) throws -> Int in
-                guard let index = indexMap[element] else {
-                    throw ReflectionError.couldNotReflectOnSequenceElement(
-                        "element not found in collection during reflection"
-                    )
-                }
-                return index
-            },
-            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
-        )
+        return elementNode(elements, index: { (element: C.Element) throws -> Int in
+            guard let index = indexMap[element] else {
+                throw ReflectionError.couldNotReflectOnSequenceElement(
+                    "element not found in collection during reflection"
+                )
+            }
+            return index
+        })
     }
 
     /// Picks a random element from a collection whose elements are `Equatable` but not `Hashable`.
@@ -362,23 +379,27 @@ package extension Gen {
     static func element<C: Collection>(
         from collection: C
     ) -> Generator<C.Element> where C.Element: Equatable {
+        elementNode(from: collection).gen
+    }
+
+    /// The node behind ``element(from:)-2`` for the `Equatable` overload, exposed so a wrapper can keep its fusion record.
+    static func elementNode<C: Collection>(
+        from collection: C
+    ) -> IsomorphNode<C.Element> where C.Element: Equatable {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
         )
         let elements = ContiguousArray(collection)
 
-        return Gen.contramap(
-            { (element: C.Element) throws -> Int in
-                guard let index = elements.firstIndex(of: element) else {
-                    throw ReflectionError.couldNotReflectOnSequenceElement(
-                        "element not found in collection during reflection"
-                    )
-                }
-                return index
-            },
-            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
-        )
+        return elementNode(elements, index: { (element: C.Element) throws -> Int in
+            guard let index = elements.firstIndex(of: element) else {
+                throw ReflectionError.couldNotReflectOnSequenceElement(
+                    "element not found in collection during reflection"
+                )
+            }
+            return index
+        })
     }
 
     /// Picks a random element from a collection, using a `Hashable` key path for O(1) reflection lookup.
@@ -389,10 +410,18 @@ package extension Gen {
     ///   - collection: The collection to pick elements from.
     ///   - id: A key path to a hashable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
-    static func element<C: Collection, Key: Hashable>(
+    static func element<C: Collection>(
+        from collection: C,
+        id path: KeyPath<C.Element, some Hashable>
+    ) -> Generator<C.Element> {
+        elementNode(from: collection, id: path).gen
+    }
+
+    /// The node behind ``element(from:id:)`` for the `Hashable` key overload, exposed so a wrapper can keep its fusion record.
+    static func elementNode<C: Collection, Key: Hashable>(
         from collection: C,
         id path: KeyPath<C.Element, Key>
-    ) -> Generator<C.Element> {
+    ) -> IsomorphNode<C.Element> {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
@@ -407,17 +436,14 @@ package extension Gen {
             }
         }
 
-        return Gen.contramap(
-            { (element: C.Element) throws -> Int in
-                guard let index = indexMap[element[keyPath: path]] else {
-                    throw ReflectionError.couldNotReflectOnSequenceElement(
-                        "element key not found in collection during reflection"
-                    )
-                }
-                return index
-            },
-            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
-        )
+        return elementNode(elements, index: { (element: C.Element) throws -> Int in
+            guard let index = indexMap[element[keyPath: path]] else {
+                throw ReflectionError.couldNotReflectOnSequenceElement(
+                    "element key not found in collection during reflection"
+                )
+            }
+            return index
+        })
     }
 
     /// Picks a random element from a collection, using an `Equatable` key path for linear-scan reflection.
@@ -432,23 +458,28 @@ package extension Gen {
         from collection: C,
         id path: KeyPath<C.Element, some Equatable>
     ) -> Generator<C.Element> {
+        elementNode(from: collection, id: path).gen
+    }
+
+    /// The node behind ``element(from:id:)`` for the `Equatable` key overload, exposed so a wrapper can keep its fusion record.
+    static func elementNode<C: Collection>(
+        from collection: C,
+        id path: KeyPath<C.Element, some Equatable>
+    ) -> IsomorphNode<C.Element> {
         precondition(
             collection.isEmpty == false,
             "Cannot return random element from empty collection"
         )
         let elements = ContiguousArray(collection)
 
-        return Gen.contramap(
-            { (element: C.Element) throws -> Int in
-                let key = element[keyPath: path]
-                guard let index = elements.firstIndex(where: { $0[keyPath: path] == key }) else {
-                    throw ReflectionError.couldNotReflectOnSequenceElement(
-                        "element key not found in collection during reflection"
-                    )
-                }
-                return index
-            },
-            Gen.choose(in: 0 ... (elements.count - 1)).map { elements[$0] }
-        )
+        return elementNode(elements, index: { (element: C.Element) throws -> Int in
+            let key = element[keyPath: path]
+            guard let index = elements.firstIndex(where: { $0[keyPath: path] == key }) else {
+                throw ReflectionError.couldNotReflectOnSequenceElement(
+                    "element key not found in collection during reflection"
+                )
+            }
+            return index
+        })
     }
 }

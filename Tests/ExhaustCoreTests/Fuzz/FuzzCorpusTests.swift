@@ -19,6 +19,27 @@ struct FuzzCorpusTests {
         #expect(corpus.coveredEdgeCount == 1)
     }
 
+    @Test("A child inherits its parent's root phase, and a mutation-phase root is its own")
+    func rootPhaseFollowsTheLineage() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        _ = corpus.offer(sequence: sequence(length: 1), tree: .just, hits: [(edge: 1, hitCount: 1)], convergence: 1.0, generation: 0, phase: .sampling)
+        _ = corpus.offer(sequence: sequence(length: 2), tree: .just, hits: [(edge: 2, hitCount: 1)], convergence: 1.0, generation: 1, phase: .mutation, parentIndex: 0)
+        _ = corpus.offer(sequence: sequence(length: 3), tree: .just, hits: [(edge: 3, hitCount: 1)], convergence: 1.0, generation: 2, phase: .mutation, parentIndex: 1)
+        _ = corpus.offer(sequence: sequence(length: 4), tree: .just, hits: [(edge: 4, hitCount: 1)], convergence: 1.0, generation: 0, phase: .mutation)
+        #expect(corpus.entries.map(\.rootPhase) == [.sampling, .sampling, .sampling, .mutation])
+        #expect(corpus.parentRootPhases == [.sampling: 3, .mutation: 1])
+    }
+
+    @Test("A restored entry keeps the root phase its checkpoint recorded, and a record without one falls back to the entry's phase")
+    func restoredRootPhaseSurvives() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        _ = corpus.offer(sequence: sequence(length: 1), tree: .just, hits: [(edge: 1, hitCount: 1)], convergence: 1.0, generation: 3, phase: .mutation, restoredRootPhase: .screening)
+        _ = corpus.offer(sequence: sequence(length: 2), tree: .just, hits: [(edge: 2, hitCount: 1)], convergence: 1.0, generation: 2, phase: .mutation)
+        #expect(corpus.entries.map(\.rootPhase) == [.screening, .mutation])
+        let record = FuzzProgressDocument.CorpusEntryRecord(entry: corpus.entries[0])
+        #expect(record.rootPhase == FuzzPhase.screening.rawValue)
+    }
+
     @Test("A discarded entry is admitted on novelty and weighted at a third of a valid one for parent selection")
     func discardedEntryEnergy() {
         let corpus = FuzzCorpus(edgeCount: 10)

@@ -85,7 +85,7 @@ package struct FuzzRunnerConfiguration {
     package var skipMutation: Bool = false
     /// Ends the run early once the STADS discovery-probability estimate falls below ``FuzzTunables/saturationDiscoveryProbability``, returning the unused budget. Set by the public `.stopWhenSaturated` setting.
     ///
-    /// Off by default, so a run spends the budget it was given. Coverage saturation is not fault exhaustion: measurement on the Etna IFC protocol found roughly a fifth of all detections arriving after the search stopped reaching new edges, which is why this cannot be the default.
+    /// Off by default, so a run spends the budget it was given. Coverage saturation is not fault exhaustion
     package var stopWhenSaturated: Bool = false
     /// Attempts before the first saturation check, and the floor on sample size the estimate needs to mean anything. Defaults to ``FuzzTunables/saturationMinimumAttempts``; lowered by tests that need the path on a small sample, and the field a calibration harness varies.
     package var saturationMinimumAttempts: Int = FuzzTunables.saturationMinimumAttempts
@@ -197,16 +197,78 @@ package enum FuzzAttemptOutcome: Int, CaseIterable, Sendable {
 /// Separate from ``FuzzAttemptLedger`` rather than a fourth dimension of it, because a candidate's arms are a mask and not a single value: one child can carry several operators and each is credited, so the two tables have different row counts for the same run. The reduction phase reports the same shape per encoder, so an arm's discard rate reads the way an encoder's rejection rate does.
 ///
 /// Scoped to candidates that reached the property. A candidate the materializer rejected or the duplicate cache skipped never reaches the crediting site, and its arms are counted in neither table; ``FuzzRunCounts/subscript(duplicateSkipsFor:)`` answers the duplicate question per producer.
+///
+/// The draw, miss, and admission counters carry a different scope. A draw is recorded at pick time, so it counts arms whose candidate never reached the property, and an admission is recorded at the corpus offer rather than at the verdict. Read them against each other, not against the outcome table.
 package struct MutationArmLedger: Sendable, Equatable {
     private static let outcomeCount = FuzzAttemptOutcome.allCases.count
     private var table: [Int]
+    /// Arms drawn from the pick distribution, by raw value. Kept apart from `table` because the two count different events: an arm that misses is drawn but never credited, and the band that absorbs its fallback is credited without being drawn. Neither figure can be recovered from the other.
+    private var draws: [Int]
+    /// Draws whose operator found nothing to target, so ``FuzzRunner`` fell back to a band mutation and credited the band. The miss rate is what separates an arm that is unproductive from one that is rarely applicable.
+    private var misses: [Int]
+    /// Credited candidates the corpus admitted. This is the bandit's reward signal, which the outcome table cannot express: admission is orthogonal to the verdict, and a passing candidate is the usual thing to admit.
+    private var admissions: [Int]
+    /// Credited candidates and admissions restricted to even attempt indices. Two estimates of the same window, drawn from interleaved attempts rather than from different periods, are what separates an unstable arm ranking from a ranking estimated under noise. The odd half is the difference from the totals.
+    private var creditedEven: [Int]
+    private var admissionsEven: [Int]
 
     package init() {
         table = Array(repeating: 0, count: MutationArm.allCases.count * Self.outcomeCount)
+        draws = Array(repeating: 0, count: MutationArm.allCases.count)
+        misses = Array(repeating: 0, count: MutationArm.allCases.count)
+        admissions = Array(repeating: 0, count: MutationArm.allCases.count)
+        creditedEven = Array(repeating: 0, count: MutationArm.allCases.count)
+        admissionsEven = Array(repeating: 0, count: MutationArm.allCases.count)
     }
 
     package mutating func record(arm: MutationArm, outcome: FuzzAttemptOutcome) {
         table[arm.rawValue * Self.outcomeCount + outcome.rawValue] += 1
+    }
+
+    /// Records that the pick distribution drew this arm, before the operator has run.
+    package mutating func recordDraw(arm: MutationArm) {
+        draws[arm.rawValue] += 1
+    }
+
+    /// Records that this arm's operator found nothing to target on its parent.
+    package mutating func recordMiss(arm: MutationArm) {
+        misses[arm.rawValue] += 1
+    }
+
+    /// Records that a candidate this arm is credited for entered the corpus.
+    package mutating func recordAdmission(arm: MutationArm) {
+        admissions[arm.rawValue] += 1
+    }
+
+    /// Records one credited candidate's parity half, so a window can be split into two interleaved estimates.
+    package mutating func recordParity(arm: MutationArm, admitted: Bool, isEven: Bool) {
+        guard isEven else {
+            return
+        }
+        creditedEven[arm.rawValue] += 1
+        if admitted {
+            admissionsEven[arm.rawValue] += 1
+        }
+    }
+
+    package func creditedEven(arm: MutationArm) -> Int {
+        creditedEven[arm.rawValue]
+    }
+
+    package func admissionsEven(arm: MutationArm) -> Int {
+        admissionsEven[arm.rawValue]
+    }
+
+    package func draws(arm: MutationArm) -> Int {
+        draws[arm.rawValue]
+    }
+
+    package func misses(arm: MutationArm) -> Int {
+        misses[arm.rawValue]
+    }
+
+    package func admissions(arm: MutationArm) -> Int {
+        admissions[arm.rawValue]
     }
 
     /// Candidates this arm produced that reached the property, whatever the verdict.
@@ -304,6 +366,34 @@ package struct FuzzDiagnostics: Sendable, Equatable {
     /// Pruning passes that removed nothing, so the original evaluation stood in for a re-evaluation of the identical sequence.
     package var pruneIdentitySkips = 0
 
+    /// Observed per-parent admission spacings, bucketed by power of two: index `k` counts spacings in `2^k ..< 2^(k+1)`, index 0 counting a spacing of zero or one.
+    ///
+    /// Bucketed rather than summed because the distribution is what the question needs. A mean over a heavy tail says little about where a threshold belongs; the percentiles say whether "the corpus has stopped filling" is a claim about hundreds of candidates or hundreds of thousands.
+    package var admissionSpacingBuckets = [Int](repeating: 0, count: 32)
+
+    /// Records one observed spacing into its bucket.
+    package mutating func recordAdmissionSpacing(_ spacing: Int) {
+        let bucket = spacing < 2 ? 0 : min(63 - UInt64(spacing).leadingZeroBitCount, 31)
+        admissionSpacingBuckets[bucket] += 1
+    }
+
+    /// The spacing at the given quantile of the observed distribution, as the lower edge of the bucket it falls in.
+    package func admissionSpacingQuantile(_ quantile: Double) -> Int {
+        let total = admissionSpacingBuckets.reduce(0, +)
+        guard total > 0 else {
+            return 0
+        }
+        let target = Int(Double(total) * quantile)
+        var seen = 0
+        for (index, count) in admissionSpacingBuckets.enumerated() {
+            seen += count
+            if seen >= target {
+                return index == 0 ? 0 : 1 << index
+            }
+        }
+        return 1 << 31
+    }
+
     package init() {}
 }
 
@@ -357,6 +447,11 @@ package struct FuzzRunCounts: Sendable {
         FuzzAttemptOutcome.allCases.reduce(0) { total, outcome in
             outcome.isEvaluated ? total + attempts.count(outcome: outcome) : total
         }
+    }
+
+    /// Fresh generator draws taken during the mutation phase, the adaptive mixture's output and the empty-tier fallback. Counted inside `mutationAttempts`, which otherwise cannot separate a draw the ramp spent from a child the mutator built.
+    package var mutationFreshDrawAttempts: Int {
+        FuzzAttemptOutcome.allCases.reduce(0) { $0 + attempts.count(.mutation, .freshSample, $1) }
     }
 
     /// Candidates produced by the three comparison-operand injection paths, each counted inside `mutationAttempts` too. A drawn operand that reconstructs, reflects, or finds no slot is not an attempt. All zero on a build without trace-cmp instrumentation, since the pool never fills.
@@ -440,6 +535,8 @@ package struct FuzzRunResult: Sendable {
     package var diagnostics: FuzzDiagnostics
     package var corpusEntryCount: Int
     package var parentCount: Int
+    /// Mutation parents by the phase of the root they descend from.
+    package var parentRootPhases: [FuzzPhase: Int] = [:]
     package var instrumentedEdgeCount: Int
     /// The corpus's edge incidence at the end of the run: covered edges and the Q₁ to Q₄ frequency counts that feed the estimators.
     package var incidence: EdgeIncidenceProfile

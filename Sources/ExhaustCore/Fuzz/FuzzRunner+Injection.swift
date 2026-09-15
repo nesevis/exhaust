@@ -97,7 +97,8 @@ extension FuzzRunner {
             from: mutated,
             parent: parent,
             parentIndex: parentIndex,
-            armsMask: 0,
+            armsMask: MutationArmSet.none,
+            eligible: .all,
             origin: .comparandSubstitution
         ) {
             let evaluation = evaluate(candidate)
@@ -110,7 +111,7 @@ extension FuzzRunner {
 
     /// Writes `word` over one or several of `parent`'s value entries of `tag`, or nothing when no entry of that tag can hold the encoding.
     ///
-    /// The pool draw is memoryless, so an unbounded arm resamples the same operand against the same parent indefinitely: on the Etna STLC type-based workload 97.7% of substitution candidates were sequences the run had already evaluated, each materialized in full before the duplicate check could see it. On IFC the arm spent 254 million of the run's billion mutation attempts to the same end. ``comparandSubstitutionAttempt()`` bounds that with ``OperandEnergyTable`` keyed on the operand, the parent, and the tag group, and consults it before calling here, because this walk over every value position of the parent was 9.2% of IFC's evaluated cases when a retired source only discovered its retirement afterwards. Keying on the tag group as well lets an operand exhausted against one group still reach the parent's others, which is affordable only because ``FuzzMutator/Layout/tags`` names the groups without a walk.
+    /// The pool draw is memoryless, so an unbounded arm resamples the same operand against the same parent indefinitely: on a recursive term workload 97.7% of substitution candidates were sequences the run had already evaluated, each materialized in full before the duplicate check could see it, and on an instruction-sequence workload the arm spent a quarter of a billion mutation attempts to the same end. ``comparandSubstitutionAttempt()`` bounds that with ``OperandEnergyTable`` keyed on the operand, the parent, and the tag group, and consults it before calling here, because this walk over every value position of the parent reached 9.2% of evaluated cases when a retired source only discovered its retirement afterwards. Keying on the tag group as well lets an operand exhausted against one group still reach the parent's others, which is affordable only because ``FuzzMutator/Layout/tags`` names the groups without a walk.
     func comparandSubstitutionCandidate(
         parent: CorpusEntry,
         layout: FuzzMutator.Layout,
@@ -184,7 +185,8 @@ extension FuzzRunner {
             origin: parent == nil ? .reflectionInjection : .graftInjection,
             parentIndex: parent?.index,
             parentHash: parent?.entry.hash ?? 0,
-            armsMask: 0,
+            armsMask: MutationArmSet.none,
+            eligible: .all,
             isBoundaryDerived: false
         )
     }

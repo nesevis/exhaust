@@ -16,6 +16,7 @@ extension FuzzRunner {
     /// Dispatches one failing candidate through the backpressure gate: attributed as a duplicate, held unreduced, or reduced and classified. A candidate whose verdict is not a failure is ignored.
     ///
     /// - Parameters:
+    ///   - origin: The producer of the failing candidate, recorded on any cluster this failure creates. Nil for a restored entry, whose producer was not persisted.
     ///   - attemptIndex: The attempt the failure was observed at, on the logical run's timeline (``attemptTimelineIndex``). Recovery passes the predecessors' total, so a restored entry's failure never lowers a carried-over cluster's discovery index.
     ///   - countsAsInstance: Whether the failure adds a member to the cluster it lands in. False for a restored entry the predecessor already recorded as failing: that entry landing back in the cluster it was restored into is the same evidence twice, and counting it inflates the carried-over instance and reduction counts on every resume. A restored entry that passed for the predecessor and fails now is evidence this build produced, so it counts.
     func handleFailure(
@@ -23,6 +24,7 @@ extension FuzzRunner {
         deferredTreeRebuild: (() -> ChoiceTree?)? = nil,
         parentIndex: Int?,
         phase: FuzzPhase,
+        origin: CandidateOrigin?,
         coverageNovel: Bool,
         attemptIndex: Int,
         countsAsInstance: Bool = true
@@ -33,6 +35,7 @@ extension FuzzRunner {
         // The boost is applied per gate arm rather than up front: a `.duplicate` is a failure the run already accounted for, and boosting on it would credit the same evidence twice while invalidating the tier's prefix sums for a score that does not move.
         switch faults.gate.admit(sequenceHash: failing.sequenceHash, symptom: symptom, coverageNovel: coverageNovel) {
             case .duplicate:
+                recordLineage(gate: "duplicate", clusterID: nil, isNewCluster: nil)
                 return
             case .recordUnreduced:
                 if let parentIndex {
@@ -44,6 +47,7 @@ extension FuzzRunner {
                     attemptIndex: attemptIndex,
                     countsAsInstance: countsAsInstance
                 )
+                recordLineage(gate: "unreduced", clusterID: nil, isNewCluster: nil)
             case let .reduce(isEscape):
                 if let parentIndex {
                     corpus.applyProvisionalFailureBoost(toParentAt: parentIndex)
@@ -58,6 +62,7 @@ extension FuzzRunner {
                             attemptIndex: attemptIndex,
                             countsAsInstance: countsAsInstance
                         )
+                        recordLineage(gate: "unreduced-divergent", clusterID: nil, isNewCluster: nil)
                         return
                     }
                     reductionTree = rebuilt
@@ -70,6 +75,7 @@ extension FuzzRunner {
                     symptom: symptom,
                     parentIndex: parentIndex,
                     phase: phase,
+                    origin: origin,
                     attemptIndex: attemptIndex,
                     wasEscape: isEscape,
                     countsAsInstance: countsAsInstance
@@ -86,6 +92,7 @@ extension FuzzRunner {
         symptom: FailureSymptom,
         parentIndex: Int?,
         phase: FuzzPhase,
+        origin: CandidateOrigin?,
         attemptIndex: Int,
         wasEscape: Bool,
         countsAsInstance: Bool
@@ -150,12 +157,18 @@ extension FuzzRunner {
             signature: signature,
             symptom: symptom,
             phase: phase,
+            origin: origin,
             timestampNanoseconds: monotonicNanoseconds(),
             attemptIndex: attemptIndex,
             unnormalizedResidual: unnormalizedResidual,
             countsAsInstance: countsAsInstance
         )
         timing.reductionNanoseconds += monotonicNanoseconds() - reductionStart
+        recordLineage(
+            gate: wasEscape ? "reduce-escape" : "reduce",
+            clusterID: classification.clusterID,
+            isNewCluster: classification.isNewCluster
+        )
 
         if classification.isNewCluster {
             forceCheckpoint = true
@@ -177,5 +190,46 @@ extension FuzzRunner {
             )
         }
         checkpointIfDue()
+    }
+
+    /// Writes the pending lineage row, if the trace is on and ``evaluate(_:)`` stashed a provenance for this failure, and clears the stash. The parent is re-materialized exactly from its corpus sequence so the row shows the value the mutation started from.
+    private func recordLineage(gate: String, clusterID: Int?, isNewCluster: Bool?) {
+        guard let failureLineage, let provenance = drawState.pendingLineage else {
+            return
+        }
+        drawState.pendingLineage = nil
+        var parentSequence: ChoiceSequence?
+        var parentValue: String?
+        var parentPhase: FuzzPhase?
+        var parentRootPhase: FuzzPhase?
+        var parentGeneration: Int?
+        if let parentIndex = provenance.parentIndex, parentIndex < corpus.entries.count {
+            let parent = corpus.entries[parentIndex]
+            parentSequence = parent.sequence
+            parentPhase = parent.phase
+            parentRootPhase = parent.rootPhase
+            parentGeneration = parent.generation
+            if case let .success(value, _, _) = Materializer.materializeAny(
+                erasedGen,
+                prefix: parent.sequence,
+                mode: .exact,
+                fallbackTree: parent.tree,
+                skipTree: true,
+                collectDecodingReport: false
+            ) {
+                parentValue = String(reflecting: value)
+            }
+        }
+        failureLineage.record(
+            provenance,
+            parentSequence: parentSequence,
+            parentValue: parentValue,
+            gate: gate,
+            cluster: clusterID.map { "\($0)" },
+            isNewCluster: isNewCluster,
+            parentPhase: parentPhase,
+            parentRootPhase: parentRootPhase,
+            parentGeneration: parentGeneration
+        )
     }
 }

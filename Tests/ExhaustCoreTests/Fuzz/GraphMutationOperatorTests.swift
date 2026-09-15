@@ -91,6 +91,68 @@ struct GraphMutationOperatorTests {
         #expect(deltas.count == 1, "Group members moved by differing deltas: \(deltas)")
     }
 
+    @Test("Lockstep keeps small floating-point differences across wide domains", arguments: [TypeTag.float16, .float, .double])
+    func lockstepPreservesFloatingDifferences(tag: TypeTag) throws {
+        let tree = try ChoiceTree.group([1.0, 2.0].map { value in
+            try ChoiceTree.choice(
+                #require(tag.floatingChoice(from: value)),
+                .init(validRange: nil, isRangeExplicit: false)
+            )
+        })
+        let sequence = ChoiceSequence.flatten(tree)
+        let targets = MutationTargets(tree: tree)
+        var prng = Xoshiro256(seed: 5)
+        for _ in 0 ..< 200 {
+            let shifted = try #require(FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng))
+            let values = shifted.compactMap { $0.value?.choice.decodedDoubleValue }
+            #expect(values.count == 2)
+            #expect(values[1] - values[0] == 1.0)
+        }
+    }
+
+    @Test("Floating lockstep mutations match the reducer's candidates", arguments: [TypeTag.float16, .float, .double])
+    func lockstepMatchesReducerFloatingCandidates(tag: TypeTag) throws {
+        let tree = try ChoiceTree.group([100.0, 101.0].map { value in
+            try ChoiceTree.choice(
+                #require(tag.floatingChoice(from: value)),
+                .init(validRange: nil, isRangeExplicit: false)
+            )
+        })
+        let sequence = ChoiceSequence.flatten(tree)
+        let indices = sequence.indices.filter { sequence[$0].value != nil }
+        let targets = MutationTargets(tree: tree)
+        var reducer = GraphLockstepEncoder()
+        reducer.valueState.reset(sequence: sequence)
+        let plan = try #require(reducer.makeLockstepWindowPlan(windowIndices: indices))
+        var prng = Xoshiro256(seed: 5)
+        var compared = 0
+        for _ in 0 ..< 200 {
+            guard let shifted = FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng),
+                  let first = shifted[indices[0]].value?.choice.decodedDoubleValue,
+                  first >= 0, first < 100
+            else { continue }
+            let delta = UInt64(100 - first)
+            #expect(reducer.makeLockstepCandidate(plan: plan, delta: delta) == shifted)
+            compared += 1
+        }
+        #expect(compared > 0)
+    }
+
+    @Test("Lockstep draws within the group's remaining headroom")
+    func lockstepFitsNarrowHeadroom() throws {
+        let tree = ChoiceTree.group([
+            boundedLeaf(0, in: 0 ... 2),
+            boundedLeaf(1, in: 0 ... 2),
+        ])
+        let sequence = ChoiceSequence.flatten(tree)
+        let targets = MutationTargets(tree: tree)
+        var prng = Xoshiro256(seed: 5)
+        for _ in 0 ..< 40 {
+            let shifted = try #require(FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng))
+            #expect(shifted.compactMap { $0.value?.choice.bitPattern64 } == [1, 2])
+        }
+    }
+
     @Test("Lockstep misses rather than shifting part of a group when one member is boundary-pinned")
     func lockstepRefusesPartialGroup() throws {
         // Three same-tag leaves, one pinned to a single-value range so no nonzero delta keeps it inside.
@@ -430,8 +492,8 @@ struct GraphMutationOperatorTests {
             #expect(MutationArm.bandArms.contains(arm))
         }
         let before = bandOnly.probabilities
-        bandOnly.reward(.swap)
-        bandOnly.reward(.lockstepDelta)
+        bandOnly.reward(.swap, drawProbability: bandOnly.probability(of: .swap))
+        bandOnly.reward(.lockstepDelta, drawProbability: bandOnly.probability(of: .lockstepDelta))
         #expect(bandOnly.probabilities == before)
 
         var full = MutationBandit(arms: MutationArm.allCases)
@@ -443,7 +505,7 @@ struct GraphMutationOperatorTests {
             }
         }
         #expect(sawGraphArm)
-        full.reward(.swap)
+        full.reward(.swap, drawProbability: full.probability(of: .swap))
         #expect(full.probabilities[MutationArm.swap.rawValue] > full.probabilities[MutationArm.shuffle.rawValue])
     }
 }
@@ -564,4 +626,376 @@ private func valueMultiset(of sequence: ChoiceSequence) -> [UInt64] {
         }
     }
     return patterns.sorted()
+}
+
+// MARK: - Headroom Tests
+
+@Suite("Value headroom")
+struct ValueHeadroomTests {
+    @Test("Unsigned integer at the middle of a range has headroom in both directions")
+    func unsignedMiddle() {
+        let current = UInt(50).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == 40)
+        #expect(value.headroom(upward: false, tag: .uint) == 40)
+    }
+
+    @Test("Unsigned integer at the upper bound has zero upward headroom")
+    func unsignedAtUpperBound() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(UInt(90).bitPattern64, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == 0)
+        #expect(value.headroom(upward: false, tag: .uint) == 80)
+    }
+
+    @Test("Unsigned integer at the lower bound has zero downward headroom")
+    func unsignedAtLowerBound() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(UInt(10).bitPattern64, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == 80)
+        #expect(value.headroom(upward: false, tag: .uint) == 0)
+    }
+
+    @Test("Signed integer headroom respects the XOR encoding")
+    func signedHeadroom() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(Int(3).bitPattern64, tag: .int),
+            validRange: Int(-7).bitPattern64 ... Int(7).bitPattern64,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .int) == 4)
+        #expect(value.headroom(upward: false, tag: .int) == 10)
+    }
+
+    @Test("Non-explicit range yields max headroom for the bit pattern")
+    func nonExplicitRange() {
+        let current = UInt(50).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .uint),
+            validRange: UInt(10).bitPattern64 ... UInt(90).bitPattern64,
+            isRangeExplicit: false
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == UInt64.max - current)
+        #expect(value.headroom(upward: false, tag: .uint) == current)
+    }
+
+    @Test("Nil range yields max headroom for the bit pattern")
+    func nilRange() {
+        let current = UInt(50).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .uint),
+            validRange: nil,
+            isRangeExplicit: false
+        )
+        #expect(value.headroom(upward: true, tag: .uint) == UInt64.max - current)
+        #expect(value.headroom(upward: false, tag: .uint) == current)
+    }
+
+    @Test("Float16 without explicit range bounds headroom by finite magnitude")
+    func float16NonExplicitRange() {
+        let encoded = Float16Emulation.encodedBitPattern(from: 100.0)
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(encoded, tag: .float16),
+            validRange: nil,
+            isRangeExplicit: false
+        )
+        let upward = value.headroom(upward: true, tag: .float16)
+        let downward = value.headroom(upward: false, tag: .float16)
+        #expect(upward <= 65504)
+        #expect(downward <= 65504 + 100)
+        #expect(upward > 0)
+        #expect(downward > 0)
+    }
+
+    @Test("Double without explicit range saturates to max because finite magnitude exceeds UInt64")
+    func doubleNonExplicitRangeSaturates() {
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(Double(1000.0).bitPattern64, tag: .double),
+            validRange: nil,
+            isRangeExplicit: false
+        )
+        #expect(value.headroom(upward: true, tag: .double) == .max)
+        #expect(value.headroom(upward: false, tag: .double) == .max)
+    }
+
+    @Test("Float16 near finite max has small upward headroom")
+    func float16NearMax() {
+        let encoded = Float16Emulation.encodedBitPattern(from: 65000.0)
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(encoded, tag: .float16),
+            validRange: nil,
+            isRangeExplicit: false
+        )
+        let upward = value.headroom(upward: true, tag: .float16)
+        #expect(upward <= 512)
+        #expect(upward > 0)
+    }
+
+    @Test("Float with explicit range computes headroom from bounds")
+    func floatExplicitRange() {
+        let lower = Float(-10.0).bitPattern64
+        let upper = Float(10.0).bitPattern64
+        let current = Float(3.0).bitPattern64
+        let value = ChoiceSequenceValue.Value(
+            choice: ChoiceValue(current, tag: .float),
+            validRange: lower ... upper,
+            isRangeExplicit: true
+        )
+        #expect(value.headroom(upward: true, tag: .float) == 7)
+        #expect(value.headroom(upward: false, tag: .float) == 13)
+    }
+}
+
+// MARK: - Sequence Length Bound Tests
+
+@Suite("Sequence length bounds in mutation targets")
+struct SequenceLengthBoundTests {
+    @Test("Deletion excludes a sequence at its lower bound")
+    func deletionRespectsLowerBound() {
+        let tree = ChoiceTree.group([
+            .sequence(
+                elements: [
+                    .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                ],
+                metadata: .init(validRange: 2 ... 5, isRangeExplicit: true)
+            ),
+        ])
+        let targets = MutationTargets(tree: tree)
+        #expect(targets.deletableSequenceNodeIDs.isEmpty)
+    }
+
+    @Test("Deletion includes a sequence above its lower bound")
+    func deletionAllowsAboveLowerBound() {
+        let tree = ChoiceTree.group([
+            .sequence(
+                elements: [
+                    .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                ],
+                metadata: .init(validRange: 2 ... 5, isRangeExplicit: true)
+            ),
+        ])
+        let targets = MutationTargets(tree: tree)
+        #expect(targets.deletableSequenceNodeIDs.isEmpty == false)
+    }
+
+    @Test("Duplication excludes a sequence at its upper bound")
+    func duplicationRespectsUpperBound() {
+        let tree = ChoiceTree.group([
+            .sequence(
+                elements: [
+                    .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                ],
+                metadata: .init(validRange: 1 ... 3, isRangeExplicit: true)
+            ),
+        ])
+        let targets = MutationTargets(tree: tree)
+        #expect(targets.duplicableSequenceNodeIDs.isEmpty)
+    }
+
+    @Test("Duplication includes a sequence below its upper bound")
+    func duplicationAllowsBelowUpperBound() {
+        let tree = ChoiceTree.group([
+            .sequence(
+                elements: [
+                    .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                ],
+                metadata: .init(validRange: 1 ... 5, isRangeExplicit: true)
+            ),
+        ])
+        let targets = MutationTargets(tree: tree)
+        #expect(targets.duplicableSequenceNodeIDs.isEmpty == false)
+    }
+
+    @Test("Fixed-length sequence excludes both deletion and duplication")
+    func fixedLengthExcludesBoth() {
+        let tree = ChoiceTree.group([
+            .sequence(
+                elements: [
+                    .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                    .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100)),
+                ],
+                metadata: .init(validRange: 2 ... 2, isRangeExplicit: true)
+            ),
+        ])
+        let targets = MutationTargets(tree: tree)
+        #expect(targets.deletableSequenceNodeIDs.isEmpty)
+        #expect(targets.duplicableSequenceNodeIDs.isEmpty)
+    }
+}
+
+// MARK: - Crossover Self-Donation Tests
+
+@Suite("Crossover excludes self-donation")
+struct CrossoverSelfDonationTests {
+    @Test("Single-entry corpus reports no crossover donor")
+    func singleEntryHasNoCrossoverDonor() throws {
+        let corpus = FuzzCorpus(edgeCount: 4, experiments: targetingExperiments(graph: true, pair: true))
+        let parentIndex = try admitPickPair(into: corpus, fingerprint: 42, values: (100, 200), edge: 0)
+        let targets = corpus.mutationTargets(forParentAt: parentIndex)!
+        #expect(targets.hasCrossoverDonor(corpus: corpus, parentIndex: parentIndex) == false)
+    }
+
+    @Test("Two-entry corpus with matching fingerprints reports a crossover donor")
+    func twoEntriesHaveCrossoverDonor() throws {
+        let corpus = FuzzCorpus(edgeCount: 4, experiments: targetingExperiments(graph: true, pair: true))
+        let firstIndex = try admitPickPair(into: corpus, fingerprint: 42, values: (100, 200), edge: 0)
+        _ = try admitPickPair(into: corpus, fingerprint: 42, values: (300, 400), edge: 1)
+        let targets = corpus.mutationTargets(forParentAt: firstIndex)!
+        #expect(targets.hasCrossoverDonor(corpus: corpus, parentIndex: firstIndex))
+    }
+}
+
+// MARK: - Query Reuse Parity Tests
+
+@Suite("Shape-key and deletable-set parity after query unification")
+struct QueryReuseParityTests {
+    @Test("NodeShapeKey distinguishes every node kind and groups same-shaped siblings")
+    func shapeKeyCoversAllKinds() {
+        let leaf1 = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
+        let leaf2 = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
+        let leaf3 = ChoiceTree.choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100))
+        let tree = ChoiceTree.group([leaf1, leaf2, leaf3])
+        let graph = ChoiceGraphBuilder.build(from: tree)
+
+        var keys: [PermutationQuery.NodeShapeKey] = []
+        for nodeID in graph.liveNodeIDs {
+            keys.append(PermutationQuery.nodeShapeKey(graph.nodes[nodeID]))
+        }
+        let valueKeys = keys.filter { $0 == .value }
+        #expect(valueKeys.count == 3)
+
+        let scopes = PermutationQuery.build(graph: graph)
+        #expect(scopes.count == 1)
+        #expect(scopes[0].swappableGroups[0].count == 3)
+    }
+
+    @Test("NodeShapeKey separates sequences by element count and isolates empty sequences")
+    func shapeKeySeparatesSequences() {
+        let seq1 = ChoiceTree.sequence(
+            elements: [boundedLeaf(1, in: 0 ... 100)],
+            metadata: .init(validRange: nil, isRangeExplicit: false)
+        )
+        let seq2 = ChoiceTree.sequence(
+            elements: [boundedLeaf(2, in: 0 ... 100)],
+            metadata: .init(validRange: nil, isRangeExplicit: false)
+        )
+        let seq3 = ChoiceTree.sequence(
+            elements: [boundedLeaf(3, in: 0 ... 100), boundedLeaf(4, in: 0 ... 100)],
+            metadata: .init(validRange: nil, isRangeExplicit: false)
+        )
+        let tree = ChoiceTree.group([seq1, seq2, seq3])
+        let graph = ChoiceGraphBuilder.build(from: tree)
+
+        let scopes = PermutationQuery.build(graph: graph)
+        #expect(scopes.count == 1)
+        #expect(scopes[0].swappableGroups.count == 1)
+        #expect(scopes[0].swappableGroups[0].count == 2)
+    }
+
+    @Test("Deletable set from RemovalQuery matches the length-constraint rule on a multi-sequence tree")
+    func deletableSetMatchesRule() {
+        let deletable = ChoiceTree.sequence(
+            elements: [boundedLeaf(1, in: 0 ... 100), boundedLeaf(2, in: 0 ... 100), boundedLeaf(3, in: 0 ... 100)],
+            metadata: .init(validRange: 1 ... 5, isRangeExplicit: true)
+        )
+        let atBound = ChoiceTree.sequence(
+            elements: [boundedLeaf(4, in: 0 ... 100), boundedLeaf(5, in: 0 ... 100)],
+            metadata: .init(validRange: 2 ... 5, isRangeExplicit: true)
+        )
+        let unconstrained = ChoiceTree.sequence(
+            elements: [boundedLeaf(6, in: 0 ... 100)],
+            metadata: .init(validRange: nil, isRangeExplicit: false)
+        )
+        let tree = ChoiceTree.group([deletable, atBound, unconstrained])
+        let targets = MutationTargets(tree: tree)
+
+        #expect(targets.deletableSequenceNodeIDs.count == 2)
+
+        let graph = targets.graph
+        for nodeID in targets.deletableSequenceNodeIDs {
+            guard case let .sequence(metadata) = graph.nodes[nodeID].kind else {
+                Issue.record("Deletable node \(nodeID) is not a sequence")
+                continue
+            }
+            let lower = metadata.lengthConstraint?.lowerBound ?? 0
+            #expect(UInt64(metadata.elementCount) > lower)
+        }
+
+        let removalScopes = RemovalQuery.elementRemovalScopes(graph: graph)
+        let scopeNodeIDs = removalScopes.compactMap { $0.targets.first?.sequenceNodeID }
+        #expect(targets.deletableSequenceNodeIDs == scopeNodeIDs)
+    }
+
+    @Test("Repertoire sights a superset of the per-parent structural arms")
+    func repertoireIsSuperset() {
+        let leaf1 = boundedLeaf(100, in: 0 ... 200)
+        let leaf2 = boundedLeaf(150, in: 0 ... 200)
+        let leaf3 = boundedLeaf(175, in: 0 ... 200)
+        let zipBranch = ChoiceTree.group([leaf1, leaf2, leaf3])
+        let scalarBranch = boundedLeaf(0, in: 0 ... 0)
+        let tree = ChoiceTree.group([
+            .branch(fingerprint: 1, weight: 1, id: 0, branchCount: 2, choice: scalarBranch, isSelected: true),
+            .branch(fingerprint: 1, weight: 1, id: 1, branchCount: 2, choice: zipBranch),
+        ])
+        let fullGraph = ChoiceGraphBuilder.build(from: tree)
+        let sighted = MutationArmRepertoire.sighted(in: fullGraph)
+
+        let targets = MutationTargets(tree: tree)
+        for arm in MutationArm.allCases where targets.structuralArms.contains(arm) {
+            #expect(sighted.contains(arm), "Repertoire missing arm \(arm) that targets reports")
+        }
+    }
+
+    @Test("Seeded fuzz run produces deterministic arm counts across two identical runs")
+    func seededRunDeterminism() {
+        func run() -> FuzzRunCounts {
+            var experiments = FuzzExperiments()
+            experiments.graphMutation = true
+            experiments.pairMutation = true
+            let runner = FuzzRunner(
+                gen: Gen.zip(
+                    Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+                    Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+                    Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
+                ),
+                property: { value in
+                    value.0 + value.1 + value.2 > 2800 ? .fail(.returnedFalse) : .pass
+                },
+                source: SyntheticCoverageSource<(Int, Int, Int)>(edgeCount: 32, edges: { value in
+                    [value.0 & 0b111, 8 + (value.1 & 0b111), 16 + (value.2 & 0b111)]
+                }),
+                configuration: FuzzRunnerConfiguration(
+                    budgetNanoseconds: 60_000_000_000,
+                    seed: 1337,
+                    attemptLimit: 5000,
+                    experiments: experiments
+                )
+            )
+            return runner.run().counts
+        }
+        let first = run()
+        let second = run()
+        for arm in MutationArm.allCases {
+            #expect(first.mutationArms.draws(arm: arm) == second.mutationArms.draws(arm: arm))
+            #expect(first.mutationArms.misses(arm: arm) == second.mutationArms.misses(arm: arm))
+            #expect(first.mutationArms.admissions(arm: arm) == second.mutationArms.admissions(arm: arm))
+        }
+        #expect(first.totalAttempts == second.totalAttempts)
+    }
 }

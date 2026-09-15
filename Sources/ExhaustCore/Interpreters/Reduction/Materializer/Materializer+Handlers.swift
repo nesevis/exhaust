@@ -99,6 +99,13 @@ extension Materializer {
         context: inout Context,
         calleeFallback: ChoiceTree? = nil
     ) throws -> (bits: UInt64, tree: ChoiceTree, calleeStart: Int) {
+        // A leaf's span excludes its continuation. Resume the prefix when the value is resolved, including in the fused and batched sequence paths. Preserve an enclosing pick's suspension when this leaf did not enter its own reseed scope.
+        let reseeding = context.enterReseedIfTargeted()
+        defer {
+            if reseeding {
+                context.cursor.suspended = false
+            }
+        }
         let randomBits: UInt64
         var reusedChoice: ChoiceValue?
 
@@ -135,13 +142,13 @@ extension Materializer {
                         reusedChoice = prefixValue.choice
                     }
                     context.decodingReport?.record(tier: .exactCarryForward)
-                } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
+                } else if reseeding == false, let calleeFallback, case let .choice(value, _) = calleeFallback {
                     // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(value.bitPattern64, min: min, max: max)
                     context.decodingReport?.record(tier: .fallbackTree)
                 } else {
                     randomBits = context.prng.next(in: min ... max)
-                    context.decodingReport?.record(tier: .prng)
+                    context.decodingReport?.record(tier: context.cursor.suspended ? .reseeded : .prng)
                 }
 
             case .generate:
@@ -634,9 +641,19 @@ extension Materializer {
         // Unwrap a forward-inert contramap layer once, before the loop: materialization ignores the backward transform, so character-style elements (contramap over chooseBits) can take the fused loop below as long as the wrapper's continuation is applied to each element.
         var fusedElementGen = elementGen
         var contramapContinuation: ((Any) throws -> AnyGenerator)?
-        if case let .impure(.contramap(_, innerGen), continuation: outerContinuation) = elementGen {
-            fusedElementGen = innerGen
-            contramapContinuation = outerContinuation
+        var wrapperForward: ((Any) throws -> Any)?
+        switch elementGen {
+            case let .impure(.contramap(_, innerGen), continuation: outerContinuation):
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+            case let .impure(.transform(.isomorph(forward, _, _, _), innerGen), continuation: outerContinuation),
+                 let .impure(.transform(.map(forward, _, _, _), innerGen), continuation: outerContinuation):
+                // A transparent transform wrapper peels the same way as a contramap, with its forward applied to each element before the wrapper's own continuation.
+                fusedElementGen = innerGen
+                contramapContinuation = outerContinuation
+                wrapperForward = forward
+            default:
+                break
         }
 
         var elementIndex = 0
@@ -694,19 +711,21 @@ extension Materializer {
                 }
                 let (elementCalleeFallback, elementContinuationFallback) = decomposeNonGroupFallback(elementFallback)
                 let elementStart = context.flatCount
-                guard let (innerResult, innerTree) = try handleChooseBits(
+                let elementOutcome = try handleChooseBits(
                     min: elementMin, max: elementMax, tag: elementTag,
                     isRangeExplicit: elementIsRangeExplicit,
                     scaling: elementScaling, typeTagPayload: elementTypeTagPayload,
                     continuation: elementContinuation, inputValue: inputValue,
                     context: &context, calleeFallback: elementCalleeFallback,
                     continuationFallback: elementContinuationFallback
-                ) else { return nil }
+                )
+                guard let (innerResult, innerTree) = elementOutcome else { return nil }
                 let result: Any
                 let element: ChoiceTree
+                let wrappedResult = try wrapperForward?(innerResult) ?? innerResult
                 if let contramapContinuation {
                     guard let continued = try runContinuation(
-                        result: innerResult, calleeChoiceTree: innerTree, calleeStart: elementStart,
+                        result: wrappedResult, calleeChoiceTree: innerTree, calleeStart: elementStart,
                         continuation: contramapContinuation, inputValue: inputValue,
                         context: &context, continuationFallback: nil
                     ) else { return nil }

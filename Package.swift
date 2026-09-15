@@ -128,7 +128,12 @@ let package = Package(
         // EXHAUST_BINARY_CORE marks the build where ExhaustCore is the release xcframework rather than a source target. Tests that reach for ExhaustCore's `#if DEBUG` helpers must check it: the test target always compiles in debug, so its own `#if DEBUG` says nothing about how ExhaustCore was built.
         .testTarget(
             name: "ExhaustTests",
-            dependencies: ["Exhaust", "ExhaustCore", "ExhaustTestSupport"],
+            dependencies: [
+                "Exhaust",
+                "ExhaustCore",
+                "ExhaustTestSupport",
+                .product(name: "IssueReportingTestSupport", package: "xctest-dynamic-overlay"),
+            ],
             swiftSettings: strictConcurrencySettings + (usePrecompiled
                 ? [.define("EXHAUST_BINARY_CORE")]
                 : []),
@@ -145,6 +150,7 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 "ExhaustCore",
+                "ExhaustMetaFuzz",
                 .product(name: "Benchmark", package: "swift-benchmark"),
             ],
             swiftSettings: strictConcurrencySettings + [

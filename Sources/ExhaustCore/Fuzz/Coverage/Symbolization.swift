@@ -42,7 +42,7 @@ package struct SymbolLocation: Sendable, Equatable {
         self.line = line
     }
 
-    /// The reader's form: `stlcGetType(_:_:) (STLC.swift:91)`, the file alone when no line resolved, the name alone when no file did. A byte offset means nothing to a reader and is never printed.
+    /// The reader's form: `typeCheck(_:_:) (Checker.swift:91)`, the file alone when no line resolved, the name alone when no file did. A byte offset means nothing to a reader and is never printed.
     package var rendered: String {
         guard let file else {
             return displayName

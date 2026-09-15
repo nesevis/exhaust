@@ -11,7 +11,7 @@ package struct CorpusEntry: Sendable {
     /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
     ///
     /// `ChoiceSequence.flatten(tree)` equals `sequence` for every admitted entry: the admission paths either construct `sequence` that way or assert the equality before offering. Read `sequence` rather than re-flattening.
-    package let tree: ChoiceTree
+    package fileprivate(set) var tree: ChoiceTree
 
     /// The graph and scope caches the graph-targeted mutation operators resolve their positions through.
     ///
@@ -42,6 +42,9 @@ package struct CorpusEntry: Sendable {
     /// The phase that produced this entry.
     package let phase: FuzzPhase
 
+    /// The phase of the root this entry descends from: its own phase for a root, the parent's root phase for a mutation child. A mutation-phase root is a fresh draw the mixture admitted, so this is what says whether a lineage started from screening, sampling, or the mutation phase's own generator draws.
+    package let rootPhase: FuzzPhase
+
     /// Whether the property failed on this entry. Report-time discrimination splits the corpus on this flag: passing entries form the P(hit | pass) denominator.
     package let propertyFailed: Bool
 
@@ -60,12 +63,17 @@ package struct CorpusEntry: Sendable {
     let coveredRunFirstEdge: Bool
 
     /// Multiplier on the entry's parent-selection score from failures among its children. 1 when no child failed; see ``FuzzTunables`` for the provisional and cluster-aware values.
+    /// Mutation candidates drawn from this entry since it last produced an admission, or since it was admitted if it never has.
+    ///
+    /// The spacing an entry sustains is what says whether the corpus is still filling: a parent that admits every few dozen draws is on new ground, one that has gone tens of thousands of draws without admitting has been mined out. A run-level gap between admissions cannot separate those, because it mixes every parent's productivity together.
+    package fileprivate(set) var candidatesSinceAdmission = 0
+
     var failureBoost: Double = 1.0
 }
 
 /// Which tier an admitted entry landed in.
 ///
-/// The split is a length guard for the champion archive. Convergence says nothing about an entry's worth as a parent: the stored sequence is the materializer's complete output whatever share of it the PRNG supplied. What it does track is length. A child that fell through to the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Admitting every entry as a parent was measured on IFC (`fuzz-loop-experiments-2026-09-06.md`): the parent pool shrank 4.5%, its mean length fell 4.1%, and covered edges fell 3.1% while the corpus stayed flat. The tier keeps those entries' coverage credit and denies them cells.
+/// The split is a length guard for the champion archive. Convergence says nothing about an entry's worth as a parent: the stored sequence is the materializer's complete output whatever share of it the PRNG supplied. What it does track is length. A child that fell through to the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Admitting every entry as a parent shrank the parent pool 4.5%, its mean length fell 4.1%, and covered edges fell 3.1% while the corpus stayed flat. The tier keeps those entries' coverage credit and denies them cells.
 package enum CorpusTier: Sendable, Equatable {
     /// Eligible for parent selection and for champion cells.
     case mutable
@@ -184,6 +192,15 @@ package final class FuzzCorpus {
     /// Indices of the mutable-tier entries eligible as mutation parents: not quarantined and, with the champion archive on, holding at least one cell.
     package private(set) var parentIndices: [Int] = []
 
+    /// Mutation parents by the phase of the root they descend from, so a run can say how much of its parent pool the mutation phase's own fresh draws seeded.
+    package var parentRootPhases: [FuzzPhase: Int] {
+        var counts: [FuzzPhase: Int] = [:]
+        for index in parentIndices {
+            counts[entries[index].rootPhase, default: 0] += 1
+        }
+        return counts
+    }
+
     /// Per-edge bitmask of hit-count buckets seen corpus-wide; novelty is a set bit not yet present.
     private var seenBucketMasks: [UInt8]
     /// Cumulative record of every edge an admitted entry has covered, kept apart from the admission masks so ``coveredEdgeCount`` keeps reporting the whole run after ``resetNoveltyBaseline()``.
@@ -228,7 +245,7 @@ package final class FuzzCorpus {
 
     // MARK: - Champion Archive
 
-    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier entries. A discovery-tier entry keeps its coverage credit but claims no cells: such entries are short, shortlex favours them, and letting them claim cells evicted the longer incumbents and cost IFC 3.1% of covered edges when measured (see ``CorpusTier``). The archive itself is net-beneficial; the same measurement found that turning it off costs a further 1.9% coverage and 37% throughput, because parents drawn from the whole corpus are 3.5 times longer.
+    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier entries. A discovery-tier entry keeps its coverage credit but claims no cells: such entries are short, shortlex favours them, and letting them claim cells evicted the longer incumbents and cost 3.1% of covered edges (see ``CorpusTier``). The archive itself is net-beneficial; the same measurement found that turning it off costs a further 1.9% coverage and 37% throughput, because parents drawn from the whole corpus are 3.5 times longer.
 
     /// The entry index holding each edge's cell, or nil while the edge is uncovered (or its champion was quarantined).
     private var edgeChampions: [Int?]
@@ -382,6 +399,8 @@ package final class FuzzCorpus {
     ///   - hits: The (edge, hit count) pairs from the candidate's attributed evaluation.
     ///   - convergence: The materializer's convergence ratio; routes the entry to a tier.
     ///   - generation: Mutation distance from a phase-1/2 root.
+    ///   - parentIndex: The corpus index of the parent a mutation child came from, so the child inherits its root phase; nil for a root.
+    ///   - restoredRootPhase: The root phase a checkpoint recorded for this entry, which restore passes because the parent it descended from is not re-offered under its old index. Nil everywhere else.
     ///   - phase: The phase offering the candidate.
     ///   - isBoundaryDerived: Whether the candidate came from the covering array's boundary catalogs. Grants admission even without coverage novelty (phases 1 and 2 only; the mutation phase never sets this).
     ///   - propertyFailed: Whether the property failed on this candidate, recorded for report-time discrimination.
@@ -416,6 +435,8 @@ package final class FuzzCorpus {
         convergence: Double,
         generation: Int,
         phase: FuzzPhase,
+        parentIndex: Int? = nil,
+        restoredRootPhase: FuzzPhase? = nil,
         isBoundaryDerived: Bool = false,
         propertyFailed: Bool = false,
         propertyDiscarded: Bool = false,
@@ -449,7 +470,7 @@ package final class FuzzCorpus {
             return .rejectedNotNovel
         }
 
-        // Filtering once here is what lets every later consumer walk the pairs without repeating the domain check.
+        // Only admitted entries retain hits; avoid allocating and copying on the common rejection path.
         var storedHits: [(edge: Int, hitCount: UInt8)] = []
         storedHits.reserveCapacity(hits.count)
         var coveredRunFirstEdge = false
@@ -482,6 +503,7 @@ package final class FuzzCorpus {
             convergence: convergence,
             generation: generation,
             phase: phase,
+            rootPhase: restoredRootPhase ?? parentIndex.map { entries[$0].rootPhase } ?? phase,
             propertyFailed: propertyFailed,
             propertyDiscarded: propertyDiscarded,
             hash: hash,
@@ -504,7 +526,7 @@ package final class FuzzCorpus {
         }
         // Typed crossover is the one consumer that cannot wait for this entry's own first parent draw: its donor pool is corpus-wide, read by every *other* entry's crossover, so an entry that has not yet been mutated must already be donatable. That forces the graph build eagerly under `pairMutation` — the other targeting consumers defer.
         if isParentEligible, experiments.pairMutation {
-            let targets = MutationTargets(tree: tree)
+            let targets = MutationTargets(tree: tree, sequence: sequence)
             entries[index].mutationTargets = targets
             registerDonorSpans(forEntryAt: index, graph: targets.graph)
         }
@@ -644,6 +666,14 @@ package final class FuzzCorpus {
     /// Construction walks the whole graph four times, so it is deferred to the first draw that consumes it: a run with the targeting knobs off never builds one, and an entry admitted and evicted without ever being drawn as a parent never pays. Returns nil when no enabled experiment consumes the tables or the entry is not a mutation parent.
     ///
     /// Construction consumes no PRNG draws, so deferring it leaves seeded replay streams unchanged.
+    /// Records that the enumeration walked one site of the entry at `index`, so the arm does not spend a second draw reproducing the same children.
+    package func markEnumerated(siteIndex: Int, forParentAt index: Int) {
+        guard entries.indices.contains(index) else {
+            return
+        }
+        entries[index].mutationTargets?.markEnumerated(siteIndex: siteIndex)
+    }
+
     package func mutationTargets(forParentAt index: Int) -> MutationTargets? {
         guard consumesMutationTargets, entries.indices.contains(index) else {
             return nil
@@ -655,9 +685,42 @@ package final class FuzzCorpus {
         guard entries[index].mutationLayout != nil else {
             return nil
         }
-        let targets = MutationTargets(tree: entries[index].tree)
+        let targets = MutationTargets(tree: entries[index].tree, sequence: entries[index].sequence)
         entries[index].mutationTargets = targets
         return targets
+    }
+
+    /// Counts one mutation candidate drawn from the entry at `index`.
+    package func noteCandidateDrawn(fromParentAt index: Int) {
+        guard entries.indices.contains(index) else {
+            return
+        }
+        entries[index].candidatesSinceAdmission += 1
+    }
+
+    /// Reports the spacing the entry at `index` sustained before this admission and resets its counter.
+    ///
+    /// - Returns: Candidates drawn from that parent since its previous admission, or nil when the index names no entry.
+    package func takeSpacing(forParentAt index: Int) -> Int? {
+        guard entries.indices.contains(index) else {
+            return nil
+        }
+        let spacing = entries[index].candidatesSinceAdmission
+        entries[index].candidatesSinceAdmission = 0
+        return spacing
+    }
+
+    /// Replaces the stored tree with a pick-materialised tree and rebuilds the targeting tables from it.
+    ///
+    /// Called after mutable-tier admission so the graph carries inactive branch layouts for ``GraphStructuralEncoder/expandDepthZeroLeaves(_:donorNodeID:donorRangeStart:graph:)``. Only entries whose targets were already built (the eager path under `pairMutation`) pay the rebuild; entries on the lazy path see the full tree when targets are built on first parent draw.
+    package func upgradeToFullTree(at index: Int, fullTree: ChoiceTree) {
+        entries[index].tree = fullTree
+        if entries[index].mutationTargets != nil {
+            let targets = MutationTargets(tree: fullTree, sequence: entries[index].sequence)
+            entries[index].mutationTargets = targets
+            removeDonorSpans(forEntryAt: index)
+            registerDonorSpans(forEntryAt: index, graph: targets.graph)
+        }
     }
 
     // MARK: - Donor Index
@@ -666,6 +729,7 @@ package final class FuzzCorpus {
     struct DonorSpan {
         let entryIndex: Int
         let range: ClosedRange<Int>
+        let donorNodeID: Int
     }
 
     /// Pick-subtree spans of parent-eligible entries, keyed by pick-site fingerprint. Rows are admission-time facts about immutable sequences, so a row stays valid for the entry's lifetime; an entry's rows are removed when it leaves parent selection (champion dethroning or quarantine) so the donor set tracks the parent-selection domain.
@@ -674,17 +738,18 @@ package final class FuzzCorpus {
     /// The fingerprints each entry contributed rows under, so eviction visits only that entry's keys. Parallel to `entries`.
     private var donorFingerprints: [[UInt64]] = []
 
-    /// Registers the entry's active pick subtrees as crossover donors.
+    /// Registers the entry's active pick subtrees as crossover donors. A span is registered only if it lies within the entry's stored sequence, which is what typed crossover slices; a graph built from a tree that flattens longer than the stored sequence would otherwise hand out spans past its end.
     private func registerDonorSpans(forEntryAt index: Int, graph: ChoiceGraph) {
         var fingerprints: [UInt64] = []
+        let sequenceCount = entries[index].sequence.count
         for (fingerprint, nodeIDs) in graph.selfSimilarityGroups {
             var didRegister = false
             for nodeID in nodeIDs {
-                guard let range = graph.nodes[nodeID].positionRange else {
+                guard let range = graph.nodes[nodeID].positionRange, range.upperBound < sequenceCount else {
                     continue
                 }
                 donorSpansByFingerprint[fingerprint, default: []].append(
-                    DonorSpan(entryIndex: index, range: range)
+                    DonorSpan(entryIndex: index, range: range, donorNodeID: nodeID)
                 )
                 didRegister = true
             }

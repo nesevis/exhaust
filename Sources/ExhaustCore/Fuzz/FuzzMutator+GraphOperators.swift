@@ -23,11 +23,124 @@ package struct MutationTargets: Sendable {
     /// The graph's self-similarity fingerprints in ascending order, so typed crossover's per-draw walk is a fixed order without sorting dictionary keys on every call.
     let sortedFingerprints: [UInt64]
 
+    /// Sequence nodes with two or more elements, eligible for element deletion. Each entry is the node ID of a sequence whose elements can be individually removed.
+    let deletableSequenceNodeIDs: [Int]
+
+    /// Sequence nodes with one or more elements, eligible for element duplication.
+    let duplicableSequenceNodeIDs: [Int]
+
+    /// Sequence nodes with two or more elements, eligible for run copy (overwriting one run with another within the same node).
+    let copyableSequenceNodeIDs: [Int]
+
+    /// One site a value reseed may draw fresh: an independent chooseBits leaf or pick node, with its span and the sites that contain it.
+    struct ReseedSite {
+        let nodeID: Int
+        let range: ClosedRange<Int>
+        /// Indices into ``MutationTargets/reseedSites`` of the sites whose spans contain this one, so an antichain draw can reject a nested pair without walking the graph.
+        let containingSiteIndices: [Int]
+    }
+
+    /// Every site a value reseed may target, ascending by position. Leaves and picks under a bind's inner subtree are excluded: a fresh value there regenerates the bound region, which is the cascade the reseed exists to avoid.
+    let reseedSites: [ReseedSite]
+
+    /// Indices into ``reseedSites`` of the sites no other site contains, which is what "reseed all" draws: the maximal antichain, covering every reseedable span once.
+    let maximalReseedSiteIndices: [Int]
+
+    /// Indices into ``reseedSites`` of the chooseBits leaves whose valid range holds ``FuzzTunables/smallDomainLimit`` patterns or fewer. What the enumeration arm walks; picks are never enumerated, since a branch alternative rebuilds its subtree and is a value reseed of the pick at several times the cost.
+    let smallDomainSiteIndices: [Int]
+
+    /// Indices into ``reseedSites`` the enumeration has already walked for this entry. An enumeration is exhaustive for its site, so a second draw of the same site can only reproduce children the run has already hashed; each is a full materialization spent on a duplicate. Marked by ``FuzzCorpus/markEnumerated(siteIndex:forParentAt:)``.
+    fileprivate(set) var enumeratedSiteIndices: Set<Int> = []
+
+    /// Sequence nodes grouped by element site: every group holds two or more sequences whose elements come from one pick site or one leaf tag, so a run of one is a valid run of another. An empty untagged sequence joins the pick-sequence group when the graph has exactly one. What the element transplant draws donor and target from.
+    package let transplantGroups: [[Int]]
+
+    /// The arms whose first guard this entry's own tables satisfy: the sibling-span operators, the lockstep delta, and the twin splice.
+    ///
+    /// Answered once at construction because the tables never change and each query walks every scope. Read per draw when the eligibility gate is on, so a scan there would be paid on every candidate. `typedCrossover` is not included: its donor half is a corpus fact, see ``hasCrossoverDonor(corpus:)``.
+    package private(set) var structuralArms: MutationArmSet
+
+    /// The number of patterns in a leaf's valid range when that is at most ``FuzzTunables/smallDomainLimit`` and at least two, or nil. Computed from the bounds' difference so a full-width range, whose count does not fit an `Int`, is answered rather than trapped on.
+    static func smallDomainSize(of range: ClosedRange<UInt64>) -> UInt64? {
+        let width = range.upperBound &- range.lowerBound
+        guard width >= 1, width < FuzzTunables.smallDomainLimit else {
+            return nil
+        }
+        return width + 1
+    }
+
+    /// Records that the enumeration walked `siteIndex`, so later draws on this entry skip it.
+    mutating func markEnumerated(siteIndex: Int) {
+        enumeratedSiteIndices.insert(siteIndex)
+    }
+
+    /// The entry a reseed site's value lives at: the leaf entry itself, or for a pick the branch marker, which sits behind the pick's opening group marker. Nil when the site's span no longer fits `sequence`.
+    static func sitePosition(of site: ReseedSite, in sequence: ChoiceSequence) -> Int? {
+        guard site.range.upperBound < sequence.count else {
+            return nil
+        }
+        for position in site.range {
+            switch sequence[position] {
+                case .value, .branch:
+                    return position
+                default:
+                    continue
+            }
+        }
+        return nil
+    }
+
+    /// Whether any swappable sibling group has at least `minimumSize` members, which is the first guard of every sibling-span operator.
+    ///
+    /// The second guard, that the group's cached position ranges still fit the candidate, is a staleness check rather than an applicability one and cannot be answered from the parent alone.
+    package func hasSwappableGroup(minimumSize: Int) -> Bool {
+        for scope in permutationScopes {
+            for group in scope.swappableGroups where group.count >= minimumSize {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Whether a tandem group has the two leaves the lockstep delta needs. A scope whose groups are all singletons passes the scope check and fails at the draw.
+    package var hasTandemGroup: Bool {
+        guard let tandem else {
+            return false
+        }
+        return tandem.groups.contains { $0.leaves.count >= 2 }
+    }
+
+    /// Whether a twin group has the two spans the twin splice copies between.
+    package var hasTwinGroup: Bool {
+        twinSpanGroups.contains { $0.count >= 2 }
+    }
+
+    /// Whether any fingerprint has both a recipient in this parent and a donor span from a different entry in the corpus.
+    ///
+    /// The only precondition here that depends on the corpus rather than the parent, so it cannot be cached at admission: a fingerprint gains donors as other entries are admitted. Excludes the parent's own spans because ``FuzzMutator/typedCrossover(_:parentHash:targets:corpus:prng:)`` rejects self-donation.
+    package func hasCrossoverDonor(corpus: FuzzCorpus, parentIndex: Int) -> Bool {
+        for fingerprint in sortedFingerprints {
+            guard let recipients = graph.selfSimilarityGroups[fingerprint],
+                  recipients.isEmpty == false,
+                  let donors = corpus.donorSpansByFingerprint[fingerprint],
+                  donors.contains(where: { $0.entryIndex != parentIndex })
+            else {
+                continue
+            }
+            return true
+        }
+        return false
+    }
+
     /// Builds the targeting tables for one entry's tree.
     ///
     /// Relation scopes are convergence-gated and always empty on a fresh graph, so they are not cached. Construction consumes no PRNG draws, so seeded replay streams are unchanged.
-    init(tree: ChoiceTree) {
+    /// - Parameters:
+    ///   - tree: The entry's choice tree, whose graph every scope is built from.
+    ///   - sequence: The entry's flat sequence, read for each reseed site's current value and domain. Nil derives it from `tree`.
+    package init(tree: ChoiceTree, sequence: ChoiceSequence? = nil) {
         let graph = ChoiceGraphBuilder.build(from: tree)
+        let flat = sequence ?? ChoiceSequence.flatten(tree)
         var tandem: TandemScope?
         for exchangeScope in ExchangeQuery.build(graph: graph) {
             if case let .tandem(scope) = exchangeScope {
@@ -39,10 +152,176 @@ package struct MutationTargets: Sendable {
         permutationScopes = PermutationQuery.build(graph: graph)
         twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
         sortedFingerprints = graph.selfSimilarityGroups.keys.sorted()
+
+        let removalScopes = RemovalQuery.elementRemovalScopes(graph: graph)
+        deletableSequenceNodeIDs = removalScopes.compactMap { $0.targets.first?.sequenceNodeID }
+        (duplicableSequenceNodeIDs, copyableSequenceNodeIDs) = Self.buildSequenceNodeIDs(graph: graph)
+        (reseedSites, maximalReseedSiteIndices) = Self.buildReseedSites(graph: graph)
+        smallDomainSiteIndices = Self.buildSmallDomainSites(sites: reseedSites, sequence: flat)
+        transplantGroups = Self.buildTransplantGroups(graph: graph)
+        structuralArms = Self.buildStructuralArms(
+            permutationScopes: permutationScopes,
+            tandem: tandem,
+            twinSpanGroups: twinSpanGroups,
+            deletableSequenceNodeIDs: deletableSequenceNodeIDs,
+            duplicableSequenceNodeIDs: duplicableSequenceNodeIDs,
+            copyableSequenceNodeIDs: copyableSequenceNodeIDs,
+            reseedSites: reseedSites,
+            smallDomainSiteIndices: smallDomainSiteIndices,
+            transplantGroups: transplantGroups
+        )
+    }
+
+    // MARK: - Init Helpers
+
+    private static func buildSequenceNodeIDs(graph: ChoiceGraph) -> (duplicable: [Int], copyable: [Int]) {
+        var duplicable: [Int] = []
+        var copyable: [Int] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .sequence(metadata) = node.kind else { continue }
+            if metadata.elementCount >= 2 {
+                copyable.append(nodeID)
+            }
+            let upper = metadata.lengthConstraint?.upperBound ?? UInt64.max
+            if metadata.elementCount >= 1, UInt64(metadata.elementCount + 1) <= upper {
+                duplicable.append(nodeID)
+            }
+        }
+        return (duplicable, copyable)
+    }
+
+    private static func buildReseedSites(graph: ChoiceGraph) -> (sites: [ReseedSite], maximalIndices: [Int]) {
+        var siteNodeIDs: [Int] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard node.positionRange != nil, node.scopeAnnotation.isBindInner == false else { continue }
+            switch node.kind {
+                case .chooseBits:
+                    guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false else { continue }
+                case .pick:
+                    break
+                default:
+                    continue
+            }
+            siteNodeIDs.append(nodeID)
+        }
+        siteNodeIDs.sort { graph.nodes[$0].positionRange!.lowerBound < graph.nodes[$1].positionRange!.lowerBound }
+        var siteIndexByNodeID: [Int: Int] = [:]
+        for (index, nodeID) in siteNodeIDs.enumerated() {
+            siteIndexByNodeID[nodeID] = index
+        }
+        var sites: [ReseedSite] = []
+        sites.reserveCapacity(siteNodeIDs.count)
+        var maximal: [Int] = []
+        for (index, nodeID) in siteNodeIDs.enumerated() {
+            var containing: [Int] = []
+            var ancestor = graph.nodes[nodeID].parent
+            while let current = ancestor {
+                if let siteIndex = siteIndexByNodeID[current] {
+                    containing.append(siteIndex)
+                }
+                ancestor = graph.nodes[current].parent
+            }
+            sites.append(ReseedSite(nodeID: nodeID, range: graph.nodes[nodeID].positionRange!, containingSiteIndices: containing))
+            if containing.isEmpty {
+                maximal.append(index)
+            }
+        }
+        return (sites, maximal)
+    }
+
+    private static func buildSmallDomainSites(sites: [ReseedSite], sequence: ChoiceSequence) -> [Int] {
+        var enumerable: [Int] = []
+        for (index, site) in sites.enumerated() {
+            guard let position = sitePosition(of: site, in: sequence),
+                  case let .value(entry) = sequence[position],
+                  let range = entry.validRange, smallDomainSize(of: range) != nil
+            else { continue }
+            enumerable.append(index)
+        }
+        return enumerable
+    }
+
+    private static func buildTransplantGroups(graph: ChoiceGraph) -> [[Int]] {
+        var sequencesByKey: [FuzzMutator.TwinKey: [Int]] = [:]
+        var emptyUntagged: [Int] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .sequence(metadata) = node.kind, node.positionRange != nil, metadata.childPositionRanges.count == metadata.elementCount else { continue }
+            if let key = FuzzMutator.twinKey(of: node, in: graph) {
+                sequencesByKey[key, default: []].append(nodeID)
+            } else if metadata.elementTypeTag == nil, node.children.isEmpty {
+                emptyUntagged.append(nodeID)
+            }
+        }
+        let pickSequenceKeys = sequencesByKey.keys.filter { if case .pickSequence = $0 { return true } else { return false } }
+        if pickSequenceKeys.count == 1, let key = pickSequenceKeys.first {
+            sequencesByKey[key, default: []].append(contentsOf: emptyUntagged)
+        }
+        func start(_ nodeID: Int) -> Int {
+            graph.nodes[nodeID].positionRange?.lowerBound ?? 0
+        }
+        var groups: [[Int]] = []
+        for members in sequencesByKey.values where members.count >= 2 {
+            groups.append(members.sorted { start($0) < start($1) })
+        }
+        groups.sort { start($0[0]) < start($1[0]) }
+        return groups
+    }
+
+    private static func buildStructuralArms(
+        permutationScopes: [PermutationScope],
+        tandem: TandemScope?,
+        twinSpanGroups: [[ClosedRange<Int>]],
+        deletableSequenceNodeIDs: [Int],
+        duplicableSequenceNodeIDs: [Int],
+        copyableSequenceNodeIDs: [Int],
+        reseedSites: [ReseedSite],
+        smallDomainSiteIndices: [Int],
+        transplantGroups: [[Int]]
+    ) -> MutationArmSet {
+        var structural = MutationArmSet.none
+        let hasSwappable2 = permutationScopes.contains { scope in scope.swappableGroups.contains { $0.count >= 2 } }
+        if hasSwappable2 {
+            structural.insert(.swap)
+            structural.insert(.shuffle)
+        }
+        if permutationScopes.contains(where: { scope in scope.swappableGroups.contains { $0.count >= 3 } }) {
+            structural.insert(.move)
+        }
+        if let tandem, tandem.groups.contains(where: { $0.leaves.count >= 2 }) {
+            structural.insert(.lockstepDelta)
+        }
+        if twinSpanGroups.contains(where: { $0.count >= 2 }) {
+            structural.insert(.twinSplice)
+        }
+        if deletableSequenceNodeIDs.isEmpty == false {
+            structural.insert(.elementDeletion)
+            structural.insert(.runDeletion)
+        }
+        if duplicableSequenceNodeIDs.isEmpty == false {
+            structural.insert(.elementDuplication)
+            structural.insert(.runDuplication)
+        }
+        if reseedSites.isEmpty == false {
+            structural.insert(.valueReseed)
+        }
+        if smallDomainSiteIndices.isEmpty == false {
+            structural.insert(.smallDomainEnumeration)
+        }
+        if copyableSequenceNodeIDs.isEmpty == false {
+            structural.insert(.runCopy)
+            structural.insert(.suffixReseed)
+        }
+        if transplantGroups.isEmpty == false {
+            structural.insert(.elementTransplant)
+        }
+        return structural
     }
 }
 
-extension FuzzMutator {
+package extension FuzzMutator {
     // MARK: - Sibling-Span Operators
 
     /// Exchanges two same-shaped sibling spans from one swap-eligible group.
@@ -126,7 +405,7 @@ extension FuzzMutator {
 
     /// Shifts every member of one same-tag tandem group by a shared delta in a shared direction.
     ///
-    /// The direction is a fair draw and the delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit``, so agreement between the members (equal values, fixed differences) survives the shift.
+    /// The direction is a fair draw when both directions have room. The delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit`` and capped by the group's shared headroom. Small steps avoid rounding away floating-point differences when the numeric domain is wide.
     ///
     /// All or nothing: a group with one member the delta cannot move is a miss, not a partial shift. Moving a subset breaks the very agreement the operator exists to preserve, and nothing downstream would catch it.
     static func lockstepDelta(
@@ -141,21 +420,37 @@ extension FuzzMutator {
         }
         var entries: [(index: Int, entry: ChoiceSequenceValue)] = []
         entries.reserveCapacity(group.leaves.count)
+        var headroomUp: UInt64 = .max
+        var headroomDown: UInt64 = .max
         for leaf in group.leaves {
-            // A member the candidate cannot address makes the whole group unshiftable, not a smaller group.
             guard let range = targets.graph.nodes[leaf.nodeID].positionRange,
                   range.lowerBound < candidate.count
             else {
                 return nil
             }
-            entries.append((index: range.lowerBound, entry: candidate[range.lowerBound]))
+            let element = candidate[range.lowerBound]
+            guard case let .value(value) = element else {
+                return nil
+            }
+            headroomUp = min(headroomUp, value.headroom(upward: true, tag: group.typeTag))
+            headroomDown = min(headroomDown, value.headroom(upward: false, tag: group.typeTag))
+            entries.append((index: range.lowerBound, entry: element))
         }
         guard entries.count >= 2 else {
             return nil
         }
-        let shiftUpward = prng.next(upperBound: 2) == 0
+        guard headroomUp > 0 || headroomDown > 0 else {
+            return nil
+        }
+        let shiftUpward = switch (headroomUp, headroomDown) {
+            case (0, _): false
+            case (_, 0): true
+            default: prng.next(upperBound: 2) == 0
+        }
+        let maxDelta = shiftUpward ? headroomUp : headroomDown
         let exponent = prng.next(upperBound: FuzzTunables.lockstepDeltaExponentLimit)
-        let delta = 1 &+ prng.next(upperBound: 1 << exponent)
+        let delta = 1 + prng.next(upperBound: min(maxDelta, 1 << exponent))
+        // Share numeric shifting and type-width conversion with the reducer's lockstep encoder.
         guard let shifted = candidate.shiftingGroup(
             entries: entries,
             tag: group.typeTag,
@@ -169,23 +464,422 @@ extension FuzzMutator {
         return shifted.candidate
     }
 
+    // MARK: - Element Transplant
+
+    /// Whether a transplanted run is copied from the donor or moved out of it.
+    enum TransplantMode {
+        case copy
+        case move
+    }
+
+    /// Inserts a run of elements from one sequence node into another sequence of the same element site, at an element boundary of the target. `copy` leaves the donor as it was; `move` removes the run from it. The run length respects the target's length upper bound and, for a move, the donor's lower bound; the two sequences must not nest. Returns nil when the parent has no two sequences of one site, or no run fits.
+    ///
+    /// Run copy and duplication grow or rewrite one sequence from itself; this is the cross-sequence form, so an argument list can receive a term from another application's list and a mirrored composite's instruction list can receive instructions from the other half's. Both sequences were drawn at one site, so the entries carry over unchanged and the child rides the ordinary guided-materialization path.
+    static func transplantElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        mode: TransplantMode,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let group = pickGroup(targets.transplantGroups, prng: &prng) else {
+            return nil
+        }
+        let graph = targets.graph
+        let donorIndex = Int(prng.next(upperBound: UInt64(group.count)))
+        let offset = 1 + Int(prng.next(upperBound: UInt64(group.count - 1)))
+        let donorID = group[donorIndex]
+        let targetID = group[(donorIndex + offset) % group.count]
+        guard case let .sequence(donor) = graph.nodes[donorID].kind,
+              case let .sequence(target) = graph.nodes[targetID].kind,
+              let donorRange = graph.nodes[donorID].positionRange,
+              let targetRange = graph.nodes[targetID].positionRange,
+              donorRange.overlaps(targetRange) == false,
+              donor.elementCount >= 1,
+              donorRange.upperBound < candidate.count, targetRange.upperBound < candidate.count
+        else {
+            return nil
+        }
+        // The run must fit the target's upper bound and, when moved, leave the donor at or above its lower bound.
+        let targetUpper = target.lengthConstraint?.upperBound ?? UInt64.max
+        var limit = donor.elementCount
+        if targetUpper != UInt64.max {
+            limit = min(limit, Int(max(0, targetUpper - UInt64(target.elementCount))))
+        }
+        if mode == .move, let donorLower = donor.lengthConstraint?.lowerBound {
+            limit = min(limit, donor.elementCount - Int(min(UInt64(donor.elementCount), donorLower)))
+        }
+        guard limit >= 1 else {
+            return nil
+        }
+        let length = runLength(upTo: limit, prng: &prng)
+        let start = Int(prng.next(upperBound: UInt64(donor.elementCount - length + 1)))
+        let first = donor.childPositionRanges[start]
+        let last = donor.childPositionRanges[start + length - 1]
+        let run = Array(candidate[first.lowerBound ... last.upperBound])
+        // Insertion boundary in the target: before element k, or after the last element (before the close marker).
+        let boundary = Int(prng.next(upperBound: UInt64(target.elementCount + 1)))
+        let insertAt = boundary < target.elementCount ? target.childPositionRanges[boundary].lowerBound : targetRange.upperBound
+        var result = candidate
+        switch mode {
+            case .copy:
+                result.insert(contentsOf: run, at: insertAt)
+            case .move:
+                // Edit the higher position first so the lower one's indices still address the original candidate.
+                if first.lowerBound > insertAt {
+                    result.removeSubrange(first.lowerBound ... last.upperBound)
+                    result.insert(contentsOf: run, at: insertAt)
+                } else {
+                    result.insert(contentsOf: run, at: insertAt)
+                    result.removeSubrange(first.lowerBound ... last.upperBound)
+                }
+        }
+        return result
+    }
+
+    /// One group drawn uniformly, or nil when there are none.
+    private static func pickGroup(_ groups: [[Int]], prng: inout Xoshiro256) -> [Int]? {
+        guard groups.isEmpty == false else {
+            return nil
+        }
+        return groups[Int(prng.next(upperBound: UInt64(groups.count)))]
+    }
+
+    // MARK: - Small-Domain Enumeration
+
+    /// Enumerates one small-domain leaf of the parent: every other value of a chooseBits leaf whose valid range holds at most ``FuzzTunables/smallDomainLimit`` patterns, one child per alternative, with the index of the site walked so the caller can mark it. Nil when the parent has no such leaf left to walk.
+    ///
+    /// The single-site arms redraw a site to one random value, so a four-valued label needs on average four draws of the right site before the wanted value comes up, on top of the draw that found the site. Enumerating the domain removes the value draw: the three alternatives cost three evaluations and are certain to include the wanted one. The site is drawn in proportion to its span, as a reseed draws. Children are written in place and ride the ordinary guided-materialization path.
+    static func enumerateSmallDomain(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> (children: [ChoiceSequence], siteIndex: Int)? {
+        let enumerable = targets.smallDomainSiteIndices.filter { targets.enumeratedSiteIndices.contains($0) == false }
+        guard let chosen = weightedPick(
+            from: enumerable,
+            weight: { UInt64(targets.reseedSites[$0].range.count) },
+            prng: &prng
+        ) else {
+            return nil
+        }
+        guard let position = MutationTargets.sitePosition(of: targets.reseedSites[chosen], in: candidate) else {
+            return nil
+        }
+        var children: [ChoiceSequence] = []
+        switch candidate[position] {
+            case let .value(entry):
+                guard let range = entry.validRange, let size = MutationTargets.smallDomainSize(of: range) else {
+                    return nil
+                }
+                children.reserveCapacity(Int(size) - 1)
+                for pattern in range where pattern != entry.choice.bitPattern64 {
+                    var child = candidate
+                    child[position] = .value(ChoiceSequenceValue.Value(
+                        choice: ChoiceValue(pattern, tag: entry.choice.tag),
+                        validRange: entry.validRange,
+                        isRangeExplicit: entry.isRangeExplicit
+                    ))
+                    children.append(child)
+                }
+            default:
+                return nil
+        }
+        return children.isEmpty ? nil : (children, chosen)
+    }
+
+    // MARK: - Element Run Operators
+
+    /// A log-uniform run length in `1 ... limit`: 1, 2, 4, and so on up to the largest power of two not above `limit`, each with equal probability, so short runs are the common case and long ones stay reachable.
+    private static func runLength(upTo limit: Int, prng: inout Xoshiro256) -> Int {
+        guard limit > 1 else {
+            return 1
+        }
+        var powers = 0
+        var span = 1
+        while span * 2 <= limit {
+            span *= 2
+            powers += 1
+        }
+        return 1 << Int(prng.next(upperBound: UInt64(powers + 1)))
+    }
+
+    /// Draws one sequence node with at least `minimumElements` elements, uniformly over the eligible nodes, and returns its metadata.
+    private static func pickSequenceNode(
+        from nodeIDs: [Int],
+        graph: ChoiceGraph,
+        minimumElements: Int,
+        prng: inout Xoshiro256
+    ) -> SequenceMetadata? {
+        let eligible = nodeIDs.filter { nodeID in
+            if case let .sequence(metadata) = graph.nodes[nodeID].kind {
+                return metadata.elementCount >= minimumElements && metadata.childPositionRanges.count == metadata.elementCount
+            }
+            return false
+        }
+        guard eligible.isEmpty == false else {
+            return nil
+        }
+        guard case let .sequence(metadata) = graph.nodes[eligible[Int(prng.next(upperBound: UInt64(eligible.count)))]].kind else {
+            return nil
+        }
+        return metadata
+    }
+
+    /// Removes a run of consecutive elements from one sequence node: the typed form of the medium band's block deletion, cutting on element boundaries so the prefix stays parseable.
+    ///
+    /// The run length is log-uniform up to what the node's lower length bound allows. Returns nil when no node has a removable run or the run's positions do not fit the candidate.
+    static func deleteElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let metadata = pickSequenceNode(from: targets.deletableSequenceNodeIDs, graph: targets.graph, minimumElements: 1, prng: &prng) else {
+            return nil
+        }
+        let lower = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+        let removable = metadata.elementCount - lower
+        guard removable >= 1 else {
+            return nil
+        }
+        let length = runLength(upTo: removable, prng: &prng)
+        let start = Int(prng.next(upperBound: UInt64(metadata.elementCount - length + 1)))
+        let first = metadata.childPositionRanges[start]
+        let last = metadata.childPositionRanges[start + length - 1]
+        guard last.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.removeSubrange(first.lowerBound ... last.upperBound)
+        return result
+    }
+
+    /// Repeats a run of consecutive elements of one sequence node in place: the typed form of the medium band's block duplication.
+    ///
+    /// The copy is inserted directly after the run, so a repeated instruction idiom lands where the blind duplication put it. Returns nil when no node can grow by the drawn run or the run's positions do not fit the candidate.
+    static func duplicateElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let metadata = pickSequenceNode(from: targets.duplicableSequenceNodeIDs, graph: targets.graph, minimumElements: 1, prng: &prng) else {
+            return nil
+        }
+        let upper = metadata.lengthConstraint?.upperBound ?? UInt64.max
+        let headroom = upper == UInt64.max ? metadata.elementCount : Int(min(UInt64(metadata.elementCount), upper - UInt64(metadata.elementCount)))
+        guard headroom >= 1 else {
+            return nil
+        }
+        let length = runLength(upTo: headroom, prng: &prng)
+        let start = Int(prng.next(upperBound: UInt64(metadata.elementCount - length + 1)))
+        let first = metadata.childPositionRanges[start]
+        let last = metadata.childPositionRanges[start + length - 1]
+        guard last.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.insert(contentsOf: candidate[first.lowerBound ... last.upperBound], at: last.upperBound + 1)
+        return result
+    }
+
+    /// Copies one run of a sequence node over a disjoint run of the same node: the typed form of the medium band's block overwrite, within one sequence.
+    ///
+    /// Both runs have the drawn length, so the sequence keeps its element count; the target's spans are replaced entry for entry with the source's, which may change the candidate's length when the elements are composites of different sizes. Returns nil when no node has two elements, or the runs do not fit the candidate.
+    static func copyElementRun(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let metadata = pickSequenceNode(from: targets.copyableSequenceNodeIDs, graph: targets.graph, minimumElements: 2, prng: &prng) else {
+            return nil
+        }
+        let length = runLength(upTo: metadata.elementCount / 2, prng: &prng)
+        let starts = metadata.elementCount - length + 1
+        let source = Int(prng.next(upperBound: UInt64(starts)))
+        // The target is drawn uniformly over the starts whose run is disjoint from the source's, by counting them rather than rejecting: on a three-element list with runs of one there are exactly two, and a rejection loop that gives up leaves the arm missing on the lists where an overwrite matters most.
+        let excludedLow = max(0, source - length + 1)
+        let excludedHigh = min(starts - 1, source + length - 1)
+        let excludedCount = excludedHigh - excludedLow + 1
+        let validCount = starts - excludedCount
+        guard validCount >= 1 else {
+            return nil
+        }
+        var target = Int(prng.next(upperBound: UInt64(validCount)))
+        if target >= excludedLow {
+            target += excludedCount
+        }
+        let sourceRange = metadata.childPositionRanges[source].lowerBound ... metadata.childPositionRanges[source + length - 1].upperBound
+        let targetRange = metadata.childPositionRanges[target].lowerBound ... metadata.childPositionRanges[target + length - 1].upperBound
+        guard sourceRange.upperBound < candidate.count, targetRange.upperBound < candidate.count else {
+            return nil
+        }
+        return candidate.copyingSpan(from: sourceRange, onto: targetRange)
+    }
+
+    /// Cuts one sequence node at an element, dropping every element from there to its end, and reseeds every maximal independent site after the node: the typed form of the high band's region deletion.
+    ///
+    /// The blind cut dropped a quarter to three quarters of the sequence by index and left the materialiser to regenerate whatever followed from the fallback tree and the PRNG. Here the cut lands on an element boundary and the regeneration is explicit: the sites after the shortened node are reseeded at their own positions in the shortened candidate. Returns nil when no node has at least two elements above its lower length bound, or the cut does not fit the candidate.
+    static func suffixReseed(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> (candidate: ChoiceSequence, reseedRanges: [ClosedRange<Int>])? {
+        guard let metadata = pickSequenceNode(from: targets.deletableSequenceNodeIDs, graph: targets.graph, minimumElements: 2, prng: &prng) else {
+            return nil
+        }
+        let lower = Int(metadata.lengthConstraint?.lowerBound ?? 0)
+        let keepAtLeast = max(lower, 1)
+        guard metadata.elementCount > keepAtLeast else {
+            return nil
+        }
+        let cut = keepAtLeast + Int(prng.next(upperBound: UInt64(metadata.elementCount - keepAtLeast)))
+        let first = metadata.childPositionRanges[cut]
+        let last = metadata.childPositionRanges[metadata.elementCount - 1]
+        guard last.upperBound < candidate.count else {
+            return nil
+        }
+        let removed = first.lowerBound ... last.upperBound
+        var result = candidate
+        result.removeSubrange(removed)
+        let shift = removed.count
+        var ranges: [ClosedRange<Int>] = []
+        for index in targets.maximalReseedSiteIndices {
+            let range = targets.reseedSites[index].range
+            guard range.lowerBound > removed.upperBound else { continue }
+            let shifted = (range.lowerBound - shift) ... (range.upperBound - shift)
+            guard shifted.upperBound < result.count else { continue }
+            ranges.append(shifted)
+        }
+        return (result, ranges)
+    }
+
+    // MARK: - Sequence Element Operators
+
+    /// Deletes one element from a random sequence node, producing a shorter candidate.
+    ///
+    /// Returns nil when no sequence node has deletable elements or the chosen element's positions do not fit the candidate.
+    static func deleteSequenceElement(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        let eligible = targets.deletableSequenceNodeIDs
+        guard eligible.isEmpty == false else {
+            return nil
+        }
+        let nodeID = eligible[Int(prng.next(upperBound: UInt64(eligible.count)))]
+        guard case let .sequence(metadata) = targets.graph.nodes[nodeID].kind,
+              metadata.childPositionRanges.isEmpty == false
+        else {
+            return nil
+        }
+        let elementIndex = Int(prng.next(upperBound: UInt64(metadata.childPositionRanges.count)))
+        let range = metadata.childPositionRanges[elementIndex]
+        guard range.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.removeSubrange(range.lowerBound ... range.upperBound)
+        return result
+    }
+
+    /// Duplicates one element from a random sequence node, producing a longer candidate.
+    ///
+    /// Copies the element's full choice span and inserts it after the last element in the same sequence. Returns nil when no sequence node has elements or the chosen element's positions do not fit the candidate.
+    static func duplicateSequenceElement(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        let eligible = targets.duplicableSequenceNodeIDs
+        guard eligible.isEmpty == false else {
+            return nil
+        }
+        let nodeID = eligible[Int(prng.next(upperBound: UInt64(eligible.count)))]
+        guard case let .sequence(metadata) = targets.graph.nodes[nodeID].kind,
+              metadata.childPositionRanges.isEmpty == false
+        else {
+            return nil
+        }
+        let elementIndex = Int(prng.next(upperBound: UInt64(metadata.childPositionRanges.count)))
+        let sourceRange = metadata.childPositionRanges[elementIndex]
+        guard sourceRange.upperBound < candidate.count else {
+            return nil
+        }
+        let lastElementRange = metadata.childPositionRanges[metadata.childPositionRanges.count - 1]
+        guard lastElementRange.upperBound < candidate.count else {
+            return nil
+        }
+        var result = candidate
+        result.insert(contentsOf: candidate[sourceRange.lowerBound ... sourceRange.upperBound], at: lastElementRange.upperBound + 1)
+        return result
+    }
+
+    // MARK: - Value Reseed
+
+    /// Chooses the spans a value reseed draws fresh: one, two, or three independent sites weighted by span, or every maximal site, each with equal probability.
+    ///
+    /// The candidate is left untouched; the materialiser redraws the returned spans at their own sites with the cursor and fallback withheld, so a leaf takes a fresh in-range value and a pick a fresh branch and subtree, while everything outside the spans is read from the parent. Sites are drawn without nesting, so the spans are disjoint. Returns nil when the parent has no site or every span is out of the candidate's bounds.
+    static func valueReseed(
+        _ candidate: ChoiceSequence,
+        targets: MutationTargets,
+        prng: inout Xoshiro256
+    ) -> [ClosedRange<Int>]? {
+        let sites = targets.reseedSites
+        guard sites.isEmpty == false else {
+            return nil
+        }
+        let countDraw = prng.next(upperBound: 4)
+        var chosen: [Int] = []
+        if countDraw == 3 {
+            chosen = targets.maximalReseedSiteIndices
+        } else {
+            let wanted = Int(countDraw) + 1
+            // Bounded rejection: a draw nested in or containing a chosen site is discarded, and the loop stops after a fixed number of draws so PRNG consumption stays bounded per call.
+            var draws = 0
+            while chosen.count < wanted, draws < wanted * 4 {
+                draws += 1
+                guard let pick = weightedPick(
+                    from: sites.indices,
+                    weight: { UInt64(sites[$0].range.count) },
+                    prng: &prng
+                ) else {
+                    break
+                }
+                if chosen.contains(pick) { continue }
+                if sites[pick].containingSiteIndices.contains(where: { chosen.contains($0) }) { continue }
+                if chosen.contains(where: { sites[$0].containingSiteIndices.contains(pick) }) { continue }
+                chosen.append(pick)
+            }
+        }
+        var ranges: [ClosedRange<Int>] = []
+        ranges.reserveCapacity(chosen.count)
+        for index in chosen.sorted() {
+            let range = sites[index].range
+            guard range.upperBound < candidate.count else { continue }
+            ranges.append(range)
+        }
+        return ranges.isEmpty ? nil : ranges
+    }
+
     // MARK: - Twin Detection
 
     /// Discriminates zip children the generator drew from the same site, so twin spans can be spliced onto one another.
     ///
     /// Picks and binds match by their site fingerprint. Sequences match by element type tag rather than shape, so twins of different lengths (two instruction lists) still group. Leaves match by type tag, zips by child count.
-    private enum TwinKey: Hashable {
+    enum TwinKey: Hashable {
         case pick(UInt64)
         case bind(UInt64)
         case value(TypeTag)
         case elementSequence(TypeTag)
+        /// A homogeneous sequence whose elements are all picks of one fingerprint: an instruction list, a list of terms. Two such sequences are interchangeable whatever arms their elements selected, so one can be copied over the other whole.
+        case pickSequence(UInt64)
         case zip(childCount: Int)
     }
 
     /// Computes the twin-span groups of every zip node: position ranges of siblings sharing a twin key, in position order, groups ordered by first position.
     ///
     /// Group and member ordering is explicit rather than dictionary order so seeded runs replay identically across processes.
-    static func twinSpanGroups(graph: ChoiceGraph) -> [[ClosedRange<Int>]] {
+    internal static func twinSpanGroups(graph: ChoiceGraph) -> [[ClosedRange<Int>]] {
         var groups: [[ClosedRange<Int>]] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
@@ -215,8 +909,23 @@ extension FuzzMutator {
         return groups
     }
 
-    /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, untagged sequences).
-    private static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
+    /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, sequences that are neither tagged nor homogeneous picks).
+    static func twinKey(of node: ChoiceGraphNode, in graph: ChoiceGraph) -> TwinKey? {
+        if case let .sequence(metadata) = node.kind, metadata.elementTypeTag == nil, node.children.isEmpty == false {
+            var fingerprint: UInt64?
+            for childID in node.children {
+                guard case let .pick(pick) = graph.nodes[childID].kind, fingerprint == nil || fingerprint == pick.fingerprint else {
+                    return nil
+                }
+                fingerprint = pick.fingerprint
+            }
+            return fingerprint.map { .pickSequence($0) }
+        }
+        return twinKey(of: node)
+    }
+
+    /// The twin key of one zip child from its own node alone, or nil for kinds with no twin identity (`just`, untagged sequences). ``twinKey(of:in:)`` also recognises homogeneous pick sequences, which need the children.
+    internal static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
         switch node.kind {
             case let .pick(metadata):
                 .pick(metadata.fingerprint)
@@ -271,7 +980,6 @@ extension FuzzMutator {
     ) -> ChoiceSequence? {
         // Fingerprint order is explicit rather than dictionary order so seeded runs replay identically across processes.
         var eligible: [(fingerprint: UInt64, recipients: [Int])] = []
-        var totalWeight: UInt64 = 0
         for fingerprint in targets.sortedFingerprints {
             guard let recipients = targets.graph.selfSimilarityGroups[fingerprint],
                   recipients.isEmpty == false,
@@ -281,21 +989,13 @@ extension FuzzMutator {
                 continue
             }
             eligible.append((fingerprint: fingerprint, recipients: recipients))
-            totalWeight += UInt64(recipients.count)
         }
-        guard totalWeight > 0 else {
+        guard let chosen = weightedPick(
+            from: eligible,
+            weight: { UInt64($0.recipients.count) },
+            prng: &prng
+        ) else {
             return nil
-        }
-
-        var remaining = prng.next(upperBound: totalWeight)
-        var chosen = eligible[eligible.count - 1]
-        for entry in eligible {
-            let weight = UInt64(entry.recipients.count)
-            if remaining < weight {
-                chosen = entry
-                break
-            }
-            remaining -= weight
         }
 
         let targetNodeID = chosen.recipients[Int(prng.next(upperBound: UInt64(chosen.recipients.count)))]
@@ -309,8 +1009,23 @@ extension FuzzMutator {
         else {
             return nil
         }
+        let donorSequence = corpus.entries[donor.entryIndex].sequence
+        if let donorGraph = corpus.entries[donor.entryIndex].mutationTargets?.graph,
+           donorGraph.selfSimilarityGroups[chosen.fingerprint] != nil
+        {
+            let donorEntries = Array(donorSequence[donor.range.lowerBound ... donor.range.upperBound])
+            let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
+                donorEntries,
+                donorNodeID: donor.donorNodeID,
+                donorRangeStart: donor.range.lowerBound,
+                graph: donorGraph
+            )
+            var result = candidate
+            result.replaceSubrange(target.lowerBound ... target.upperBound, with: expanded)
+            return result
+        }
         return candidate.graftingSpan(
-            from: corpus.entries[donor.entryIndex].sequence,
+            from: donorSequence,
             at: donor.range,
             onto: target
         )
@@ -318,32 +1033,45 @@ extension FuzzMutator {
 
     // MARK: - Scope Selection
 
+    /// Draws one element from a collection in proportion to its weight, or nil when every weight is zero.
+    ///
+    /// The draw consumes one PRNG value regardless of the collection's size, so PRNG consumption stays fixed per call. On a floating-point tie at the last element the fallback returns it rather than nil.
+    private static func weightedPick<C: Collection>(
+        from collection: C,
+        weight: (C.Element) -> UInt64,
+        prng: inout Xoshiro256
+    ) -> C.Element? {
+        var totalWeight: UInt64 = 0
+        for element in collection {
+            totalWeight += weight(element)
+        }
+        guard totalWeight > 0 else {
+            return nil
+        }
+        var remaining = prng.next(upperBound: totalWeight)
+        var last: C.Element?
+        for element in collection {
+            let elementWeight = weight(element)
+            if remaining < elementWeight {
+                return element
+            }
+            remaining -= elementWeight
+            last = element
+        }
+        return last
+    }
+
     /// Picks one swap-eligible sibling group with `minimumSize` or more members, weighted by member count.
     private static func pickSwappableGroup(
         scopes: [PermutationScope],
         minimumSize: Int,
         prng: inout Xoshiro256
     ) -> [Int]? {
-        var eligible: [[Int]] = []
-        var totalWeight: UInt64 = 0
-        for scope in scopes {
-            for group in scope.swappableGroups where group.count >= minimumSize {
-                eligible.append(group)
-                totalWeight += UInt64(group.count)
-            }
-        }
-        guard totalWeight > 0 else {
-            return nil
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        for group in eligible {
-            let weight = UInt64(group.count)
-            if remaining < weight {
-                return group
-            }
-            remaining -= weight
-        }
-        return eligible[eligible.count - 1]
+        weightedPick(
+            from: scopes.lazy.flatMap(\.swappableGroups).filter { $0.count >= minimumSize },
+            weight: { UInt64($0.count) },
+            prng: &prng
+        )
     }
 
     /// Picks one range group with two or more members, weighted by member count.
@@ -351,22 +1079,11 @@ extension FuzzMutator {
         _ groups: [[ClosedRange<Int>]],
         prng: inout Xoshiro256
     ) -> [ClosedRange<Int>]? {
-        var totalWeight: UInt64 = 0
-        for group in groups where group.count >= 2 {
-            totalWeight += UInt64(group.count)
-        }
-        guard totalWeight > 0 else {
-            return nil
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        for group in groups where group.count >= 2 {
-            let weight = UInt64(group.count)
-            if remaining < weight {
-                return group
-            }
-            remaining -= weight
-        }
-        return groups[groups.count - 1]
+        weightedPick(
+            from: groups.lazy.filter { $0.count >= 2 },
+            weight: { UInt64($0.count) },
+            prng: &prng
+        )
     }
 
     /// Picks one tandem group with two or more leaves, weighted by leaf count.
@@ -374,22 +1091,11 @@ extension FuzzMutator {
         _ scope: TandemScope,
         prng: inout Xoshiro256
     ) -> TandemGroup? {
-        var totalWeight: UInt64 = 0
-        for group in scope.groups where group.leaves.count >= 2 {
-            totalWeight += UInt64(group.leaves.count)
-        }
-        guard totalWeight > 0 else {
-            return nil
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        for group in scope.groups where group.leaves.count >= 2 {
-            let weight = UInt64(group.leaves.count)
-            if remaining < weight {
-                return group
-            }
-            remaining -= weight
-        }
-        return scope.groups[scope.groups.count - 1]
+        weightedPick(
+            from: scope.groups.lazy.filter { $0.leaves.count >= 2 },
+            weight: { UInt64($0.leaves.count) },
+            prng: &prng
+        )
     }
 
     /// Resolves a sibling group's node IDs to position ranges sorted by position, or nil when any member is inactive or extends past the candidate.

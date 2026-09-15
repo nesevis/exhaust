@@ -10,7 +10,7 @@ package enum FuzzTunables {
 
     /// Convergence threshold τ separating the mutable tier from the discovery tier.
     ///
-    /// The tier is a length guard for the champion archive, not a judgement of the entry as a parent. A child that resolved mostly through the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Measured 2026-09-06 (`fuzz-loop-experiments-2026-09-06.md`): admitting every entry as a parent cost IFC 3.1% of covered edges and 4.5% of its parent pool while the corpus stayed flat, with parent length down 4.1%. Keeping low-convergence entries out of the archive holds the pool off the shortlex floor.
+    /// The tier is a length guard for the champion archive, not a judgement of the entry as a parent. A child that resolved mostly through the PRNG is short, the archive orders champions by shortlex, and a short entry claims many cells at once and evicts the longer incumbents holding them. Measured 2026-09-06 (`fuzz-loop-experiments-2026-09-06.md`): admitting every entry as a parent cost 3.1% of covered edges and 4.5% of the parent pool while the corpus stayed flat, with parent length down 4.1%. Keeping low-convergence entries out of the archive holds the pool off the shortlex floor.
     package static let mutableTierConvergenceThreshold = 0.5
 
     /// Weight of the novelty bonus term (α) in parent selection.
@@ -38,10 +38,35 @@ package enum FuzzTunables {
     /// Probability that a mutation candidate is a bind-boundary splice with a random donor instead of a single-parent mutation. AFL's splicing yields roughly 10–15% of paths in extended runs; the starting weight matches.
     package static let spliceProbability = 0.125
 
+    /// Whether the bind-boundary splice arm is in the inventory. `EXHAUST_BLIND_MUTATORS=0` removes it with the other two blind operations for an ablation. The splice pairs any donor bind region with any recipient bind region by position alone, since the flat sequence's bind markers carry no site fingerprint; it fires only on generators with bind regions and was measured as a loss on F<: (2026-09-13), but the three blind operations together were worth 109 IFC solves over three seed sets (2026-09-15) through the corpus coverage they add, so they stay on by default.
+    package static let spliceEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_BLIND_MUTATORS"] != "0"
+
+    /// Whether the high band may delete its region outright rather than randomising the values in it. A deletion cut by index removes markers along with values, so the prefix stops parsing at the cut and the materialiser rebuilds the remainder from the fallback tree and the PRNG; that rebuild is what reaches parents the typed operators do not, measured on IFC as covered edges (489 against 475 per trial) and the eleven-mutant block (102 against 45 over three seed sets, 2026-09-15). `EXHAUST_BLIND_MUTATORS=0` turns it off with the other two.
+    package static let regionDeletionEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_BLIND_MUTATORS"] != "0"
+
+    /// Whether the medium band may delete, duplicate, or overwrite a block chosen by index, beside its branch pivot. A block cut by index crosses marker pairs, so the child is whatever the materialiser rebuilds past the cut; the typed forms (``MutationArm/elementDeletion``, ``MutationArm/elementDuplication``, ``MutationArm/typedCrossover``) make the same moves through the graph, but the blind cut is what copies a span across the two halves of a mirrored composite and it carries the IFC block (see ``regionDeletionEnabled``). `EXHAUST_BLIND_MUTATORS=0` turns it off with the other two.
+    package static let blockMovesEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_BLIND_MUTATORS"] != "0"
+
     // MARK: - Phase 1 (Screening)
 
-    /// Rows the screening pass may draw from the covering array before sampling begins. The pass has never detected a fault on the Etna register machine, but its boundary rows seed the only fully populated memories the corpus sees, so the number trades a few hundred milliseconds against reach into memory-operation faults; 1,000 keeps most of that reach at a tenth of the original 10,000's cost. `EXHAUST_SCREENING_BUDGET` overrides it for measurement.
+    /// Rows the screening pass may draw from the covering array before sampling begins. The pass rarely detects a fault on its own, but its boundary rows seed the only fully populated memories the corpus sees, so the number trades a few hundred milliseconds against reach into memory-operation faults; 1,000 keeps most of that reach at a tenth of the original 10,000's cost. `EXHAUST_SCREENING_BUDGET` overrides it for measurement.
     package static let screeningBudget: UInt64 = ProcessInfo.processInfo.environment["EXHAUST_SCREENING_BUDGET"].flatMap(UInt64.init) ?? 1000
+
+    // MARK: - Measurement
+
+    /// Directory the mutation-arm window trace writes into, or nil when `EXHAUST_ARM_TRACE` is unset and no trace is kept. Off by default because the rows are only useful to an offline analysis, and a run nobody is analyzing should not pay for the file.
+    package static let armTraceDirectory: String? = ProcessInfo.processInfo.environment["EXHAUST_ARM_TRACE"]
+
+    /// Directory the failure lineage trace writes into, or nil when `EXHAUST_FAILURE_LINEAGE` is unset. One JSON line per failing search candidate pairs the child with the parent it was mutated from; see ``FuzzFailureLineage``.
+    package static let failureLineageDirectory: String? = ProcessInfo.processInfo.environment["EXHAUST_FAILURE_LINEAGE"]
+
+    /// Attempts per row of the mutation-arm trace, overridden by `EXHAUST_ARM_TRACE_WINDOW`. A minute of searching evaluates tens of thousands of attempts, so 2,000 leaves enough windows in a run for a window-to-window comparison while keeping each window's admission counts above single digits.
+    package static let armTraceWindow: Int = ProcessInfo.processInfo.environment["EXHAUST_ARM_TRACE_WINDOW"].flatMap(Int.init) ?? 2000
+
+    /// Attempts that must separate two admissions before structural admissibility starts sampling.
+    ///
+    /// While the corpus is filling, admissions arrive every few attempts and each would pay for a materialization with picks, and the inventory is least worth narrowing then because the search has barely seen the generator. Past this spacing, sampling is rare and an arm that has never been sighted has had a real chance to appear.
+    package static let armAdmissibilitySlowdown = 2000
 
     // MARK: - Phase 2 (Random Sampling) Stopping
 
@@ -71,13 +96,22 @@ package enum FuzzTunables {
     /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
     package static let discardParentEnergy = 1.0 / 3.0
 
+    /// Whether the element transplant is in the arm inventory. `EXHAUST_ELEMENT_TRANSPLANT=0` removes it for a same-binary comparison.
+    package static let elementTransplantEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_ELEMENT_TRANSPLANT"] != "0"
+
+    /// Largest valid range a chooseBits leaf may have for the small-domain enumeration to enumerate it: a leaf with this many patterns or fewer yields one child per alternative value. Ten covers enum-like leaves (labels, small tag sets, booleans) and single digits while keeping a draw to at most nine evaluations; `EXHAUST_SMALL_DOMAIN_LIMIT` overrides it for measurement, and each unit raises the cost of a draw by one evaluation.
+    package static let smallDomainLimit: UInt64 = ProcessInfo.processInfo.environment["EXHAUST_SMALL_DOMAIN_LIMIT"].flatMap(UInt64.init) ?? 10
+
+    /// Whether the small-domain enumeration is in the arm inventory. `EXHAUST_SMALL_DOMAIN_ENUMERATION=0` removes it for a same-binary comparison.
+    package static let smallDomainEnumerationEnabled: Bool = ProcessInfo.processInfo.environment["EXHAUST_SMALL_DOMAIN_ENUMERATION"] != "0"
+
     /// Maximum slots one comparand-substitution candidate may overwrite with the drawn operand. The count is drawn uniformly in 1...min(span, compatible slots): 1 preserves the single-slot magic-gate move, larger counts perform the agreement move for preconditions that require many positions to match at once. Kept small: each extra slot halves the chance that every overwritten position was one the comparison actually constrained.
     package static let comparandSubstitutionSlotSpan = 8
 
     /// Barren draws a comparand-substitution key gets before it is retired, and the allowance a yielding draw restores it to. A yield is a corpus admission or a failure: the arm can be worth its attempts through faults that light no new edge, so admission alone would retire it too early.
     package static let comparandOperandEnergy: UInt8 = 16
 
-    /// Barren draws allowed per value slot of the chosen tag group, and the allowance's cap. A draw samples one subset of the group's slots, so the candidates a source can reach grow with the group: 15 for four slots, 255 for eight, 3,796 for twelve. A fixed 16 samples a four-slot group exhaustively and a twelve-slot group at 0.4%, which retires exactly the sources whose walk is longest, the multi-slot agreement preconditions of IFC's memory operations. Scaling the allowance with the group spends draws where a draw can still be new; the floor is the fixed allowance, the cap bounds the walk a run will fund for one source; 255 was measured against it on the IFC memory-operation probe (2026-09-07) and found nothing the lower cap missed.
+    /// Barren draws allowed per value slot of the chosen tag group, and the allowance's cap. A draw samples one subset of the group's slots, so the candidates a source can reach grow with the group: 15 for four slots, 255 for eight, 3,796 for twelve. A fixed 16 samples a four-slot group exhaustively and a twelve-slot group at 0.4%, which retires exactly the sources whose walk is longest, the multi-slot agreement preconditions of memory-operation faults. Scaling the allowance with the group spends draws where a draw can still be new; the floor is the fixed allowance, the cap bounds the walk a run will fund for one source; 255 was measured against it on memory-operation faults and found nothing the lower cap missed.
     package static let comparandOperandEnergyPerSlot = 8
     package static let comparandOperandEnergyCap: UInt8 = 128
 
@@ -87,14 +121,20 @@ package enum FuzzTunables {
         return UInt8(min(max(scaled, Int(comparandOperandEnergy)), Int(comparandOperandEnergyCap)))
     }
 
-    /// Floor of the adaptive fresh-draw mixture: the probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick while the corpus is admitting. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost, so a healthy corpus keeps only a background rate.
-    package static let freshMixtureFloor = 0.05
+    /// Floor of the fresh-draw mixture: the least probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost, so a corpus the mutator is growing keeps only this background rate. `EXHAUST_FRESH_FLOOR` overrides it for measurement.
+    package static let freshMixtureFloor: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_FLOOR"].flatMap(Double.init) ?? 0.05
 
-    /// Cap of the adaptive fresh-draw mixture, reached when the corpus has admitted nothing for a full ramp. The default sits at the measured dose-response knee: on basin-fragmented workloads a starved run climbs to spending most of its budget on fresh draws, matching the exploration share FuzzChick reaches through queue starvation.
-    package static let freshMixtureCap = 0.6
+    /// Cap of the fresh-draw mixture: the most a run spends on the generator, taken in full only when neither producer is seeding parents. Under the adaptive rule the operating point is set by the producers' admission rates and the cap is a ceiling on it (STLC sits near it, IFC near the floor); under the starvation ramp the cap is the operating point of every coverage-guided run, since the corpus starves faster than any ramp. `EXHAUST_FRESH_CAP` overrides it for measurement.
+    package static let freshMixtureCap: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_CAP"].flatMap(Double.init) ?? 0.8
 
-    /// Attempts without a corpus admission over which the mixture climbs linearly from floor to cap.
-    package static let freshMixtureRampAttempts = 2000.0
+    /// Whether the fresh-draw mixture adapts to the producers' parent-admission rates rather than ramping on attempts since any admission. The share is the fresh producer's portion of mutable-tier admissions per attempt, fresh draws against mutation children and injections, clamped to the floor and cap; when neither has seeded a parent within a window the run is starved and takes the cap. Measured 2026-09-14/15 against fixed caps of 0.2 and 0.6: the fixed caps are wrong in opposite directions (fresh draws never witness on IFC and are the only witness path for STLC's hard tasks), and the adaptive rule is the first configuration to hold both. `EXHAUST_FRESH_ADAPTIVE=0` restores the ramp for comparison.
+    package static let freshMixtureAdaptive: Bool = ProcessInfo.processInfo.environment["EXHAUST_FRESH_ADAPTIVE"] != "0"
+
+    /// Attempts over which the adaptive mixture averages each producer's parent-admission rate. Parents arrive every few thousand attempts at best, so the window has to hold many arrivals for the rates to mean anything; a run whose two producers together seed fewer than one parent per window is starved and takes the cap. `EXHAUST_FRESH_WINDOW` overrides it for measurement.
+    package static let freshMixtureAdaptiveWindow: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_WINDOW"].flatMap(Double.init) ?? 100_000
+
+    /// Attempts without a corpus admission over which the starvation ramp climbs linearly from floor to cap, in effect only with ``freshMixtureAdaptive`` off. The length has no measurable effect on the share spent between 500 and 25,000 attempts, since admissions are rarer than any of them on a coverage-guided run. `EXHAUST_FRESH_RAMP` overrides it for measurement.
+    package static let freshMixtureRampAttempts: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_RAMP"].flatMap(Double.init) ?? 2000.0
 
     // MARK: - Crash Recovery
 
@@ -109,7 +149,7 @@ package enum FuzzTunables {
     /// Discriminating source locations reported per cluster. Beyond a handful, the ranking's tail is noise against small failing samples.
     package static let discriminatingEdgeLimit = 5
 
-    /// Ranked edges handed to the report per cluster before it folds them by source location and keeps ``discriminatingEdgeLimit``. One function usually ranks at several offsets (one IFC cluster ranked a single getter at five), so the pool has to be wider than the printed list for the list to name more than one or two functions.
+    /// Ranked edges handed to the report per cluster before it folds them by source location and keeps ``discriminatingEdgeLimit``. One function usually ranks at several offsets (one cluster ranked a single getter at five), so the pool has to be wider than the printed list for the list to name more than one or two functions.
     package static let discriminatingEdgeCandidateLimit = 40
 
     // MARK: - Reduction Backpressure
@@ -148,7 +188,7 @@ package enum FuzzTunables {
 
     /// Budget at or above which the crash breadcrumb records each candidate's own choice sequence, so a resumed run can show the trapping input instead of naming it by hash and quarantining its parent.
     ///
-    /// The recording costs about 8% of candidate throughput at any budget, because the encode and the copy into the slot run inside every property invocation's bracket (on the Etna IFC type-based workload, property time went from 0.8 to 4.1 microseconds per evaluated case). What the budget changes is the value of having the input: a short run is cheap to reproduce by running it again, and a long campaign is not.
+    /// The recording costs about 8% of candidate throughput at any budget, because the encode and the copy into the slot run inside every property invocation's bracket, which on a cheap property can take it from under one microsecond per evaluated case to several. What the budget changes is the value of having the input: a short run is cheap to reproduce by running it again, and a long campaign is not.
     ///
     /// - Note: Throughput therefore steps down at this boundary. A run just under it searches about 8% faster than one just over.
     package static let trapCandidateBudgetFloor: UInt64 = 10 * 60 * 1_000_000_000
@@ -165,7 +205,7 @@ package enum FuzzTunables {
 
 /// Per-run switches for the mechanisms a benchmark arm can still hold off.
 ///
-/// A knob exists only while its off path is worth measuring against: the arm inventory (bandit, graph, and pair operators) and the swarm rewrite. Mechanisms whose off path lost its last measurement (uniform parent selection, the binary swarm mask, the power schedule, campaigns, the reseed burst, the fixed escape cadence, and the knob-off variants of normalization, candidate dedup, and the champion archive) were deleted rather than left switchable. In-package tests reach the knobs through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
+/// A knob exists only while its off path is worth measuring against: the arm inventory (bandit, graph, and pair operators) and the swarm rewrite. Mechanisms whose off path lost its last measurement (uniform parent selection, the binary swarm mask, the power schedule, campaigns, the reseed burst, the fixed escape cadence, and the knob-off variants of normalization, candidate dedup, and the champion archive) were deleted rather than left switchable. In-package tests reach the knobs through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, parsed once at run start via ``parse(environmentValue:)``.
 package struct FuzzExperiments: Sendable, Equatable {
     /// Bandit-tuned mutation band weights over the enabled arm inventory, rewarded by corpus admission.
     package var banditBands = true
@@ -175,6 +215,16 @@ package struct FuzzExperiments: Sendable, Equatable {
 
     /// Pair mutation operators: the twin splice (copy one zip twin's span over its sibling's, creating structural agreement) and the typed crossover (replace a pick subtree with a same-fingerprint span from a different corpus entry). Adds the two arms to the pick inventory the same way `graphMutation` adds its four.
     package var pairMutation = true
+
+    /// Whether an arm is offered to the pick only when its operator's precondition holds for the parent.
+    ///
+    /// Before each draw, the parent's structural tables (bind regions, sibling groups, tandem groups, twin spans, typed donors) determine which operators can fire. The bandit draws only from that subset, so draws that would have picked a dead arm pick a live one instead. The three bands are unconditionally eligible.
+    package var armEligibility = true
+
+    /// Whether the arm inventory is narrowed to what the generator's structure admits, sampled at corpus admissions.
+    ///
+    /// A corpus entry's tree is materialized with `materializePicks: false`, so its graph describes the one path the entry took, not the shapes the generator can produce. Re-materializing an admitted entry with picks gives every branch alternative a full subtree, which turns "no bind region on this path" into "this generator's structure has no bind region" — the difference between a guess and a fact about whether `splice` can ever fire.
+    package var armAdmissibility = true
 
     /// How swarm generation rewrites a mutated child's branch selections.
     package enum SwarmMode: String, Sendable {
@@ -213,6 +263,8 @@ package struct FuzzExperiments: Sendable, Equatable {
     package static var knobs: [(name: String, keyPath: WritableKeyPath<FuzzExperiments, Bool>)] {
         [
             ("banditBands", \.banditBands),
+            ("armEligibility", \.armEligibility),
+            ("armAdmissibility", \.armAdmissibility),
             ("graphMutation", \.graphMutation),
             ("pairMutation", \.pairMutation),
         ]

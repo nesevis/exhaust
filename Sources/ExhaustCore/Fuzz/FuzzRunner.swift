@@ -39,8 +39,10 @@ struct FuzzCandidate<Output>: ~Copyable {
     let parentIndex: Int?
     /// The parent's sequence hash for the crash breadcrumb; 0 without a parent.
     let parentHash: UInt64
-    /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; 0 outside the arm inventory.
-    let armsMask: UInt32
+    /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; `.none` outside the arm inventory.
+    let armsMask: MutationArmSet
+    /// The eligible set the arm was drawn from, so the bandit can compute the conditional draw probability at reward time instead of on every draw. `.all` outside the arm inventory.
+    let eligible: MutationArmSet
     /// Whether the candidate is a covering array row, admitted for its boundary values without coverage novelty.
     let isBoundaryDerived: Bool
 }
@@ -116,11 +118,26 @@ package final class FuzzRunner<Output> {
     /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
     package let corpus: FuzzCorpus
     var faults = FaultPipeline()
-    var prng: Xoshiro256
+    package var prng: Xoshiro256
     var bandit = MutationBandit()
+
+    /// Per-window arm counts written to a CSV for offline analysis, or nil when `EXHAUST_ARM_TRACE` is unset. See ``MutationArmTrace``.
+    var armTrace: MutationArmTrace?
+
+    /// Failing-child-beside-parent rows, or nil when `EXHAUST_FAILURE_LINEAGE` is unset. See ``FuzzFailureLineage``.
+    var failureLineage: FuzzFailureLineage?
+    /// Per-draw mutable state for the mutation draw in progress: the accounting ``evaluate(_:)`` and ``recordLineage(gate:clusterID:isNewCluster:)`` consume. Grouped so the mutation loop resets one value per draw instead of four separate fields.
+    var drawState = MutationDrawState()
+
+    /// Arms the generator's structure has been shown to admit, accumulated across inspected admissions. Nil until the first inspection, while the whole inventory is still open.
+    package var sightedArms: MutationArmSet?
+    /// Attempts opened when the previous admission landed, so the gap between admissions measures how fast the corpus is still filling.
+    var attemptsAtPreviousAdmission = 0
 
     /// The non-splice arms the fixed distribution draws from, assembled once at init from the experiment knobs.
     var fixedDrawArms: [MutationArm] = []
+    /// The knob-enabled inventory as a set: what a full repertoire has to cover, and which corpus-dependent eligibility checks are worth running.
+    var enabledArms = MutationArmSet.none
 
     /// Comparison operands harvested from the system under test, drawn on during mutation. Stays empty when the source does not harvest or the build lacks `trace-cmp` instrumentation, so reads cost nothing.
     var comparisonPool = ComparisonPool()
@@ -144,6 +161,12 @@ package final class FuzzRunner<Output> {
 
     /// Evaluated attempts since the corpus last admitted an entry, driving the adaptive fresh-draw mixture. Reset on every admission. Package-visible so tests can pin the ramp against a driven counter.
     package var attemptsSinceAdmission = 0
+
+    /// Mutable-tier admissions per attempt of the mutation phase's two producer classes, each an exponential moving average over ``FuzzTunables/freshMixtureAdaptiveWindow`` of its own attempts: fresh generator draws, and mutation children with the injections. What the adaptive mixture divides between. Package-visible so tests can drive them.
+    package var freshAdmissionRate = 0.0
+    package var mutationAdmissionRate = 0.0
+    /// Mutation-phase attempts the two rates have seen. Until a full window has been observed the rates are not evidence, and the mixture holds the floor rather than reading an empty window as starvation.
+    package var mixtureObservations = 0
 
     /// The later of the two discoveries, falling back to the run's start before anything is found.
     ///
@@ -222,15 +245,30 @@ package final class FuzzRunner<Output> {
         )
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
-        var arms = MutationArm.bandArms
+        var arms = MutationArm.bandArms.filter { FuzzTunables.spliceEnabled || $0 != .splice }
         if configuration.experiments.graphMutation {
-            arms += [.swap, .shuffle, .move, .lockstepDelta]
+            arms += [.swap, .shuffle, .move, .lockstepDelta, .elementDeletion, .elementDuplication, .valueReseed, .runDeletion, .runDuplication, .runCopy, .suffixReseed]
+            if FuzzTunables.smallDomainEnumerationEnabled {
+                arms.append(.smallDomainEnumeration)
+            }
+            if FuzzTunables.elementTransplantEnabled {
+                arms.append(.elementTransplant)
+            }
         }
         if configuration.experiments.pairMutation {
             arms += [.twinSplice, .typedCrossover]
         }
         bandit = MutationBandit(arms: arms)
         fixedDrawArms = arms.filter { $0 != .splice }
+        enabledArms = arms.reduce(into: MutationArmSet.none) { set, arm in
+            set.insert(arm)
+        }
+        armTrace = MutationArmTrace(
+            directory: FuzzTunables.armTraceDirectory,
+            windowSize: FuzzTunables.armTraceWindow,
+            seed: configuration.seed
+        )
+        failureLineage = FuzzFailureLineage(directory: FuzzTunables.failureLineageDirectory, seed: configuration.seed)
     }
 
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
@@ -360,6 +398,7 @@ package final class FuzzRunner<Output> {
             diagnostics: diagnostics,
             corpusEntryCount: corpus.entries.count,
             parentCount: corpus.parentIndices.count,
+            parentRootPhases: corpus.parentRootPhases,
             instrumentedEdgeCount: source.edgeCount,
             incidence: corpus.edgeIncidenceProfile,
             incidenceTotal: corpus.incidenceTotal,
@@ -435,7 +474,8 @@ package final class FuzzRunner<Output> {
                 origin: .screeningRow,
                 parentIndex: nil,
                 parentHash: 0,
-                armsMask: 0,
+                armsMask: MutationArmSet.none,
+                eligible: .all,
                 isBoundaryDerived: true
             ))
             checkpointIfDue()
@@ -602,19 +642,43 @@ package final class FuzzRunner<Output> {
                 continue
             }
 
-            for _ in 0 ..< FuzzTunables.childrenPerParent {
+            var childrenSpent = 0
+            while childrenSpent < FuzzTunables.childrenPerParent {
                 if terminationDue() != nil {
                     break
                 }
-                let (mutated, armsMask) = nextCandidate(from: parent, parentIndex: parentIndex)
+                let draw = nextCandidate(from: parent, parentIndex: parentIndex)
+                childrenSpent += 1
+                drawState.reset(cost: 1 + draw.alternatives.count)
                 if let child = childCandidate(
-                    from: mutated,
+                    from: draw.candidate,
                     parent: parent,
                     parentIndex: parentIndex,
-                    armsMask: armsMask,
-                    origin: .mutationChild
+                    armsMask: draw.armsMask,
+                    eligible: draw.eligible,
+                    origin: .mutationChild,
+                    reseedRanges: draw.reseedRanges
                 ) {
+                    drawState.reseedRanges = draw.reseedRanges
                     evaluate(child)
+                    drawState.reseedRanges = []
+                }
+                // The rest of an enumeration. Each alternative is its own attempt and spends one of the parent's children, so an enumeration costs the parent the draws it would have spent anyway rather than adding to them; the bandit is rewarded at most once for the whole draw, see `drawRewarded`.
+                for alternative in draw.alternatives {
+                    if terminationDue() != nil {
+                        break
+                    }
+                    childrenSpent += 1
+                    if let child = childCandidate(
+                        from: alternative,
+                        parent: parent,
+                        parentIndex: parentIndex,
+                        armsMask: draw.armsMask,
+                        eligible: draw.eligible,
+                        origin: .mutationChild
+                    ) {
+                        evaluate(child)
+                    }
                 }
             }
         }
@@ -622,12 +686,45 @@ package final class FuzzRunner<Output> {
 
     /// The fresh-draw mixture in effect for the current iteration.
     ///
-    /// The ramp climbs linearly from ``FuzzTunables/freshMixtureFloor`` to ``FuzzTunables/freshMixtureCap`` as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant.
+    /// Under ``FuzzTunables/freshMixtureAdaptive`` the share is the fresh producer's portion of the two producers' parent-admission rates, clamped to ``FuzzTunables/freshMixtureFloor`` and ``FuzzTunables/freshMixtureCap``: a corpus the mutator is growing keeps the mixture near the floor however slowly it grows, and one only the generator can grow gets the generator. The cap is taken in full only when neither producer has seeded a parent within a window, FuzzChick's empty-queue case. Before a full window has been observed the rates are not evidence and the share is the floor. With the rule off the share follows ``rampFreshMixture(attemptsSinceAdmission:)``.
     package func currentFreshMixture(attemptsSinceAdmission: Int) -> Double {
+        guard FuzzTunables.freshMixtureAdaptive else {
+            return rampFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission)
+        }
+        let floor = FuzzTunables.freshMixtureFloor
+        let cap = FuzzTunables.freshMixtureCap
+        let window = FuzzTunables.freshMixtureAdaptiveWindow
+        guard Double(mixtureObservations) >= window else {
+            return floor
+        }
+        let total = freshAdmissionRate + mutationAdmissionRate
+        guard total >= 1 / window else {
+            return cap
+        }
+        return min(cap, max(floor, freshAdmissionRate / total))
+    }
+
+    /// The starvation ramp: climbs linearly from the floor to the cap as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant. On a coverage-guided run admissions come rarer than the ramp, so this sits at the cap for most of a run whichever producer is admitting; the adaptive rule replaces it by default.
+    package func rampFreshMixture(attemptsSinceAdmission: Int) -> Double {
         let floor = FuzzTunables.freshMixtureFloor
         let cap = FuzzTunables.freshMixtureCap
         let progress = min(1, Double(attemptsSinceAdmission) / FuzzTunables.freshMixtureRampAttempts)
         return floor + (cap - floor) * progress
+    }
+
+    /// Feeds one attempt's outcome into the producer admission rates behind the adaptive mixture. Only mutation-phase attempts count, and every one of them does: a duplicate skipped before the property, a child the materialiser rejected, and an evaluated candidate all cost their producer an attempt, so each is a zero-admission observation unless the candidate entered the mutable tier.
+    package func noteMixtureOutcome(phase: FuzzPhase, origin: CandidateOrigin, admitted: Bool) {
+        guard phase == .mutation else {
+            return
+        }
+        mixtureObservations += 1
+        let rate = 1 / FuzzTunables.freshMixtureAdaptiveWindow
+        let observation = admitted ? 1.0 : 0.0
+        if origin == .freshSample {
+            freshAdmissionRate += rate * (observation - freshAdmissionRate)
+        } else {
+            mutationAdmissionRate += rate * (observation - mutationAdmissionRate)
+        }
     }
 
     /// Materializes a mutated sequence into a child candidate through guided materialization, or nil when the materializer rejects it, which is recorded as the attempt's outcome.
@@ -637,17 +734,21 @@ package final class FuzzRunner<Output> {
         from mutated: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,
-        armsMask: UInt32,
-        origin: CandidateOrigin
+        armsMask: MutationArmSet,
+        eligible: MutationArmSet,
+        origin: CandidateOrigin,
+        reseedRanges: [ClosedRange<Int>] = []
     ) -> FuzzCandidate<Output>? {
         let guidedSeed = prng.next()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
             prefix: mutated,
-            mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
+            mode: .guided(seed: guidedSeed, fallbackTree: parent.tree),
+            reseedRanges: reseedRanges
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.attempts.record(.mutation, origin, .rejectedByMaterializer)
+            noteMixtureOutcome(phase: .mutation, origin: origin, admitted: false)
             return nil
         }
         return FuzzCandidate(
@@ -663,6 +764,7 @@ package final class FuzzRunner<Output> {
             parentIndex: parentIndex,
             parentHash: parent.hash,
             armsMask: armsMask,
+            eligible: eligible,
             isBoundaryDerived: false
         )
     }
@@ -675,12 +777,30 @@ package final class FuzzRunner<Output> {
         // Screening rows are distinct by construction and are never entered in the recent-hash table, as in #exhaust.
         if candidate.origin != .screeningRow, isRecentDuplicate(hash: candidate.hash) {
             counts.attempts.record(candidate.phase, candidate.origin, .duplicate)
+            noteMixtureOutcome(phase: candidate.phase, origin: candidate.origin, admitted: false)
             return FuzzEvaluation(admission: .rejectedDuplicate, verdict: nil)
         }
         let (verdict, hits) = evaluateInBracket(
             candidate.value,
-            recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: candidate.sequence)
+            recordingBreadcrumb: (candidateHash: candidate.hash, parentHash: candidate.parentHash, sequence: breadcrumb != nil ? candidate.sequence : nil)
         )
+
+        if failureLineage != nil, case let .fail(symptom) = verdict {
+            drawState.pendingLineage = FuzzFailureLineage.Provenance(
+                attemptIndex: attemptTimelineIndex,
+                phase: candidate.phase,
+                origin: candidate.origin,
+                arms: candidate.armsMask,
+                reseedRanges: drawState.reseedRanges,
+                parentIndex: candidate.parentIndex,
+                parentHash: candidate.parentHash,
+                childHash: candidate.hash,
+                childSequence: candidate.sequence,
+                // The report renderer elides nested values; the row wants the whole term, since the failure usually sits several levels down.
+                childValue: String(reflecting: candidate.value),
+                symptom: symptom.kind
+            )
+        }
 
         var deferredTreeRebuild: (() -> ChoiceTree?)?
         if candidate.tree == nil {
@@ -688,6 +808,7 @@ package final class FuzzRunner<Output> {
                 guard let rebuilt = rebuildTree(for: candidate.sequence) else {
                     // The property ran, so the attempt is recorded with its verdict. The candidate is not offered, since admission would store the placeholder tree, but a failure is still dispatched and held unreduced rather than lost.
                     counts.attempts.record(candidate.phase, candidate.origin, FuzzAttemptOutcome(verdict))
+                    noteMixtureOutcome(phase: candidate.phase, origin: candidate.origin, admitted: false)
                     if verdict.isFailure {
                         handleFailure(
                             EvaluatedFuzzCandidate(
@@ -701,6 +822,7 @@ package final class FuzzRunner<Output> {
                             deferredTreeRebuild: { nil },
                             parentIndex: candidate.parentIndex,
                             phase: candidate.phase,
+                            origin: candidate.origin,
                             coverageNovel: false,
                             attemptIndex: attemptTimelineIndex
                         )
@@ -720,14 +842,64 @@ package final class FuzzRunner<Output> {
             verdict: verdict,
             hits: hits
         )
+        // Mutable-tier admissions only: a discovery-tier entry never becomes a parent, and fresh draws land there often enough on a saturated corpus that counting them would keep the generator's share high where its draws grow nothing the search can use.
+        var seededParent = false
+        if case .admitted(_, .mutable) = admission {
+            seededParent = true
+        }
+        noteMixtureOutcome(phase: candidate.phase, origin: candidate.origin, admitted: seededParent)
+        // A provenance the gate did not consume must not attach to a later failure from outside the loop.
+        drawState.pendingLineage = nil
         // Credit every arm in the mask, whatever the verdict: the bandit only learns from admissions, but the report has to be able to say what an arm spent its attempts on, including the discards an admission-only tally never sees.
         let outcome = FuzzAttemptOutcome(verdict)
-        for arm in MutationArm.allCases where candidate.armsMask & (1 << UInt32(arm.rawValue)) != 0 {
+        for arm in MutationArm.allCases where candidate.armsMask.contains(arm) {
             counts.mutationArms.record(arm: arm, outcome: outcome)
-            if admission.isAdmitted, configuration.experiments.banditBands {
-                bandit.reward(arm)
+            counts.mutationArms.recordParity(
+                arm: arm,
+                admitted: admission.isAdmitted,
+                isEven: attemptTimelineIndex.isMultiple(of: 2)
+            )
+            if admission.isAdmitted {
+                // Recorded whether or not the bandit is on, so the two arms of a bandit-against-fixed comparison report the same reward signal.
+                counts.mutationArms.recordAdmission(arm: arm)
+                // One reward per draw, scaled to the evaluations the draw spent: an enumeration evaluates several children at the draw's probability, and rewarding each in full would credit the arm as though it had been drawn that many times at that probability.
+                if configuration.experiments.banditBands, drawState.rewarded == false {
+                    drawState.rewarded = true
+                    bandit.reward(arm, drawProbability: bandit.probability(of: arm, eligible: candidate.eligible), magnitude: 1 / Double(drawState.cost))
+                }
             }
         }
+        if admission.isAdmitted, let parentIndex = candidate.parentIndex,
+           let spacing = corpus.takeSpacing(forParentAt: parentIndex)
+        {
+            diagnostics.recordAdmissionSpacing(spacing)
+        }
+        if case let .admitted(admittedIndex, .mutable) = admission,
+           configuration.experiments.pairMutation,
+           let targets = corpus.entries[admittedIndex].mutationTargets,
+           targets.sortedFingerprints.isEmpty == false,
+           counts.totalAttempts - attemptsAtPreviousAdmission >= FuzzTunables.armAdmissibilitySlowdown
+        {
+            // The stored sequence, not the candidate's: under a prune hook the corpus holds the pruned form, and a full tree materialised from the longer original would give the donor index spans past the end of the entry's sequence.
+            if case let .success(_, fullTree, _) = Materializer.materializeAny(
+                erasedGen,
+                prefix: corpus.entries[admittedIndex].sequence,
+                mode: .exact,
+                materializePicks: true
+            ) {
+                corpus.upgradeToFullTree(at: admittedIndex, fullTree: fullTree)
+            }
+        }
+        if case let .admitted(admittedIndex, _) = admission, configuration.experiments.armAdmissibility {
+            noteStructuralAdmissibility(of: candidate.sequence, parentIndex: candidate.parentIndex, admittedIndex: admittedIndex)
+        }
+        armTrace?.note(
+            attemptIndex: attemptTimelineIndex,
+            ledger: counts.mutationArms,
+            bandit: bandit,
+            admissible: sightedArms ?? .all,
+            diagnostics: diagnostics
+        )
         return FuzzEvaluation(admission: admission, verdict: verdict)
     }
 
@@ -768,7 +940,8 @@ package final class FuzzRunner<Output> {
             origin: .freshSample,
             parentIndex: nil,
             parentHash: 0,
-            armsMask: 0,
+            armsMask: MutationArmSet.none,
+            eligible: .all,
             isBoundaryDerived: false
         ))
     }
@@ -804,6 +977,7 @@ package final class FuzzRunner<Output> {
         hits: [(edge: Int, hitCount: UInt8)]
     ) -> CorpusAdmission {
         let phase = candidate.phase
+        let origin = candidate.origin
         let parentIndex = candidate.parentIndex
         let tree = candidate.tree ?? .just
         configuration.onAttempt?(phase, hits)
@@ -825,6 +999,7 @@ package final class FuzzRunner<Output> {
                 convergence: candidate.convergence,
                 generation: candidate.generation,
                 phase: phase,
+                parentIndex: parentIndex,
                 isBoundaryDerived: candidate.isBoundaryDerived,
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard,
@@ -844,6 +1019,7 @@ package final class FuzzRunner<Output> {
                     deferredTreeRebuild: deferredTreeRebuild,
                     parentIndex: parentIndex,
                     phase: phase,
+                    origin: origin,
                     coverageNovel: admission.isAdmitted,
                     attemptIndex: attemptTimelineIndex
                 )
@@ -871,6 +1047,7 @@ package final class FuzzRunner<Output> {
             convergence: candidate.convergence,
             generation: candidate.generation,
             phase: phase,
+            parentIndex: parentIndex,
             isBoundaryDerived: candidate.isBoundaryDerived,
             propertyFailed: candidates.corpus.verdict.isFailure,
             propertyDiscarded: candidates.corpus.verdict.isDiscard,
@@ -884,6 +1061,7 @@ package final class FuzzRunner<Output> {
                 deferredTreeRebuild: deferredTreeRebuild,
                 parentIndex: parentIndex,
                 phase: phase,
+                origin: origin,
                 coverageNovel: candidates.independentFailureCoverageNovel
                     ?? admission.isAdmitted,
                 attemptIndex: attemptTimelineIndex

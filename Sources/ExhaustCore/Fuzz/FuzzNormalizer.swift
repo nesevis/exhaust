@@ -2,7 +2,7 @@
 //
 // Reduction on a real SUT is not guaranteed canonical: a masked-bit gate can stall at `flags: 171` when `flags: 3` suffices, and every distinct stall the frontier heuristic then mints as a first-class cluster — the inflated-bug-count failure mode users punish hardest. The pass here is the Exhaust translation of test-case normalization (Groce, Holmes, Kellar, "One Test to Rule Them All", ISSTA 2017): a rewrite pass distinct from and after reduction that re-drives each value of the reduced form toward its minimal still-failing bit pattern, so every member of one fault converges on one canonical form before cluster identity is computed. Their measured slippage for normalization (19.3%/12.5%) was lower than the ~30% of property-only reduction itself, so the pass adds no categorically new risk; the post-hoc coverage signature and the "likely same" tier remain the safety net for a genuine merge of distinct faults.
 //
-// Per-value minimization is a semantic-simplest probe followed by a greedy bit-clear loop to fixpoint. Clearing a set bit always lowers the unsigned pattern, so the loop is monotone and needs no backtracking; for mask gates (`flags & 0b11 != 0`) and threshold gates (`> 240`, `< 16`) it lands exactly on the shortlex-minimal still-failing value, which is where the reducer's own canonical forms already sit. Every probe re-materializes in `.exact` mode — a value rewrite that would change structure (a bind input, a coupled length) is rejected by the materializer before the property ever runs — and must fail with the original symptom.
+// Per-value minimization is a semantic-simplest probe followed by, for unsigned integer types only, a greedy bit-clear loop to fixpoint. Clearing a set bit always lowers the unsigned pattern, so the loop is monotone and needs no backtracking; for mask gates (`flags & 0b11 != 0`) and threshold gates (`> 240`, `< 16`) it lands exactly on the shortlex-minimal still-failing value, which is where the reducer's own canonical forms already sit. Signed integers under XOR encoding and floats under IEEE 754 do not have this monotonicity, so they stop at the semantic-simplest probe. Every probe re-materializes in `.exact` mode — a value rewrite that would change structure (a bind input, a coupled length) is rejected by the materializer before the property ever runs — and must fail with the original symptom.
 
 import Foundation
 
@@ -99,7 +99,10 @@ package enum FuzzNormalizer {
                 continue
             }
 
-            // Greedy bit-clear to fixpoint: retry every set bit after each acceptance, since a higher bit can become clearable only once a lower one is gone (and vice versa).
+            // Greedy bit-clear to fixpoint, unsigned types only: clearing a set bit always lowers the unsigned pattern, so the loop is monotone. Signed integers under XOR encoding and floats under IEEE 754 do not have this property.
+            guard entry.choice.tag.isSigned == false, entry.choice.tag.isFloatingPoint == false else {
+                continue
+            }
             var clearedAny = true
             while clearedAny, hasProbeBudget() {
                 clearedAny = false

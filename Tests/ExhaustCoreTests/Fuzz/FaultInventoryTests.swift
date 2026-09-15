@@ -3,6 +3,46 @@ import Testing
 
 @Suite("FaultInventory clustering tests")
 struct FaultInventoryTests {
+    @Test("A cluster keeps the origin of the candidate that created it, and later members do not change it")
+    func discoveringOriginIsTheFirstMembers() {
+        let inventory = FaultInventory()
+        let first = inventory.recordReduced(
+            reducedSequence: sequence(length: 1),
+            reducedKey: "A",
+            renderDescription: { "A" },
+            signature: signature(edges: [1]),
+            symptom: FailureSymptom(kind: "ParserError"),
+            phase: .mutation,
+            origin: .freshSample,
+            timestampNanoseconds: 10,
+            attemptIndex: 1
+        )
+        _ = inventory.recordReduced(
+            reducedSequence: sequence(length: 1),
+            reducedKey: "A",
+            renderDescription: { "A" },
+            signature: signature(edges: [1]),
+            symptom: FailureSymptom(kind: "ParserError"),
+            phase: .mutation,
+            origin: .mutationChild,
+            timestampNanoseconds: 20,
+            attemptIndex: 2
+        )
+        let outsideSearch = inventory.recordReduced(
+            reducedSequence: sequence(length: 2),
+            reducedKey: "B",
+            renderDescription: { "B" },
+            signature: signature(edges: [2]),
+            symptom: FailureSymptom(kind: "ParserError"),
+            phase: .mutation,
+            timestampNanoseconds: 30,
+            attemptIndex: 3
+        )
+        let clusters = inventory.snapshot()
+        #expect(clusters.first { $0.id == first.clusterID }?.discoveringOrigin == .freshSample)
+        #expect(clusters.first { $0.id == outsideSearch.clusterID }?.discoveringOrigin == nil)
+    }
+
     @Test("Distinct reduced forms create distinct clusters despite identical symptoms")
     func slippageSeparation() {
         let inventory = FaultInventory()

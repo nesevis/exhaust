@@ -40,6 +40,9 @@ public struct FuzzReport: Sendable {
         /// The phase that first created this cluster. A cluster only the mutation phase could find is evidence the coverage guidance earned its budget.
         public let discoveringPhase: Phase
 
+        /// The producer of the candidate that first created this cluster, finer than ``discoveringPhase``: within the mutation phase it separates a fresh generator draw from a mutated child and from the comparison-operand injections. Nil for a cluster restored from a progress record written before the source was kept.
+        public var discoveringSource: Source?
+
         /// Elapsed run time at the first failure attributed to this cluster.
         public let firstSeen: TimeSpan
 
@@ -133,6 +136,22 @@ public struct FuzzReport: Sendable {
         case mutation
     }
 
+    /// The producer of one candidate, finer than ``Phase``: what made the value the property was given.
+    public enum Source: String, Sendable, Equatable {
+        /// A covering array row of the screening phase.
+        case screeningRow
+        /// A fresh generator draw, in the sampling phase or as the mutation phase's fresh-draw mixture.
+        case freshSample
+        /// A mutation of a corpus parent.
+        case mutationChild
+        /// A comparison operand reconstructed into a whole value.
+        case reflectionInjection
+        /// A comparison operand grafted into one field of a corpus parent.
+        case graftInjection
+        /// A comparison operand written over a parent's choice sequence.
+        case comparandSubstitution
+    }
+
     /// Why the run stopped.
     public enum Termination: Sendable, Equatable {
         /// The wall-clock budget elapsed.
@@ -204,6 +223,9 @@ public struct FuzzReport: Sendable {
 
         /// Candidate opportunities opened by Phase 3 (the mutation phase), including candidates rejected before property entry.
         public let mutation: Int
+
+        /// Fresh generator draws the mutation phase spent through its adaptive fresh-draw mixture, plus the fallback draws taken while no corpus entry was mutable. Counted inside ``mutation``; the remainder of ``mutation`` is mutated children and injections.
+        public let mutationFreshDraws: Int
 
         /// Mutation-phase candidates whose value was reconstructed from a comparison operand the property's code compared against and reflected through the generator. Counted inside ``mutation``. Zero when the system under test carries no `trace-cmp` instrumentation or the generator is not reflective.
         public let reflectionInjection: Int
@@ -340,6 +362,9 @@ public struct FuzzReport: Sendable {
         ///
         /// Parent selection is a weighted draw over this set and costs one score lookup per member per pick, so this is the number to watch against ``FuzzReport/attemptsPerSecond`` when diagnosing a run whose throughput falls as the corpus grows.
         public let parentCount: Int
+
+        /// ``parentCount`` split by the phase of the root each parent descends from, keyed by ``Phase`` raw value. A parent under `mutation` descends from a fresh draw the mutation phase's own mixture admitted rather than from screening or sampling, so this says how much of the parent pool those draws seeded.
+        public let parentRootPhases: [String: Int]
 
         /// The parent domain's length and cell distribution at the end of the run.
         public let parentProfile: ParentProfile
@@ -585,6 +610,7 @@ package extension FuzzReport {
                 unnormalizedMemberCount: cluster.unnormalizedMemberCount,
                 isLikelySplit: cluster.signatures.count > 1,
                 discoveringPhase: Phase(phase: cluster.discoveringPhase),
+                discoveringSource: cluster.discoveringOrigin.map(Source.init(origin:)),
                 // Clamped like every other timestamp conversion in the pipeline: a restored record that violates the ordering assumption must read as zero, not as a wrapped 584-year duration.
                 firstSeen: TimeSpan(
                     nanoseconds: cluster.firstSeenNanoseconds > runStartNanoseconds
@@ -609,6 +635,7 @@ package extension FuzzReport {
             screening: counts.screeningAttempts,
             sampling: counts.samplingAttempts,
             mutation: counts.mutationAttempts,
+            mutationFreshDraws: counts.mutationFreshDrawAttempts,
             reflectionInjection: counts.reflectionInjectionAttempts,
             graftInjection: counts.graftInjectionAttempts,
             comparandSubstitution: counts.comparandSubstitutionAttempts,
@@ -646,6 +673,7 @@ package extension FuzzReport {
         coverage = Coverage(
             corpusEntryCount: result.corpusEntryCount,
             parentCount: result.parentCount,
+            parentRootPhases: Dictionary(uniqueKeysWithValues: result.parentRootPhases.map { (Phase(phase: $0.key).rawValue, $0.value) }),
             parentProfile: ParentProfile(
                 parentCount: profile.parentCount,
                 minimumLength: profile.minimumLength,
@@ -707,6 +735,7 @@ package extension FuzzReport {
                 screening: 0,
                 sampling: 0,
                 mutation: 0,
+                mutationFreshDraws: 0,
                 reflectionInjection: 0,
                 graftInjection: 0,
                 comparandSubstitution: 0,
@@ -737,6 +766,7 @@ package extension FuzzReport {
             coverage: Coverage(
                 corpusEntryCount: 0,
                 parentCount: 0,
+                parentRootPhases: [:],
                 parentProfile: .empty,
                 coveredEdges: 0,
                 instrumentedEdges: 0,
@@ -769,6 +799,19 @@ package extension FuzzReport.Phase {
             case .screening: .screening
             case .sampling: .sampling
             case .mutation: .mutation
+        }
+    }
+}
+
+package extension FuzzReport.Source {
+    init(origin: CandidateOrigin) {
+        self = switch origin {
+            case .screeningRow: .screeningRow
+            case .freshSample: .freshSample
+            case .mutationChild: .mutationChild
+            case .reflectionInjection: .reflectionInjection
+            case .graftInjection: .graftInjection
+            case .comparandSubstitution: .comparandSubstitution
         }
     }
 }

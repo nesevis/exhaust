@@ -92,7 +92,7 @@ extension FuzzRunner {
     /// One search attempt's evaluation: runs the property inside the attribution bracket with the breadcrumb slot, comparison capture, and property timing around it, and notes whether the run has seen an edge yet.
     func evaluateInBracket(
         _ value: Output,
-        recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64, sequence: ChoiceSequence)?
+        recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64, sequence: ChoiceSequence?)?
     ) -> (verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)]) {
         let capturesComparisons = source.wantsComparisons
         let (verdict, hits) = attribute(value) { value in

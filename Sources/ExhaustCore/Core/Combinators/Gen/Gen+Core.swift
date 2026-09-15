@@ -43,6 +43,36 @@ package extension Gen {
         }
     }
 
+    /// Lifts an exact inverse pair over `inner` as one `.isomorph` transform node.
+    ///
+    /// The single-node form of `contramap(backward, inner.map(forward))`: the same reflection behaviour, one interpreter dispatch fewer per draw, and no map composed into the inner continuation. The backward closure throws to reject a value during reflection, as the contramap form did. Only framework-authored pairs may use this, because ``TransformKind/isomorph(forward:backward:inputType:outputType:)`` promises invertibility to the interpreters.
+    static func isomorphed<Inner, Output>(
+        _ inner: Generator<Inner>,
+        forward: @escaping (Inner) throws -> Output,
+        backward: @escaping (Output) throws -> Inner
+    ) -> IsomorphNode<Output> {
+        let erasedForward: (Any) throws -> Any = { try forward($0 as! Inner) }
+        let erasedInner = inner.erase()
+        let gen: Generator<Output> = liftF(.transform(
+            kind: .isomorph(
+                forward: erasedForward,
+                backward: { anyOutput in
+                    guard let output = anyOutput as? Output else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return try backward(output)
+                },
+                inputType: Inner.self,
+                outputType: Output.self
+            ),
+            inner: erasedInner
+        ))
+        return IsomorphNode(
+            gen: gen,
+            fusable: FusableTransform(forward: erasedForward, inner: erasedInner, inputType: Inner.self)
+        )
+    }
+
     /// Wraps a generator with a prune marker that tells the reflection interpreter to abandon this branch when a preceding ``contramap`` returns nil.
     ///
     /// Separate from ``contramap`` because the two responsibilities are distinct: contramap transforms the input, prune decides whether to continue. Merging them would force every contramap to handle the nil case even when failure is impossible. Use ``comap(_:_:)`` when you need both in a single call.
@@ -104,5 +134,18 @@ package extension Gen {
             next: generator.erase()
         ))
         return prune(contramapped)
+    }
+}
+
+/// A freshly built `.isomorph` node with the record a ``ReflectiveGenerator`` needs to fuse a following forward-only map into it.
+package struct IsomorphNode<Output> {
+    package let gen: Generator<Output>
+    package let fusable: FusableTransform
+
+    /// Wraps the node, carrying the fusion record.
+    package func wrapped(isReflective: Bool) -> ReflectiveGenerator<Output> {
+        var wrapped = gen.wrapped(isReflective: isReflective)
+        wrapped.fusable = fusable
+        return wrapped
     }
 }
