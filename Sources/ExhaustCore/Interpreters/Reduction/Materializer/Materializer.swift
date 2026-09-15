@@ -277,27 +277,14 @@ extension Materializer {
         return (tree, nil)
     }
 
-    /// Whether `gen` is a node a value reseed can target: a chooseBits leaf or a pick. Sequences, zips, binds, and transparent wrappers dispatch at the same position as their first site and must not take its reseed.
-    private static func isReseedSite(_ gen: AnyGenerator) -> Bool {
-        guard case let .impure(operation, _) = gen else {
-            return false
-        }
-        switch operation {
-            case .chooseBits, .pick:
-                return true
-            default:
-                return false
-        }
-    }
-
     static func generateRecursive(
         _ gen: AnyGenerator,
         with inputValue: Any,
         context: inout Context,
         fallbackTree: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
-        // A value reseed: the prefix is jumped past the marked span and the cursor is suspended for exactly this node's walk, with no fallback tree, so the span is drawn fresh at its own site and the prefix resumes after it. Only a leaf or a pick may take a reseed: the start check skips structural markers, so an enclosing zip or sequence dispatching at the same position would otherwise take it and redraw every sibling with the target.
-        if isReseedSite(gen), context.enterReseedIfTargeted() {
+        // A pick's reseed span includes its branch body and continuation, so suspend the cursor for the whole walk. Leaf reseeding is scoped inside resolveChooseBits and ends before its continuation. Enclosing wrappers must not take a reseed from a site at the same cursor position.
+        if case .impure(.pick, _) = gen, context.enterReseedIfTargeted() {
             defer { context.cursor.suspended = false }
             return try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: nil)
         }
@@ -530,7 +517,7 @@ extension Materializer {
         ///
         /// The generation-side deadline samples on element index, which retry loops never advance: a filter over a scalar can spin ``__ExhaustRuntime/maxFilterRuns`` times without passing a single checkpoint, and nested filters multiply that. Retry counts do not compose, so the bound that does has to be a clock.
         var deadlineNanoseconds: UInt64 = 0
-        /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order by the dispatch hook in ``generateRecursive(_:with:context:fallbackTree:)``.
+        /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order at pick dispatch or leaf value resolution.
         var reseedRanges: [ClosedRange<Int>] = []
         var nextReseedIndex = 0
 

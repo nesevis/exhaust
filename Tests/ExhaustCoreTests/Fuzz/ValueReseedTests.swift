@@ -3,6 +3,34 @@ import Testing
 
 @Suite("Value reseed")
 struct ValueReseedTests {
+    @Test("Leaf reseeding resumes the prefix before a non-pure continuation", arguments: [false, true], [false, true])
+    func leafReseedPreservesContinuation(inSequence: Bool, multipleTargets: Bool) throws {
+        let leaf: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1_000_000)
+        let pair = leaf.bind { first in leaf.map { second in (first, second) } }
+        let gen: Generator<[(UInt64, UInt64)]> = inSequence
+            ? Gen.arrayOf(pair, exactly: 2)
+            : Gen.zip(pair, pair).map { [$0.0, $0.1] }
+        let (parentSequence, parentTree) = try materializedParent(gen)
+        let sites = MutationTargets(tree: parentTree).reseedSites
+        #expect(sites.count == 4)
+        let first = try #require(sites.first)
+        let third = try #require(sites.dropFirst(2).first)
+        let ranges = multipleTargets ? [first.range, third.range] : [first.range]
+        var changedRanges: Set<Int> = []
+
+        for seed in UInt64(1) ... 20 {
+            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: ranges))
+            #expect(child.count == parentSequence.count)
+            for index in child.indices where ranges.contains(where: { $0.contains(index) }) == false {
+                #expect(child[index] == parentSequence[index], "entry \(index) outside the targeted leaves moved, seed \(seed)")
+            }
+            for (index, range) in ranges.enumerated() where child[range.lowerBound] != parentSequence[range.lowerBound] {
+                changedRanges.insert(index)
+            }
+        }
+        #expect(changedRanges.count == ranges.count, "every targeted leaf should be redrawn")
+    }
+
     @Test("Reseeding one leaf redraws that entry and keeps every other entry")
     func leafReseedIsLocal() throws {
         let gen = leafZipGenerator()
