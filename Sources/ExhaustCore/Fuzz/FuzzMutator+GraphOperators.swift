@@ -405,7 +405,7 @@ package extension FuzzMutator {
 
     /// Shifts every member of one same-tag tandem group by a shared delta in a shared direction.
     ///
-    /// The direction is a fair draw and the delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit``, so agreement between the members (equal values, fixed differences) survives the shift.
+    /// The direction is a fair draw when both directions have room. The delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit`` and capped by the group's shared headroom. Small steps avoid rounding away floating-point differences when the numeric domain is wide.
     ///
     /// All or nothing: a group with one member the delta cannot move is a miss, not a partial shift. Moving a subset breaks the very agreement the operator exists to preserve, and nothing downstream would catch it.
     static func lockstepDelta(
@@ -448,7 +448,9 @@ package extension FuzzMutator {
             default: prng.next(upperBound: 2) == 0
         }
         let maxDelta = shiftUpward ? headroomUp : headroomDown
-        let delta = 1 + prng.next(upperBound: maxDelta)
+        let exponent = prng.next(upperBound: FuzzTunables.lockstepDeltaExponentLimit)
+        let delta = 1 + prng.next(upperBound: min(maxDelta, 1 << exponent))
+        // Share numeric shifting and type-width conversion with the reducer's lockstep encoder.
         guard let shifted = candidate.shiftingGroup(
             entries: entries,
             tag: group.typeTag,

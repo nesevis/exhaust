@@ -91,6 +91,68 @@ struct GraphMutationOperatorTests {
         #expect(deltas.count == 1, "Group members moved by differing deltas: \(deltas)")
     }
 
+    @Test("Lockstep keeps small floating-point differences across wide domains", arguments: [TypeTag.float16, .float, .double])
+    func lockstepPreservesFloatingDifferences(tag: TypeTag) throws {
+        let tree = try ChoiceTree.group([1.0, 2.0].map { value in
+            try ChoiceTree.choice(
+                #require(tag.floatingChoice(from: value)),
+                .init(validRange: nil, isRangeExplicit: false)
+            )
+        })
+        let sequence = ChoiceSequence.flatten(tree)
+        let targets = MutationTargets(tree: tree)
+        var prng = Xoshiro256(seed: 5)
+        for _ in 0 ..< 200 {
+            let shifted = try #require(FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng))
+            let values = shifted.compactMap { $0.value?.choice.decodedDoubleValue }
+            #expect(values.count == 2)
+            #expect(values[1] - values[0] == 1.0)
+        }
+    }
+
+    @Test("Floating lockstep mutations match the reducer's candidates", arguments: [TypeTag.float16, .float, .double])
+    func lockstepMatchesReducerFloatingCandidates(tag: TypeTag) throws {
+        let tree = try ChoiceTree.group([100.0, 101.0].map { value in
+            try ChoiceTree.choice(
+                #require(tag.floatingChoice(from: value)),
+                .init(validRange: nil, isRangeExplicit: false)
+            )
+        })
+        let sequence = ChoiceSequence.flatten(tree)
+        let indices = sequence.indices.filter { sequence[$0].value != nil }
+        let targets = MutationTargets(tree: tree)
+        var reducer = GraphLockstepEncoder()
+        reducer.valueState.reset(sequence: sequence)
+        let plan = try #require(reducer.makeLockstepWindowPlan(windowIndices: indices))
+        var prng = Xoshiro256(seed: 5)
+        var compared = 0
+        for _ in 0 ..< 200 {
+            guard let shifted = FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng),
+                  let first = shifted[indices[0]].value?.choice.decodedDoubleValue,
+                  first >= 0, first < 100
+            else { continue }
+            let delta = UInt64(100 - first)
+            #expect(reducer.makeLockstepCandidate(plan: plan, delta: delta) == shifted)
+            compared += 1
+        }
+        #expect(compared > 0)
+    }
+
+    @Test("Lockstep draws within the group's remaining headroom")
+    func lockstepFitsNarrowHeadroom() throws {
+        let tree = ChoiceTree.group([
+            boundedLeaf(0, in: 0 ... 2),
+            boundedLeaf(1, in: 0 ... 2),
+        ])
+        let sequence = ChoiceSequence.flatten(tree)
+        let targets = MutationTargets(tree: tree)
+        var prng = Xoshiro256(seed: 5)
+        for _ in 0 ..< 40 {
+            let shifted = try #require(FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng))
+            #expect(shifted.compactMap { $0.value?.choice.bitPattern64 } == [1, 2])
+        }
+    }
+
     @Test("Lockstep misses rather than shifting part of a group when one member is boundary-pinned")
     func lockstepRefusesPartialGroup() throws {
         // Three same-tag leaves, one pinned to a single-value range so no nonzero delta keeps it inside.
