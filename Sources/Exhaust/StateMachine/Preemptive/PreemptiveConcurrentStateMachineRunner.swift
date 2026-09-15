@@ -172,6 +172,7 @@ extension __ExhaustRuntime {
         }
         let smokeSource: AnyStateMachineCandidateSource<Spec>? = .smoke(
             sequenceGen: smokeSequenceGen,
+            deadlineNanoseconds: config.deadlineNanoseconds,
             property: smokeProperty
         )
 

@@ -157,6 +157,7 @@ extension AnyStateMachineCandidateSource {
         screeningBudget: UInt64,
         concurrencyLevel: Int?,
         leadingFactors: ScreeningLeadingFactors?,
+        deadlineNanoseconds: UInt64? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(
@@ -173,6 +174,7 @@ extension AnyStateMachineCandidateSource {
                 logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
+                deadlineNanoseconds: deadlineNanoseconds,
                 combine: __ExhaustRuntime.screeningCombine(Spec.self),
                 property: property
             )
@@ -188,12 +190,14 @@ extension AnyStateMachineCandidateSource {
                         provenance: .screening(coveringSeed: coveringSeed, tierLength: tierLength, rowInTier: rowInTier)
                     )
                 case let .completed(screeningInvocations):
+                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
                     // Reaching the row costs exactly row + 1 iterations in a tier-skipping replay, so fewer means the tier's row stream ended first. Returning nil would let a stale regression pin pass as if the failure were fixed.
                     if screeningInvocations < row + 1 {
                         throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: screeningInvocations)
                     }
                     return nil
                 case .skipped:
+                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
                     throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: 0)
             }
         }
@@ -204,6 +208,7 @@ extension AnyStateMachineCandidateSource {
         replaySeed: UInt64,
         replayIteration: Int?,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        deadlineNanoseconds: UInt64? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(
@@ -221,6 +226,7 @@ extension AnyStateMachineCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
+            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
             guard property(value) == false else {
                 return nil
             }
@@ -237,6 +243,7 @@ extension AnyStateMachineCandidateSource {
     /// Seed 0, one sequential probe to catch obvious breakage before concurrent phases.
     static func smoke(
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        deadlineNanoseconds: UInt64? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .smokeTest) {
@@ -245,6 +252,7 @@ extension AnyStateMachineCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
+            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
             guard property(value) == false else {
                 return nil
             }
@@ -269,6 +277,7 @@ extension AnyStateMachineCandidateSource {
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
         leadingFactors: ScreeningLeadingFactors?,
         onFilterLosses: ((__ExhaustRuntime.ScreeningFilterLosses) -> Void)? = nil,
+        deadlineNanoseconds: UInt64? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening) {
@@ -284,6 +293,7 @@ extension AnyStateMachineCandidateSource {
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
                 onFilterLosses: onFilterLosses,
+                deadlineNanoseconds: deadlineNanoseconds,
                 combine: __ExhaustRuntime.screeningCombine(Spec.self),
                 property: property
             )
@@ -308,6 +318,7 @@ extension AnyStateMachineCandidateSource {
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         seed: UInt64,
         samplingBudget: UInt64,
+        deadlineNanoseconds: UInt64? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         var interpreter = ValueAndChoiceTreeInterpreter(
@@ -317,7 +328,10 @@ extension AnyStateMachineCandidateSource {
         )
         var iteration = 0
         return AnyStateMachineCandidateSource(discoveryMethod: .randomSampling, reportedSeed: seed) {
-            while let value = try interpreter.nextValueOnly() {
+            while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+                  let value = try interpreter.nextValueOnly()
+            {
+                if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
                 iteration += 1
                 if property(value) == false {
                     let tree = try interpreter.reproduceFailureTree()

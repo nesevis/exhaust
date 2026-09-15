@@ -37,6 +37,13 @@ package extension __ExhaustRuntime {
         /// Present only to reach the sampling lanes: a lane runs on a `concurrentPerform` worker, which inherits neither the scope nor the issue sink bound around the run.
         let absorbedIssues: AbsorbedIssues?
 
+        /// The absolute monotonic deadline resolved from `.deadline`, or nil for the usual iteration budget.
+        var deadlineNanoseconds: UInt64?
+
+        var deadlineExceeded: Bool {
+            deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+        }
+
         /// The skip count accumulated so far, for phase-delta accounting. Skips land on the shared counter from any lane, so a delta taken outside a concurrent section is exact.
         var skipCount: Int {
             skipCounter?.count ?? 0
@@ -74,6 +81,7 @@ package extension __ExhaustRuntime {
             screeningBudget: screeningBudget,
             coveringSeed: coveringSeed,
             skipToRow: skipToRow,
+            deadlineNanoseconds: context.deadlineNanoseconds,
             property: context.property,
             onExample: context.statsAccumulator.map { accumulator in
                 { value, tree, passed in
@@ -229,6 +237,7 @@ package extension __ExhaustRuntime {
     ///   - lane: Batch index for stats attribution, or `nil` for sequential runs.
     ///   - statsPropertyName: Property name passed to the per-batch ``OpenPBTStatsAccumulator``, or `nil` to skip stats collection.
     ///   - canceled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
+    ///   - deadlineNanoseconds: Absolute monotonic deadline shared by the run's lanes, or nil for no time limit.
     private static func runSamplingBatch<Output>( // swiftlint:disable:this function_body_length
         gen: Generator<Output>,
         property: @Sendable (Output) -> Bool,
@@ -237,7 +246,8 @@ package extension __ExhaustRuntime {
         count: UInt64,
         lane: Int?,
         statsPropertyName: String?,
-        canceled: some CancellationFlag
+        canceled: some CancellationFlag,
+        deadlineNanoseconds: UInt64?
     ) -> BatchResult<Output> {
         var result = BatchResult<Output>()
         let statsAccumulator: OpenPBTStatsAccumulator? = statsPropertyName.map {
@@ -254,9 +264,12 @@ package extension __ExhaustRuntime {
             if let statsAccumulator {
                 var previousTotalAttempts = 0
                 var previousTotalPasses = 0
-                while canceled.isCancelled == false {
+                while canceled.isCancelled == false,
+                      deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
+                {
                     let generateStart = monotonicNanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
+                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
                     let generateEnd = monotonicNanoseconds()
                     result.iterations += 1
 
@@ -308,8 +321,11 @@ package extension __ExhaustRuntime {
                 }
                 result.statsLines = statsAccumulator.finalize()
             } else {
-                while canceled.isCancelled == false {
+                while canceled.isCancelled == false,
+                      deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
+                {
                     guard let next = try interpreter.nextValueOnly() else { break }
+                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
                     result.iterations += 1
 
                     if property(next) == false {
@@ -356,7 +372,8 @@ package extension __ExhaustRuntime {
         let skipsBefore = context.skipCount
 
         do {
-            while let next = try interpreter.nextValueOnly() {
+            while context.deadlineExceeded == false, let next = try interpreter.nextValueOnly() {
+                if context.deadlineExceeded { break }
                 iterations += 1
                 if context.property(next) == false {
                     // Sampling outcomes are recorded before reduction runs so reduction-phase skips stay out of the sampling delta.
@@ -524,7 +541,8 @@ package extension __ExhaustRuntime {
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
-                canceled: UnsafeSendableBox(false)
+                canceled: UnsafeSendableBox(false),
+                deadlineNanoseconds: context.deadlineNanoseconds
             )
             batchResults = [singleResult]
         } else {
@@ -550,7 +568,8 @@ package extension __ExhaustRuntime {
                         count: iterationsForLane,
                         lane: laneIndex,
                         statsPropertyName: statsPropertyName,
-                        canceled: canceled
+                        canceled: canceled,
+                        deadlineNanoseconds: unsafeContext.deadlineNanoseconds
                     )
                 }
                 resultStorage.withValue { $0[laneIndex] = batchResult }

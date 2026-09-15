@@ -284,6 +284,7 @@ extension __ExhaustRuntime {
         }
 
         for encodedSeed in regressionSeeds {
+            if config.deadlineExceeded { break }
             guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
                 deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                 continue

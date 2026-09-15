@@ -243,7 +243,7 @@ private extension __ExhaustRuntime {
             } else {
                 smokeSequenceGen = sequenceGen
             }
-            smokeSource = .smoke(sequenceGen: smokeSequenceGen, property: smokeProperty)
+            smokeSource = .smoke(sequenceGen: smokeSequenceGen, deadlineNanoseconds: config.deadlineNanoseconds, property: smokeProperty)
         }
 
         let pipeline = SpecPipeline(

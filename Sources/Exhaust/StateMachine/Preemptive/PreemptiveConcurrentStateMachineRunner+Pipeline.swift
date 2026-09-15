@@ -44,10 +44,12 @@ extension __ExhaustRuntime {
         backend: Backend,
         input: [(ScheduleMarker, Backend.Spec.Command)],
         setupStep: Backend.Spec.SetupStep?,
-        discoveryIterations: Int
+        discoveryIterations: Int,
+        deadlineNanoseconds: UInt64? = nil
     ) -> FailureEvidence<Backend.Spec>? {
         let partition = LanePartition(markers: input.map(\.0))
         for _ in 0 ..< PreemptiveConfirmation.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
+            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
             if let confirmed = classifyFailure(
                 taggedCommands: input,
                 setupStep: setupStep,

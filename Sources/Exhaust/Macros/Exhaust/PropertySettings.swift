@@ -27,6 +27,19 @@ public enum PropertySettings {
     /// Controls iteration budgets for screening and random sampling. Defaults to `.standard` (200 screening rows, 200 random samplings).
     case budget(ExhaustBudget)
 
+    /// Limits the time spent screening, sampling, and reducing in one run.
+    ///
+    /// The run stops when either its iteration budget or this duration is exhausted. The limit is cooperative: an in-flight generator or property call finishes before the run returns, so it can exceed the deadline. A failure already found is still reported, even when there is no time left to reduce it. With no failure, the result is nil; ``ExhaustReport/deadlineExceeded`` distinguishes a reached deadline from a completed budget.
+    ///
+    /// Omitted by default. `.deadline(.zero)` runs no examples. If specified more than once, the last setting wins. Wall-clock limits can shorten a replay differently under different machine loads.
+    ///
+    /// ```swift
+    /// #exhaust(gen, .budget(.extensive), .deadline(.seconds(30))) { value in
+    ///     isValid(value)
+    /// }
+    /// ```
+    case deadline(TimeSpan)
+
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     ///
     /// Accepts a raw `UInt64` or a Crockford Base32 string:

@@ -56,6 +56,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
             tree: tree,
             output: taggedCommands,
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
+            runDeadlineNanoseconds: context.config.deadlineNanoseconds,
             property: oracleProperty
         )
         return StateMachineReduction(finalInput: result.value, stats: result.stats, timedOut: result.aborted)

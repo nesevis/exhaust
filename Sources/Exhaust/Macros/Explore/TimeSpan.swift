@@ -1,10 +1,10 @@
-// The wall-clock time type for `#explore(time:)` budgets and report durations.
+// The wall-clock time type for run budgets, deadlines, and report durations.
 
-/// A span of wall-clock time, used for `#explore(time:)` budgets and for the elapsed and per-cluster times a ``FuzzReport`` reports.
+/// A span of wall-clock time, used for ``PropertySettings/deadline(_:)``, ``StateMachineSettings/deadline(_:)``, `#explore(time:)` budgets, and the elapsed and per-cluster times a ``FuzzReport`` reports.
 ///
 /// This exists instead of the standard library's `Duration` so the `time:` mode carries no availability floor: `Duration` requires macOS 13 / iOS 16, while a fuzz run is otherwise deployable to the package's own minimum. Construct one with the unit factories, which keep the call site self-documenting (`.minutes(15)`, `.seconds(8)`) and admit no bare, unit-ambiguous number.
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: The `#explore(time:)` mode is experimental. Its settings, report format, and search behavior may change in any release; every call site for that mode emits a build warning until it stabilizes.
 ///
 /// ```swift
 /// #explore(messageGen, time: .minutes(15)) { message in

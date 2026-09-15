@@ -199,15 +199,18 @@ package enum ScreeningRunner {
     /// - Parameters:
     ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
     ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
+    ///   - deadlineNanoseconds: Absolute monotonic deadline, checked between rows and before property calls. In-flight work finishes before this method returns.
     package static func run<Output>(
         _ gen: Generator<Output>,
         screeningBudget: UInt64,
         coveringSeed: UInt64,
         skipToRow: Int? = nil,
         continuePastFailure: Bool = false,
+        deadlineNanoseconds: UInt64? = nil,
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
+        if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return .notApplicable }
         guard let plan = plan(gen, screeningBudget: screeningBudget) else {
             return .notApplicable
         }
@@ -219,11 +222,17 @@ package enum ScreeningRunner {
         var rows = Rows(plan: plan, coveringSeed: coveringSeed, skipToRow: skipToRow)
         var summary = Summary()
         var failureObserved = false
-        while let (rowIndex, row) = rows.next() {
+        while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+              let (rowIndex, row) = rows.next()
+        {
             summary.rowAttempts += 1
             guard let (value, tree) = materializeRow(erasedGen, row: row, rowIndex: rowIndex, profile: plan.profile, needsTree: needsTree) as (Output, ChoiceTree)? else {
                 summary.rejectedRows += 1
                 continue
+            }
+            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false {
+                summary.rejectedRows += 1
+                break
             }
             summary.propertyInvocations += 1
             let passed = property(value)
@@ -257,6 +266,7 @@ package enum ScreeningRunner {
         if plan.isExhaustiveCandidate,
            skipToRow == nil,
            failureObserved == false,
+           deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
            summary.rejectedRows == 0,
            UInt64(summary.rowAttempts) >= domainRows
         {

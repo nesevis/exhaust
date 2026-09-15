@@ -239,6 +239,9 @@ public extension __ExhaustRuntime {
     }
 
     // swiftlint:disable:next function_body_length
+    /// Runs the property pipeline using the iteration and time limits in its settings.
+    ///
+    /// The deadline is cooperative: generation and property calls already in flight finish synchronously before the run returns. A stopped search returns no counterexample; a failure found before stopping remains available even if reduction is cut short.
     package static func __exhaustBody<Output>(
         gen: Generator<Output>,
         settings: [PropertySettings],
@@ -252,6 +255,8 @@ public extension __ExhaustRuntime {
         testName: String,
         property: @escaping @Sendable (Output) -> Bool
     ) -> (Output?, String?) {
+        let runStart = monotonicNanoseconds()
+        var deadlineNanoseconds: UInt64?
         var budget = ExhaustBudget.standard
         var seed: UInt64?
         var replayIteration: Int?
@@ -272,6 +277,9 @@ public extension __ExhaustRuntime {
             switch setting {
                 case let .budget(b):
                     budget = b
+                case let .deadline(duration):
+                    let (deadline, overflow) = runStart.addingReportingOverflow(duration.nanoseconds)
+                    deadlineNanoseconds = overflow ? .max : deadline
                 case let .replay(replaySeed):
                     guard let resolved = replaySeed.resolve() else {
                         invalidReplaySeed = replaySeed
@@ -353,6 +361,7 @@ public extension __ExhaustRuntime {
             var ledger = RunLedger()
             defer {
                 report.applyLedger(ledger)
+                report.deadlineExceeded = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
                 onReportClosure?(report)
             }
 
@@ -406,8 +415,11 @@ public extension __ExhaustRuntime {
                 column: column,
                 statsAccumulator: statsAccumulator,
                 skipCounter: skipCounter,
-                absorbedIssues: absorbedIssues
+                absorbedIssues: absorbedIssues,
+                deadlineNanoseconds: deadlineNanoseconds
             )
+
+            if context.deadlineExceeded { return (nil, nil) }
 
             if let reflecting {
                 do {
@@ -415,6 +427,7 @@ public extension __ExhaustRuntime {
                         gen,
                         value: reflecting,
                         reductionConfig: reductionConfig,
+                        deadlineNanoseconds: deadlineNanoseconds,
                         visualize: visualize,
                         suppressIssueReporting: suppress.issueReporting,
                         includeDiff: includeDiff,
@@ -506,7 +519,7 @@ public extension __ExhaustRuntime {
             report.screeningMilliseconds = Double(screeningPhaseEndTime - phaseTimingStart) / 1_000_000
             report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
 
-            if samplingResult == nil {
+            if samplingResult == nil, context.deadlineExceeded == false {
                 report.generationMilliseconds = Double(endTime - screeningPhaseEndTime) / 1_000_000
                 let totalPropertyCalls = report.propertyInvocations
                 var passMetadata = [

@@ -40,18 +40,27 @@ package extension __ExhaustRuntime {
         let reductionStart = monotonicNanoseconds()
         do {
             var reducerConfig = context.reductionConfig
+            if let deadline = context.deadlineNanoseconds {
+                let remaining = deadline > reductionStart ? deadline - reductionStart : 1
+                let configured = reducerConfig.wallClockDeadlineNanoseconds
+                reducerConfig.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
+            }
             reducerConfig.visualize = context.visualize
-            let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+            let reduceResult = try context.deadlineExceeded ? nil : Interpreters.choiceGraphReduceCollectingStats(
                 gen: context.gen,
                 tree: tree,
                 output: value,
                 config: reducerConfig,
                 property: { countingProperty($0) }
             )
-            report.applyReductionStats(reduceResult.stats)
+            if let reduceResult {
+                report.applyReductionStats(reduceResult.stats)
+            } else {
+                report.reductionWasCapped = true
+            }
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
             recordReductionOutcomes()
-            if case let .reduced(reducedSequence, _, reducedValue) = reduceResult.outcome {
+            if case let .reduced(reducedSequence, _, reducedValue)? = reduceResult?.outcome {
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
                     original: value,
@@ -113,7 +122,7 @@ package extension __ExhaustRuntime {
             return .reductionError
         }
 
-        // Reduction ran but could not improve
+        // Reduction could not improve, or the deadline left no time to start it. Either way, report the original failure.
         var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
@@ -155,6 +164,7 @@ package extension __ExhaustRuntime {
         _ gen: Generator<Output>,
         value: Output,
         reductionConfig: Interpreters.ReducerConfiguration,
+        deadlineNanoseconds: UInt64? = nil,
         visualize: Bool,
         suppressIssueReporting: Bool,
         includeDiff: Bool,
@@ -213,17 +223,28 @@ package extension __ExhaustRuntime {
             )
         }
         var reducerConfig = reductionConfig
+        if let deadline = deadlineNanoseconds {
+            let now = monotonicNanoseconds()
+            let remaining = deadline > now ? deadline - now : 1
+            let configured = reducerConfig.wallClockDeadlineNanoseconds
+            reducerConfig.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
+        }
         reducerConfig.visualize = visualize
-        let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+        let deadlineExceeded = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+        let reduceResult = try deadlineExceeded ? nil : Interpreters.choiceGraphReduceCollectingStats(
             gen: gen,
             tree: tree,
             output: value,
             config: reducerConfig,
             property: { countingProperty($0) }
         )
-        report.applyReductionStats(reduceResult.stats)
+        if let reduceResult {
+            report.applyReductionStats(reduceResult.stats)
+        } else {
+            report.reductionWasCapped = true
+        }
 
-        if case let .reduced(reducedSequence, _, reducedValue) = reduceResult.outcome {
+        if case let .reduced(reducedSequence, _, reducedValue)? = reduceResult?.outcome {
             var failure = PropertyTestFailure(
                 counterexample: reducedValue,
                 original: value,
@@ -278,7 +299,7 @@ package extension __ExhaustRuntime {
         )
         failure.replayHint = "No replay seed — counterexample found via reflection."
         // Reflected inputs report only that nothing improved: a user-supplied example is often already minimal, and a stall warning there would be noise.
-        failure.reductionNote = .noImprovement
+        failure.reductionNote = report.reductionWasCapped ? .timeLimit : .noImprovement
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         report.renderedFailure = rendered
         let reductionEnd = monotonicNanoseconds()

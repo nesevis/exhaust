@@ -9,6 +9,13 @@ struct ResolvedConcurrentConfig {
     var commandLimit: Int?
     var concurrencyLevel: Int = 2
     var budget: ExhaustBudget = .standard
+    /// Absolute monotonic deadline, preserved when the config is copied for regression replays.
+    var deadlineNanoseconds: UInt64?
+
+    var deadlineExceeded: Bool {
+        deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+    }
+
     var seed: UInt64?
     var replayIteration: Int?
     /// The screening row to replay, addressed tier-locally: the sequence length identifying the tier and the 0-based row within its covering array.
@@ -72,6 +79,7 @@ struct ResolvedConcurrentConfig {
     }
 
     static func parse(_ settings: [StateMachineSettings]) -> ParseResult {
+        let runStart = monotonicNanoseconds()
         var config = ResolvedConcurrentConfig()
         var invalidSeed: ReplaySeed?
         var clampedCommandLimit: Int?
@@ -81,6 +89,9 @@ struct ResolvedConcurrentConfig {
                     config.concurrencyLevel = level.rawValue
                 case let .budget(budget):
                     config.budget = budget
+                case let .deadline(duration):
+                    let (deadline, overflow) = runStart.addingReportingOverflow(duration.nanoseconds)
+                    config.deadlineNanoseconds = overflow ? .max : deadline
                 case let .commandLimit(limit):
                     precondition(limit >= 1, "Command limit must be at least 1")
                     if limit > maxCommandLimit {

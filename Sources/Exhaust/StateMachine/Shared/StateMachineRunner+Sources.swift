@@ -90,6 +90,7 @@ extension __ExhaustRuntime {
         onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil
     ) -> [AnyStateMachineCandidateSource<Spec>] {
         var sources: [AnyStateMachineCandidateSource<Spec>] = []
+        if config.deadlineExceeded { return sources }
         let leadingFactors = setupScreeningFactors(for: Spec.self)
 
         if let screeningReplay = config.screeningReplay {
@@ -104,6 +105,7 @@ extension __ExhaustRuntime {
                 screeningBudget: max(UInt64(config.budget.screeningBudget), SequenceCoveringArray.nominalDomainBudget),
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
+                deadlineNanoseconds: config.deadlineNanoseconds,
                 property: property
             ))
         }
@@ -113,6 +115,7 @@ extension __ExhaustRuntime {
                 replaySeed: seed,
                 replayIteration: replayIteration,
                 sequenceGen: sequenceGen,
+                deadlineNanoseconds: config.deadlineNanoseconds,
                 property: property
             ))
         }
@@ -132,6 +135,7 @@ extension __ExhaustRuntime {
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
                 onFilterLosses: onFilterLosses,
+                deadlineNanoseconds: config.deadlineNanoseconds,
                 property: property
             ))
         }
@@ -142,6 +146,7 @@ extension __ExhaustRuntime {
                 sequenceGen: sequenceGen,
                 seed: seed,
                 samplingBudget: UInt64(config.budget.samplingBudget),
+                deadlineNanoseconds: config.deadlineNanoseconds,
                 property: property
             ))
         }

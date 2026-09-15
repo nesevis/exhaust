@@ -9,6 +9,17 @@ public enum StateMachineSettings {
     /// Controls iteration budgets for screening and random sampling. Defaults to `.standard` (200 screening rows, 200 random samplings).
     case budget(ExhaustBudget)
 
+    /// Limits the total time spent discovering and reducing a failing command sequence.
+    ///
+    /// Applies to all execution modes and shares one duration across regression replays, screening, sampling, and reduction. The limit is cooperative: an in-flight sequence finishes under the existing `.idleTimeout` policy, and a discovered failure is still assembled and reported. These operations can extend past the deadline. ``ExhaustReport/deadlineExceeded`` indicates that the deadline was reached.
+    ///
+    /// Omitted by default. `.deadline(.zero)` executes no sequences. If specified more than once, the last setting wins. A wall-clock limit can shorten a replay differently under different machine loads.
+    ///
+    /// ```swift
+    /// await #execute(CounterSpec.self, mode: .sequential, .deadline(.seconds(30)))
+    /// ```
+    case deadline(TimeSpan)
+
     /// Replays a specific test run using a fixed seed.
     ///
     /// Accepts a raw `UInt64` or a Crockford Base32 string.

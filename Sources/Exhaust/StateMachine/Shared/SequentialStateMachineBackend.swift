@@ -26,8 +26,9 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
             enabledEncoders: [.laneCollapse, .deletion, .valueSearch, .floatSearch],
             tuning: SchedulerTuning(relaxMaterializationBudget: 0)
         )
+        let deadline = context.config.deadlineNanoseconds
         let commandProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { [property] commands in
-            property(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
+            (deadline.map { monotonicNanoseconds() >= $0 } ?? false) || property(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
         }
         let (reduced, stats, _) = __ExhaustRuntime.reduceStateMachineCounterexample(
             value: taggedCommands,

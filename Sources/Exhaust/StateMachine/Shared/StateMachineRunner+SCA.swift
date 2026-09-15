@@ -51,9 +51,13 @@ extension __ExhaustRuntime {
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Row>)? = nil,
         leadingFactors: ScreeningLeadingFactors? = nil,
         onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil,
+        deadlineNanoseconds: UInt64? = nil,
         combine: (ChoiceTree?, Row, ChoiceTree) -> (value: Value, tree: ChoiceTree)?,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
+        if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false {
+            return .completed(screeningInvocations: 0)
+        }
         guard let pickChoices = extractPickChoices(from: commandGen) else {
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -81,6 +85,7 @@ extension __ExhaustRuntime {
         var filterLosses = ScreeningFilterLosses()
 
         for tier in tiers {
+            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
             // A replay addresses one tier by length. The others contribute nothing to the target row, so they are skipped wholesale rather than run and discarded.
             if let skipTo, tier.length != skipTo.tierLength {
                 continue
@@ -128,7 +133,9 @@ extension __ExhaustRuntime {
             let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
             let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
 
-            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = nextRow() {
+            while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+                  tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = nextRow()
+            {
                 tierAttempts += 1
                 let leadingRow = CoveringArrayRow(values: Array(combinedRow.values.prefix(leadingDomainSizes.count)))
                 let rowValues = CoveringArrayRow(values: Array(combinedRow.values.dropFirst(leadingDomainSizes.count)))
@@ -168,6 +175,9 @@ extension __ExhaustRuntime {
                 totalIterations += 1
                 if let skipTo, Int(tierIterations) - 1 < skipTo.row {
                     continue
+                }
+                if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false {
+                    return .completed(screeningInvocations: totalIterations)
                 }
                 if property(value) == false {
                     return .failure(

@@ -128,9 +128,16 @@ extension __ExhaustRuntime {
         tree: ChoiceTree,
         output: Value,
         deadlineNanoseconds: UInt64,
+        runDeadlineNanoseconds: UInt64? = nil,
         probeWrapper: ProbeWrapper? = nil,
         property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
     ) -> ConcurrentTwoPassResult<Value, Evidence> {
+        func remainingBudget() -> UInt64 {
+            guard let deadline = runDeadlineNanoseconds else { return deadlineNanoseconds }
+            let now = monotonicNanoseconds()
+            let remaining = deadline > now ? deadline - now : 1
+            return deadlineNanoseconds == 0 ? remaining : min(deadlineNanoseconds, remaining)
+        }
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
         var currentOutput = output
         var currentTree = tree
@@ -142,7 +149,7 @@ extension __ExhaustRuntime {
 
         // The underlying graph reducer has no abort channel, so an abort is latched here: remaining probes in the in-flight pass report passing (rejecting every candidate) without reaching the backend's property, and the next pass is skipped.
         let boolProperty: @Sendable (Value) -> Bool = { commands in
-            guard aborted == false else {
+            guard aborted == false, runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
                 return true
             }
             switch property(commands) {
@@ -158,19 +165,21 @@ extension __ExhaustRuntime {
         }
 
         // Pass 1: structural reduction (lane collapse + deletion).
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(
-                maxStalls: 2,
-                wallClockDeadlineNanoseconds: deadlineNanoseconds,
-                enabledEncoders: [.laneCollapse, .deletion],
-                tuning: noRelax,
-                probeWrapper: probeWrapper
-            ),
-            property: boolProperty
-        ) {
+        if runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+           let result = try? Interpreters.choiceGraphReduceCollectingStats(
+               gen: generator,
+               tree: currentTree,
+               output: currentOutput,
+               config: .init(
+                   maxStalls: 2,
+                   wallClockDeadlineNanoseconds: remainingBudget(),
+                   enabledEncoders: [.laneCollapse, .deletion],
+                   tuning: noRelax,
+                   probeWrapper: probeWrapper
+               ),
+               property: boolProperty
+           )
+        {
             mergedStats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
@@ -186,19 +195,21 @@ extension __ExhaustRuntime {
         }
 
         // Pass 2: value minimization on the structurally reduced sequence.
-        if aborted == false, let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(
-                maxStalls: 2,
-                wallClockDeadlineNanoseconds: deadlineNanoseconds,
-                enabledEncoders: [.valueSearch, .floatSearch],
-                tuning: noRelax,
-                probeWrapper: probeWrapper
-            ),
-            property: boolProperty
-        ) {
+        if aborted == false, runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+           let result = try? Interpreters.choiceGraphReduceCollectingStats(
+               gen: generator,
+               tree: currentTree,
+               output: currentOutput,
+               config: .init(
+                   maxStalls: 2,
+                   wallClockDeadlineNanoseconds: remainingBudget(),
+                   enabledEncoders: [.valueSearch, .floatSearch],
+                   tuning: noRelax,
+                   probeWrapper: probeWrapper
+               ),
+               property: boolProperty
+           )
+        {
             mergedStats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
