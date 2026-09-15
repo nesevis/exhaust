@@ -6,15 +6,32 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-15
+
 ### Added
 
-- Reduction pivots picks inside a bind's inner and re-searches the dependent subtree. A generator that draws a selector through `.oneOf` and binds a dependent generator to it (a type that selects a term generator, a shape that selects a body) used to stop one branch above its minimum: changing the selector regenerates the dependent subtree, and the old values carried into it rarely fail the property, while bound value search only handles a numeric selector. The reducer now lifts each alternative selector branch through the generator, enumerates the regenerated subtree's values, and also tries each same-family subterm of the old subtree in the new subtree's place, so a counterexample can drop a wrapper and change the type it was selected under in one move. Bound value search is no longer proposed for a bind whose inner is not a single value, where it could never run.
+- The reducer can now pivot picks inside bind inners and re-search the dependent subtree, reducing counterexamples that previously stopped one wrapper above their minimum.
+- `#explore(…, time:)` has new graph-informed mutation operators for value reseeding, small-domain enumeration, element transplants, typed crossover, and sequence edits.
+- Fuzzer diagnostics now record mutation-arm traces, failure lineage, parent provenance, and producer information for each concrete failure.
+- New benchmark and probe targets cover IFC workloads, mutation-arm gates, witness shapes, and fuzz hot paths.
+- Float16 emulation supports x86 platforms.
+
+### Changed
+
+- `#explore(…, time:)` now restricts mutation arms per parent, gates arms by eligibility and admissibility, and adapts fresh random draws based on corpus admission.
+- Fuzzer mutation is more structure-aware: reseeding targets only `chooseBits` and pick sites, handles sequence elements independently, and keeps blind band operations behind a flag.
+- Generator and materialiser hot paths allocate less through map/isomorph fusion, cached node identifiers, reduced weighted-pick duplication, cheaper swarm rewrites, deferred draw-probability calculation, and less corpus hit-list copying.
+- Floating-point generation and reduction share more logic.
 
 ### Fixed
 
-- Reduction left counterexamples from a generator using `.lazy` at their first failing size. The unit inner of a `.lazy` bind leaves an entry the exact decoder did not step over, so a zip directly under `.lazy` never decoded from the prefix and every value probe inside it was rejected before the property ran.
-- Reduction ended in the same cycle it released bind-inner search when every value was already at its target, so bind-inner scopes were deferred and then never dispatched. The release is now followed by one more cycle whenever it adds scopes.
-- Branch promotion across recursion depths read a base case's layout from unselected alternatives and wrapped only the promoted family's leaves, so a recursive generator whose base case has a different shape at the top level, or whose recursion runs through a second generator, kept the extra level. Layouts are read per branch from active nodes and each bare leaf is wrapped with the family its slot expects.
+- Reduction through `.lazy` generators now steps over the unit entry before exact zip decoding, so value probes run instead of being rejected during materialisation.
+- Branch promotion across recursion depths now reads active branch layouts and supports mutual recursion.
+- Bind-inner reduction scopes are dispatched after release even when every value is already at its target.
+- Value reseeding and typed crossover now materialise through the correct tree shape.
+- Lockstep and sequence-based mutators handle edge cases in their valid delta and donor-span bounds.
+- Failure-lineage writes are concurrency-safe.
+- Fresh-rate attribution reports the correct producer.
 
 ## [1.2.1] - 2026-09-09
 
@@ -107,7 +124,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/nesevis/exhaust/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/nesevis/exhaust/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/nesevis/exhaust/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/nesevis/exhaust/compare/v1.0.0...v1.1.0
