@@ -1,7 +1,6 @@
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 @testable import ExhaustCore
 
 @Suite("Mutation-arm accounting tests")
