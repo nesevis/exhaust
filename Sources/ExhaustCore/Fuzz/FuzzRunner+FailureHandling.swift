@@ -16,6 +16,7 @@ extension FuzzRunner {
     /// Dispatches one failing candidate through the backpressure gate: attributed as a duplicate, held unreduced, or reduced and classified. A candidate whose verdict is not a failure is ignored.
     ///
     /// - Parameters:
+    ///   - origin: The producer of the failing candidate, recorded on any cluster this failure creates. Nil for a restored entry, whose producer was not persisted.
     ///   - attemptIndex: The attempt the failure was observed at, on the logical run's timeline (``attemptTimelineIndex``). Recovery passes the predecessors' total, so a restored entry's failure never lowers a carried-over cluster's discovery index.
     ///   - countsAsInstance: Whether the failure adds a member to the cluster it lands in. False for a restored entry the predecessor already recorded as failing: that entry landing back in the cluster it was restored into is the same evidence twice, and counting it inflates the carried-over instance and reduction counts on every resume. A restored entry that passed for the predecessor and fails now is evidence this build produced, so it counts.
     func handleFailure(
@@ -23,6 +24,7 @@ extension FuzzRunner {
         deferredTreeRebuild: (() -> ChoiceTree?)? = nil,
         parentIndex: Int?,
         phase: FuzzPhase,
+        origin: CandidateOrigin?,
         coverageNovel: Bool,
         attemptIndex: Int,
         countsAsInstance: Bool = true
@@ -73,6 +75,7 @@ extension FuzzRunner {
                     symptom: symptom,
                     parentIndex: parentIndex,
                     phase: phase,
+                    origin: origin,
                     attemptIndex: attemptIndex,
                     wasEscape: isEscape,
                     countsAsInstance: countsAsInstance
@@ -89,6 +92,7 @@ extension FuzzRunner {
         symptom: FailureSymptom,
         parentIndex: Int?,
         phase: FuzzPhase,
+        origin: CandidateOrigin?,
         attemptIndex: Int,
         wasEscape: Bool,
         countsAsInstance: Bool
@@ -153,6 +157,7 @@ extension FuzzRunner {
             signature: signature,
             symptom: symptom,
             phase: phase,
+            origin: origin,
             timestampNanoseconds: monotonicNanoseconds(),
             attemptIndex: attemptIndex,
             unnormalizedResidual: unnormalizedResidual,
@@ -195,9 +200,15 @@ extension FuzzRunner {
         pendingLineage = nil
         var parentSequence: ChoiceSequence?
         var parentValue: String?
+        var parentPhase: FuzzPhase?
+        var parentRootPhase: FuzzPhase?
+        var parentGeneration: Int?
         if let parentIndex = provenance.parentIndex, parentIndex < corpus.entries.count {
             let parent = corpus.entries[parentIndex]
             parentSequence = parent.sequence
+            parentPhase = parent.phase
+            parentRootPhase = parent.rootPhase
+            parentGeneration = parent.generation
             if case let .success(value, _, _) = Materializer.materializeAny(
                 erasedGen,
                 prefix: parent.sequence,
@@ -215,7 +226,10 @@ extension FuzzRunner {
             parentValue: parentValue,
             gate: gate,
             cluster: clusterID.map { "\($0)" },
-            isNewCluster: isNewCluster
+            isNewCluster: isNewCluster,
+            parentPhase: parentPhase,
+            parentRootPhase: parentRootPhase,
+            parentGeneration: parentGeneration
         )
     }
 }

@@ -63,14 +63,17 @@ package struct FuzzFailureLineage {
         runStartNanoseconds = monotonicNanoseconds()
     }
 
-    /// Writes one row. `parentSequence` and `parentValue` are nil for candidates with no parent (fresh draws, screening rows, whole-value injections). `cluster` is nil when the gate did not reduce.
+    /// Writes one row. `parentSequence` and `parentValue` are nil for candidates with no parent (fresh draws, screening rows, whole-value injections). `cluster` is nil when the gate did not reduce. The parent's phase, root phase, and generation say where its lineage began: a mutation-phase root is a fresh draw the mixture admitted.
     package func record(
         _ provenance: Provenance,
         parentSequence: ChoiceSequence?,
         parentValue: String?,
         gate: String,
         cluster: String?,
-        isNewCluster: Bool?
+        isNewCluster: Bool?,
+        parentPhase: FuzzPhase? = nil,
+        parentRootPhase: FuzzPhase? = nil,
+        parentGeneration: Int? = nil
     ) {
         var armNames: [String] = []
         for arm in MutationArm.allCases where provenance.arms.contains(arm) {
@@ -92,6 +95,9 @@ package struct FuzzFailureLineage {
             ("gate", Self.quote(gate)),
             ("cluster", cluster.map(Self.quote) ?? "null"),
             ("newCluster", isNewCluster.map { $0 ? "true" : "false" } ?? "null"),
+            ("parentPhase", parentPhase.map { Self.quote("\($0)") } ?? "null"),
+            ("parentRootPhase", parentRootPhase.map { Self.quote("\($0)") } ?? "null"),
+            ("parentGeneration", parentGeneration.map { "\($0)" } ?? "null"),
             ("childSequence", Self.quote(Self.render(provenance.childSequence))),
             ("childValue", Self.quote(provenance.childValue)),
             ("parentSequence", parentSequence.map { Self.quote(Self.render($0)) } ?? "null"),

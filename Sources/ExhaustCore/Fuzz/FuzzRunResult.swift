@@ -449,6 +449,11 @@ package struct FuzzRunCounts: Sendable {
         }
     }
 
+    /// Fresh generator draws taken during the mutation phase, the adaptive mixture's output and the empty-tier fallback. Counted inside `mutationAttempts`, which otherwise cannot separate a draw the ramp spent from a child the mutator built.
+    package var mutationFreshDrawAttempts: Int {
+        FuzzAttemptOutcome.allCases.reduce(0) { $0 + attempts.count(.mutation, .freshSample, $1) }
+    }
+
     /// Candidates produced by the three comparison-operand injection paths, each counted inside `mutationAttempts` too. A drawn operand that reconstructs, reflects, or finds no slot is not an attempt. All zero on a build without trace-cmp instrumentation, since the pool never fills.
     package var reflectionInjectionAttempts: Int {
         attempts.count(origin: .reflectionInjection)
@@ -530,6 +535,8 @@ package struct FuzzRunResult: Sendable {
     package var diagnostics: FuzzDiagnostics
     package var corpusEntryCount: Int
     package var parentCount: Int
+    /// Mutation parents by the phase of the root they descend from.
+    package var parentRootPhases: [FuzzPhase: Int] = [:]
     package var instrumentedEdgeCount: Int
     /// The corpus's edge incidence at the end of the run: covered edges and the Q₁ to Q₄ frequency counts that feed the estimators.
     package var incidence: EdgeIncidenceProfile

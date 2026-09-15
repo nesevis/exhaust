@@ -87,6 +87,7 @@ struct IssueReportingIntegrationTests {
             coverage: FuzzReport.Coverage(
                 corpusEntryCount: 0,
                 parentCount: 0,
+                parentRootPhases: [:],
                 parentProfile: .empty,
                 coveredEdges: 0,
                 instrumentedEdges: 16,

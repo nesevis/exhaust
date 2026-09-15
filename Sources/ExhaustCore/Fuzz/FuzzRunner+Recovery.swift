@@ -145,7 +145,8 @@ extension FuzzRunner {
                 lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
                 firstSeenAttempt: record.firstSeenAttempt,
                 unnormalizedMemberCount: record.unnormalizedMemberCount,
-                discoveringPhase: phase
+                discoveringPhase: phase,
+                discoveringOrigin: record.discoveringOrigin.flatMap(CandidateOrigin.init(rawValue:))
             ))
         }
         faults.inventory.restore(clusters: restoredClusters)
@@ -217,6 +218,8 @@ extension FuzzRunner {
                 failure.candidate,
                 parentIndex: nil,
                 phase: failure.phase,
+                // A restored entry's producer is not persisted; a cluster it creates records no source.
+                origin: nil,
                 coverageNovel: failure.coverageNovel,
                 // The predecessors' attempt total: after every index they recorded, so a carried-over cluster keeps its discovery index, and before this run's first attempt.
                 attemptIndex: attemptTimelineIndex,

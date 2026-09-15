@@ -62,6 +62,9 @@ package struct FaultCluster: Sendable {
     /// The phase whose failure first created this cluster.
     package let discoveringPhase: FuzzPhase
 
+    /// The producer of the failing candidate that first created this cluster: a fresh draw, a mutation child, or one of the injection paths. Nil for a cluster recorded outside the search loop, such as a reduction driven by `#exhaust`, or restored from a record written before the origin was kept.
+    package let discoveringOrigin: CandidateOrigin?
+
     fileprivate init(
         id: Int,
         reducedSequence: ChoiceSequence,
@@ -70,6 +73,7 @@ package struct FaultCluster: Sendable {
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: FuzzPhase,
+        origin: CandidateOrigin?,
         timestampNanoseconds: UInt64,
         attemptIndex: Int,
         unnormalizedResidual: Bool
@@ -87,6 +91,7 @@ package struct FaultCluster: Sendable {
         firstSeenAttempt = attemptIndex
         unnormalizedMemberCount = unnormalizedResidual ? 1 : 0
         discoveringPhase = phase
+        discoveringOrigin = origin
     }
 
     /// Reconstructs a cluster from a progress-log record at resume. Restored counts and timestamps carry over verbatim; the phase and identity are those of the original discovery.
@@ -103,7 +108,8 @@ package struct FaultCluster: Sendable {
         lastSeenNanoseconds: UInt64,
         firstSeenAttempt: Int,
         unnormalizedMemberCount: Int,
-        discoveringPhase: FuzzPhase
+        discoveringPhase: FuzzPhase,
+        discoveringOrigin: CandidateOrigin? = nil
     ) {
         id = restoredID
         self.reducedSequence = reducedSequence
@@ -118,6 +124,7 @@ package struct FaultCluster: Sendable {
         self.firstSeenAttempt = firstSeenAttempt
         self.unnormalizedMemberCount = unnormalizedMemberCount
         self.discoveringPhase = discoveringPhase
+        self.discoveringOrigin = discoveringOrigin
     }
 
     fileprivate mutating func absorb(
@@ -219,6 +226,7 @@ package final class FaultInventory {
     ///   - signature: The post-hoc coverage signature from the attributed re-run, or nil when attribution was unavailable.
     ///   - symptom: The failure's cheap symptom.
     ///   - phase: The phase that discovered the failing input.
+    ///   - origin: The producer of the failing candidate, kept on a cluster this reduction creates. Nil when the failure did not come from a search candidate.
     ///   - timestampNanoseconds: Monotonic time of the discovery, supplied by the caller so tests stay deterministic.
     ///   - attemptIndex: The 1-based attempt index at which the failing input was observed: the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics. Counted on the logical run's timeline, so a failure a resumed run observes while restoring carries the predecessor's attempt count rather than zero, and never precedes a cluster the predecessor recorded.
     ///   - unnormalizedResidual: Whether this member's own reduced form differed from `reducedKey` and joined only through the normalization pass.
@@ -230,6 +238,7 @@ package final class FaultInventory {
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: FuzzPhase,
+        origin: CandidateOrigin? = nil,
         timestampNanoseconds: UInt64,
         attemptIndex: Int,
         unnormalizedResidual: Bool = false,
@@ -260,6 +269,7 @@ package final class FaultInventory {
             signature: signature,
             symptom: symptom,
             phase: phase,
+            origin: origin,
             timestampNanoseconds: timestampNanoseconds,
             attemptIndex: attemptIndex,
             unnormalizedResidual: unnormalizedResidual

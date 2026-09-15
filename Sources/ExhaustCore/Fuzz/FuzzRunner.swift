@@ -404,6 +404,7 @@ package final class FuzzRunner<Output> {
             diagnostics: diagnostics,
             corpusEntryCount: corpus.entries.count,
             parentCount: corpus.parentIndices.count,
+            parentRootPhases: corpus.parentRootPhases,
             instrumentedEdgeCount: source.edgeCount,
             incidence: corpus.edgeIncidenceProfile,
             incidenceTotal: corpus.incidenceTotal,
@@ -822,6 +823,7 @@ package final class FuzzRunner<Output> {
                             deferredTreeRebuild: { nil },
                             parentIndex: candidate.parentIndex,
                             phase: candidate.phase,
+                            origin: candidate.origin,
                             coverageNovel: false,
                             attemptIndex: attemptTimelineIndex
                         )
@@ -978,6 +980,7 @@ package final class FuzzRunner<Output> {
         hits: [(edge: Int, hitCount: UInt8)]
     ) -> CorpusAdmission {
         let phase = candidate.phase
+        let origin = candidate.origin
         let parentIndex = candidate.parentIndex
         let tree = candidate.tree ?? .just
         configuration.onAttempt?(phase, hits)
@@ -999,6 +1002,7 @@ package final class FuzzRunner<Output> {
                 convergence: candidate.convergence,
                 generation: candidate.generation,
                 phase: phase,
+                parentIndex: parentIndex,
                 isBoundaryDerived: candidate.isBoundaryDerived,
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard,
@@ -1018,6 +1022,7 @@ package final class FuzzRunner<Output> {
                     deferredTreeRebuild: deferredTreeRebuild,
                     parentIndex: parentIndex,
                     phase: phase,
+                    origin: origin,
                     coverageNovel: admission.isAdmitted,
                     attemptIndex: attemptTimelineIndex
                 )
@@ -1045,6 +1050,7 @@ package final class FuzzRunner<Output> {
             convergence: candidate.convergence,
             generation: candidate.generation,
             phase: phase,
+            parentIndex: parentIndex,
             isBoundaryDerived: candidate.isBoundaryDerived,
             propertyFailed: candidates.corpus.verdict.isFailure,
             propertyDiscarded: candidates.corpus.verdict.isDiscard,
@@ -1058,6 +1064,7 @@ package final class FuzzRunner<Output> {
                 deferredTreeRebuild: deferredTreeRebuild,
                 parentIndex: parentIndex,
                 phase: phase,
+                origin: origin,
                 coverageNovel: candidates.independentFailureCoverageNovel
                     ?? admission.isAdmitted,
                 attemptIndex: attemptTimelineIndex

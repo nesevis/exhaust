@@ -42,6 +42,9 @@ package struct CorpusEntry: Sendable {
     /// The phase that produced this entry.
     package let phase: FuzzPhase
 
+    /// The phase of the root this entry descends from: its own phase for a root, the parent's root phase for a mutation child. A mutation-phase root is a fresh draw the mixture admitted, so this is what says whether a lineage started from screening, sampling, or the mutation phase's own generator draws.
+    package let rootPhase: FuzzPhase
+
     /// Whether the property failed on this entry. Report-time discrimination splits the corpus on this flag: passing entries form the P(hit | pass) denominator.
     package let propertyFailed: Bool
 
@@ -188,6 +191,15 @@ package final class FuzzCorpus {
 
     /// Indices of the mutable-tier entries eligible as mutation parents: not quarantined and, with the champion archive on, holding at least one cell.
     package private(set) var parentIndices: [Int] = []
+
+    /// Mutation parents by the phase of the root they descend from, so a run can say how much of its parent pool the mutation phase's own fresh draws seeded.
+    package var parentRootPhases: [FuzzPhase: Int] {
+        var counts: [FuzzPhase: Int] = [:]
+        for index in parentIndices {
+            counts[entries[index].rootPhase, default: 0] += 1
+        }
+        return counts
+    }
 
     /// Per-edge bitmask of hit-count buckets seen corpus-wide; novelty is a set bit not yet present.
     private var seenBucketMasks: [UInt8]
@@ -421,6 +433,7 @@ package final class FuzzCorpus {
         convergence: Double,
         generation: Int,
         phase: FuzzPhase,
+        parentIndex: Int? = nil,
         isBoundaryDerived: Bool = false,
         propertyFailed: Bool = false,
         propertyDiscarded: Bool = false,
@@ -486,6 +499,7 @@ package final class FuzzCorpus {
             convergence: convergence,
             generation: generation,
             phase: phase,
+            rootPhase: parentIndex.map { entries[$0].rootPhase } ?? phase,
             propertyFailed: propertyFailed,
             propertyDiscarded: propertyDiscarded,
             hash: hash,

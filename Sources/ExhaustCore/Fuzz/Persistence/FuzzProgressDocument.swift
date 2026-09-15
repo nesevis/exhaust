@@ -74,6 +74,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var instanceCount: Int
         package var reducedCount: Int
         package var discoveringPhase: String
+        /// The producer of the discovering candidate, by ``CandidateOrigin`` raw value. Absent in records written before it was kept, and for clusters recorded outside the search loop.
+        package var discoveringOrigin: Int?
         /// Run-relative timestamps (nanoseconds since the logical run's start), not raw monotonic readings — a resumed process has a different monotonic origin.
         package var firstSeenNanoseconds: UInt64
         package var lastSeenNanoseconds: UInt64
@@ -93,6 +95,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             instanceCount = cluster.instanceCount
             reducedCount = cluster.reducedCount
             discoveringPhase = cluster.discoveringPhase.rawValue
+            discoveringOrigin = cluster.discoveringOrigin?.rawValue
             firstSeenNanoseconds = cluster.firstSeenNanoseconds >= epochNanoseconds
                 ? cluster.firstSeenNanoseconds - epochNanoseconds
                 : 0
