@@ -450,13 +450,10 @@ package final class FuzzCorpus {
 
         var introducedEdges: [Int] = []
         var hasNovelBucket = false
-        var storedHits: [(edge: Int, hitCount: UInt8)] = []
-        storedHits.reserveCapacity(hits.count)
         for (edge, hitCount) in hits {
             guard edge >= 0, edge < edgeCount else {
                 continue
             }
-            storedHits.append((edge, hitCount))
             incidenceTotalCount += 1
             if edgeIncidenceCounts[edge] < 5 {
                 edgeIncidenceCounts[edge] += 1
@@ -470,14 +467,18 @@ package final class FuzzCorpus {
         }
 
         guard hasNovelBucket || isBoundaryDerived else {
-            storedHits.removeAll(keepingCapacity: true)
             return .rejectedNotNovel
         }
 
+        // Only admitted entries retain hits; avoid allocating and copying on the common rejection path.
+        var storedHits: [(edge: Int, hitCount: UInt8)] = []
+        storedHits.reserveCapacity(hits.count)
         var coveredRunFirstEdge = false
-        for index in storedHits.indices {
-            let edge = storedHits[index].edge
-            let hitCount = storedHits[index].hitCount
+        for (edge, hitCount) in hits {
+            guard edge >= 0, edge < edgeCount else {
+                continue
+            }
+            storedHits.append((edge, hitCount))
             seenBucketMasks[edge] |= HitCountBucket.bucketMask(for: hitCount)
             if everCoveredEdges[edge] == false {
                 coveredRunFirstEdge = true
