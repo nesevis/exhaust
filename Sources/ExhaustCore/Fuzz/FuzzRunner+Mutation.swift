@@ -24,8 +24,8 @@ package struct MutationDraw {
     package let candidate: ChoiceSequence
     /// The arm to credit, which is the arm drawn unless its operator missed and a band absorbed the attempt.
     package let armsMask: MutationArmSet
-    /// The probability the credited arm was drawn with, renormalized over the arms eligible for this parent. Zero outside the bandit.
-    package let drawProbability: Double
+    /// The eligible set the arm was drawn from, so the bandit can compute the conditional probability at reward time instead of on every draw.
+    package let eligible: MutationArmSet
     /// Spans of the candidate the materialiser should draw fresh, from a value reseed. Empty for every other arm; the candidate itself is the parent's sequence when this is not.
     package var reseedRanges: [ClosedRange<Int>] = []
     /// Further candidates from the same draw, evaluated after `candidate` under the same arm: the rest of a small-domain enumeration. Empty for every other arm.
@@ -56,7 +56,7 @@ extension FuzzRunner {
                 return MutationDraw(
                     candidate: mask.applyActivated(to: draw.candidate, scratch: &swarmScratch, prng: &prng),
                     armsMask: draw.armsMask,
-                    drawProbability: draw.drawProbability,
+                    eligible: draw.eligible,
                     reseedRanges: draw.reseedRanges
                 )
         }
@@ -205,7 +205,7 @@ extension FuzzRunner {
             return MutationDraw(
                 candidate: candidate,
                 armsMask: MutationArmSet(arm),
-                drawProbability: bandit.probability(of: arm, eligible: eligible),
+                eligible: eligible,
                 reseedRanges: reseedRanges,
                 alternatives: alternatives,
                 isEnumeration: isEnumeration
@@ -218,7 +218,7 @@ extension FuzzRunner {
         return MutationDraw(
             candidate: FuzzMutator.mutate(candidate, intensity: intensity, prng: &prng),
             armsMask: MutationArmSet(band),
-            drawProbability: bandit.probability(of: band, eligible: eligible)
+            eligible: eligible
         )
     }
 

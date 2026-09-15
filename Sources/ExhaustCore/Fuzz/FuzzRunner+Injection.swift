@@ -98,7 +98,7 @@ extension FuzzRunner {
             parent: parent,
             parentIndex: parentIndex,
             armsMask: MutationArmSet.none,
-            drawProbability: 0,
+            eligible: .all,
             origin: .comparandSubstitution
         ) {
             let evaluation = evaluate(candidate)
@@ -186,7 +186,7 @@ extension FuzzRunner {
             parentIndex: parent?.index,
             parentHash: parent?.entry.hash ?? 0,
             armsMask: MutationArmSet.none,
-            drawProbability: 0,
+            eligible: .all,
             isBoundaryDerived: false
         )
     }

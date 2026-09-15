@@ -39,10 +39,10 @@ struct FuzzCandidate<Output>: ~Copyable {
     let parentIndex: Int?
     /// The parent's sequence hash for the crash breadcrumb; 0 without a parent.
     let parentHash: UInt64
-    /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; 0 outside the arm inventory.
+    /// Bitmask of the ``MutationArm`` that produced the candidate, credited to the bandit on admission; `.none` outside the arm inventory.
     let armsMask: MutationArmSet
-    /// The probability the credited arm was drawn with, renormalized over the arms eligible for its parent. The bandit's importance weight divides by this, so it has to be the probability the draw ran at rather than the unconditional one. Zero outside the arm inventory.
-    let drawProbability: Double
+    /// The eligible set the arm was drawn from, so the bandit can compute the conditional draw probability at reward time instead of on every draw. `.all` outside the arm inventory.
+    let eligible: MutationArmSet
     /// Whether the candidate is a covering array row, admitted for its boundary values without coverage novelty.
     let isBoundaryDerived: Bool
 }
@@ -475,7 +475,7 @@ package final class FuzzRunner<Output> {
                 parentIndex: nil,
                 parentHash: 0,
                 armsMask: MutationArmSet.none,
-                drawProbability: 0,
+                eligible: .all,
                 isBoundaryDerived: true
             ))
             checkpointIfDue()
@@ -655,7 +655,7 @@ package final class FuzzRunner<Output> {
                     parent: parent,
                     parentIndex: parentIndex,
                     armsMask: draw.armsMask,
-                    drawProbability: draw.drawProbability,
+                    eligible: draw.eligible,
                     origin: .mutationChild,
                     reseedRanges: draw.reseedRanges
                 ) {
@@ -674,7 +674,7 @@ package final class FuzzRunner<Output> {
                         parent: parent,
                         parentIndex: parentIndex,
                         armsMask: draw.armsMask,
-                        drawProbability: draw.drawProbability,
+                        eligible: draw.eligible,
                         origin: .mutationChild
                     ) {
                         evaluate(child)
@@ -735,7 +735,7 @@ package final class FuzzRunner<Output> {
         parent: CorpusEntry,
         parentIndex: Int,
         armsMask: MutationArmSet,
-        drawProbability: Double,
+        eligible: MutationArmSet,
         origin: CandidateOrigin,
         reseedRanges: [ClosedRange<Int>] = []
     ) -> FuzzCandidate<Output>? {
@@ -764,7 +764,7 @@ package final class FuzzRunner<Output> {
             parentIndex: parentIndex,
             parentHash: parent.hash,
             armsMask: armsMask,
-            drawProbability: drawProbability,
+            eligible: eligible,
             isBoundaryDerived: false
         )
     }
@@ -865,7 +865,7 @@ package final class FuzzRunner<Output> {
                 // One reward per draw, scaled to the evaluations the draw spent: an enumeration evaluates several children at the draw's probability, and rewarding each in full would credit the arm as though it had been drawn that many times at that probability.
                 if configuration.experiments.banditBands, drawState.rewarded == false {
                     drawState.rewarded = true
-                    bandit.reward(arm, drawProbability: candidate.drawProbability, magnitude: 1 / Double(drawState.cost))
+                    bandit.reward(arm, drawProbability: bandit.probability(of: arm, eligible: candidate.eligible), magnitude: 1 / Double(drawState.cost))
                 }
             }
         }
@@ -941,7 +941,7 @@ package final class FuzzRunner<Output> {
             parentIndex: nil,
             parentHash: 0,
             armsMask: MutationArmSet.none,
-            drawProbability: 0,
+            eligible: .all,
             isBoundaryDerived: false
         ))
     }
