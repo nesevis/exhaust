@@ -194,10 +194,10 @@ extension FuzzRunner {
 
     /// Writes the pending lineage row, if the trace is on and ``evaluate(_:)`` stashed a provenance for this failure, and clears the stash. The parent is re-materialized exactly from its corpus sequence so the row shows the value the mutation started from.
     private func recordLineage(gate: String, clusterID: Int?, isNewCluster: Bool?) {
-        guard let failureLineage, let provenance = pendingLineage else {
+        guard let failureLineage, let provenance = drawState.pendingLineage else {
             return
         }
-        pendingLineage = nil
+        drawState.pendingLineage = nil
         var parentSequence: ChoiceSequence?
         var parentValue: String?
         var parentPhase: FuzzPhase?

@@ -1,5 +1,24 @@
 // Candidate production for the fuzz loop: arm selection and the swarm rewrite.
 
+/// Per-draw mutable state the mutation loop sets and ``FuzzRunner/evaluate(_:)`` reads: reseed ranges for the lineage row, the one-per-draw reward flag, and the draw's evaluation cost. Grouped so the loop resets one struct per draw instead of four fields.
+package struct MutationDrawState {
+    /// Provenance of the failing candidate, set by evaluate and consumed by recordLineage.
+    package var pendingLineage: FuzzFailureLineage.Provenance?
+    /// Reseed spans of the mutation child under evaluation, for the lineage row.
+    package var reseedRanges: [ClosedRange<Int>] = []
+    /// Whether the bandit has been rewarded for this draw. A draw that yields several children (an enumeration) rewards at most once.
+    package var rewarded = false
+    /// Evaluations this draw spends: 1 for every arm but an enumeration, which spends one per alternative.
+    package var cost = 1
+
+    package mutating func reset(cost: Int) {
+        pendingLineage = nil
+        reseedRanges = []
+        rewarded = false
+        self.cost = cost
+    }
+}
+
 /// One produced candidate and the accounting the bandit needs to credit it on admission.
 package struct MutationDraw {
     package let candidate: ChoiceSequence
