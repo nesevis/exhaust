@@ -29,6 +29,9 @@ package struct MutationTargets: Sendable {
     /// Sequence nodes with one or more elements, eligible for element duplication.
     let duplicableSequenceNodeIDs: [Int]
 
+    /// Sequence nodes with two or more elements, eligible for run copy (overwriting one run with another within the same node).
+    let copyableSequenceNodeIDs: [Int]
+
     /// One site a value reseed may draw fresh: an independent chooseBits leaf or pick node, with its span and the sites that contain it.
     struct ReseedSite {
         let nodeID: Int
@@ -154,15 +157,20 @@ package struct MutationTargets: Sendable {
         deletableSequenceNodeIDs = removalScopes.compactMap { $0.targets.first?.sequenceNodeID }
 
         var duplicable: [Int] = []
+        var copyable: [Int] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case let .sequence(metadata) = node.kind else { continue }
+            if metadata.elementCount >= 2 {
+                copyable.append(nodeID)
+            }
             let upper = metadata.lengthConstraint?.upperBound ?? UInt64.max
             if metadata.elementCount >= 1, UInt64(metadata.elementCount + 1) <= upper {
                 duplicable.append(nodeID)
             }
         }
         duplicableSequenceNodeIDs = duplicable
+        copyableSequenceNodeIDs = copyable
 
         var siteNodeIDs: [Int] = []
         for nodeID in graph.liveNodeIDs {
@@ -271,10 +279,7 @@ package struct MutationTargets: Sendable {
         if duplicableSequenceNodeIDs.isEmpty == false {
             structural.insert(.runDuplication)
         }
-        if graph.liveNodeIDs.contains(where: { nodeID in
-            if case let .sequence(metadata) = graph.nodes[nodeID].kind { return metadata.elementCount >= 2 }
-            return false
-        }) {
+        if copyable.isEmpty == false {
             structural.insert(.runCopy)
             structural.insert(.suffixReseed)
         }
@@ -651,11 +656,7 @@ package extension FuzzMutator {
         targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        let sequenceNodeIDs = targets.graph.liveNodeIDs.filter { nodeID in
-            if case let .sequence(metadata) = targets.graph.nodes[nodeID].kind { return metadata.elementCount >= 2 }
-            return false
-        }
-        guard let metadata = pickSequenceNode(from: sequenceNodeIDs, graph: targets.graph, minimumElements: 2, prng: &prng) else {
+        guard let metadata = pickSequenceNode(from: targets.copyableSequenceNodeIDs, graph: targets.graph, minimumElements: 2, prng: &prng) else {
             return nil
         }
         let length = runLength(upTo: metadata.elementCount / 2, prng: &prng)
