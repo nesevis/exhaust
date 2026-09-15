@@ -126,7 +126,8 @@ extension Materializer {
                     guard tag.isFloatingPoint || (bp >= min && bp <= max) else {
                         throw RejectionError()
                     }
-                    randomBits = tag.clampBits(bp, min: min, max: max)
+                    // Validation proves integer bits are already in range, while floating-point bits deliberately pass through unchanged.
+                    randomBits = bp
                 }
                 // Reuse original ChoiceValue when bits unchanged, avoiding tag.makeConvertible(bitPattern64:) reconstruction.
                 if randomBits == bp {
@@ -202,8 +203,8 @@ extension Materializer {
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
         let branchCount = UInt64(choices.count)
-        // Always consume a jump seed from the PRNG stream (VACTI pattern).
-        let jumpSeed = context.prng.next()
+        // Guided resolution must preserve the PRNG stream even when alternatives are omitted. Exact resolution never draws from that stream, so its jump seed is observable only when alternatives consume it.
+        let jumpSeed = context.mode == .exact && context.materializePicks == false ? 0 : context.prng.next()
 
         // Extract fallback branch info. For Gen.recursive, the pick site is wrapped in a bind — unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?
@@ -281,53 +282,8 @@ extension Materializer {
             return continued
         }
 
-        // Execute selected branch; optionally materialize non-selected branches.
-        var branches = [ChoiceTree]()
-        branches.reserveCapacity(context.materializePicks ? choices.count : 1)
-        var finalValue: Any?
         let fingerprint = choices[0].fingerprint
-
-        if context.materializePicks {
-            let selectedIndex = Int(selectedChoice.id)
-
-            var choiceIdx = 0
-            while choiceIdx < choices.count {
-                let choice = choices[choiceIdx]
-
-                if choiceIdx == selectedIndex {
-                    let branchBodyStart = context.flatCount
-                    guard let (result, branchTree) = try generateRecursive(
-                        choice.generator, with: inputValue, context: &context,
-                        fallbackTree: branchBodyFallback
-                    ) else { return nil }
-
-                    guard let (contValue, contTree) = try runContinuation(
-                        result: result, calleeChoiceTree: branchTree, calleeStart: branchBodyStart,
-                        continuation: continuation, inputValue: inputValue,
-                        context: &context,
-                        continuationFallback: branchContFallback ?? continuationFallback
-                    ) else { return nil }
-
-                    finalValue = contValue
-                    branches.append(.branch(
-                        fingerprint: fingerprint, weight: choice.weight,
-                        id: choice.id, branchCount: branchCount, choice: contTree,
-                        isSelected: true
-                    ))
-                } else if let branch = try materializeUnselectedBranch(
-                    choice,
-                    fingerprint: fingerprint,
-                    branchCount: branchCount,
-                    jumpSeed: jumpSeed,
-                    continuation: continuation,
-                    inputValue: inputValue,
-                    size: context.size
-                ) {
-                    branches.append(branch)
-                }
-                choiceIdx += 1
-            }
-        } else {
+        guard context.materializePicks else {
             // Skip non-selected branches — only materialize the selected one.
             let branchBodyStart = context.flatCount
             guard let (result, branchTree) = try generateRecursive(
@@ -335,19 +291,74 @@ extension Materializer {
                 fallbackTree: branchBodyFallback
             ) else { return nil }
 
-            guard let (contValue, contTree) = try runContinuation(
-                result: result, calleeChoiceTree: branchTree, calleeStart: branchBodyStart,
-                continuation: continuation, inputValue: inputValue,
+            guard let (continuationValue, continuationTree) = try runContinuation(
+                result: result,
+                calleeChoiceTree: branchTree,
+                calleeStart: branchBodyStart,
+                continuation: continuation,
+                inputValue: inputValue,
                 context: &context,
                 continuationFallback: branchContFallback ?? continuationFallback
             ) else { return nil }
 
-            finalValue = contValue
-            branches.append(.branch(
-                fingerprint: fingerprint, weight: selectedChoice.weight,
-                id: selectedChoice.id, branchCount: branchCount, choice: contTree,
+            return (continuationValue, .group([.branch(
+                fingerprint: fingerprint,
+                weight: selectedChoice.weight,
+                id: selectedChoice.id,
+                branchCount: branchCount,
+                choice: continuationTree,
                 isSelected: true
-            ))
+            )]))
+        }
+
+        // Execute the selected branch and materialize every non-selected branch.
+        var branches = [ChoiceTree]()
+        branches.reserveCapacity(choices.count)
+        var finalValue: Any?
+        let selectedIndex = Int(selectedChoice.id)
+
+        var choiceIndex = 0
+        while choiceIndex < choices.count {
+            let choice = choices[choiceIndex]
+
+            if choiceIndex == selectedIndex {
+                let branchBodyStart = context.flatCount
+                guard let (result, branchTree) = try generateRecursive(
+                    choice.generator, with: inputValue, context: &context,
+                    fallbackTree: branchBodyFallback
+                ) else { return nil }
+
+                guard let (continuationValue, continuationTree) = try runContinuation(
+                    result: result,
+                    calleeChoiceTree: branchTree,
+                    calleeStart: branchBodyStart,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                    continuationFallback: branchContFallback ?? continuationFallback
+                ) else { return nil }
+
+                finalValue = continuationValue
+                branches.append(.branch(
+                    fingerprint: fingerprint,
+                    weight: choice.weight,
+                    id: choice.id,
+                    branchCount: branchCount,
+                    choice: continuationTree,
+                    isSelected: true
+                ))
+            } else if let branch = try materializeUnselectedBranch(
+                choice,
+                fingerprint: fingerprint,
+                branchCount: branchCount,
+                jumpSeed: jumpSeed,
+                continuation: continuation,
+                inputValue: inputValue,
+                size: context.size
+            ) {
+                branches.append(branch)
+            }
+            choiceIndex += 1
         }
 
         guard let value = finalValue else { return nil }
@@ -407,8 +418,8 @@ extension Materializer {
     ) throws -> (Any, ChoiceTree)? {
         let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
-        // Always consume a jump seed from the PRNG stream (VACTI pattern).
-        let jumpSeed = context.prng.next()
+        // Exact resolution uses the jump seed only to materialize alternatives. Guided resolution still consumes it when alternatives are omitted because later PRNG fallbacks observe the stream position.
+        let jumpSeed = context.mode == .exact && context.materializePicks == false ? 0 : context.prng.next()
 
         // Extract fallback branch info. For Gen.recursive, the pick site is wrapped in a bind, so unwrap to reach the group with branch alternatives.
         let fbBranchId: UInt64?

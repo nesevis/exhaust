@@ -99,7 +99,7 @@ package enum Materializer {
 
         switch mode {
             case .exact:
-                // The seed only feeds context.prng. In exact mode the PRNG is consulted nowhere except the pick handler's jump-seed draw, whose value is discarded unless materializePicks routes it into non-selected branch contexts. Without materializePicks the O(n) prefix hash buys nothing and a constant seed is byte-identical.
+                // The seed only feeds context.prng. In exact mode the PRNG is consulted nowhere except when materializePicks routes jump seeds into non-selected branch contexts. Without materializePicks the O(n) prefix hash buys nothing and a constant seed is byte-identical.
                 seed = precomputedSeed ?? (materializePicks ? ZobristHash.hash(of: prefix) : 0)
                 // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing: dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25).
                 resolvedFallbackTree = fallbackTree
@@ -177,6 +177,7 @@ package extension Materializer {
         collectDecodingReport: Bool = true,
         reseedRanges: [ClosedRange<Int>] = []
     ) -> FlatResult {
+        let prefixCount = prefix.count
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
         let maximizeBoundRegionIndices: Set<Int>?
@@ -205,8 +206,9 @@ package extension Materializer {
             deadlineNanoseconds: monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
         )
         context.flatOutput = ChoiceSequence()
-        context.flatOutput!.reserveCapacity(64)
+        context.flatOutput!.reserveCapacity(Swift.max(64, prefixCount))
         context.reseedRanges = reseedRanges
+        context.hasPendingReseed = reseedRanges.isEmpty == false
 
         do {
             guard let (value, _) = try generateRecursive(
@@ -520,10 +522,13 @@ extension Materializer {
         /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order at pick dispatch or leaf value resolution.
         var reseedRanges: [ClosedRange<Int>] = []
         var nextReseedIndex = 0
+        /// Avoids loading the usually empty range array at every pick and leaf. This flag must stay equivalent to `nextReseedIndex < reseedRanges.count` after initialization and each successful entry.
+        var hasPendingReseed = false
 
         /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
+        @inline(__always)
         mutating func enterReseedIfTargeted() -> Bool {
-            guard nextReseedIndex < reseedRanges.count,
+            guard hasPendingReseed,
                   cursor.suspended == false,
                   cursor.isAtStart(of: reseedRanges[nextReseedIndex])
             else {
@@ -531,6 +536,7 @@ extension Materializer {
             }
             cursor.jump(past: reseedRanges[nextReseedIndex])
             nextReseedIndex += 1
+            hasPendingReseed = nextReseedIndex < reseedRanges.count
             cursor.suspended = true
             return true
         }
