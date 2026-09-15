@@ -517,22 +517,12 @@ package extension FuzzMutator {
         prng: inout Xoshiro256
     ) -> (children: [ChoiceSequence], siteIndex: Int)? {
         let enumerable = targets.smallDomainSiteIndices.filter { targets.enumeratedSiteIndices.contains($0) == false }
-        guard enumerable.isEmpty == false else {
+        guard let chosen = weightedPick(
+            from: enumerable,
+            weight: { UInt64(targets.reseedSites[$0].range.count) },
+            prng: &prng
+        ) else {
             return nil
-        }
-        var totalWeight: UInt64 = 0
-        for index in enumerable {
-            totalWeight += UInt64(targets.reseedSites[index].range.count)
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        var chosen = enumerable[enumerable.count - 1]
-        for index in enumerable {
-            let weight = UInt64(targets.reseedSites[index].range.count)
-            if remaining < weight {
-                chosen = index
-                break
-            }
-            remaining -= weight
         }
         guard let position = MutationTargets.sitePosition(of: targets.reseedSites[chosen], in: candidate) else {
             return nil
@@ -810,23 +800,16 @@ package extension FuzzMutator {
             chosen = targets.maximalReseedSiteIndices
         } else {
             let wanted = Int(countDraw) + 1
-            var totalWeight: UInt64 = 0
-            for site in sites {
-                totalWeight += UInt64(site.range.count)
-            }
             // Bounded rejection: a draw nested in or containing a chosen site is discarded, and the loop stops after a fixed number of draws so PRNG consumption stays bounded per call.
             var draws = 0
             while chosen.count < wanted, draws < wanted * 4 {
                 draws += 1
-                var remaining = prng.next(upperBound: totalWeight)
-                var pick = sites.count - 1
-                for (index, site) in sites.enumerated() {
-                    let weight = UInt64(site.range.count)
-                    if remaining < weight {
-                        pick = index
-                        break
-                    }
-                    remaining -= weight
+                guard let pick = weightedPick(
+                    from: sites.indices,
+                    weight: { UInt64(sites[$0].range.count) },
+                    prng: &prng
+                ) else {
+                    break
                 }
                 if chosen.contains(pick) { continue }
                 if sites[pick].containingSiteIndices.contains(where: { chosen.contains($0) }) { continue }
@@ -963,7 +946,6 @@ package extension FuzzMutator {
     ) -> ChoiceSequence? {
         // Fingerprint order is explicit rather than dictionary order so seeded runs replay identically across processes.
         var eligible: [(fingerprint: UInt64, recipients: [Int])] = []
-        var totalWeight: UInt64 = 0
         for fingerprint in targets.sortedFingerprints {
             guard let recipients = targets.graph.selfSimilarityGroups[fingerprint],
                   recipients.isEmpty == false,
@@ -973,21 +955,13 @@ package extension FuzzMutator {
                 continue
             }
             eligible.append((fingerprint: fingerprint, recipients: recipients))
-            totalWeight += UInt64(recipients.count)
         }
-        guard totalWeight > 0 else {
+        guard let chosen = weightedPick(
+            from: eligible,
+            weight: { UInt64($0.recipients.count) },
+            prng: &prng
+        ) else {
             return nil
-        }
-
-        var remaining = prng.next(upperBound: totalWeight)
-        var chosen = eligible[eligible.count - 1]
-        for entry in eligible {
-            let weight = UInt64(entry.recipients.count)
-            if remaining < weight {
-                chosen = entry
-                break
-            }
-            remaining -= weight
         }
 
         let targetNodeID = chosen.recipients[Int(prng.next(upperBound: UInt64(chosen.recipients.count)))]
@@ -1025,34 +999,45 @@ package extension FuzzMutator {
 
     // MARK: - Scope Selection
 
+    /// Draws one element from a collection in proportion to its weight, or nil when every weight is zero.
+    ///
+    /// The draw consumes one PRNG value regardless of the collection's size, so PRNG consumption stays fixed per call. On a floating-point tie at the last element the fallback returns it rather than nil.
+    private static func weightedPick<C: Collection>(
+        from collection: C,
+        weight: (C.Element) -> UInt64,
+        prng: inout Xoshiro256
+    ) -> C.Element? {
+        var totalWeight: UInt64 = 0
+        for element in collection {
+            totalWeight += weight(element)
+        }
+        guard totalWeight > 0 else {
+            return nil
+        }
+        var remaining = prng.next(upperBound: totalWeight)
+        var last: C.Element?
+        for element in collection {
+            let elementWeight = weight(element)
+            if remaining < elementWeight {
+                return element
+            }
+            remaining -= elementWeight
+            last = element
+        }
+        return last
+    }
+
     /// Picks one swap-eligible sibling group with `minimumSize` or more members, weighted by member count.
     private static func pickSwappableGroup(
         scopes: [PermutationScope],
         minimumSize: Int,
         prng: inout Xoshiro256
     ) -> [Int]? {
-        var totalWeight: UInt64 = 0
-        for scope in scopes {
-            for group in scope.swappableGroups where group.count >= minimumSize {
-                totalWeight += UInt64(group.count)
-            }
-        }
-        guard totalWeight > 0 else {
-            return nil
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        var last: [Int]?
-        for scope in scopes {
-            for group in scope.swappableGroups where group.count >= minimumSize {
-                let weight = UInt64(group.count)
-                if remaining < weight {
-                    return group
-                }
-                remaining -= weight
-                last = group
-            }
-        }
-        return last
+        weightedPick(
+            from: scopes.lazy.flatMap(\.swappableGroups).filter { $0.count >= minimumSize },
+            weight: { UInt64($0.count) },
+            prng: &prng
+        )
     }
 
     /// Picks one range group with two or more members, weighted by member count.
@@ -1060,24 +1045,11 @@ package extension FuzzMutator {
         _ groups: [[ClosedRange<Int>]],
         prng: inout Xoshiro256
     ) -> [ClosedRange<Int>]? {
-        var totalWeight: UInt64 = 0
-        for group in groups where group.count >= 2 {
-            totalWeight += UInt64(group.count)
-        }
-        guard totalWeight > 0 else {
-            return nil
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        var last: [ClosedRange<Int>]?
-        for group in groups where group.count >= 2 {
-            let weight = UInt64(group.count)
-            if remaining < weight {
-                return group
-            }
-            remaining -= weight
-            last = group
-        }
-        return last
+        weightedPick(
+            from: groups.lazy.filter { $0.count >= 2 },
+            weight: { UInt64($0.count) },
+            prng: &prng
+        )
     }
 
     /// Picks one tandem group with two or more leaves, weighted by leaf count.
@@ -1085,24 +1057,11 @@ package extension FuzzMutator {
         _ scope: TandemScope,
         prng: inout Xoshiro256
     ) -> TandemGroup? {
-        var totalWeight: UInt64 = 0
-        for group in scope.groups where group.leaves.count >= 2 {
-            totalWeight += UInt64(group.leaves.count)
-        }
-        guard totalWeight > 0 else {
-            return nil
-        }
-        var remaining = prng.next(upperBound: totalWeight)
-        var last: TandemGroup?
-        for group in scope.groups where group.leaves.count >= 2 {
-            let weight = UInt64(group.leaves.count)
-            if remaining < weight {
-                return group
-            }
-            remaining -= weight
-            last = group
-        }
-        return last
+        weightedPick(
+            from: scope.groups.lazy.filter { $0.leaves.count >= 2 },
+            weight: { UInt64($0.leaves.count) },
+            prng: &prng
+        )
     }
 
     /// Resolves a sibling group's node IDs to position ranges sorted by position, or nil when any member is inactive or extends past the candidate.
