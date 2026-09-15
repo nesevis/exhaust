@@ -155,7 +155,26 @@ package struct MutationTargets: Sendable {
 
         let removalScopes = RemovalQuery.elementRemovalScopes(graph: graph)
         deletableSequenceNodeIDs = removalScopes.compactMap { $0.targets.first?.sequenceNodeID }
+        (duplicableSequenceNodeIDs, copyableSequenceNodeIDs) = Self.buildSequenceNodeIDs(graph: graph)
+        (reseedSites, maximalReseedSiteIndices) = Self.buildReseedSites(graph: graph)
+        smallDomainSiteIndices = Self.buildSmallDomainSites(sites: reseedSites, sequence: flat)
+        transplantGroups = Self.buildTransplantGroups(graph: graph)
+        structuralArms = Self.buildStructuralArms(
+            permutationScopes: permutationScopes,
+            tandem: tandem,
+            twinSpanGroups: twinSpanGroups,
+            deletableSequenceNodeIDs: deletableSequenceNodeIDs,
+            duplicableSequenceNodeIDs: duplicableSequenceNodeIDs,
+            copyableSequenceNodeIDs: copyableSequenceNodeIDs,
+            reseedSites: reseedSites,
+            smallDomainSiteIndices: smallDomainSiteIndices,
+            transplantGroups: transplantGroups
+        )
+    }
 
+    // MARK: - Init Helpers
+
+    private static func buildSequenceNodeIDs(graph: ChoiceGraph) -> (duplicable: [Int], copyable: [Int]) {
         var duplicable: [Int] = []
         var copyable: [Int] = []
         for nodeID in graph.liveNodeIDs {
@@ -169,9 +188,10 @@ package struct MutationTargets: Sendable {
                 duplicable.append(nodeID)
             }
         }
-        duplicableSequenceNodeIDs = duplicable
-        copyableSequenceNodeIDs = copyable
+        return (duplicable, copyable)
+    }
 
+    private static func buildReseedSites(graph: ChoiceGraph) -> (sites: [ReseedSite], maximalIndices: [Int]) {
         var siteNodeIDs: [Int] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
@@ -208,19 +228,22 @@ package struct MutationTargets: Sendable {
                 maximal.append(index)
             }
         }
-        reseedSites = sites
-        maximalReseedSiteIndices = maximal
+        return (sites, maximal)
+    }
 
+    private static func buildSmallDomainSites(sites: [ReseedSite], sequence: ChoiceSequence) -> [Int] {
         var enumerable: [Int] = []
         for (index, site) in sites.enumerated() {
-            guard let position = Self.sitePosition(of: site, in: flat),
-                  case let .value(entry) = flat[position],
-                  let range = entry.validRange, Self.smallDomainSize(of: range) != nil
+            guard let position = sitePosition(of: site, in: sequence),
+                  case let .value(entry) = sequence[position],
+                  let range = entry.validRange, smallDomainSize(of: range) != nil
             else { continue }
             enumerable.append(index)
         }
-        smallDomainSiteIndices = enumerable
+        return enumerable
+    }
 
+    private static func buildTransplantGroups(graph: ChoiceGraph) -> [[Int]] {
         var sequencesByKey: [FuzzMutator.TwinKey: [Int]] = [:]
         var emptyUntagged: [Int] = []
         for nodeID in graph.liveNodeIDs {
@@ -244,49 +267,57 @@ package struct MutationTargets: Sendable {
             groups.append(members.sorted { start($0) < start($1) })
         }
         groups.sort { start($0[0]) < start($1[0]) }
-        transplantGroups = groups
+        return groups
+    }
 
-        structuralArms = .none
+    private static func buildStructuralArms(
+        permutationScopes: [PermutationScope],
+        tandem: TandemScope?,
+        twinSpanGroups: [[ClosedRange<Int>]],
+        deletableSequenceNodeIDs: [Int],
+        duplicableSequenceNodeIDs: [Int],
+        copyableSequenceNodeIDs: [Int],
+        reseedSites: [ReseedSite],
+        smallDomainSiteIndices: [Int],
+        transplantGroups: [[Int]]
+    ) -> MutationArmSet {
         var structural = MutationArmSet.none
-        if hasSwappableGroup(minimumSize: 2) {
+        let hasSwappable2 = permutationScopes.contains { scope in scope.swappableGroups.contains { $0.count >= 2 } }
+        if hasSwappable2 {
             structural.insert(.swap)
             structural.insert(.shuffle)
         }
-        if hasSwappableGroup(minimumSize: 3) {
+        if permutationScopes.contains(where: { scope in scope.swappableGroups.contains { $0.count >= 3 } }) {
             structural.insert(.move)
         }
-        if hasTandemGroup {
+        if let tandem, tandem.groups.contains(where: { $0.leaves.count >= 2 }) {
             structural.insert(.lockstepDelta)
         }
-        if hasTwinGroup {
+        if twinSpanGroups.contains(where: { $0.count >= 2 }) {
             structural.insert(.twinSplice)
         }
         if deletableSequenceNodeIDs.isEmpty == false {
             structural.insert(.elementDeletion)
-        }
-        if duplicable.isEmpty == false {
-            structural.insert(.elementDuplication)
-        }
-        if sites.isEmpty == false {
-            structural.insert(.valueReseed)
-        }
-        if enumerable.isEmpty == false {
-            structural.insert(.smallDomainEnumeration)
-        }
-        if deletableSequenceNodeIDs.isEmpty == false {
             structural.insert(.runDeletion)
         }
         if duplicableSequenceNodeIDs.isEmpty == false {
+            structural.insert(.elementDuplication)
             structural.insert(.runDuplication)
         }
-        if copyable.isEmpty == false {
+        if reseedSites.isEmpty == false {
+            structural.insert(.valueReseed)
+        }
+        if smallDomainSiteIndices.isEmpty == false {
+            structural.insert(.smallDomainEnumeration)
+        }
+        if copyableSequenceNodeIDs.isEmpty == false {
             structural.insert(.runCopy)
             structural.insert(.suffixReseed)
         }
         if transplantGroups.isEmpty == false {
             structural.insert(.elementTransplant)
         }
-        structuralArms = structural
+        return structural
     }
 }
 
