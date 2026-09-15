@@ -6,6 +6,9 @@ import Foundation
 
 /// Appends one JSON line per failing search candidate: provenance, parent and child sequences and rendered values, the structural diff between them, and what the failure gate and classification did with it.
 package struct FuzzFailureLineage {
+    /// Files are named by process ID, so all runners in this process must serialize file creation and the complete seek/write operation. An instance lock would not protect runners sharing the same file.
+    private static let appendLock = NSLock()
+
     /// What the runner knows about a failing candidate before the gate sees it.
     package struct Provenance {
         package let attemptIndex: Int
@@ -171,12 +174,14 @@ package struct FuzzFailureLineage {
 
     private func append(_ text: String) {
         guard let data = text.data(using: .utf8) else { return }
-        if let handle = FileHandle(forWritingAtPath: path) {
-            handle.seekToEndOfFile()
-            handle.write(data)
-            handle.closeFile()
-        } else {
-            FileManager.default.createFile(atPath: path, contents: data)
+        Self.appendLock.withLocking {
+            if let handle = FileHandle(forWritingAtPath: path) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                handle.closeFile()
+            } else {
+                FileManager.default.createFile(atPath: path, contents: data)
+            }
         }
     }
 }
