@@ -241,10 +241,10 @@ package extension TypeTag {
                     if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
                         Float16(bitPattern64: bitPattern64)
                     } else {
-                        Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
+                        Float16Emulation.Value(bitPattern64: bitPattern64)
                     }
             #else
-                case .float16: Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
+                case .float16: Float16Emulation.Value(bitPattern64: bitPattern64)
             #endif
             case .date: Int64(bitPattern64: bitPattern64)
             case .bits: UInt64(bitPattern64: bitPattern64)

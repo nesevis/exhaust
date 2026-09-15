@@ -116,6 +116,39 @@ package enum Float16Emulation {
         return sign * significand * pow(2.0, Double(exponentBits - exponentBias))
     }
 
+    // MARK: - BitPatternConvertible Value Type
+
+    /// Value type for non-ARM64 platforms where the `Float16` type is unavailable.
+    ///
+    /// Stores an order-preserving encoded bit pattern and round-trips it through ``BitPatternConvertible`` without loss. On ARM64, ``TypeTag/makeConvertible(bitPattern64:)`` returns a real `Float16` instead.
+    package struct Value: BitPatternConvertible, CustomStringConvertible, Hashable, Sendable {
+        private let encoded: UInt16
+
+        package static var tag: TypeTag {
+            .float16
+        }
+
+        package static var defaultScaling: SizeScaling<Value> {
+            .exponentialFrom(origin: Value(bitPattern64: Float16Emulation.encodedBitPattern(from: 0.0)))
+        }
+
+        package static var bitPatternRange: ClosedRange<UInt64> {
+            UInt64(UInt16.min) ... UInt64(UInt16.max)
+        }
+
+        package init(bitPattern64: UInt64) {
+            encoded = UInt16(truncatingIfNeeded: bitPattern64)
+        }
+
+        package var bitPattern64: UInt64 {
+            UInt64(encoded)
+        }
+
+        package var description: String {
+            Float16Emulation.doubleValue(fromEncoded: UInt64(encoded)).description
+        }
+    }
+
     private static func rawBitsFromDouble(_ value: Double) -> UInt16 {
         if value.isNaN {
             // Canonical NaN
