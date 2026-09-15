@@ -171,6 +171,7 @@ extension FuzzRunner {
                 convergence: record.convergence,
                 generation: record.generation,
                 phase: phase,
+                restoredRootPhase: record.rootPhase.flatMap(FuzzPhase.init(rawValue:)) ?? phase,
                 isBoundaryDerived: record.isBoundaryDerived,
                 propertyFailed: verdict.isFailure,
                 propertyDiscarded: verdict.isDiscard

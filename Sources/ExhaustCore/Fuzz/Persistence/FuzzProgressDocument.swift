@@ -117,6 +117,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var convergence: Double
         package var generation: Int
         package var phase: String
+        /// The phase of the root this entry descends from. Absent in records written before it was kept; restore then falls back to the entry's own phase.
+        package var rootPhase: String?
         package var isBoundaryDerived: Bool
         package var propertyFailed: Bool
         /// Whether the property discarded this entry. Provenance only, like ``propertyFailed``: restore takes both from its own evaluation.
@@ -129,6 +131,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             convergence = entry.convergence
             generation = entry.generation
             phase = entry.phase.rawValue
+            rootPhase = entry.rootPhase.rawValue
             isBoundaryDerived = entry.isBoundaryDerived
             propertyFailed = entry.propertyFailed
             propertyDiscarded = entry.propertyDiscarded

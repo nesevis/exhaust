@@ -475,10 +475,13 @@ struct FuzzRunnerTests {
         let ramp = Int(FuzzTunables.freshMixtureAdaptiveWindow)
         // Before a window of observations the rates are not evidence: the floor, not starvation.
         #expect(runner.currentFreshMixture(attemptsSinceAdmission: 0) == floor)
+        // Attempts outside the mutation phase are not the mixture's evidence.
+        runner.noteMixtureOutcome(phase: .sampling, origin: .freshSample, admitted: true)
+        #expect(runner.mixtureObservations == 0)
         // A mutator that admits one child in every hundred and a generator that never admits: the share sits at the floor.
         for attempt in 0 ..< ramp * 4 {
-            runner.noteMixtureOutcome(origin: .mutationChild, admitted: attempt % 100 == 0)
-            runner.noteMixtureOutcome(origin: .freshSample, admitted: false)
+            runner.noteMixtureOutcome(phase: .mutation, origin: .mutationChild, admitted: attempt % 100 == 0)
+            runner.noteMixtureOutcome(phase: .mutation, origin: .freshSample, admitted: false)
         }
         #expect(runner.mutationAdmissionRate > runner.freshAdmissionRate)
         // The rule is computed from the same rates the runner keeps, so the expectation does not depend on the env flag.
@@ -487,14 +490,14 @@ struct FuzzRunnerTests {
         #expect(runner.mixtureObservations >= ramp)
         // Both producers silent for several ramps: the rates decay below one admission per ramp, the starvation case.
         for _ in 0 ..< ramp * 20 {
-            runner.noteMixtureOutcome(origin: .mutationChild, admitted: false)
-            runner.noteMixtureOutcome(origin: .freshSample, admitted: false)
+            runner.noteMixtureOutcome(phase: .mutation, origin: .mutationChild, admitted: false)
+            runner.noteMixtureOutcome(phase: .mutation, origin: .freshSample, admitted: false)
         }
         #expect(runner.freshAdmissionRate + runner.mutationAdmissionRate < 1 / Double(ramp))
         // A generator that admits where the mutator does not: the share rises with its portion.
         for attempt in 0 ..< ramp * 4 {
-            runner.noteMixtureOutcome(origin: .freshSample, admitted: attempt % 50 == 0)
-            runner.noteMixtureOutcome(origin: .mutationChild, admitted: attempt % 400 == 0)
+            runner.noteMixtureOutcome(phase: .mutation, origin: .freshSample, admitted: attempt % 50 == 0)
+            runner.noteMixtureOutcome(phase: .mutation, origin: .mutationChild, admitted: attempt % 400 == 0)
         }
         let generatorShare = runner.freshAdmissionRate / (runner.freshAdmissionRate + runner.mutationAdmissionRate)
         #expect(generatorShare > 0.8)

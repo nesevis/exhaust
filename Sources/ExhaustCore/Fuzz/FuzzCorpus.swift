@@ -399,6 +399,8 @@ package final class FuzzCorpus {
     ///   - hits: The (edge, hit count) pairs from the candidate's attributed evaluation.
     ///   - convergence: The materializer's convergence ratio; routes the entry to a tier.
     ///   - generation: Mutation distance from a phase-1/2 root.
+    ///   - parentIndex: The corpus index of the parent a mutation child came from, so the child inherits its root phase; nil for a root.
+    ///   - restoredRootPhase: The root phase a checkpoint recorded for this entry, which restore passes because the parent it descended from is not re-offered under its old index. Nil everywhere else.
     ///   - phase: The phase offering the candidate.
     ///   - isBoundaryDerived: Whether the candidate came from the covering array's boundary catalogs. Grants admission even without coverage novelty (phases 1 and 2 only; the mutation phase never sets this).
     ///   - propertyFailed: Whether the property failed on this candidate, recorded for report-time discrimination.
@@ -434,6 +436,7 @@ package final class FuzzCorpus {
         generation: Int,
         phase: FuzzPhase,
         parentIndex: Int? = nil,
+        restoredRootPhase: FuzzPhase? = nil,
         isBoundaryDerived: Bool = false,
         propertyFailed: Bool = false,
         propertyDiscarded: Bool = false,
@@ -499,7 +502,7 @@ package final class FuzzCorpus {
             convergence: convergence,
             generation: generation,
             phase: phase,
-            rootPhase: parentIndex.map { entries[$0].rootPhase } ?? phase,
+            rootPhase: restoredRootPhase ?? parentIndex.map { entries[$0].rootPhase } ?? phase,
             propertyFailed: propertyFailed,
             propertyDiscarded: propertyDiscarded,
             hash: hash,

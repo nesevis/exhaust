@@ -719,8 +719,11 @@ package final class FuzzRunner<Output> {
         return floor + (cap - floor) * progress
     }
 
-    /// Feeds one mutation-phase attempt's outcome into the producer admission rates behind the adaptive mixture.
-    package func noteMixtureOutcome(origin: CandidateOrigin, admitted: Bool) {
+    /// Feeds one attempt's outcome into the producer admission rates behind the adaptive mixture. Only mutation-phase attempts count, and every one of them does: a duplicate skipped before the property, a child the materialiser rejected, and an evaluated candidate all cost their producer an attempt, so each is a zero-admission observation unless the candidate entered the mutable tier.
+    package func noteMixtureOutcome(phase: FuzzPhase, origin: CandidateOrigin, admitted: Bool) {
+        guard phase == .mutation else {
+            return
+        }
         mixtureObservations += 1
         let rate = 1 / FuzzTunables.freshMixtureAdaptiveWindow
         let observation = admitted ? 1.0 : 0.0
@@ -752,6 +755,7 @@ package final class FuzzRunner<Output> {
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.attempts.record(.mutation, origin, .rejectedByMaterializer)
+            noteMixtureOutcome(phase: .mutation, origin: origin, admitted: false)
             return nil
         }
         return FuzzCandidate(
@@ -780,6 +784,7 @@ package final class FuzzRunner<Output> {
         // Screening rows are distinct by construction and are never entered in the recent-hash table, as in #exhaust.
         if candidate.origin != .screeningRow, isRecentDuplicate(hash: candidate.hash) {
             counts.attempts.record(candidate.phase, candidate.origin, .duplicate)
+            noteMixtureOutcome(phase: candidate.phase, origin: candidate.origin, admitted: false)
             return FuzzEvaluation(admission: .rejectedDuplicate, verdict: nil)
         }
         let (verdict, hits) = evaluateInBracket(
@@ -810,6 +815,7 @@ package final class FuzzRunner<Output> {
                 guard let rebuilt = rebuildTree(for: candidate.sequence) else {
                     // The property ran, so the attempt is recorded with its verdict. The candidate is not offered, since admission would store the placeholder tree, but a failure is still dispatched and held unreduced rather than lost.
                     counts.attempts.record(candidate.phase, candidate.origin, FuzzAttemptOutcome(verdict))
+                    noteMixtureOutcome(phase: candidate.phase, origin: candidate.origin, admitted: false)
                     if verdict.isFailure {
                         handleFailure(
                             EvaluatedFuzzCandidate(
@@ -843,14 +849,12 @@ package final class FuzzRunner<Output> {
             verdict: verdict,
             hits: hits
         )
-        if candidate.phase == .mutation {
-            // Mutable-tier admissions only: a discovery-tier entry never becomes a parent, and fresh draws land there often enough on a saturated corpus that counting them would keep the generator's share high where its draws grow nothing the search can use.
-            var seededParent = false
-            if case .admitted(_, .mutable) = admission {
-                seededParent = true
-            }
-            noteMixtureOutcome(origin: candidate.origin, admitted: seededParent)
+        // Mutable-tier admissions only: a discovery-tier entry never becomes a parent, and fresh draws land there often enough on a saturated corpus that counting them would keep the generator's share high where its draws grow nothing the search can use.
+        var seededParent = false
+        if case .admitted(_, .mutable) = admission {
+            seededParent = true
         }
+        noteMixtureOutcome(phase: candidate.phase, origin: candidate.origin, admitted: seededParent)
         // A provenance the gate did not consume must not attach to a later failure from outside the loop.
         pendingLineage = nil
         // Credit every arm in the mask, whatever the verdict: the bandit only learns from admissions, but the report has to be able to say what an arm spent its attempts on, including the discards an admission-only tally never sees.
