@@ -62,6 +62,7 @@ extension Generator where Operation == ReflectiveOperation {
                     case .none: break
                     case .some(.linear): suffix += " [linear]"
                     case .some(.exponential): suffix += " [exponential]"
+                    case .some(.size): suffix += " [size]"
                 }
                 return "chooseBits(\(tag.description): \(range))\(suffix)"
 

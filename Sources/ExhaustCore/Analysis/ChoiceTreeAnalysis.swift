@@ -243,6 +243,7 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [ScreeningParameter]
     ) -> Bool {
         // `isRangeExplicit: false` is accepted because ``analyze(_:)`` runs VACTI with `sizeOverride: 100`, at which point the stored range from a size-scaled `chooseDerived` equals the user-declared range.
+        if metadata.isPinnedToSize { return true }
         guard let range = metadata.validRange else {
             return false
         }
@@ -562,6 +563,7 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [ScreeningParameter]
     ) -> Bool {
         // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
+        if metadata.isPinnedToSize { return true }
         guard let range = metadata.validRange else {
             return false
         }

@@ -226,7 +226,8 @@ package enum CGSDerivativeInterpreter {
                 min: min, max: max, tag: tag, scaling: $0, size: size
             )
         } ?? (min ... max)
-        let rawBits = rng.next(in: effective)
+        // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
+        let rawBits = scaling?.isPinnedToSize == true ? effective.lowerBound : rng.next(in: effective)
         let randomBits = tag.isFloatingPoint
             ? tag.linearlyDistributed(rawBits: rawBits, in: effective)
             : rawBits

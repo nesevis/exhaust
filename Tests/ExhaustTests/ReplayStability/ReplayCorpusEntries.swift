@@ -168,6 +168,7 @@ private let combinatorEntries: [ReplayCorpusEntry] = [
         integer
     ),
     sampling("resize", .int(in: 0 ... 1000, scaling: .linear).resize(10), integer),
+    sampling("getSize", .getSize { size in .uint64(in: 0 ... size) }, integer),
     sampling("lazy", .lazy { .int(in: 0 ... 9) }, integer),
     sampling(
         "backtrack.always",

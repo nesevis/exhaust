@@ -16,13 +16,22 @@ public extension ReflectiveGenerator {
     /// }
     /// ```
     ///
-    /// - Parameter forward: A closure that receives the current size and returns the generator to run.
+    /// The size a counterexample was generated with is part of the counterexample: during reduction Exhaust can lower it, so the closure may run with a smaller size than any the test itself reached. A size set by ``resize(_:)`` reaches the closure clamped to 1 through 100.
+    ///
+    /// `forward` runs once per distinct size and the generator it returns is reused, so it must be pure: for equal sizes it must return structurally identical generators, or replay and reduction lose determinism.
+    ///
+    /// - Parameter forward: A pure closure that receives the current size and returns the generator to run.
     /// - Returns: A generator that produces the result of the size-dependent generator.
     static func getSize(
-        _ forward: @Sendable @escaping (UInt64) -> ReflectiveGenerator<Output>
+        _ forward: @Sendable @escaping (UInt64) -> ReflectiveGenerator<Output>,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
         // The forward closure runs at generation time and cannot be inspected here; reflection still rejects a value the produced generator cannot decompose.
-        Gen.getSize { size in
+        Gen.reducibleGetSize(
+            fingerprint: Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        ) { size in
             forward(size).gen
         }.wrapped(isReflective: true)
     }

@@ -29,6 +29,45 @@ package extension Gen {
         rawGetSize()._bound(forward: forward, backward: { _ in 100 })
     }
 
+    /// The declared range of a reducible size choice. Generation pins the value to the current size; the reducer may lower it anywhere in this range.
+    static let reducibleSizeRange: ClosedRange<UInt64> = 1 ... 100
+
+    /// Draws the current size as a reducible choice and feeds it into a generator-producing closure.
+    ///
+    /// Unlike ``getSize(_:)``, whose ``ReflectiveOperation/getSize`` leaf contributes no choice-sequence entry and whose bind the ``ChoiceGraphBuilder`` treats as transparent, this form emits a `chooseBits` pinned to the size (``ChooseBitsScaling/size``) under a reified bind. The size therefore appears in the ``ChoiceSequence`` with ``reducibleSizeRange`` as its valid range, so value encoders and bound-value search can lower it during reduction. The materializer resolves it like any other choice: the declared range admits every proposal, and `.generate` mode pins to the active size exactly as a raw read would.
+    ///
+    /// The pinned draw consumes no PRNG output and the choice is invisible to screening, so replay seeds and screening rows match the non-reified form. Dependent generators are built once per distinct size through ``BuiltGeneratorTable``.
+    ///
+    /// - Parameters:
+    ///   - fingerprint: The bind's source fingerprint, so distinct call sites classify separately in the ``ChoiceGraph``.
+    ///   - forward: A pure closure that receives the current size and returns a generator.
+    /// - Returns: A generator that produces the result of the size-dependent inner generator.
+    static func reducibleGetSize<Output>(
+        fingerprint: UInt64,
+        _ forward: @escaping (UInt64) -> Generator<Output>
+    ) -> Generator<Output> {
+        let built = BuiltGeneratorTable<UInt64>()
+        let sizeChoice: Generator<UInt64> = choose(
+            in: reducibleSizeRange,
+            type: UInt64.self,
+            isRangeExplicit: true,
+            scaling: .size
+        )
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { input in
+                    let size = input as! UInt64
+                    return built.generator(for: size) { forward(size).erase() }
+                },
+                backward: { _ in reducibleSizeRange.upperBound as Any },
+                inputType: UInt64.self,
+                outputType: Output.self
+            ),
+            inner: sizeChoice.erase()
+        ))
+    }
+
     /// Retrieves the current size parameter without reifying the dependent bind.
     ///
     /// Use this on internal hot paths whose structural operations already expose the dependency, such as size-dependent sequence lengths. The contramap supplies size 100 during reflection, allowing the downstream generator to expose its full range without adding a ``ReflectiveOperation/transform(kind:inner:)`` bind node.

@@ -186,9 +186,6 @@ package extension Gen {
         scaling: ChooseBitsScaling,
         size: UInt64
     ) -> ClosedRange<UInt64> {
-        let fraction = Swift.min(Double(size) / 100.0, 1.0)
-        guard fraction < 1.0 else { return min ... max }
-
         let origin: UInt64?
         let isExponential: Bool
         switch scaling {
@@ -198,7 +195,14 @@ package extension Gen {
             case let .exponential(o):
                 origin = o
                 isExponential = true
+            case .size:
+                // A pinned size collapses the range at every size, including 100, so it never reaches the full-size early return below.
+                let pinned = Swift.min(Swift.max(size, min), max)
+                return pinned ... pinned
         }
+
+        let fraction = Swift.min(Double(size) / 100.0, 1.0)
+        guard fraction < 1.0 else { return min ... max }
 
         if tag.isFloatingPoint {
             return applyFloatingPointScaling(

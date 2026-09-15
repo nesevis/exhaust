@@ -160,10 +160,12 @@ extension Materializer {
                     effective = Gen.applyScaling(
                         min: min, max: max, tag: tag, scaling: scaling, size: size
                     )
+                    // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
+                    randomBits = scaling.isPinnedToSize ? effective.lowerBound : context.prng.next(in: effective)
                 } else {
                     effective = min ... max
+                    randomBits = context.prng.next(in: effective)
                 }
-                randomBits = context.prng.next(in: effective)
 
             case .minimize:
                 let placeholder = ChoiceValue(min, tag: tag)
@@ -182,7 +184,12 @@ extension Materializer {
             ? .just
             : .choice(
                 reusedChoice ?? ChoiceValue(randomBits, tag: tag),
-                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
+                .init(
+                    validRange: min ... max,
+                    isRangeExplicit: isRangeExplicit,
+                    typeTagPayload: typeTagPayload,
+                    isPinnedToSize: scaling?.isPinnedToSize == true
+                )
             )
         return (randomBits, choiceTree, calleeStart)
     }

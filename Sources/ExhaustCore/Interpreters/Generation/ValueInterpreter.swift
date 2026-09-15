@@ -223,15 +223,18 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
         let effectiveRange: ClosedRange<UInt64>
+        let rawBits: UInt64
         if let scaling {
             let size = SharedInterpreterHelpers.currentSize(&context)
             effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
+            // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
+            rawBits = scaling.isPinnedToSize ? effectiveRange.lowerBound : context.prng.next(in: effectiveRange)
         } else {
             effectiveRange = min ... max
+            rawBits = context.prng.next(in: effectiveRange)
         }
-        let rawBits = context.prng.next(in: effectiveRange)
         let randomBits: Any = tag.isFloatingPoint
             ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
             : rawBits
