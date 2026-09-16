@@ -106,14 +106,4 @@ struct ReducibleGetSizeTests {
             #expect(materialized.value == replayed)
         }
     }
-
-    @Test("Resize above the declared range clamps the pinned size")
-    func resizeClampsPinnedSize() throws {
-        let generator = ReflectiveGenerator<UInt64>.getSize { size in
-            .just(size)
-        }.resize(500)
-        var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 7)
-        let (value, _) = try #require(try interpreter.next())
-        #expect(value == Gen.reducibleSizeRange.upperBound)
-    }
 }
