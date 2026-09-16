@@ -148,7 +148,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
             case let .impure(operation: .chooseBits(min, max, tag, _, scaling, _), continuation):
                 return try handleChooseBits(
-                    min: min, max: max, tag: tag, scaling: scaling,
+                    min: min,
+                    max: max,
+                    tag: tag,
+                    scaling: scaling,
                     continuation: continuation, context: &context
                 )
 
@@ -222,19 +225,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         scaling: ChooseBitsScaling?,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        let effectiveRange: ClosedRange<UInt64>
-        let rawBits: UInt64
-        if let scaling {
-            let size = SharedInterpreterHelpers.currentSize(&context)
-            effectiveRange = Gen.applyScaling(
-                min: min, max: max, tag: tag, scaling: scaling, size: size
+        let effectiveRange = scaling.map { scaling in
+            Gen.applyScaling(
+                min: min,
+                max: max,
+                tag: tag,
+                scaling: scaling,
+                size: SharedInterpreterHelpers.currentSize(&context)
             )
-            // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
-            rawBits = scaling.isPinnedToSize ? effectiveRange.lowerBound : context.prng.next(in: effectiveRange)
-        } else {
-            effectiveRange = min ... max
-            rawBits = context.prng.next(in: effectiveRange)
-        }
+        } ?? (min ... max)
+        // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
+        let rawBits = scaling?.isPinnedToSize == true
+            ? effectiveRange.lowerBound
+            : context.prng.next(in: effectiveRange)
         let randomBits: Any = tag.isFloatingPoint
             ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
             : rawBits

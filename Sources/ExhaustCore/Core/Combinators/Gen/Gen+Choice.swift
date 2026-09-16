@@ -202,7 +202,9 @@ package extension Gen {
         }
 
         let fraction = Swift.min(Double(size) / 100.0, 1.0)
-        guard fraction < 1.0 else { return min ... max }
+        guard fraction < 1.0 else {
+            return min ... max
+        }
 
         if tag.isFloatingPoint {
             return applyFloatingPointScaling(

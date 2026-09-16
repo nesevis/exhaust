@@ -23,7 +23,9 @@ struct StateMachineRunContext<Spec: StateMachineSpecBase> {
             FuzzTunables.specReductionDeadlineNanoseconds,
             UInt64(config.budget.samplingBudget) * 5 * 1_000_000
         )
-        guard let deadline = config.deadlineNanoseconds else { return ceiling }
+        guard let deadline = config.deadlineNanoseconds else {
+            return ceiling
+        }
         let now = monotonicNanoseconds()
         // Zero disables the reducer's limit, so an expired deadline must use the smallest nonzero budget.
         return min(ceiling, deadline > now ? deadline - now : 1)

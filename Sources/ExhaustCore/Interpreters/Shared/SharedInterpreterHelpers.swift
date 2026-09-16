@@ -132,7 +132,9 @@ package enum SharedInterpreterHelpers {
         innerContinuation: @escaping (Any) throws -> AnyGenerator = { .pure($0) }
     ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
         // A pinned size is a context read, not a distribution: a bucket would clamp the size the dependent generator sees.
-        if scaling?.isPinnedToSize == true { return nil }
+        guard scaling?.isPinnedToSize != true else {
+            return nil
+        }
         let rangeSize = (lower ... upper).saturatingCount
         guard rangeSize > 4 else { return nil }
 

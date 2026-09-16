@@ -40,7 +40,7 @@ package extension __ExhaustRuntime {
         /// The absolute monotonic deadline resolved from `.deadline`, or nil for the usual iteration budget.
         var deadlineNanoseconds: UInt64?
 
-        var deadlineExceeded: Bool {
+        var hasExceededDeadline: Bool {
             deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
         }
 
@@ -269,7 +269,9 @@ package extension __ExhaustRuntime {
                 {
                     let generateStart = monotonicNanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
-                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
+                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                        break
+                    }
                     let generateEnd = monotonicNanoseconds()
                     result.iterations += 1
 
@@ -325,7 +327,9 @@ package extension __ExhaustRuntime {
                       deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
                 {
                     guard let next = try interpreter.nextValueOnly() else { break }
-                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
+                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                        break
+                    }
                     result.iterations += 1
 
                     if property(next) == false {
@@ -372,8 +376,10 @@ package extension __ExhaustRuntime {
         let skipsBefore = context.skipCount
 
         do {
-            while context.deadlineExceeded == false, let next = try interpreter.nextValueOnly() {
-                if context.deadlineExceeded { break }
+            while context.hasExceededDeadline == false, let next = try interpreter.nextValueOnly() {
+                guard context.hasExceededDeadline == false else {
+                    break
+                }
                 iterations += 1
                 if context.property(next) == false {
                     // Sampling outcomes are recorded before reduction runs so reduction-phase skips stay out of the sampling delta.

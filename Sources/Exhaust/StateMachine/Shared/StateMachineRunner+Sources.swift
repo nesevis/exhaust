@@ -90,7 +90,9 @@ extension __ExhaustRuntime {
         onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil
     ) -> [AnyStateMachineCandidateSource<Spec>] {
         var sources: [AnyStateMachineCandidateSource<Spec>] = []
-        if config.deadlineExceeded { return sources }
+        guard config.hasExceededDeadline == false else {
+            return sources
+        }
         let leadingFactors = setupScreeningFactors(for: Spec.self)
 
         if let screeningReplay = config.screeningReplay {

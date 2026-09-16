@@ -361,7 +361,7 @@ public extension __ExhaustRuntime {
             var ledger = RunLedger()
             defer {
                 report.applyLedger(ledger)
-                report.deadlineExceeded = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+                report.hasExceededDeadline = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
                 onReportClosure?(report)
             }
 
@@ -419,7 +419,9 @@ public extension __ExhaustRuntime {
                 deadlineNanoseconds: deadlineNanoseconds
             )
 
-            if context.deadlineExceeded { return (nil, nil) }
+            guard context.hasExceededDeadline == false else {
+                return (nil, nil)
+            }
 
             if let reflecting {
                 do {
@@ -519,7 +521,7 @@ public extension __ExhaustRuntime {
             report.screeningMilliseconds = Double(screeningPhaseEndTime - phaseTimingStart) / 1_000_000
             report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
 
-            if samplingResult == nil, context.deadlineExceeded == false {
+            if samplingResult == nil, context.hasExceededDeadline == false {
                 report.generationMilliseconds = Double(endTime - screeningPhaseEndTime) / 1_000_000
                 let totalPropertyCalls = report.propertyInvocations
                 var passMetadata = [

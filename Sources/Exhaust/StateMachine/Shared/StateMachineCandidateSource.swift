@@ -190,14 +190,18 @@ extension AnyStateMachineCandidateSource {
                         provenance: .screening(coveringSeed: coveringSeed, tierLength: tierLength, rowInTier: rowInTier)
                     )
                 case let .completed(screeningInvocations):
-                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
+                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                        return nil
+                    }
                     // Reaching the row costs exactly row + 1 iterations in a tier-skipping replay, so fewer means the tier's row stream ended first. Returning nil would let a stale regression pin pass as if the failure were fixed.
                     if screeningInvocations < row + 1 {
                         throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: screeningInvocations)
                     }
                     return nil
                 case .skipped:
-                    if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
+                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                        return nil
+                    }
                     throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: 0)
             }
         }
@@ -226,7 +230,9 @@ extension AnyStateMachineCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
-            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
+            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                return nil
+            }
             guard property(value) == false else {
                 return nil
             }
@@ -252,7 +258,9 @@ extension AnyStateMachineCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
-            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
+            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                return nil
+            }
             guard property(value) == false else {
                 return nil
             }
@@ -331,7 +339,9 @@ extension AnyStateMachineCandidateSource {
             while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
                   let value = try interpreter.nextValueOnly()
             {
-                if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return nil }
+                guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                    return nil
+                }
                 iteration += 1
                 if property(value) == false {
                     let tree = try interpreter.reproduceFailureTree()

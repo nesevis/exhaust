@@ -514,7 +514,7 @@ All settings are passed as variadic arguments to `#execute`:
 | `.commandLimit(N)` | auto-estimated (10 with an `@Equivalence`) | Maximum commands per generated sequence. Estimated from the command domain and screening budget. `mode: .tasks` caps the estimate at 40, and a spec that declares an `@Equivalence` gets a flat 10 under either concurrent mode. |
 | `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
 | `.budget(.thorough)` | `.standard` | Controls screening rows and random sampling iterations. |
-| `.deadline(.seconds(30))` | none | Shares a time limit across regression replays, screening, sampling, and reduction in every mode. In-flight sequences and failure reporting can finish after the deadline. `ExhaustReport.deadlineExceeded` records when it was reached. |
+| `.deadline(.seconds(30))` | none | Shares a time limit across regression replays, screening, sampling, and reduction in every mode. In-flight sequences and failure reporting can finish after the deadline. `ExhaustReport.hasExceededDeadline` records when it was reached. |
 | `.idleTimeout(.seconds(2))` | `.seconds(2)` | Wall-clock bound on a stalled probe: a drain-loop stall under `mode: .tasks`, a wedged lane or a deadlocked system under test under `mode: .threads`. A timed-out probe counts as a pass; the run warns once a quarter of probes time out. `.zero` disables. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |

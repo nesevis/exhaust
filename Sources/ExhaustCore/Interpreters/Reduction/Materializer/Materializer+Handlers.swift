@@ -154,18 +154,19 @@ extension Materializer {
 
             case .generate:
                 // Fresh generation honors scaling; replay / guided / minimize operate on the declared range so they can reconstruct or target specific bit patterns without being re-narrowed.
-                let effective: ClosedRange<UInt64>
-                if let scaling {
-                    let size = Materializer.currentSize(&context)
-                    effective = Gen.applyScaling(
-                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                let effective = scaling.map { scaling in
+                    Gen.applyScaling(
+                        min: min,
+                        max: max,
+                        tag: tag,
+                        scaling: scaling,
+                        size: Materializer.currentSize(&context)
                     )
-                    // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
-                    randomBits = scaling.isPinnedToSize ? effective.lowerBound : context.prng.next(in: effective)
-                } else {
-                    effective = min ... max
-                    randomBits = context.prng.next(in: effective)
-                }
+                } ?? (min ... max)
+                // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
+                randomBits = scaling?.isPinnedToSize == true
+                    ? effective.lowerBound
+                    : context.prng.next(in: effective)
 
             case .minimize:
                 let placeholder = ChoiceValue(min, tag: tag)

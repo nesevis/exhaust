@@ -52,7 +52,9 @@ extension StateMachineBackend {
         _ candidate: SpecCandidateValue<Spec>,
         context: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
-        if context.config.deadlineExceeded { return .timeout }
+        guard context.config.hasExceededDeadline == false else {
+            return .timeout
+        }
         context.invocationCounter.value += 1
         return probe(candidate, context: context)
     }

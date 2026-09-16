@@ -44,11 +44,15 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         nonisolated(unsafe) let capturedContext = context
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.StateMachineProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
             // One increment per candidate, covering all confirmation repetitions. This site cannot go through countedProbe because it calls inner.execute directly to carry evidence and repetitions.
-            if capturedContext.config.deadlineExceeded { return .abort }
+            guard capturedContext.config.hasExceededDeadline == false else {
+                return .abort
+            }
             capturedContext.invocationCounter.value += 1
             let partition = LanePartition(markers: commands.map(\.0))
             for _ in 0 ..< repetitions {
-                if capturedContext.config.deadlineExceeded { return .abort }
+                guard capturedContext.config.hasExceededDeadline == false else {
+                    return .abort
+                }
                 let outcome = inner.execute(commands, setupStep: setupStep, partition: partition)
                 if case .timedOut = outcome {
                     // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the failure as-is rather than reducing toward a hang.

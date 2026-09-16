@@ -133,7 +133,9 @@ extension __ExhaustRuntime {
         property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
     ) -> ConcurrentTwoPassResult<Value, Evidence> {
         func remainingBudget() -> UInt64 {
-            guard let deadline = runDeadlineNanoseconds else { return deadlineNanoseconds }
+            guard let deadline = runDeadlineNanoseconds else {
+                return deadlineNanoseconds
+            }
             let now = monotonicNanoseconds()
             let remaining = deadline > now ? deadline - now : 1
             return deadlineNanoseconds == 0 ? remaining : min(deadlineNanoseconds, remaining)

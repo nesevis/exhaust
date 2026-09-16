@@ -71,7 +71,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     /// Advances to the next source, returning `.candidateFound` on the first failure or `.sourceExhausted` when all sources pass or error.
     private mutating func stepPullSource() -> Transition {
-        guard context.config.deadlineExceeded == false, sourceIndex < sources.count else {
+        guard context.config.hasExceededDeadline == false, sourceIndex < sources.count else {
             phase = .finalize
             return stepFinalize() ?? .sourceExhausted
         }
@@ -165,7 +165,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         let setupStep = candidate.value.setupStep
         reducedSetupStep = setupStep
 
-        if context.config.deadlineExceeded {
+        guard context.config.hasExceededDeadline == false else {
             reduction = StateMachineReduction(finalInput: candidate.value.taggedCommands, stats: nil, timedOut: true)
             phase = .recordStats
             return .pruned
@@ -217,7 +217,9 @@ struct SpecMachine<Backend: StateMachineBackend> {
         commandTree: ChoiceTree,
         seed: UInt64
     ) -> (value: [(ScheduleMarker, Backend.Spec.Command)], tree: ChoiceTree) {
-        if context.config.deadlineExceeded { return (taggedCommands, commandTree) }
+        guard context.config.hasExceededDeadline == false else {
+            return (taggedCommands, commandTree)
+        }
         nonisolated(unsafe) let unsafeBackend = backend
         nonisolated(unsafe) let capturedContext = context
         return __ExhaustRuntime.pruneSkippedCommands(
@@ -226,7 +228,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             generator: context.state.sequenceGen,
             seed: seed,
             property: { commands in
-                capturedContext.config.deadlineExceeded || unsafeBackend.countedProbe(
+                capturedContext.config.hasExceededDeadline || unsafeBackend.countedProbe(
                     SpecCandidateValue(setupStep: setupStep, taggedCommands: commands),
                     context: capturedContext
                 ) != .fail
@@ -250,7 +252,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             phase = .pullSource
             return .sourceExhausted
         }
-        if context.config.deadlineExceeded {
+        guard context.config.hasExceededDeadline == false else {
             phase = .reduce
             return .setupReduced
         }
@@ -312,7 +314,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             return .sourceExhausted
         }
 
-        reduction = context.config.deadlineExceeded
+        reduction = context.config.hasExceededDeadline
             ? StateMachineReduction(finalInput: reductionInput.taggedCommands, stats: nil, timedOut: true)
             : backend.reduce(
                 setupStep: reducedSetupStep,
@@ -342,7 +344,9 @@ struct SpecMachine<Backend: StateMachineBackend> {
             }
             context.state.report.applyReductionStats(mergedStats)
         }
-        if context.config.deadlineExceeded { context.state.report.reductionWasCapped = true }
+        if context.config.hasExceededDeadline {
+            context.state.report.reductionWasCapped = true
+        }
 
         phase = .assemble
         return .statsRecorded
@@ -383,7 +387,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
     @discardableResult
     private mutating func stepFinalize() -> Transition? {
         context.state.report.applyLedger(context.state.ledger)
-        context.state.report.deadlineExceeded = context.config.deadlineExceeded
+        context.state.report.hasExceededDeadline = context.config.hasExceededDeadline
         if let onReport = context.config.onReportClosure {
             context.state.report.seed = reportedSeed
             context.state.report.totalMilliseconds = context.state.runStopwatch.elapsedMilliseconds
@@ -521,7 +525,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource, onFilterLosses: accumulateFilterLosses)
         deferredIssues.append(contentsOf: issues)
         // A passing run that never executed a command sequence asserts nothing. Checked against the shared invocation counter so a regression replay that did execute counts.
-        if result == nil, issues.isEmpty, invocationCounter.value == 0, config.deadlineExceeded == false {
+        if result == nil, issues.isEmpty, invocationCounter.value == 0, config.hasExceededDeadline == false {
             deferredIssues.append("The spec was never executed: the screening and sampling budgets are both zero, so this test asserts nothing.")
         }
         // Filter losses are legitimate domain narrowing: a warning, never an error. A found failure supersedes the coverage concern, so a red run reports one issue, not two: a reproduced regression failure returns above without the warning, and a sampling failure gates it here.

@@ -46,7 +46,7 @@ package extension __ExhaustRuntime {
                 reducerConfig.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
             }
             reducerConfig.visualize = context.visualize
-            let reduceResult = try context.deadlineExceeded ? nil : Interpreters.choiceGraphReduceCollectingStats(
+            let reduceResult = try context.hasExceededDeadline ? nil : Interpreters.choiceGraphReduceCollectingStats(
                 gen: context.gen,
                 tree: tree,
                 output: value,
@@ -230,8 +230,8 @@ package extension __ExhaustRuntime {
             reducerConfig.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
         }
         reducerConfig.visualize = visualize
-        let deadlineExceeded = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
-        let reduceResult = try deadlineExceeded ? nil : Interpreters.choiceGraphReduceCollectingStats(
+        let hasExceededDeadline = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+        let reduceResult = try hasExceededDeadline ? nil : Interpreters.choiceGraphReduceCollectingStats(
             gen: gen,
             tree: tree,
             output: value,

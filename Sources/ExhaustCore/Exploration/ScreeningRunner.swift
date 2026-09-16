@@ -210,7 +210,9 @@ package enum ScreeningRunner {
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
-        if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { return .notApplicable }
+        guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            return .notApplicable
+        }
         guard let plan = plan(gen, screeningBudget: screeningBudget) else {
             return .notApplicable
         }
@@ -230,7 +232,7 @@ package enum ScreeningRunner {
                 summary.rejectedRows += 1
                 continue
             }
-            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false {
+            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
                 summary.rejectedRows += 1
                 break
             }

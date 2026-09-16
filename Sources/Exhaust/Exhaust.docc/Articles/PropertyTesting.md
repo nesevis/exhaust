@@ -88,7 +88,7 @@ One error type is special. Throwing `PropertySkip` skips the current invocation:
 | `.budget(.extensive)` | — | 2,000 screening rows, 2,000 random samples. |
 | `.budget(.custom(...))` | — | Explicit values for screening and sampling budgets. |
 | `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
-| `.deadline(.seconds(30))` | none | Limits screening, sampling, and reduction by elapsed time. In-flight work finishes before returning. Failures remain failures if reduction runs out of time; `ExhaustReport.deadlineExceeded` records when the deadline was reached. |
+| `.deadline(.seconds(30))` | none | Limits screening, sampling, and reduction by elapsed time. In-flight work finishes before returning. Failures remain failures if reduction runs out of time; `ExhaustReport.hasExceededDeadline` records when the deadline was reached. |
 | `.replay(seed)` | — | Deterministic reproduction from a failure report seed (for example `.replay("8DZR69-7")`). Also accepts a raw `UInt64`. |
 | `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see <doc:BuildingGenerators#Reflecting-known-values>). Passed as a named parameter, not a setting. |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualisation. |

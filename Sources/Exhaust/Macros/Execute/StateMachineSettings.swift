@@ -11,7 +11,7 @@ public enum StateMachineSettings {
 
     /// Limits the total time spent discovering and reducing a failing command sequence.
     ///
-    /// Applies to all execution modes and shares one duration across regression replays, screening, sampling, and reduction. The limit is cooperative: an in-flight sequence finishes under the existing `.idleTimeout` policy, and a discovered failure is still assembled and reported. These operations can extend past the deadline. ``ExhaustReport/deadlineExceeded`` indicates that the deadline was reached.
+    /// Applies to all execution modes and shares one duration across regression replays, screening, sampling, and reduction. The limit is cooperative: an in-flight sequence finishes under the existing `.idleTimeout` policy, and a discovered failure is still assembled and reported. These operations can extend past the deadline. ``ExhaustReport/hasExceededDeadline`` indicates that the deadline was reached.
     ///
     /// Omitted by default. `.deadline(.zero)` executes no sequences. If specified more than once, the last setting wins. A wall-clock limit can shorten a replay differently under different machine loads.
     ///

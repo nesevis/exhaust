@@ -29,7 +29,7 @@ public struct ExhaustReport: Sendable {
     public var totalMilliseconds: Double = 0
 
     /// Whether the run reached its `.deadline` before returning. A nil counterexample with this flag set means no failure was found within the available time; it does not mean the iteration budget completed.
-    public var deadlineExceeded = false
+    public var hasExceededDeadline = false
 
     /// Total property invocations across all phases, including the final source-located diagnostic rerun when one executes.
     public var propertyInvocations: Int = 0

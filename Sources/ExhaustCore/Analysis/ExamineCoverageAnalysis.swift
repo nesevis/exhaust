@@ -107,7 +107,9 @@ private extension ExamineCoverageAnalysis {
     ) {
         switch tree {
             case let .choice(value, metadata):
-                guard metadata.isPinnedToSize == false else { break }
+                guard metadata.isPinnedToSize == false else {
+                    break
+                }
                 guard let range = metadata.validRange, range.upperBound > range.lowerBound else { break }
                 let tag = value.tag
                 let domainSize = range.upperBound - range.lowerBound

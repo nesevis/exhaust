@@ -55,7 +55,7 @@ extension __ExhaustRuntime {
         combine: (ChoiceTree?, Row, ChoiceTree) -> (value: Value, tree: ChoiceTree)?,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
-        if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false {
+        guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
             return .completed(screeningInvocations: 0)
         }
         guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -85,7 +85,9 @@ extension __ExhaustRuntime {
         var filterLosses = ScreeningFilterLosses()
 
         for tier in tiers {
-            if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false { break }
+            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                break
+            }
             // A replay addresses one tier by length. The others contribute nothing to the target row, so they are skipped wholesale rather than run and discarded.
             if let skipTo, tier.length != skipTo.tierLength {
                 continue
@@ -176,7 +178,7 @@ extension __ExhaustRuntime {
                 if let skipTo, Int(tierIterations) - 1 < skipTo.row {
                     continue
                 }
-                if deadlineNanoseconds.map({ monotonicNanoseconds() >= $0 }) ?? false {
+                guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
                     return .completed(screeningInvocations: totalIterations)
                 }
                 if property(value) == false {

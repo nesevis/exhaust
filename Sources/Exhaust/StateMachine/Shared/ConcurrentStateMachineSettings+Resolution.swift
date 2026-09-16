@@ -12,7 +12,7 @@ struct ResolvedConcurrentConfig {
     /// Absolute monotonic deadline, preserved when the config is copied for regression replays.
     var deadlineNanoseconds: UInt64?
 
-    var deadlineExceeded: Bool {
+    var hasExceededDeadline: Bool {
         deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
     }
 

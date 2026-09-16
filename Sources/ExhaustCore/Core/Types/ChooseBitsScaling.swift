@@ -27,9 +27,9 @@ package enum ChooseBitsScaling: Sendable, Hashable {
 
     /// Whether this scaling samples the current size rather than a random value.
     var isPinnedToSize: Bool {
-        if case .size = self {
-            return true
+        guard case .size = self else {
+            return false
         }
-        return false
+        return true
     }
 }

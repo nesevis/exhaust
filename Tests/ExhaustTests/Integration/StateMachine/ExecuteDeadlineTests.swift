@@ -8,10 +8,10 @@ struct ExecuteDeadlineTests {
     @Test("Settings resolve the last deadline and saturate large durations")
     func deadlineResolution() {
         let expired = ResolvedConcurrentConfig.parse([.deadline(.seconds(60)), .deadline(.zero)]).config
-        #expect(expired.deadlineExceeded)
+        #expect(expired.hasExceededDeadline)
         let unlimited = ResolvedConcurrentConfig.parse([.deadline(.zero), .deadline(.nanoseconds(.max))]).config
         #expect(unlimited.deadlineNanoseconds == UInt64.max)
-        #expect(unlimited.deadlineExceeded == false)
+        #expect(unlimited.hasExceededDeadline == false)
     }
 
     @Test("A zero deadline executes no synchronous sequences")
@@ -24,7 +24,7 @@ struct ExecuteDeadlineTests {
         #expect(result == nil)
         let completed = try #require(report)
         #expect(completed.propertyInvocations == 0)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -38,7 +38,7 @@ struct ExecuteDeadlineTests {
         #expect(result == nil)
         let completed = try #require(report)
         #expect(completed.propertyInvocations == 0)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
     }
 
     @Test("Screening and sampling stop after an in-flight sequence", arguments: [0, 50])
@@ -51,7 +51,7 @@ struct ExecuteDeadlineTests {
         )
         #expect(result == nil)
         let completed = try #require(report)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.propertyInvocations > 0)
         #expect(completed.propertyInvocations < 1000)
         #expect(completed.reductionInvocations == 0)
@@ -74,7 +74,7 @@ struct ExecuteDeadlineTests {
         )
         #expect(result == nil)
         let completed = try #require(report)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.propertyInvocations == 1)
         #expect(completed.reductionInvocations == 0)
     }
@@ -90,7 +90,7 @@ struct ExecuteDeadlineTests {
         #expect(result != nil)
         #expect(result?.commands.isEmpty == false)
         let completed = try #require(report)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.reductionWasCapped)
         #expect(completed.screeningInvocations == 1)
         #expect(completed.reductionInvocations == 0)

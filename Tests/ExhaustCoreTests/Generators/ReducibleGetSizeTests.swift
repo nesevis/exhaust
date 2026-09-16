@@ -25,10 +25,10 @@ struct ReducibleGetSizeTests {
         #expect(metadata.validRange == Gen.reducibleSizeRange)
         #expect(metadata.isPinnedToSize)
         #expect(ChoiceSequence.flatten(tree).count(where: { entry in
-            if case .value = entry {
-                return true
+            guard case .value = entry else {
+                return false
             }
-            return false
+            return true
         }) == 1)
     }
 
@@ -86,8 +86,10 @@ struct ReducibleGetSizeTests {
         let generator = Gen.zip(size, Gen.choose(in: UInt64(0) ... upperBound), size)
         let analysis = try #require(ChoiceTreeAnalysis.analyze(generator))
         let profile: any ScreeningProfile = switch analysis {
-            case let .enumerable(profile): profile
-            case let .large(profile): profile
+            case let .enumerable(profile):
+                profile
+            case let .large(profile):
+                profile
         }
         #expect(profile.parameterCount == 1)
         for valueIndex in UInt64(0) ..< profile.domainSizes[0] {

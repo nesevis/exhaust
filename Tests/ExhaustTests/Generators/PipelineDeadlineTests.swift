@@ -15,7 +15,7 @@ struct PipelineDeadlineTests {
             return false
         }
         #expect(value == nil)
-        #expect(try #require(report).deadlineExceeded)
+        #expect(try #require(report).hasExceededDeadline)
     }
 
     @Test("Large deadlines saturate and the last setting wins")
@@ -32,7 +32,7 @@ struct PipelineDeadlineTests {
         #expect(value == nil)
         let completed = try #require(report)
         #expect(completed.randomSamplingInvocations == 3)
-        #expect(completed.deadlineExceeded == false)
+        #expect(completed.hasExceededDeadline == false)
     }
 
     @Test("Reflected failures still render when the deadline prevents reduction")
@@ -50,7 +50,7 @@ struct PipelineDeadlineTests {
         }
         #expect(value == 37)
         let completed = try #require(report)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.reductionWasCapped)
         #expect(completed.renderedFailure != nil)
         #expect(completed.propertyInvocations == 1)
@@ -74,7 +74,7 @@ struct PipelineDeadlineTests {
         }
         #expect(value == nil)
         let completed = try #require(report)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completedCalls.value > 0)
         #expect(completedCalls.value <= 2)
         #expect(completed.propertyInvocations == completedCalls.value)
@@ -87,7 +87,7 @@ struct PipelineDeadlineTests {
         ) { _ in true }
         #expect(value == nil)
         #expect(try #require(report).randomSamplingInvocations == 1000)
-        #expect(try #require(report).deadlineExceeded == false)
+        #expect(try #require(report).hasExceededDeadline == false)
     }
 
     @Test("Expired runs invoke no property", arguments: [0, 50], [false, true])
@@ -99,7 +99,7 @@ struct PipelineDeadlineTests {
         #expect(value == nil)
         let completed = try #require(report)
         #expect(completed.propertyInvocations == 0)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.reductionInvocations == 0)
     }
 
@@ -116,7 +116,7 @@ struct PipelineDeadlineTests {
         #expect(calls.value == 1)
         let completed = try #require(report)
         #expect(completed.propertyInvocations == 1)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.reductionInvocations == 0)
         #expect(completed.replaySeed == nil)
         #expect(completed.randomSamplingInvocations == (screening == 0 ? 1 : 0))
@@ -134,7 +134,7 @@ struct PipelineDeadlineTests {
         #expect(completed.randomSamplingInvocations == 1)
         #expect(completed.reductionInvocations == 0)
         #expect(completed.reductionWasCapped)
-        #expect(completed.deadlineExceeded)
+        #expect(completed.hasExceededDeadline)
         #expect(completed.renderedFailure != nil)
         #expect(completed.replaySeed != nil)
     }
@@ -151,7 +151,9 @@ struct PipelineDeadlineTests {
                 count += 1
                 return count
             }
-            if call > 1 { waitUntilDeadline(deadline) }
+            if call > 1 {
+                waitUntilDeadline(deadline)
+            }
             return false
         }
         #expect(value != nil)
@@ -179,7 +181,9 @@ struct PipelineDeadlineTests {
         ]
         let now = monotonicNanoseconds()
         settings.append(.deadline(.nanoseconds(deadline > now ? deadline - now : 0)))
-        if collectStats { settings.append(.collectOpenPBTStats) }
+        if collectStats {
+            settings.append(.collectOpenPBTStats)
+        }
         let value = __ExhaustRuntime.__exhaust(generator, settings: settings, property: property)
         return (value, report)
     }
