@@ -1,9 +1,10 @@
 import Exhaust
 import ExhaustCore
+import Foundation
 import Testing
 @testable import ExhaustGenerators
 
-@Suite("Derived numeric state spaces")
+@Suite("Derived state spaces")
 struct GeneratorStateSpaceTests {
     @Test("Numeric presets scale linearly and clip narrow integer types", arguments: [
         (GeneratorStateSpace.tiny, 10), (.small, 100), (.medium, 10000),
@@ -91,8 +92,10 @@ struct GeneratorStateSpaceTests {
         #expect(samples.contains { abs($0.wider.leaf.value) > 10 })
         for value in samples {
             #expect(abs(value.narrow.leaf.value) <= 10)
+            #expect(value.narrow.values.count <= 5)
             #expect(value.narrow.values.allSatisfy { abs($0.value) <= 10 })
             #expect(abs(value.wider.leaf.value) <= 100)
+            #expect(value.wider.values.count <= 10)
             #expect(value.wider.values.allSatisfy { abs($0.value) <= 100 })
             #expect(abs(value.direct.value) <= 100)
             try expectStateSpaceReplay(generator, value: value)
@@ -119,7 +122,7 @@ struct GeneratorStateSpaceTests {
         }
     }
 
-    @Test("Optional, set, and dictionary payloads inherit the numeric policy", arguments: [Int?.none, 128])
+    @Test("Optional, set, and dictionary payloads inherit the state-space policy", arguments: [Int?.none, 128])
     func standardContainers(maximumNodes: Int?) throws {
         let generator = StateSpaceContainers.derivedGenerator(maximumNodes: maximumNodes, stateSpace: .tiny).resize(100)
         let samples = try #example(generator, count: 50, seed: 1337)
@@ -129,9 +132,172 @@ struct GeneratorStateSpaceTests {
         #expect(samples.contains { $0.values.isEmpty == false })
         for value in samples {
             #expect(value.optional.map { abs($0) <= 10 } ?? true)
+            #expect(value.values.count <= 5)
             #expect(value.values.allSatisfy { abs($0) <= 10 })
+            #expect(value.dictionary.count <= 5)
             #expect(value.dictionary.allSatisfy { abs($0.key) <= 10 && abs($0.value.value) <= 10 })
             try expectStateSpaceReplay(generator, value: value)
+        }
+    }
+
+    @Test("Sequence presets bound and scale default lengths", arguments: [
+        (GeneratorStateSpace.tiny, 5), (.small, 10), (.medium, 20),
+    ], [25, 100])
+    func sequenceBounds(preset: (GeneratorStateSpace, Int), size: Int) throws {
+        let (policy, maximumLength) = preset
+        let scaledMaximum = sizeScaledMaximum(maximumLength, size: size)
+        let generator = StateSpaceSequences.derivedGenerator(depth: 0, stateSpace: policy).resize(size)
+        let samples = try #example(generator, count: 100, seed: 1337)
+        #expect(samples.count == 100)
+        for value in samples {
+            #expect(value.names.count <= scaledMaximum)
+            #expect(value.names.allSatisfy { $0.count <= scaledMaximum })
+            #expect(value.bytes.count <= scaledMaximum)
+            try expectStateSpaceReplay(generator, value: value)
+        }
+
+        let boundary = StateSpaceSequences(
+            names: Array(
+                repeating: String(repeating: "a", count: scaledMaximum),
+                count: scaledMaximum
+            ),
+            bytes: Data(repeating: 0, count: scaledMaximum)
+        )
+        try expectStateSpaceReplay(generator, value: boundary)
+        expectStateSpaceRejection(
+            generator,
+            value: StateSpaceSequences(
+                names: Array(repeating: "", count: scaledMaximum + 1),
+                bytes: Data()
+            )
+        )
+        expectStateSpaceRejection(
+            generator,
+            value: StateSpaceSequences(
+                names: [String(repeating: "a", count: scaledMaximum + 1)],
+                bytes: Data()
+            )
+        )
+        expectStateSpaceRejection(
+            generator,
+            value: StateSpaceSequences(
+                names: [],
+                bytes: Data(repeating: 0, count: scaledMaximum + 1)
+            )
+        )
+    }
+
+    @Test("Explicit sequence payload overrides retain their domains")
+    func sequenceOverridesWin() throws {
+        let name = String(repeating: "a", count: 30)
+        let generator = StateSpaceSequences.derivedGenerator(
+            depth: 0,
+            stateSpace: .tiny,
+            overriding: ReflectiveGenerator<String>.just(name)
+        ).resize(100)
+        let samples = try #example(generator, count: 50, seed: 1337)
+        #expect(samples.count == 50)
+        #expect(samples.contains { $0.names.isEmpty == false })
+        for value in samples {
+            #expect(value.names.count <= 5)
+            #expect(value.names.allSatisfy { $0 == name })
+            #expect(value.bytes.count <= 5)
+            try expectStateSpaceReplay(generator, value: value)
+        }
+    }
+
+    @Test("Date collision presets use a fixed January 1, 2026 midpoint", arguments: [
+        (GeneratorStateSpace.tiny, 10), (.small, 100),
+    ])
+    func dateCollisionDomains(preset: (GeneratorStateSpace, Int)) throws {
+        let (policy, dayRadius) = preset
+        let midpoint = Date(timeIntervalSince1970: 1_767_225_600)
+        let lowerBound = midpoint.addingTimeInterval(TimeInterval(-dayRadius * 86400))
+        let upperBound = midpoint.addingTimeInterval(TimeInterval(dayRadius * 86400))
+        let generator = StateSpaceDate.derivedGenerator(depth: 0, stateSpace: policy)
+        let samples = try #example(generator, count: 200, seed: 1337)
+        #expect(samples.count == 200)
+        #expect(Set(samples.map(\.value)).count <= dayRadius * 2 + 1)
+        #expect(Set(samples.map(\.value)).count < samples.count)
+        for value in samples {
+            #expect((lowerBound ... upperBound).contains(value.value))
+            #expect(value.value.timeIntervalSince(midpoint).truncatingRemainder(dividingBy: 86400) == 0)
+            try expectStateSpaceReplay(generator, value: value)
+        }
+        try expectStateSpaceReplay(generator, value: StateSpaceDate(value: lowerBound))
+        try expectStateSpaceReplay(generator, value: StateSpaceDate(value: upperBound))
+
+        let outsideDate = upperBound.addingTimeInterval(86400)
+        let dateGenerator = Date.defaultGenerator(stateSpace: policy)
+        let reflected = try #require(try Interpreters.reflect(dateGenerator.gen, with: outsideDate))
+        #expect(try Interpreters.replay(dateGenerator.gen, using: reflected) == upperBound)
+        #expect(try Interpreters.reflect(generator.gen, with: StateSpaceDate(value: outsideDate)) == nil)
+    }
+
+    @Test("Medium and full preserve default date outputs and subsequent random draws", arguments: [GeneratorStateSpace.medium, .full], [UInt64(0), 42, 1337])
+    func unrestrictedDateParity(policy: GeneratorStateSpace, seed: UInt64) throws {
+        let actual = try #example(
+            #gen(Date.defaultGenerator(stateSpace: policy), .uint64()),
+            count: 100,
+            seed: .numeric(seed)
+        )
+        let reference = try #example(
+            #gen(Date.defaultGenerator, .uint64()),
+            count: 100,
+            seed: .numeric(seed)
+        )
+        #expect(actual.count == reference.count)
+        for (value, expected) in zip(actual, reference) {
+            #expect(value.0 == expected.0)
+            #expect(value.1 == expected.1)
+        }
+    }
+
+    @Test("Explicit date payload overrides retain their domains")
+    func dateOverridesWin() throws {
+        let expected = Date.distantFuture
+        let generator = StateSpaceDate.derivedGenerator(
+            depth: 0,
+            stateSpace: .tiny,
+            overriding: ReflectiveGenerator<Date>.just(expected)
+        )
+        let samples = try #example(generator, count: 20, seed: 1337)
+        #expect(samples.count == 20)
+        #expect(samples.allSatisfy { $0.value == expected })
+        try expectStateSpaceReplay(generator, value: StateSpaceDate(value: expected))
+    }
+
+    @Test("The full preset preserves default sequence outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
+    func fullSequenceParity(seed: UInt64) throws {
+        let actualStrings = try #example(
+            #gen(String.defaultGenerator(stateSpace: .full), .uint64()),
+            count: 100,
+            seed: .numeric(seed)
+        )
+        let referenceStrings = try #example(
+            #gen(String.defaultGenerator, .uint64()),
+            count: 100,
+            seed: .numeric(seed)
+        )
+        let actualData = try #example(
+            #gen(Data.defaultGenerator(stateSpace: .full), .uint64()),
+            count: 100,
+            seed: .numeric(seed)
+        )
+        let referenceData = try #example(
+            #gen(Data.defaultGenerator, .uint64()),
+            count: 100,
+            seed: .numeric(seed)
+        )
+        #expect(actualStrings.count == referenceStrings.count)
+        for (actual, reference) in zip(actualStrings, referenceStrings) {
+            #expect(actual.0 == reference.0)
+            #expect(actual.1 == reference.1)
+        }
+        #expect(actualData.count == referenceData.count)
+        for (actual, reference) in zip(actualData, referenceData) {
+            #expect(actual.0 == reference.0)
+            #expect(actual.1 == reference.1)
         }
     }
 
@@ -256,12 +422,27 @@ private struct StateSpaceContainers: Equatable {
 }
 
 @Exhaustable
+private struct StateSpaceSequences: Equatable {
+    let names: [String]
+    let bytes: Data
+}
+
+@Exhaustable
+private struct StateSpaceDate: Equatable {
+    let value: Date
+}
+
+@Exhaustable
 private indirect enum StateSpaceTree: Equatable {
     case empty
     case node(Int, StateSpaceTree, StateSpaceTree)
 }
 
 // MARK: - Helpers
+
+private func sizeScaledMaximum(_ maximum: Int, size: Int) -> Int {
+    min(maximum, Int((Double(maximum + 1) * Double(size) / 100).rounded()))
+}
 
 private func expectIntegerBound<Value: FixedWidthInteger>(_ value: Value, magnitude: Int, size: Int) {
     let lower = Int((Double(Int(Value(clamping: -magnitude))) * Double(size) / 100).rounded())

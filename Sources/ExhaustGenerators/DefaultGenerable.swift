@@ -5,6 +5,8 @@ import Exhaustable
 import ExhaustCore
 import Foundation
 
+private let defaultStateSpaceDateMidpoint = Date(timeIntervalSince1970: 1_767_225_600) // January 1, 2026 at 00:00:00 UTC.
+
 /// Supplies Exhaust's internal catalogue of standard-library and Foundation generators to the derivation resolver.
 ///
 /// This is not a user customization point. Annotated types expose their derived generator through ``__Exhaustable/Conformance/defaultGenerator``; other payload generators are supplied explicitly through `overriding:`. Witness properties stay internal as well, so the catalogue does not add public factory members to standard-library types.
@@ -12,7 +14,7 @@ protocol DefaultGenerable {
     /// The generator used for this type when no other is named.
     static var defaultGenerator: ReflectiveGenerator<Self> { get }
 
-    /// Applies numeric domain presets while leaving other built-in defaults unchanged.
+    /// Applies the preset's standard payload domains.
     static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self>
 }
 
@@ -123,6 +125,13 @@ extension String: DefaultGenerable {
     static var defaultGenerator: ReflectiveGenerator<String> {
         .string()
     }
+
+    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<String> {
+        guard let maximumLength = stateSpace.defaultSequenceLengthMaximum else {
+            return defaultGenerator
+        }
+        return .string(length: 0 ... maximumLength, scaling: .linear)
+    }
 }
 
 extension Character: DefaultGenerable {
@@ -137,6 +146,17 @@ extension Date: DefaultGenerable {
     /// Any date at one-minute resolution, matching the synthesizer's default for `Date` fields.
     static var defaultGenerator: ReflectiveGenerator<Date> {
         .date(between: Date.distantPast ... Date.distantFuture, interval: .seconds(60))
+    }
+
+    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Date> {
+        guard let dayRadius = stateSpace.defaultDateDayRadius else {
+            return defaultGenerator
+        }
+        return .date(
+            within: .days(-dayRadius) ... .days(dayRadius),
+            of: defaultStateSpaceDateMidpoint,
+            interval: .days(1)
+        )
     }
 }
 
@@ -155,6 +175,13 @@ extension URL: DefaultGenerable {
 extension Data: DefaultGenerable {
     static var defaultGenerator: ReflectiveGenerator<Data> {
         .data()
+    }
+
+    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Data> {
+        guard let maximumLength = stateSpace.defaultSequenceLengthMaximum else {
+            return defaultGenerator
+        }
+        return .data(length: 0 ... maximumLength, scaling: .linear)
     }
 }
 

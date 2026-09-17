@@ -627,21 +627,17 @@ extension Interpreters {
             combinedPath.append(path.count == 1 ? path[0] : .group(path))
         }
 
-        let validRange: ClosedRange<UInt64>
-        if let lengthRange = lengthGen.associatedRange {
-            validRange = lengthRange
-        } else {
-            let targetLength = UInt64(combinedPath.count)
-            let lengthReflection = try reflectRecursive(
-                lengthGen,
-                onFinalOutput: targetLength,
-                probingPickArm: probingPickArm,
-                sizeOverride: sizeOverride
-            )
-            validRange = lengthReflection
-                .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
-                ?? UInt64.bitPatternRange
-        }
+        let targetLength = UInt64(combinedPath.count)
+        let lengthReflection = try reflectRecursive(
+            lengthGen,
+            onFinalOutput: targetLength,
+            probingPickArm: probingPickArm,
+            sizeOverride: sizeOverride
+        )
+        let validRange = lengthReflection
+            .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
+            ?? lengthGen.associatedRange
+            ?? UInt64.bitPatternRange
 
         let finalTree = ChoiceTree.sequence(
             elements: combinedPath,

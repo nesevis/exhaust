@@ -22,7 +22,7 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     ///
     /// Payload resolution first uses an exact override, then structural derivation for an annotated type, then a standard container recipe, then Exhaust's built-in defaults for standard-library and Foundation types. Container contents use the same resolver, so element overrides are honored inside nested containers. Supply custom payload generators through `overriding:`; a user-defined property named `defaultGenerator` is not discovered automatically. Supplied generators are opaque: depth bounds apply to the derived structure, not to recursion or filtering inside an override.
     ///
-    /// Set `stateSpace: .small` for numeric magnitudes that grow linearly to 100, or use `.tiny` and `.medium` for ceilings of 10 and 10,000. The default, `.full`, preserves the built-in generators' existing domains and scaling. This policy propagates through annotated types and container contents. Nested annotations cap it, while explicit payload overrides retain their own domains. See ``GeneratorStateSpace`` for the supported numeric types and unchanged leaf types.
+    /// Set `stateSpace: .small` to favor collisions with numeric magnitudes up to 100, automatically derived sequence lengths up to 10, and 201 daily dates centered on January 1, 2026 UTC. `.tiny` uses numeric and sequence ceilings of 10 and 5, respectively, and 21 daily dates around the same midpoint. `.medium` uses numeric and sequence ceilings of 10,000 and 20 to reduce processing costs while preserving the full date domain. Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. The default, `.full`, preserves the built-in generators' existing domains and scaling, including sequence lengths up to 100 and `Date.distantPast...Date.distantFuture` at one-minute resolution. This policy propagates through annotated types and container contents. Nested annotations cap it, while explicit payload overrides retain their own domains. See ``GeneratorStateSpace`` for details.
     ///
     /// Set `maximumNodes:` to split a structural allowance as well as limiting depth. Each annotated value, standard container, and opaque payload costs one node. Products reserve each child's minimum cost, then divide the remainder evenly. Containers reserve one node for themselves and split the rest among their elements; dictionary keys and values both count. The root allowance ramps linearly from its minimum constructible cost to the ceiling as size grows, rounding down. This can exclude unbalanced values even when their total cost would fit. Reflection uses the full allowance, but must still fit the same splitting policy.
     ///
@@ -31,7 +31,7 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     /// - Parameters:
     ///   - maximumDepth: The root depth ceiling, overriding the type's annotation. Defaults to the annotation or ``defaultMaximumDepth``.
     ///   - maximumNodes: A positive structural node ceiling, overriding the root annotation. Defaults to the annotation or no node limit.
-    ///   - stateSpace: Overrides the root's numeric preset, which defaults to `.full`. Nested annotations cap the inherited preset; explicit payload overrides are unaffected. See ``GeneratorStateSpace``.
+    ///   - stateSpace: Overrides the root's payload-domain preset, which defaults to `.full`. Nested annotations cap the inherited preset; explicit payload overrides are unaffected. See ``GeneratorStateSpace``.
     ///   - scaling: How the drawn depth scales with the size parameter. Defaults to `.linear`, which reaches the ceiling at full size.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator with a reducible choice of constructible depth and best-effort reflection.
@@ -65,7 +65,7 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     /// - Parameters:
     ///   - depth: How many nested structurally derived types a value may contain.
     ///   - maximumNodes: An optional positive structural ceiling. Its allowance still scales with size even though depth is pinned.
-    ///   - stateSpace: Overrides the root's numeric preset. Numeric bounds still scale with size even though depth is pinned.
+    ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds and default sequence lengths still scale with size even though depth is pinned; tiny and small date domains remain fixed.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator built at the requested depth, with best-effort reflection.
     static func derived<each Override>(
@@ -97,7 +97,7 @@ public extension __Exhaustable.Conformance {
     /// let combined = #gen(generator, generator, .bool())
     /// ```
     ///
-    /// Use ``derivedGenerator(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)`` instead when supplying payload overrides, numeric presets, or different ceilings. Other derived types resolve this type structurally; declaring a custom generator property does not change that resolution.
+    /// Use ``derivedGenerator(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)`` instead when supplying payload overrides, state-space presets, or different ceilings. Other derived types resolve this type structurally; declaring a custom generator property does not change that resolution.
     static var defaultGenerator: ReflectiveGenerator<Self> {
         derivedGenerator()
     }
@@ -117,7 +117,7 @@ public extension __Exhaustable.Conformance {
     /// - Parameters:
     ///   - maximumDepth: The root depth ceiling. Defaults to the annotation or 10.
     ///   - maximumNodes: A positive structural node ceiling. Defaults to the annotation or no node limit; its allowance grows linearly with size.
-    ///   - stateSpace: Overrides the root's numeric preset, which defaults to `.full`. Nested types and containers inherit it, subject to nested annotation caps. Explicit payload overrides keep their own domains.
+    ///   - stateSpace: Overrides the root's payload-domain preset, which defaults to `.full`. Nested types and containers inherit it, subject to nested annotation caps. Explicit payload overrides keep their own domains.
     ///   - scaling: How the drawn depth scales with the size parameter. Defaults to `.linear`.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator with a reducible choice of constructible depth and best-effort reflection.
@@ -149,7 +149,7 @@ public extension __Exhaustable.Conformance {
     /// - Parameters:
     ///   - depth: The root nesting bound, overriding the root annotation's ceiling.
     ///   - maximumNodes: An optional positive structural ceiling. Its allowance still scales with size even though depth is pinned.
-    ///   - stateSpace: Overrides the root's numeric preset. Numeric bounds still scale with size even though depth is pinned.
+    ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds and default sequence lengths still scale with size even though depth is pinned; tiny and small date domains remain fixed.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator built at the requested depth, with best-effort reflection.
     static func derivedGenerator<each Override>(

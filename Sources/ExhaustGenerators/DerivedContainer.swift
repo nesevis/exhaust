@@ -16,6 +16,7 @@ package struct DerivedContainerRecipe {
     let isReflective: Bool
     let empty: AnyGenerator
     let build: ([AnyGenerator]) -> AnyGenerator
+    let buildWithin: (Int, [AnyGenerator]) -> AnyGenerator
     let buildExactly: (Int, [AnyGenerator]) -> AnyGenerator
     let selectCount: ([AnyGenerator]) -> AnyGenerator
 }
@@ -31,6 +32,14 @@ extension Array: DerivedContainer {
             build: { children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
                 return Gen.arrayOf(element).erase()
+            },
+            buildWithin: { maximumCount, children in
+                let element: Generator<Element> = children[0].map { $0 as! Element }
+                return Gen.arrayOf(
+                    element,
+                    within: UInt64(0) ... UInt64(maximumCount),
+                    scaling: .linear
+                ).erase()
             },
             buildExactly: { count, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
@@ -61,6 +70,13 @@ extension Optional: DerivedContainer {
                     .gen
                     .erase()
             },
+            buildWithin: { _, children in
+                let wrapped: Generator<Wrapped> = children[0].map { $0 as! Wrapped }
+                return ReflectiveGenerator<Wrapped>
+                    .optional(wrapped.wrapped(isReflective: true))
+                    .gen
+                    .erase()
+            },
             buildExactly: { _, children in
                 let wrapped: Generator<Wrapped> = children[0].map { $0 as! Wrapped }
                 return wrapped.liftToOptional().erase()
@@ -81,6 +97,14 @@ extension Set: DerivedContainer {
             build: { children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
                 return Gen.setOf(element).erase()
+            },
+            buildWithin: { maximumCount, children in
+                let element: Generator<Element> = children[0].map { $0 as! Element }
+                return Gen.setOf(
+                    element,
+                    within: UInt64(0) ... UInt64(maximumCount),
+                    scaling: .linear
+                ).erase()
             },
             buildExactly: { count, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
@@ -103,6 +127,16 @@ extension Dictionary: DerivedContainer {
                 let key: Generator<Key> = children[0].map { $0 as! Key }
                 let value: Generator<Value> = children[1].map { $0 as! Value }
                 return Gen.dictionaryOf(key, value).erase()
+            },
+            buildWithin: { maximumCount, children in
+                let key: Generator<Key> = children[0].map { $0 as! Key }
+                let value: Generator<Value> = children[1].map { $0 as! Value }
+                return Gen.dictionaryOf(
+                    key,
+                    value,
+                    within: UInt64(0) ... UInt64(maximumCount),
+                    scaling: .linear
+                ).erase()
             },
             buildExactly: { count, children in
                 let key: Generator<Key> = children[0].map { $0 as! Key }

@@ -122,7 +122,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 ///
 /// The root allowance grows with Exhaust's size parameter toward the ceiling. A nested annotation caps that type's allocated share; it never replenishes the parent's budget. `Type.derivedGenerator(maximumNodes:)` overrides the root annotation. Without a node limit on the root or its dependencies, the existing depth-only policy is unchanged.
 ///
-/// Pass `stateSpace: .small` for integer and binary floating-point payloads whose magnitudes grow linearly up to 100, rather than using machine-wide defaults. `.tiny` and `.medium` use ceilings of 10 and 10,000. The default, `.full`, preserves existing domains and scaling. The policy propagates through nested types and container contents; nested annotations cap it, and explicit payload overrides take precedence. Other leaf types and structural limits are unchanged. See ``GeneratorStateSpace`` for details.
+/// Pass `stateSpace: .small` to favor collisions with numeric magnitudes up to 100, automatically derived sequence lengths up to 10, and 201 daily dates centered on January 1, 2026 UTC. `.tiny` uses numeric and sequence ceilings of 10 and 5, respectively, and 21 daily dates around the same midpoint. `.medium` uses numeric and sequence ceilings of 10,000 and 20 to reduce processing costs while preserving the full date domain. Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. The default, `.full`, preserves existing domains and scaling, including sequence lengths up to 100 and `Date.distantPast...Date.distantFuture` at one-minute resolution. The policy propagates through nested types and container contents; nested annotations cap it, and explicit payload overrides take precedence. Other leaf types and structural limits are unchanged. See ``GeneratorStateSpace`` for details.
 ///
 /// Products require explicitly typed, individually named stored properties. A struct may declare one initializer whose parameters match every stored property in order, label, and type, and whose body only assigns each parameter to its corresponding property. Defaults, effects, failable initialization, and other in-body initializers are rejected. Final classes must not declare in-body initializers. A `var` may have an initial value or observers; an initialized `let` is rejected rather than silently omitted from the generated metadata or assigned twice. Computed and static properties are excluded. Property wrappers, stored-property attributes, lazy or weak/unowned storage, and conditional member blocks are not supported.
 ///
@@ -133,7 +133,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 /// - Parameters:
 ///   - maximumDepth: The deepest nesting of this type inside itself that a derived generator produces. Defaults to the derivation's own ceiling.
 ///   - maximumNodes: An optional positive structural node ceiling. Defaults to no node ceiling.
-///   - stateSpace: The numeric payload domain preset. Defaults to `.full`.
+///   - stateSpace: The payload-domain preset for numeric values, default sequence lengths, and dates. Defaults to `.full`.
 @attached(extension, conformances: __Exhaustable.Conformance, names: named(__generatorDescriptor))
 @attached(member, names: named(init))
 public macro Exhaustable(

@@ -205,7 +205,7 @@ final class BudgetedGeneratorDerivation {
         return result
     }
 
-    /// Preserves unrestricted container choices when there is no allowance. Budgeted containers always retain a cardinality bind, including empty-only layers, so reflection through deeper layers keeps the empty value's path.
+    /// Preserves the built-in container choice under `.full` when there is no node allowance; bounded state spaces cap its size-scaled cardinality. Budgeted containers always retain a cardinality bind, including empty-only layers, so reflection through deeper layers keeps the empty value's path.
     private func buildContainer(
         _ recipe: DerivedContainerRecipe,
         children: [PayloadPlan],
@@ -219,13 +219,26 @@ final class BudgetedGeneratorDerivation {
                 return recipe.empty.wrapped(isReflective: true)
             }
             let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: nil, stateSpace: stateSpace) }
-            return recipe.build(generators.map { $0.gen }).wrapped(
+            let generator = switch stateSpace.defaultSequenceLengthMaximum {
+                case let .some(maximumCount):
+                    recipe.buildWithin(
+                        min(maximumCount, recipe.maximumCount ?? maximumCount),
+                        generators.map { $0.gen }
+                    )
+                case .none:
+                    recipe.build(generators.map { $0.gen })
+            }
+            return generator.wrapped(
                 isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
             )
         }
         var layers = [recipe.empty.wrapped(isReflective: true)]
         if let minima, let minimum = sumNodes(minima) {
-            let maximumCount = min(recipe.maximumCount ?? Int.max, (nodes - 1) / minimum)
+            let policyMaximum = stateSpace.defaultSequenceLengthMaximum ?? Int.max
+            let maximumCount = min(
+                min(recipe.maximumCount ?? Int.max, policyMaximum),
+                (nodes - 1) / minimum
+            )
             for count in 0 ..< maximumCount {
                 let cardinality = count + 1
                 let allowances = budget.split((nodes - 1) / cardinality, minima: minima)!
