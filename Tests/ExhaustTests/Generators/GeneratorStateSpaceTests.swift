@@ -37,8 +37,8 @@ struct GeneratorStateSpaceTests {
         for value in [-magnitude, 0, magnitude] {
             try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
         }
-        try expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: magnitude + 1))
-        try expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: -magnitude - 1))
+        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: magnitude + 1))
+        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
     @Test("The full preset preserves primitive outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
@@ -62,7 +62,7 @@ struct GeneratorStateSpaceTests {
     func annotationAndFactoryPrecedence() throws {
         #expect(StateSpaceSmall.__generatorDescriptor.stateSpace == .small)
         let target = StateSpaceSmall(value: 500)
-        try expectStateSpaceRejection(StateSpaceSmall.defaultGenerator, value: target)
+        expectStateSpaceRejection(StateSpaceSmall.defaultGenerator, value: target)
         try expectStateSpaceReplay(StateSpaceSmall.derivedGenerator(stateSpace: .medium), value: target)
         try expectStateSpaceReplay(StateSpaceSmall.derivedGenerator(depth: 0, stateSpace: .full), value: target)
         for generator in [
@@ -144,8 +144,8 @@ struct GeneratorStateSpaceTests {
         for value in [-magnitude, 0, magnitude] {
             try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
         }
-        try expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: magnitude + 1))
-        try expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: -magnitude - 1))
+        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: magnitude + 1))
+        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
     @Test("Examine and actual reflected output equality hold for recursive presets", arguments: GeneratorStateSpace.allCases, [Int?.none, 64])
@@ -195,8 +195,8 @@ struct GeneratorStateSpaceTests {
             #expect(unsignedSamples.allSatisfy { $0 <= 100 })
             try expectStateSpaceReplay(signed, value: -100)
             try expectStateSpaceReplay(unsigned, value: 100)
-            try expectStateSpaceRejection(signed, value: Int128.max)
-            try expectStateSpaceRejection(unsigned, value: UInt128.max)
+            expectStateSpaceRejection(signed, value: Int128.max)
+            expectStateSpaceRejection(unsigned, value: UInt128.max)
         }
     }
 }
@@ -274,11 +274,16 @@ private func expectStateSpaceReplay<Value: Equatable>(_ generator: ReflectiveGen
     #expect(try Interpreters.replay(generator.gen, using: tree) == value)
 }
 
-private func expectStateSpaceRejection<Value>(_ generator: ReflectiveGenerator<Value>, value: Value) throws {
+private func expectStateSpaceRejection<Value>(_ generator: ReflectiveGenerator<Value>, value: Value) {
     do {
-        let reflected = try Interpreters.reflect(generator.gen, with: value)
-        #expect(reflected == nil)
-    } catch is ReflectionError {
-        // A rejected nested payload can throw instead of returning nil.
+        _ = try Interpreters.reflect(generator.gen, with: value)
+        Issue.record("Expected reflection to reject the value as out of range")
+    } catch let error as ReflectionError {
+        guard case .inputWasOutOfGeneratorRange = error else {
+            Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
+            return
+        }
+    } catch {
+        Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
     }
 }

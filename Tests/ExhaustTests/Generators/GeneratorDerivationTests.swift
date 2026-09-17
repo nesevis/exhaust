@@ -84,7 +84,6 @@ struct GeneratorDerivationTests {
             }
         }
         let counterexample = try #require(found)
-        let start = ContinuousClock.now
         let result = try Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: counterexample.tree,
@@ -92,10 +91,12 @@ struct GeneratorDerivationTests {
             config: Interpreters.ReducerConfiguration(maxStalls: 2),
             property: property
         )
-        let elapsed = ContinuousClock.now - start
         let reduced = try #require(result.outcome.counterexample)
-        #expect(reduced.1 == .typeApplication(.variable(0), .top), "\(reduced.1) after \(elapsed), \(result.stats.reductionProbes) probes")
-        #expect(elapsed < .seconds(5), "\(elapsed), \(result.stats.reductionProbes) probes")
+        #expect(
+            reduced.1 == .typeApplication(.variable(0), .top),
+            "\(reduced.1) after \(result.stats.reductionProbes) probes"
+        )
+        #expect(result.stats.reductionProbes <= 100, "\(result.stats.reductionProbes) probes")
     }
 
     @Test("A struct derives through its stored properties and reflects")
@@ -190,8 +191,10 @@ struct GeneratorDerivationTests {
         let samples = try #example(generator, count: 100)
         #expect(samples.contains { $0.inner.depth > 0 })
         let direct = Term.defaultGenerator
-        let directSamples = try #example(direct, count: 20)
-        #expect(directSamples.allSatisfy { $0.indicesWithin(Int.min ... Int.max) })
+        let directSamples = try #example(direct, count: 20, seed: 1337)
+        #expect(directSamples.count == 20)
+        #expect(directSamples.contains { $0.depth > 0 })
+        #expect(directSamples.allSatisfy { $0.depth <= ReflectiveGenerator<Term>.defaultMaximumDepth })
     }
 
     @Test("A final class derives through its stored properties and reflects")

@@ -155,7 +155,7 @@ package extension Gen {
 
     /// Generates a random value within a range, using a ``SizeScaling`` distribution to control how tightly values cluster around an origin at small sizes.
     ///
-    /// The scaling strategy is erased to ``ChooseBitsScaling`` and attached directly to the emitted ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` operation. Generation interpreters consult the active generation size at sample time and narrow the effective sampling range relative to `range`. Reflection, analysis, and the reducer observe the declared range unchanged.
+    /// The scaling strategy is erased to ``ChooseBitsScaling`` and attached directly to the emitted ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` operation. Generation interpreters consult the active generation size at sample time and narrow the effective sampling range relative to `range`. Reflection enforces that effective range inside an explicit resize and otherwise uses the full size-100 range. Analysis and the reducer observe the declared range unchanged.
     ///
     /// - Parameters:
     ///   - range: The full range of values to generate from at size 100.

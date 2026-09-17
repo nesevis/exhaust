@@ -90,7 +90,10 @@ private func boundedWideInteger<Value: FixedWidthInteger>(
         forward: { Value($0) },
         backward: { value in
             guard let integer = Int(exactly: value) else {
-                throw ReflectionError.couldNotMapInputToGenerator
+                throw ReflectionError.inputWasOutOfGeneratorRange(
+                    String(describing: value),
+                    range: "\(lowerBound)...\(magnitude)"
+                )
             }
             return integer
         }

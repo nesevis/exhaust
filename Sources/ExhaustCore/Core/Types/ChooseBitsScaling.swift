@@ -5,7 +5,7 @@
 
 /// Size-scaling strategy attached to a ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` operation.
 ///
-/// Sampling interpreters consult the current generation size when a chooseBits carries a non-nil scaling, narrowing the effective sampling range relative to the declared `(min, max)` range. Reflection, analysis, and tree construction ignore the scaling field — the declared range remains the single source of truth for what values are permitted.
+/// Sampling interpreters consult the current generation size when a chooseBits carries a non-nil scaling, narrowing the effective sampling range relative to the declared `(min, max)` range. Reflection enforces that effective range inside an explicit ``ReflectiveOperation/resize(newSize:next:)`` scope and otherwise uses the full size-100 range. Analysis and tree metadata retain the declared range so reduction can explore beyond the generated size.
 ///
 /// - Note: A `nil` scaling on ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` means the full declared range is sampled uniformly at every size (the `.constant` case from ``SizeScaling``).
 @usableFromInline

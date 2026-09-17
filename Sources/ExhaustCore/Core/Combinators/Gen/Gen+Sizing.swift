@@ -4,7 +4,7 @@
 package extension Gen {
     /// Retrieves the raw size parameter without a backward comap.
     ///
-    /// Use this for framework internals that need the true interpreter size. User-facing code should use ``getSize(_:)`` instead, which adds a backward comap of 100 so reflection through size-dependent generators works without requiring the original size.
+    /// Use this for framework internals that need the true interpreter size. User-facing code should use ``getSize(_:)`` instead, which reifies the size for reduction. Reflection uses an enclosing ``resize(_:_:)`` value when present and otherwise defaults to 100.
     static func rawGetSize() -> Generator<UInt64> {
         .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
@@ -19,7 +19,7 @@ package extension Gen {
 
     /// Retrieves the current size parameter and feeds it into a generator-producing closure.
     ///
-    /// The size parameter (1-100) controls generated-value complexity. It starts small and grows as tests progress, so simple counterexamples are found first. The closure receives the current size and returns a generator to run. Reflection through size-dependent generators works automatically — the backward comap supplies a default size of 100 so the reflector does not need to know the original.
+    /// The size parameter (1-100) controls generated-value complexity. It starts small and grows as tests progress, so simple counterexamples are found first. The closure receives the current size and returns a generator to run. Reflection uses the innermost enclosing ``resize(_:_:)`` value, or 100 when no explicit resize is present.
     ///
     /// - Parameter forward: A closure that receives the current size and returns a generator.
     /// - Returns: A generator that produces the result of the size-dependent inner generator.
@@ -70,7 +70,7 @@ package extension Gen {
 
     /// Retrieves the current size parameter without reifying the dependent bind.
     ///
-    /// Use this on internal hot paths whose structural operations already expose the dependency, such as size-dependent sequence lengths. The contramap supplies size 100 during reflection, allowing the downstream generator to expose its full range without adding a ``ReflectiveOperation/transform(kind:inner:)`` bind node.
+    /// Use this on internal hot paths whose structural operations already expose the dependency, such as size-dependent sequence lengths. Reflection uses an enclosing ``resize(_:_:)`` value when present and otherwise supplies size 100, allowing the downstream generator to expose its full range without adding a ``ReflectiveOperation/transform(kind:inner:)`` bind node.
     ///
     /// - Parameter forward: A closure that receives the current size and returns a generator.
     /// - Returns: A generator that produces the result of the size-dependent inner generator.
