@@ -11,13 +11,26 @@ package protocol DerivedContainer {
 package struct DerivedContainerRecipe {
     let type: Any.Type
     let childTypes: [Any.Type]
+
+    /// The container's own structural ceiling, independent of any node allowance. `Optional` holds at most one element; the rest are unbounded.
     let maximumCount: Int?
+
     /// Matches the public container factory; deduplicating containers do not promise reflection even when their elements do.
     let isReflective: Bool
+
+    /// Produces only the container's empty value, and rejects a nonempty reflection target rather than replaying it as empty.
     let empty: AnyGenerator
+
+    /// Builds the factory's own size-scaled cardinality, used when no node allowance and no bounded state space applies.
     let build: ([AnyGenerator]) -> AnyGenerator
+
+    /// Builds a cardinality capped at the given count, used when a bounded state space narrows the default without a node allowance.
     let buildWithin: (Int, [AnyGenerator]) -> AnyGenerator
+
+    /// Builds one fixed-cardinality layer, so a node allowance can divide the same remainder among a known number of elements.
     let buildExactly: (Int, [AnyGenerator]) -> AnyGenerator
+
+    /// Chooses among the prebuilt cardinality layers, recovering the index from the value's own count so reflection does not depend on generation state.
     let selectCount: ([AnyGenerator]) -> AnyGenerator
 }
 

@@ -43,15 +43,13 @@ A passing property test gives no signal about whether the generator explored its
 
 ### Skipping reflection
 
-Some generators intentionally discard information that reflection would need. Set and dictionary generators, for example, discard draw order and can collapse duplicate elements or keys. Use `.skipReflection` to omit that check while retaining generation, coverage, filter health, and optional replay validation:
+Some generators intentionally discard information that reflection would need. Set and dictionary generators, for example, discard draw order and can collapse duplicate elements or keys. Use `.skipReflection` to skip that check while generation, coverage, filter health, and the optional replay check still run:
 
 ```swift
-#examine(dictionaryGen, .skipReflection) { first, second in
-    first == second
-}
+#examine(dictionaryGen, .skipReflection)
 ```
 
-The report records `reflectionSkipped` and can pass when the remaining checks succeed. `.reflection(.silent)` has different behaviour: reflection still runs, failures remain in the report, and only issue output is suppressed. Exhaust skips reflection automatically for generators synthesised from example values.
+The examination can still pass when the remaining checks succeed, and the report sets `reflectionSkipped`. `.reflection(.silent)` has different behaviour: reflection still runs, failures remain in the report, and Exhaust suppresses only the issue output.
 
 ### Providing a replay check
 
@@ -102,6 +100,6 @@ Correctness checks (reflection round-trip, filter health) can fail the test. Cov
 | `.replay(seed)` | — | Deterministic validation run. Accepts a raw `UInt64` or an encoded seed string. |
 | `.severity(.warning)` | `.error` | Default severity for all checks. `.error` fails the test, `.warning` reports without failing, `.silent` only populates the report. |
 | `.reflection(.warning)` | inherits | Severity override for reflection round-trip failures. `.silent` retains failures in the report without producing issue output. |
-| `.skipReflection` | — | Omits value-to-choice reflection while retaining generation, coverage, filter health, and optional replay checks. |
+| `.skipReflection` | — | Skips the reflection round-trip check. Generation, coverage, filter health, and the optional replay check still run. |
 | `.filterHealth(.warning)` | inherits | Severity override for filter validity failures (a validity rate below 5% fails the check). |
 | `.suppress(.issueReporting)` | — | Silences issue reporting; assert on the returned `ExamineReport` instead. `.suppress(.logs)` and `.suppress(.all)` also available. |

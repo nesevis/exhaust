@@ -5,7 +5,7 @@ final class GeneratorNodeBudget {
     let plan: GeneratorDerivationPlan
     private var costs: [CostKey: Int?] = [:]
 
-    /// Structural minima depend only on type and depth, not the numeric policy or the requested allowance.
+    /// Structural minima depend only on type and depth, not the state space or the requested allowance.
     private struct CostKey: Hashable {
         let type: ObjectIdentifier
         let depth: Int
@@ -37,6 +37,7 @@ final class GeneratorNodeBudget {
         return minimum
     }
 
+    /// Returns one minimum per payload in declaration order, or `nil` when any payload is unconstructible at this depth. The caller needs the individual minima, not their sum, because splitting reserves each child's share separately.
     func minimumNodes(for payloads: [PayloadPlan], depth: Int) -> [Int]? {
         var result: [Int] = []
         for payload in payloads {
@@ -48,6 +49,7 @@ final class GeneratorNodeBudget {
         return result
     }
 
+    /// Charges one node for anything that is not another annotated type: a supplied generator, a built-in leaf, and a container all cost one regardless of their contents. A derived-type edge costs whatever that type costs at the remaining depth, and the child's own annotated ceiling rejects the cost rather than capping it.
     func minimumNodes(for payload: PayloadPlan, depth: Int) -> Int? {
         switch payload {
             case .supplied, .standard, .container:

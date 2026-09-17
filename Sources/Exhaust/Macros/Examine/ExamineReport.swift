@@ -26,8 +26,10 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public fileprivate(set) var replayDeterminismSuccesses: Int?
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public fileprivate(set) var uniqueChoiceSequences = 0
-    /// Indicates whether Exhaust omitted the reflection round-trip check automatically or through ``ExamineSettings/skipReflection``.
+    /// Indicates whether Exhaust skipped the reflection round-trip check automatically or through ``ExamineSettings/skipReflection``. The rendered report names which.
     public fileprivate(set) var reflectionSkipped = false
+    /// Names the reason in the rendered report, so a reader can tell an automatic skip from a requested one. Nil whenever ``reflectionSkipped`` is `false`.
+    fileprivate var reflectionSkipReason: ReflectionSkipReason?
     /// Number of `.just` (pinned constant) nodes found in a synthesized generator tree. These are fields the synthesizer could not build a full generator for.
     public fileprivate(set) var pinnedFieldCount = 0
     /// All validation failures detected during the run. Empty when the generator is healthy.
@@ -105,10 +107,11 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
         lines.append("#examine: \(valuesGenerated) samples, \(String(format: "%.3f", perSampleMs))ms/sample")
 
         if reflectionSkipped {
+            let reason = reflectionSkipReason.map { " (\($0.rendered))" } ?? ""
             if let replayDeterminismSuccesses {
-                lines.append("  Correctness: reflection skipped, \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
+                lines.append("  Correctness: reflection skipped\(reason), \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
             } else {
-                lines.append("  Correctness: reflection skipped")
+                lines.append("  Correctness: reflection skipped\(reason)")
             }
             if pinnedFieldCount > 0 {
                 lines.append("  Pinned fields: \(pinnedFieldCount) field\(pinnedFieldCount == 1 ? "" : "s") could not be synthesized (constant value from example JSON)")
@@ -211,6 +214,26 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     }
 }
 
+// MARK: - Reflection Skip Reason
+
+/// Separates the skip Exhaust decides on from the one the test asks for. Both leave the same checks running, so the rendered report is the only place a reader can tell them apart.
+private enum ReflectionSkipReason: Sendable {
+    /// The generator came from `#gen` with an example value, which builds a forward-only generator that cannot reflect by design.
+    case synthesizedGenerator
+
+    /// The test passed ``ExamineSettings/skipReflection``.
+    case requested
+
+    var rendered: String {
+        switch self {
+            case .synthesizedGenerator:
+                "synthesized generator"
+            case .requested:
+                ".skipReflection"
+        }
+    }
+}
+
 /// Describes a single failure detected during a `#examine` validation run.
 ///
 /// Match on cases to diagnose failures reported in ``ExamineReport/failures``.
@@ -258,7 +281,7 @@ package extension Generator where Operation == ReflectiveOperation {
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    ///   - skipReflection: When `true`, omits the reflection round-trip check while retaining generation, replay, and health checks.
+    ///   - skipReflection: When `true`, skips the reflection round-trip check because the generator is synthesized and forward-only by design. Generation, replay, and health checks still run. A user-requested skip arrives through `reporting` instead, and the report distinguishes the two.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -298,7 +321,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    ///   - skipReflection: When `true`, omits the reflection round-trip check while retaining generation, replay, and health checks.
+    ///   - skipReflection: When `true`, skips the reflection round-trip check because the generator is synthesized and forward-only by design. Generation, replay, and health checks still run. A user-requested skip arrives through `reporting` instead, and the report distinguishes the two.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -346,7 +369,15 @@ private extension Generator where Operation == ReflectiveOperation {
         let maxFailures = 20
         var report = ExamineReport()
         report.sampleCount = samples
-        report.reflectionSkipped = skipReflection || reporting?.skipReflection == true
+        report.reflectionSkipReason = switch (skipReflection, reporting?.skipReflection == true) {
+            case (true, _):
+                .synthesizedGenerator
+            case (false, true):
+                .requested
+            case (false, false):
+                nil
+        }
+        report.reflectionSkipped = report.reflectionSkipReason != nil
         var forwardOnlyDetected = report.reflectionSkipped
         var replaySuccesses = 0
         var uniqueSequenceHashes: Set<UInt64> = []

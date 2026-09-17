@@ -267,13 +267,13 @@ enum ExhaustableDiagnostic: String, Error, DiagnosticMessage {
             case .classInheritanceUnsupported:
                 "@Exhaustable requires a final class without an inheritance clause; put protocol conformances in extensions"
             case .propertyAttributesUnsupported:
-                "@Exhaustable does not support attributes or property wrappers on stored properties"
+                "@Exhaustable does not support attributes or property wrappers on stored properties; remove the attribute or write a generator for this type instead"
             case .propertyStorageUnsupported:
-                "@Exhaustable does not support lazy, weak, or unowned stored properties"
+                "@Exhaustable does not support lazy, weak, or unowned stored properties; use plain storage or write a generator for this type instead"
             case .propertyPatternUnsupported:
-                "@Exhaustable requires each stored property to have a simple name"
+                "@Exhaustable does not support tuple destructuring in a stored property; declare each property on its own"
             case .conditionalMembersUnsupported:
-                "@Exhaustable does not support conditional compilation in the declaration's members"
+                "@Exhaustable does not support conditional compilation in the declaration's members; move the #if outside the type so each variant is its own annotated declaration"
         }
     }
 

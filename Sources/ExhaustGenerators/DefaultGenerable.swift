@@ -14,7 +14,7 @@ protocol DefaultGenerable {
     /// The generator used for this type when no other is named.
     static var defaultGenerator: ReflectiveGenerator<Self> { get }
 
-    /// Applies the preset's standard payload domains.
+    /// Applies the state space's standard payload domains.
     static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self>
 }
 

@@ -15,13 +15,13 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
         /// Lists constructors in declaration order.
         public let constructors: [ConstructorDescriptor<Value>]
 
-        /// Bounds nesting through annotated payloads when the declaration specifies a ceiling; nil leaves the choice to the derivation.
+        /// Bounds nesting through annotated payloads when the declaration specifies a ceiling; `nil` leaves the choice to the derivation.
         public let maximumDepth: Int?
 
         /// Caps structural nodes when specified. Each annotated value, standard container, and opaque payload costs one node; descendants consume the remainder.
         public let maximumNodes: Int?
 
-        /// Caps inherited numeric domains; `.full` leaves the parent's policy unchanged.
+        /// Caps inherited numeric domains; `.full` leaves the parent's state space unchanged.
         public let stateSpace: GeneratorStateSpace
 
         /// Identifies the declaration's source file without an absolute checkout path.
@@ -38,6 +38,10 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
         /// The macro supplies the original annotation's location explicitly. Other construction sites default to this initializer's call site. Moving that location can change the family's fingerprint; launching another process does not.
         ///
         /// - Parameters:
+        ///   - constructors: The type's constructors in declaration order.
+        ///   - maximumDepth: The declared nesting ceiling for this type inside itself, or `nil` to leave the choice to the derivation.
+        ///   - maximumNodes: The declared structural node ceiling, or `nil` for no node ceiling.
+        ///   - stateSpace: The state space this type caps its occurrences to.
         ///   - fileID: The module-qualified source file identifier, not an absolute path.
         ///   - line: The one-based source line of the declaration's annotation.
         ///   - column: The one-based source column of the declaration's annotation.
@@ -91,7 +95,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 
 /// Derives a generator for use with the Exhaust property-testing library.
 ///
-/// Apply this macro to an enum, struct, or final class in the application target while importing only `Exhaustable`. In a test target that imports `ExhaustGenerators` or `Exhaust`, the annotated type gains a `gen(...)` factory. Use `Term.gen()` for the annotation's defaults, or pass arguments such as `Term.gen(maximumDepth: 6, overriding: .int(in: 0 ... 9))` to customize a generator at its use site. Another derived type that holds a `Term` resolves it structurally without being told.
+/// Apply this macro to an enum, struct, or final class in the application target while importing only `Exhaustable`. In a test target that imports `ExhaustGenerators` or `Exhaust`, the annotated type gains a `gen(...)` factory. Use `Term.gen()` for the annotation's defaults, or pass arguments such as `Term.gen(maximumDepth: 6, overriding: .int(in: 0 ... 9))` to customize a generator at its use site. A derived generator for another annotated type that holds a `Term` resolves that payload through this annotation, without an override.
 ///
 /// ```swift
 /// @Exhaustable
@@ -104,7 +108,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 ///
 /// The macro records construction metadata rather than linking the generator runtime into the application target. For an enum, the expansion lists one constructor per case, with associated-value types and closures that build and take apart the case. A struct or final class has one constructor whose payload is its stored properties in declaration order. Structs use Swift's synthesized memberwise initializer or a verified direct equivalent; final classes gain a memberwise initializer.
 ///
-/// A recursive type nests as deeply as the derived generator's depth allows, which grows with the size parameter toward a ceiling of 10 by default. Pass `maximumDepth:` to set a different ceiling for this type where it appears as its own payload; a shallower one keeps values small for a type whose cases branch widely, a deeper one reaches longer chains.
+/// A recursive type nests as deeply as the derived generator's depth allows, which grows with the size parameter toward that generator's ceiling. Pass `maximumDepth:` to set a different ceiling for this type where it appears as its own payload; a shallower one keeps values small for a type whose cases branch widely, a deeper one reaches longer chains.
 ///
 /// ```swift
 /// @Exhaustable(maximumDepth: 6)
@@ -145,9 +149,9 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 /// Generic parameter packs and enum cases inside conditional member blocks are not supported.
 ///
 /// - Parameters:
-///   - maximumDepth: The deepest nesting of this type inside itself that a derived generator produces. Defaults to the derivation's own ceiling.
+///   - maximumDepth: The deepest nesting of this type inside itself that a derived generator produces. Defaults to 10, which a `gen(maximumDepth:)` argument overrides.
 ///   - maximumNodes: An optional positive structural node ceiling. Defaults to no node ceiling.
-///   - stateSpace: The payload-domain preset for numeric values, default sequence lengths, and dates. Defaults to `.full`.
+///   - stateSpace: The state space for numeric values, default sequence lengths, and dates. Defaults to `.full`.
 @attached(extension, conformances: __Exhaustable.Conformance, names: named(__generatorDescriptor))
 @attached(member, names: named(init))
 public macro Exhaustable(

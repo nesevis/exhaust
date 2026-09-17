@@ -4,7 +4,7 @@ Validate a generator's correctness and measure how well it explores its domain.
 
 ## Overview
 
-`#examine` generates samples, checks reflection unless configured to skip it, and reports coverage of numeric ranges, branches, sequence lengths, and character space.
+`#examine` generates samples, checks that each value round-trips through reflection unless you skip that check, and reports coverage of numeric ranges, branches, sequence lengths, and character space.
 
 ```swift
 let report = #examine(personGen, .samples(500))

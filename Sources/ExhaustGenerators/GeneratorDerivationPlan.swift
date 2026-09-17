@@ -3,9 +3,16 @@ import ExhaustCore
 
 /// Records the resolver's decision once, so construction and depth analysis follow the same dependencies.
 indirect enum PayloadPlan {
+    /// An `overriding:` generator, which wins over every other resolution and stays opaque to depth and node analysis.
     case supplied(ReflectiveGenerator<Any>)
+
+    /// A built-in leaf from Exhaust's catalogue of standard-library and Foundation generators. The state space selects its domain, so one type can back several completed leaves.
     case standard(any DefaultGenerable.Type)
+
+    /// Another annotated type, named by identifier rather than by node so recursive and mutually recursive edges close without placeholders. Crossing this edge costs one unit of depth.
     case derivedType(ObjectIdentifier)
+
+    /// A standard container whose children resolve through the same rules. The container terminates at its empty value, so it never blocks a construction even when no child fits.
     case container(DerivedContainerRecipe, children: [PayloadPlan])
 
     /// Keeps a bind boundary for every derived-type dependency, including those inside containers and those outside a recursive cycle.
@@ -73,7 +80,7 @@ final class GeneratorDerivationPlan {
         analyzeDepths()
     }
 
-    /// Shares built-in leaves by type and effective policy without applying presets to explicit overrides.
+    /// Shares built-in leaves by type and effective state space without applying that state space to explicit overrides.
     func defaultGenerator(for type: any DefaultGenerable.Type, stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Any> {
         let key = DefaultGeneratorKey(type: ObjectIdentifier(type), stateSpace: stateSpace)
         if let existing = defaults[key] {

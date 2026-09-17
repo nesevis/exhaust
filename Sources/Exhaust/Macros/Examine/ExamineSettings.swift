@@ -46,7 +46,7 @@ public enum ExamineSettings: Sendable {
     /// The reflection check generates a value, reflects it back through the generator to obtain a choice tree, replays that tree, and compares the result. A mismatch indicates a broken `backward` mapping or a non-injective generator that reflection cannot invert.
     case reflection(ExamineSeverity)
 
-    /// Checks generation, recorded-choice replay, and health without requiring value-to-choice reflection.
+    /// Skips the reflection round-trip check while generation, replay, and health checks continue.
     ///
     /// Use this for dictionaries, sets, forward-only transforms, or derived generators whose reflection is best effort. Supply a trailing equivalence closure to check replay determinism. Unlike `.reflection(.silent)`, this skips reflection instead of merely suppressing its diagnostics.
     ///
@@ -90,7 +90,7 @@ public enum ExamineSettings: Sendable {
 package struct ExamineReportingConfiguration {
     /// Severity for reflection round-trip failures.
     var reflectionSeverity: ExamineSeverity
-    /// Skips only value-to-choice reflection; generation and recorded-choice replay still run.
+    /// Skips only the reflection round-trip check; generation, replay, and health checks still run.
     var skipReflection: Bool
     /// Severity for filter validity rate failures.
     var filterHealthSeverity: ExamineSeverity

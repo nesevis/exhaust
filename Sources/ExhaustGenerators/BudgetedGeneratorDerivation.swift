@@ -81,6 +81,9 @@ final class BudgetedGeneratorDerivation {
         }
     }
 
+    /// Builds one layer: a uniform pick over the constructors that fit this depth and allowance.
+    ///
+    /// A constructor drops out when any payload is unconstructible here, or when the allowance cannot cover its children's minima. At depth zero a type with payload-free cases offers only those, so recursion terminates on a case that carries no structure rather than on whichever payload happens to bottom out. Arms whose payloads reach another derived type are wrapped in `lazy`, which keeps the recursive layer from being constructed while this one is still being built. Layers are cached by type, depth, allowance, and state space, so a shared child generator is built once and reused wherever those four agree.
     func generator<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         depth: Int,

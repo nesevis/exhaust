@@ -64,7 +64,7 @@ extension UInt128 {
 
 // MARK: - Helpers
 
-/// Prebuilds exact size-bounded integer ranges rather than using the general linear scaler's extra endpoint allowance. Equal ranges share a completed leaf, and the full preset never enters this path.
+/// Prebuilds exact size-bounded integer ranges rather than using the general linear scaler's extra endpoint allowance. Equal ranges share a completed leaf, and the full state space never enters this path.
 private func boundedInteger<Value: FixedWidthInteger & BitPatternConvertible>(
     in range: ClosedRange<Value>
 ) -> ReflectiveGenerator<Value> {
@@ -78,7 +78,7 @@ private func boundedInteger<Value: FixedWidthInteger & BitPatternConvertible>(
     )
 }
 
-/// Uses an exactly invertible machine-integer representation for bounded 128-bit values; the full preset still uses the original two-half generator.
+/// Uses an exactly invertible machine-integer representation for bounded 128-bit values; the full state space still uses the original two-half generator.
 private func boundedWideInteger<Value: FixedWidthInteger>(
     _: Value.Type,
     magnitude: Int

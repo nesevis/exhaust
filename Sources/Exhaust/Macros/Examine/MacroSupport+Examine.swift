@@ -10,9 +10,9 @@ import IssueReporting
 public extension __ExhaustRuntime {
     // MARK: - Examination
 
-    /// Validates a generator's reflection, replay, and health, omitting reflection when configured. Runtime target of `#examine` expansion.
+    /// Validates a generator's reflection, replay, and health, skipping reflection when configured. Runtime target of `#examine` expansion.
     ///
-    /// Falls back to choice-sequence comparison for non-`Equatable` types. Omits reflection for synthesized generators and when the settings contain ``ExamineSettings/skipReflection``.
+    /// Falls back to choice-sequence comparison for non-`Equatable` types. Skips reflection for synthesized generators and when the settings contain ``ExamineSettings/skipReflection``.
     @discardableResult
     static func __examine(
         _ refGen: ReflectiveGenerator<some Any>,
@@ -49,7 +49,7 @@ public extension __ExhaustRuntime {
 
     /// Validates a generator with a user-provided replay determinism check. Runtime target of `#examine` expansion with trailing closure.
     ///
-    /// Omits reflection for synthesized generators and when the settings contain ``ExamineSettings/skipReflection``. Replay and health checks continue in either case.
+    /// Skips reflection for synthesized generators and when the settings contain ``ExamineSettings/skipReflection``. Replay and health checks continue in either case.
     @discardableResult
     static func __examine<Output>(
         _ refGen: ReflectiveGenerator<Output>,
