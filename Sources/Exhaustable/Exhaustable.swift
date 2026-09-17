@@ -89,11 +89,9 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
     }
 }
 
-/// Exposes an enum's cases, or a struct's or final class's stored properties, so that a test target can derive a generator for the type.
+/// Derives a generator for use with the Exhaust property-testing library.
 ///
-/// A type marked this way gains generator factories once `ExhaustGenerators` or `Exhaust` is imported. Use `Term.defaultGenerator` for the annotation's defaults, or `Term.derivedGenerator(maximumDepth:overriding:)` to customize a generator at its use site. Another derived type that holds a `Term` resolves it structurally without being told.
-///
-/// For an enum, the expansion lists one constructor per case, with associated-value types and closures that build and take apart the case. A struct or final class has one constructor whose payload is its stored properties in declaration order. Structs use Swift's synthesized memberwise initializer or a verified direct equivalent; final classes gain a memberwise initializer. The type's module gains no dependency on Exhaust's generators or interpreter.
+/// Apply this macro to an enum, struct, or final class in the application target while importing only `Exhaustable`. In a test target that imports `ExhaustGenerators` or `Exhaust`, the annotated type gains `defaultGenerator` and `derivedGenerator(...)` factories. Use `Term.defaultGenerator` for the annotation's defaults, or `Term.derivedGenerator(maximumDepth:overriding:)` to customize a generator at its use site. Another derived type that holds a `Term` resolves it structurally without being told.
 ///
 /// ```swift
 /// @Exhaustable
@@ -103,6 +101,8 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 ///     case application(Term, Term)
 /// }
 /// ```
+///
+/// The macro records construction metadata rather than linking the generator runtime into the application target. For an enum, the expansion lists one constructor per case, with associated-value types and closures that build and take apart the case. A struct or final class has one constructor whose payload is its stored properties in declaration order. Structs use Swift's synthesized memberwise initializer or a verified direct equivalent; final classes gain a memberwise initializer.
 ///
 /// A recursive type nests as deeply as the derived generator's depth allows, which grows with the size parameter toward a ceiling of 10 by default. Pass `maximumDepth:` to set a different ceiling for this type where it appears as its own payload; a shallower one keeps values small for a type whose cases branch widely, a deeper one reaches longer chains.
 ///
