@@ -20,7 +20,7 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public fileprivate(set) var sampleCount = 0
     /// Number of values the generator actually produced. Lower than ``sampleCount`` when generation fails for some samples.
     public fileprivate(set) var valuesGenerated = 0
-    /// Number of values whose reflected choice tree matched the generation tree. Equal to ``valuesGenerated`` for a healthy generator.
+    /// Number of values whose reflected choices matched the generation choices, ignoring depth-control values. Reflection may reconstruct the same output with a different depth allowance. Equal to ``valuesGenerated`` when every sample passes this check.
     public fileprivate(set) var reflectionRoundTripSuccesses = 0
     /// Number of values that passed the user-provided replay equivalence check. Nil when no `replayCheck` closure was provided.
     public fileprivate(set) var replayDeterminismSuccesses: Int?
@@ -485,9 +485,9 @@ private extension Generator where Operation == ReflectiveOperation {
 
     // MARK: - Round-Trip Check
 
-    /// Reflects a generated value and compares the reflected choice tree against the original generation tree.
+    /// Reflects a generated value and compares its value choices against the original generation tree, excluding paired depth-control values.
     ///
-    /// Returns `true` when the trees match (round-trip success). Appends to `failures` on mismatch or error. Sets `forwardOnlyDetected` when a forward-only transform blocks reflection.
+    /// A different depth allowance is valid when reflection reconstructs the same output; it does not exempt the bound subtree from comparison. Returns `true` when the comparison succeeds. Appends to `failures` on mismatch or error. Sets `forwardOnlyDetected` when a forward-only transform blocks reflection.
     func checkReflectionRoundTrip(
         value: Value,
         originalTree: ChoiceTree,

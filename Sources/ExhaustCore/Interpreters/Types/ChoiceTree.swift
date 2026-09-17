@@ -435,10 +435,13 @@ package extension ChoiceTree {
 // MARK: - Value Comparison
 
 package extension ChoiceTree {
-    /// Walks two trees in lockstep and compares the chosen values at every choice site, ignoring metadata such as valid ranges. Returns `nil` when all values match, or a description of the first mismatch.
+    /// Walks two trees in lockstep and compares value choices, ignoring metadata such as valid ranges and the values of paired depth-control choices. Reflection may choose a larger depth allowance for the same output, so depth controls are not evidence of a value mismatch. Bound subtrees and ordinary choices are still compared. Returns `nil` when these checks match, or a description of the first mismatch.
     static func compareValues(_ lhs: ChoiceTree, _ rhs: ChoiceTree) -> String? {
         switch (lhs, rhs) {
             case let (.choice(lhsValue, _), .choice(rhsValue, _)):
+                if lhsValue.tag == .depthControl, rhsValue.tag == .depthControl {
+                    return nil
+                }
                 if lhsValue.bitPattern64 != rhsValue.bitPattern64 {
                     return "value mismatch: \(lhsValue.bitPattern64) vs \(rhsValue.bitPattern64)"
                 }

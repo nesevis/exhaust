@@ -143,12 +143,18 @@ package extension Gen {
     /// Generates a depth index tagged with ``TypeTag/depthControl``.
     ///
     /// Separate from ``chooseBits`` so the reducer excludes depth choices from value search. Depth is changed only by structural operations (remove, replace), which can collapse entire recursive layers while preserving context. Value search on depth would risk creating structurally incoherent trees.
-    static func chooseDepth(in range: ClosedRange<UInt64>) -> Generator<UInt64> {
+    ///
+    /// Scaling narrows the generation-time range without changing the declared range used by reflection and replay. The default preserves the unscaled depth draws used by ``recursive(base:depthRange:extend:)``.
+    static func chooseDepth(
+        in range: ClosedRange<UInt64>,
+        scaling: SizeScaling<UInt64> = .constant
+    ) -> Generator<UInt64> {
         let operation = ReflectiveOperation.chooseBits(
             min: range.lowerBound,
             max: range.upperBound,
             tag: .depthControl,
-            isRangeExplicit: true
+            isRangeExplicit: true,
+            scaling: scaling.erased
         )
         return .impure(operation: operation) { result in
             try .pure(UInt64(bitPattern64: chooseBitsBitPattern(result)))
