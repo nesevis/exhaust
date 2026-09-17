@@ -26,7 +26,7 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public fileprivate(set) var replayDeterminismSuccesses: Int?
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public fileprivate(set) var uniqueChoiceSequences = 0
-    /// Whether the reflection round-trip check was skipped because the generator is synthesized (forward-only by design).
+    /// Indicates whether Exhaust omitted the reflection round-trip check automatically or through ``ExamineSettings/skipReflection``.
     public fileprivate(set) var reflectionSkipped = false
     /// Number of `.just` (pinned constant) nodes found in a synthesized generator tree. These are fields the synthesizer could not build a full generator for.
     public fileprivate(set) var pinnedFieldCount = 0
@@ -106,9 +106,9 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
 
         if reflectionSkipped {
             if let replayDeterminismSuccesses {
-                lines.append("  Correctness: reflection skipped (synthesized generator), \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
+                lines.append("  Correctness: reflection skipped, \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
             } else {
-                lines.append("  Correctness: reflection skipped (synthesized generator)")
+                lines.append("  Correctness: reflection skipped")
             }
             if pinnedFieldCount > 0 {
                 lines.append("  Pinned fields: \(pinnedFieldCount) field\(pinnedFieldCount == 1 ? "" : "s") could not be synthesized (constant value from example JSON)")
@@ -251,13 +251,14 @@ public enum ExamineFailure: Sendable, CustomStringConvertible {
 // MARK: - Non-Equatable overload
 
 package extension Generator where Operation == ReflectiveOperation {
-    /// Validates this generator by checking reflection round-trip correctness and generation health.
+    /// Validates this generator's reflection, replay, and generation health.
     ///
-    /// The round-trip check generates a value, reflects it to obtain a choice tree, and compares that tree against the generation tree. A mismatch indicates a broken backward mapping. Failures are recorded as test issues via ``reportIssue``.
+    /// When reflection is enabled, the round-trip check generates a value, reflects it to obtain a choice tree, and compares that tree against the generation tree. A mismatch indicates a broken backward mapping. Failures are recorded as test issues via ``reportIssue``.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
+    ///   - skipReflection: When `true`, omits the reflection round-trip check while retaining generation, replay, and health checks.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -290,14 +291,14 @@ package extension Generator where Operation == ReflectiveOperation {
 // MARK: - Equatable overload
 
 package extension Generator where Operation == ReflectiveOperation, Value: Equatable {
-    /// Validates this generator by checking reflection round-trip correctness and generation health.
+    /// Validates this generator's reflection, replay, and generation health.
     ///
-    /// The round-trip check generates a value, reflects it to obtain a choice tree, and compares that tree against the generation tree. A mismatch indicates a broken backward mapping. Failures are recorded as test issues via ``reportIssue``.
+    /// When reflection is enabled, the round-trip check generates a value, reflects it to obtain a choice tree, and compares that tree against the generation tree. A mismatch indicates a broken backward mapping. Failures are recorded as test issues via ``reportIssue``.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    ///   - skipReflection: When `true`, skips the reflection round-trip check entirely. Used for synthesized generators that are forward-only by design.
+    ///   - skipReflection: When `true`, omits the reflection round-trip check while retaining generation, replay, and health checks.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -345,8 +346,8 @@ private extension Generator where Operation == ReflectiveOperation {
         let maxFailures = 20
         var report = ExamineReport()
         report.sampleCount = samples
-        report.reflectionSkipped = skipReflection
-        var forwardOnlyDetected = skipReflection
+        report.reflectionSkipped = skipReflection || reporting?.skipReflection == true
+        var forwardOnlyDetected = report.reflectionSkipped
         var replaySuccesses = 0
         var uniqueSequenceHashes: Set<UInt64> = []
         var storedTrees: [ChoiceTree] = []
