@@ -4,7 +4,7 @@
 //
 //  Canonical implementations for the Foundation-type generators. The public
 //  `ReflectiveGenerator.*` factories in the `Exhaust` module and the
-//  `ExhaustGenerable.defaultGenerator` conformances both forward here, so the
+//  `SynthesisGenerable.defaultGenerator` conformances both forward here, so the
 //  per-sample transform closures are authored — and therefore compiled
 //  optimized — inside the prebuilt `ExhaustCore` binary rather than in the
 //  consumer's debug build.

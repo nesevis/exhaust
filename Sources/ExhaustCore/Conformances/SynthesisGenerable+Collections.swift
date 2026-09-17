@@ -1,4 +1,4 @@
-extension Optional: ExhaustGenerable where Wrapped: ExhaustGenerable {
+extension Optional: SynthesisGenerable where Wrapped: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         let typedInner: Generator<Wrapped> = Wrapped.defaultGenerator.map { $0 as! Wrapped }
         return Gen.pick(choices: [
@@ -8,14 +8,14 @@ extension Optional: ExhaustGenerable where Wrapped: ExhaustGenerable {
     }
 }
 
-extension Array: ExhaustGenerable where Element: ExhaustGenerable {
+extension Array: SynthesisGenerable where Element: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         let typedElement: Generator<Element> = Element.defaultGenerator.map { $0 as! Element }
         return Gen.arrayOf(typedElement).erase()
     }
 }
 
-extension Dictionary: ExhaustGenerable where Key: ExhaustGenerable, Value: ExhaustGenerable {
+extension Dictionary: SynthesisGenerable where Key: SynthesisGenerable, Value: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         let typedKey: Generator<Key> = Key.defaultGenerator.map { $0 as! Key }
         let typedValue: Generator<Value> = Value.defaultGenerator.map { $0 as! Value }
@@ -23,7 +23,7 @@ extension Dictionary: ExhaustGenerable where Key: ExhaustGenerable, Value: Exhau
     }
 }
 
-extension Set: ExhaustGenerable where Element: ExhaustGenerable {
+extension Set: SynthesisGenerable where Element: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         let typedElement: Generator<Element> = Element.defaultGenerator.map { $0 as! Element }
         return Gen.setOf(typedElement).erase()

@@ -51,7 +51,7 @@ public macro gen<each GeneratedValue>(
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to `ExhaustGenerable` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to `ExhaustGenerable` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
+/// Types conforming to `SynthesisGenerable` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to `SynthesisGenerable` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
 /// ## What Gets Pinned
 ///
@@ -89,7 +89,7 @@ public macro gen<DecodedValue: Decodable>(
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to `ExhaustGenerable` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to `ExhaustGenerable` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
+/// Types conforming to `SynthesisGenerable` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to `SynthesisGenerable` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
 /// ## What Gets Pinned
 ///
@@ -125,7 +125,7 @@ public macro gen<CodableValue: Codable>(
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to `ExhaustGenerable` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to `ExhaustGenerable` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
+/// Types conforming to `SynthesisGenerable` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to `SynthesisGenerable` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
 /// ## What Gets Pinned
 ///

@@ -245,7 +245,7 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     ) {
         let generator: AnyGenerator
 
-        // Collections are checked before `ExhaustGenerable` because Array/Dictionary/Set conform to `ExhaustGenerable` only conditionally, and those conditional conformance records are not reliably linked in xcframework builds. `SynthesizableCollection` and `DiscoverableCollection` are unconditional, so they resolve where the conditional conformance would not.
+        // Collections are checked before `SynthesisGenerable` because Array/Dictionary/Set conform to `SynthesisGenerable` only conditionally, and those conditional conformance records are not reliably linked in xcframework builds. `SynthesizableCollection` and `DiscoverableCollection` are unconditional, so they resolve where the conditional conformance would not.
         if let collectionGenerator = (type as? SynthesizableCollection.Type)?.synthesizedGenerator {
             generator = collectionGenerator
         } else if let discoveredCollectionGenerator = makeDiscoveredCollectionGenerator(
@@ -254,7 +254,7 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
             codingPath: codingPath + [key]
         ) {
             generator = discoveredCollectionGenerator
-        } else if let generableType = type as? ExhaustGenerable.Type {
+        } else if let generableType = type as? SynthesisGenerable.Type {
             generator = generableType.defaultGenerator
         } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
                   let caseGenerator = makeCaseIterableGenerator(caseIterable)
@@ -278,7 +278,7 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     }
 
     private func decodeValue<T: Decodable>(_ type: T.Type, from jsonValue: Any, key: Key) throws -> T {
-        if type is any ExhaustGenerable.Type {
+        if type is any SynthesisGenerable.Type {
             return try decodePrimitive(type, from: jsonValue)
         }
         let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath + [key])
@@ -372,7 +372,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
         let jsonValue = array[currentIndex]
         currentIndex += 1
 
-        if let generableType = type as? ExhaustGenerable.Type {
+        if let generableType = type as? SynthesisGenerable.Type {
             let primitive = try decodePrimitive(type, from: jsonValue)
             decoder.recordUnkeyed(elementType: type, generableType.defaultGenerator)
             return primitive
@@ -390,7 +390,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
             codingPath: codingPath
         ) {
             generator = discoveredCollectionGenerator
-        } else if let generableType = type as? ExhaustGenerable.Type {
+        } else if let generableType = type as? SynthesisGenerable.Type {
             generator = generableType.defaultGenerator
         } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
                   let caseGenerator = makeCaseIterableGenerator(caseIterable)
@@ -473,7 +473,7 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
     }
 
     func decode<T: Decodable>(_ type: T.Type) throws -> T {
-        if let generableType = type as? ExhaustGenerable.Type {
+        if let generableType = type as? SynthesisGenerable.Type {
             let primitive = try decodePrimitive(type, from: value)
             decoder.recordSingle(generableType.defaultGenerator)
             return primitive
@@ -491,7 +491,7 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
             codingPath: codingPath
         ) {
             generator = discoveredCollectionGenerator
-        } else if let generableType = type as? ExhaustGenerable.Type {
+        } else if let generableType = type as? SynthesisGenerable.Type {
             generator = generableType.defaultGenerator
         } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
                   let caseGenerator = makeCaseIterableGenerator(caseIterable)
