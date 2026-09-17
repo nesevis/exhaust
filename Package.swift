@@ -56,6 +56,11 @@ let package = Package(
             name: "ExhaustGenerators",
             targets: ["ExhaustGenerators"]
         ),
+        // The app-safe `@Exhaustable` annotation and its expansion metadata, with no dependency on ExhaustCore.
+        .library(
+            name: "Exhaustable",
+            targets: ["Exhaustable"]
+        ),
         // Consumed by the MetaFuzzHarness package (the self-fuzzing harness); not part of the supported public API.
         .library(
             name: "ExhaustMetaFuzz",
@@ -82,10 +87,20 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         // The app-safe generator layer under Exhaust: factory shims over ExhaustCore's package Gen* API, #gen, generator synthesis, and the reporting chokepoints. Deliberately free of Testing and XCTest imports on Apple platforms so importing it never drags test-framework search paths into an app build.
+        // The leaf module an app adopts for generator derivation. Depends only on the macro plugin, which is a build-time dependency, so nothing from ExhaustCore links into an app that imports it.
+        .target(
+            name: "Exhaustable",
+            dependencies: [
+                .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
+            ],
+            swiftSettings: strictConcurrencySettings,
+            plugins: swiftLintPlugins
+        ),
         .target(
             name: "ExhaustGenerators",
             dependencies: [
                 "ExhaustCore",
+                "Exhaustable",
                 .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
                 .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
             ],

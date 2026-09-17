@@ -8,3 +8,6 @@
 @_exported import enum ExhaustCore.SizeScaling
 @_exported import enum ExhaustCore.UnfoldStep
 @_exported import enum ExhaustCore.UnicodeVersion
+
+// Re-export the annotation and its expansion infrastructure so clients can use `@Exhaustable` without a second import.
+@_exported import Exhaustable
