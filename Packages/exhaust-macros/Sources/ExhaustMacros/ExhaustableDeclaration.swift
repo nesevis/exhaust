@@ -25,10 +25,10 @@ struct ExhaustableDeclaration {
         _ declaration: some DeclGroupSyntax,
         lexicalContext: [Syntax]
     ) throws -> Self {
-        guard hasGenericParameters(Syntax(declaration)) == false,
-              lexicalContext.contains(where: hasGenericParameters) == false
+        guard hasParameterPacks(Syntax(declaration)) == false,
+              lexicalContext.contains(where: hasParameterPacks) == false
         else {
-            throw ExhaustableDiagnostic.genericUnsupported
+            throw ExhaustableDiagnostic.parameterPacksUnsupported
         }
         guard declaration.memberBlock.members.contains(where: { $0.decl.is(IfConfigDeclSyntax.self) }) == false else {
             throw ExhaustableDiagnostic.conditionalMembersUnsupported
@@ -173,11 +173,12 @@ struct ExhaustableDeclaration {
         }
     }
 
-    private static func hasGenericParameters(_ declaration: Syntax) -> Bool {
-        declaration.as(EnumDeclSyntax.self)?.genericParameterClause != nil
-            || declaration.as(StructDeclSyntax.self)?.genericParameterClause != nil
-            || declaration.as(ClassDeclSyntax.self)?.genericParameterClause != nil
-            || declaration.as(ActorDeclSyntax.self)?.genericParameterClause != nil
+    private static func hasParameterPacks(_ declaration: Syntax) -> Bool {
+        let parameters = declaration.as(EnumDeclSyntax.self)?.genericParameterClause
+            ?? declaration.as(StructDeclSyntax.self)?.genericParameterClause
+            ?? declaration.as(ClassDeclSyntax.self)?.genericParameterClause
+            ?? declaration.as(ActorDeclSyntax.self)?.genericParameterClause
+        return parameters?.parameters.contains { $0.eachKeyword != nil } ?? false
     }
 
     /// Uses the effective enclosing access so an extension on a nested private type does not expose that type through an internal descriptor property.
@@ -236,7 +237,7 @@ struct ExhaustableDeclaration {
 enum ExhaustableDiagnostic: String, Error, DiagnosticMessage {
     case requiresEnumStructOrFinalClass
     case classMustBeFinal
-    case genericUnsupported
+    case parameterPacksUnsupported
     case propertyNeedsTypeAnnotation
     case sourceLocationUnavailable
     case initializedConstantUnsupported
@@ -253,8 +254,8 @@ enum ExhaustableDiagnostic: String, Error, DiagnosticMessage {
                 "@Exhaustable can only be attached to an enum, a struct, or a final class"
             case .classMustBeFinal:
                 "@Exhaustable requires a class to be final"
-            case .genericUnsupported:
-                "@Exhaustable does not support generic types or types nested in generic declarations"
+            case .parameterPacksUnsupported:
+                "@Exhaustable does not support generic parameter packs or types nested in declarations with parameter packs"
             case .propertyNeedsTypeAnnotation:
                 "@Exhaustable needs a type annotation on every stored property"
             case .sourceLocationUnavailable:

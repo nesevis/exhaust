@@ -128,7 +128,21 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 ///
 /// Put additional struct initializers in an extension to preserve Swift's memberwise initializer. For custom construction that does not preserve the memberwise arguments, write a generator instead and supply it through `overriding:` when deriving a containing type. A final class must have no inheritance clause: syntax alone cannot distinguish a superclass from a protocol or type alias. Put its protocol conformances in extensions, and do not declare an initializer elsewhere that duplicates the generated memberwise signature.
 ///
-/// Generic types, types nested in generic declarations, and enum cases inside conditional member blocks are not supported.
+/// Generic enums, structs, final classes, and declarations nested in generic types are supported. Derive a concrete specialization, such as `Tree<Int>.gen()`. Each concrete payload must have a built-in generator, be annotated, be a supported container, or have an explicit override. Generic parameters do not need a generator protocol constraint.
+///
+/// ```swift
+/// @Exhaustable
+/// indirect enum Tree<Element> {
+///     case leaf(Element)
+///     case branch(Tree<Element>, Tree<Element>)
+/// }
+/// ```
+///
+/// Descriptor closures are sendable. Under strict concurrency, protocol-constrained generic parameters and associated types used by those closures may need `SendableMetatype` constraints on the original declaration. For example, use `Element: Hashable & SendableMetatype` rather than requiring `Element: Sendable`; the generated values themselves need not be sendable.
+///
+/// Recursive specializations must form a finite dependency graph. Exact repetitions and finite cycles that change arguments are supported. Discovery rejects more than 32 distinct specializations of the same annotation on one active dependency path, preventing types such as `Nested<Element>` containing `Nested<[Element]>` from expanding indefinitely. This conservative limit also rejects unusually deep finite chains of specializations. A depth or node ceiling does not bypass discovery; supply an exact payload override to terminate such a dependency.
+///
+/// Generic parameter packs and enum cases inside conditional member blocks are not supported.
 ///
 /// - Parameters:
 ///   - maximumDepth: The deepest nesting of this type inside itself that a derived generator produces. Defaults to the derivation's own ceiling.

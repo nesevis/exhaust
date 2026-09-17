@@ -21,11 +21,12 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
                 throw ExhaustableDiagnostic.sourceLocationUnavailable
             }
             let typeName = type.trimmedDescription
+            let valueType = specializedName(for: declaration, fallback: typeName)
             let caseEntries: [String] = switch model.construction {
                 case let .enumeration(cases):
-                    cases.map { caseEntry(for: $0, typeName: typeName) }
+                    cases.map { caseEntry(for: $0, typeName: valueType) }
                 case let .memberwise(properties), let .synthesizedMemberwise(properties):
-                    [productEntry(properties: properties, typeName: typeName)]
+                    [productEntry(properties: properties, typeName: typeName, valueType: valueType)]
             }
             let entries = caseEntries.joined(separator: ",\n            ")
             let limits = ["maximumDepth", "maximumNodes", "stateSpace"].compactMap { label in
@@ -33,7 +34,7 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
             }.joined()
             let extensionDeclaration: DeclSyntax = """
             extension \(raw: typeName): __Exhaustable.Conformance {
-                \(raw: model.access)static var __generatorDescriptor: __Exhaustable.TypeDescriptor<\(raw: typeName)> {
+                \(raw: model.access)static var __generatorDescriptor: __Exhaustable.TypeDescriptor<\(raw: valueType)> {
                     __Exhaustable.TypeDescriptor(constructors: [
                         \(raw: entries)
                     ]\(raw: limits), fileID: \(location.file), line: \(location.line), column: \(location.column))
@@ -79,6 +80,15 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
 
 // MARK: - Rendering
 
+/// A nested generic name such as `Outer.Inner` is valid in the extension declaration but needs its own arguments in the descriptor and constructor expressions. Preserve qualification so unrelated types with the same short name cannot shadow it.
+private func specializedName(for declaration: some DeclGroupSyntax, fallback: String) -> String {
+    guard let parameters = declaration.asProtocol(WithGenericParametersSyntax.self)?.genericParameterClause else {
+        return fallback
+    }
+    let arguments = parameters.parameters.map { $0.name.trimmedDescription }.joined(separator: ", ")
+    return "\(fallback)<\(arguments)>"
+}
+
 /// Passes limit expressions through without evaluating them in the macro process.
 private func limitArgument(_ label: String, of node: AttributeSyntax) -> String? {
     guard let arguments = node.arguments?.as(LabeledExprListSyntax.self) else {
@@ -88,14 +98,14 @@ private func limitArgument(_ label: String, of node: AttributeSyntax) -> String?
 }
 
 /// Uses only validated fields: every payload has a concrete type and a corresponding memberwise argument and extraction position.
-private func productEntry(properties: [ExhaustableDeclaration.StoredProperty], typeName: String) -> String {
+private func productEntry(properties: [ExhaustableDeclaration.StoredProperty], typeName: String, valueType: String) -> String {
     let payloadTypes = properties.map { metatypeExpression($0.type) }
     let embedArguments = properties.enumerated().map { index, property in
         "\(property.name): values[\(index)] as! \(property.type.trimmedDescription)"
     }
     let embedBody = properties.isEmpty
-        ? "{ _ in \(typeName)() }"
-        : "{ values in \(typeName)(\(embedArguments.joined(separator: ", "))) }"
+        ? "{ _ in \(valueType)() }"
+        : "{ values in \(valueType)(\(embedArguments.joined(separator: ", "))) }"
     let extractBody = "{ value in [\(properties.map { "value.\($0.name)" }.joined(separator: ", "))] }"
     return """
     __Exhaustable.ConstructorDescriptor(name: "\(typeName)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))

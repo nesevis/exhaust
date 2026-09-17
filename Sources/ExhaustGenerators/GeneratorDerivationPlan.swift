@@ -59,6 +59,10 @@ final class GeneratorDerivationPlan {
     private var discoveryOrder: [ObjectIdentifier] = []
     private var minimumDepths: [ObjectIdentifier: Int] = [:]
     private var defaults: [DefaultGeneratorKey: ReflectiveGenerator<Any>] = [:]
+    private var activeSpecializations: [DeclarationKey: [Any.Type]] = [:]
+
+    /// Bounds eager graph discovery, not generated value depth. Exact type repeats close through `resolved` before this limit applies.
+    static let maximumActiveSpecializations = 32
 
     init(
         for type: (some __Exhaustable.Conformance).Type,
@@ -158,6 +162,25 @@ final class GeneratorDerivationPlan {
         if let maximumNodes = descriptor.maximumNodes, maximumNodes <= 0 {
             throw GeneratorDerivationError.invalidMaximumNodes(type: String(describing: type), nodes: maximumNodes)
         }
+        let declaration = DeclarationKey(
+            fileID: String(describing: descriptor.fileID),
+            line: descriptor.line,
+            column: descriptor.column
+        )
+        let active = activeSpecializations[declaration, default: []]
+        guard active.count < Self.maximumActiveSpecializations else {
+            throw GeneratorDerivationError.specializationLimitExceeded(
+                type: String(describing: active[0]),
+                limit: Self.maximumActiveSpecializations
+            )
+        }
+        activeSpecializations[declaration, default: []].append(type)
+        defer {
+            activeSpecializations[declaration]?.removeLast()
+            if activeSpecializations[declaration]?.isEmpty == true {
+                activeSpecializations.removeValue(forKey: declaration)
+            }
+        }
         resolved[reference] = .derivedType(reference)
         discoveryOrder.append(reference)
         let constructors = try descriptor.constructors.map { entry in
@@ -231,6 +254,7 @@ enum GeneratorDerivationError: Error, Equatable, CustomStringConvertible {
     case noFiniteConstructionWithinNodeLimits(type: String, depth: Int)
     case insufficientDepth(type: String, minimum: Int, requested: Int)
     case noFiniteConstruction(type: String, dependencyPath: [String])
+    case specializationLimitExceeded(type: String, limit: Int)
 
     var description: String {
         switch self {
@@ -248,11 +272,20 @@ enum GeneratorDerivationError: Error, Equatable, CustomStringConvertible {
                 "Cannot derive a generator for \(type) at depth \(requested): minimum constructible depth is \(minimum)."
             case let .noFiniteConstruction(type, dependencyPath):
                 "Cannot derive a generator for \(type): no finite construction within the declared depth limits. Dependency path: \(dependencyPath.joined(separator: " -> "))."
+            case let .specializationLimitExceeded(type, limit):
+                "Cannot derive a generator for \(type): more than \(limit) distinct specializations of the same declaration on one dependency path. Recursive generic arguments may expand without bound; supply an override to terminate the dependency."
         }
     }
 }
 
 // MARK: - Helpers
+
+/// Groups specializations by their original annotation, including types nested in a generic declaration. Concrete metatype identifiers still distinguish resolved nodes and generator layers.
+private struct DeclarationKey: Hashable {
+    let fileID: String
+    let line: UInt
+    let column: UInt
+}
 
 private struct DefaultGeneratorKey: Hashable {
     let type: ObjectIdentifier

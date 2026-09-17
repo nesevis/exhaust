@@ -107,9 +107,9 @@
                 ("final class Example {\nlet count: Int\ninit(count: Int) { self.count = count }\n}", .customInitializerUnsupported),
                 ("final class Example: Parent { let count: Int }", .classInheritanceUnsupported),
                 ("final class Example: Sendable { let count: Int }", .classInheritanceUnsupported),
-                ("final class Example<Value> { let count: Int }", .genericUnsupported),
-                ("struct Example<Value> { let value: Value }", .genericUnsupported),
-                ("enum Example<Value> { case value(Value) }", .genericUnsupported),
+                ("final class Example<each Value> { let count: Int }", .parameterPacksUnsupported),
+                ("struct Example<each Value> { let count: Int }", .parameterPacksUnsupported),
+                ("enum Example<each Value> { case value(Int) }", .parameterPacksUnsupported),
                 ("final class Example { var count = 0 }", .propertyNeedsTypeAnnotation),
                 ("struct Example { @Wrapper var count: Int }", .propertyAttributesUnsupported),
                 ("final class Example { @Wrapper var count: Int }", .propertyAttributesUnsupported),
@@ -231,14 +231,61 @@
             }
         }
 
-        @Test("A nongeneric nested declaration still rejects a generic enclosing scope")
-        func rejectsGenericEnclosingScope() throws {
-            let nested: DeclSyntax = "struct Value { let count: Int }"
+        @Test("Generic declarations retain their construction strategy")
+        func genericDeclarations() throws {
+            let declarations = [
+                "final class Example<Value> { let value: Value }",
+                "struct Example<Value> { let value: Value }",
+                "enum Example<Value> { case value(Value) }",
+            ]
+            for source in declarations {
+                let syntax = DeclSyntax(stringLiteral: source)
+                let declaration = try #require(syntax.asProtocol(DeclGroupSyntax.self))
+                let model = try ExhaustableDeclaration.validate(declaration, lexicalContext: [])
+                let payloadTypes = switch model.construction {
+                    case let .enumeration(cases):
+                        cases.flatMap { $0.parameterClause?.parameters.map { $0.type.trimmedDescription } ?? [] }
+                    case let .memberwise(properties), let .synthesizedMemberwise(properties):
+                        properties.map { $0.type.trimmedDescription }
+                }
+                #expect(payloadTypes == ["Value"])
+            }
+        }
+
+        @Test("Nested generic expansions qualify the concrete specialization without constraining its arguments")
+        func genericExpansion() throws {
+            let declaration: DeclSyntax = "struct Box<Element> { let value: Element }"
+            let structure = try #require(declaration.as(StructDeclSyntax.self))
+            let extensions = try ExhaustableMacro.expansion(
+                of: AttributeSyntax("@Exhaustable"),
+                attachedTo: structure,
+                providingExtensionsOf: TypeSyntax(stringLiteral: "Scope.Box"),
+                conformingTo: [],
+                in: GenerableValidationContext()
+            )
+            #expect(extensions.count == 1)
+            let expansion = try #require(extensions.first)
+            #expect(expansion.extendedType.trimmedDescription == "Scope.Box")
+            #expect(expansion.genericWhereClause == nil)
+            #expect(expansion.trimmedDescription.contains("__Exhaustable.TypeDescriptor<Scope.Box<Element>>"))
+            #expect(expansion.trimmedDescription.contains("Scope.Box<Element>(value: values[0] as! Element)"))
+        }
+
+        @Test("Nested declarations can refer to an enclosing generic parameter")
+        func genericEnclosingScope() throws {
+            let nested: DeclSyntax = "struct Value { let element: Element }"
             let structure = try #require(nested.as(StructDeclSyntax.self))
             for kind in ["struct", "enum", "class", "actor"] {
                 let outer = DeclSyntax(stringLiteral: "\(kind) Container<Element> {}")
-                #expect(throws: ExhaustableDiagnostic.genericUnsupported) {
-                    try ExhaustableDeclaration.validate(structure, lexicalContext: [Syntax(outer)])
+                let model = try ExhaustableDeclaration.validate(structure, lexicalContext: [Syntax(outer)])
+                guard case let .memberwise(properties) = model.construction else {
+                    Issue.record("Expected memberwise construction")
+                    continue
+                }
+                #expect(properties.map { $0.type.trimmedDescription } == ["Element"])
+                let packed = DeclSyntax(stringLiteral: "\(kind) Container<each Element> {}")
+                #expect(throws: ExhaustableDiagnostic.parameterPacksUnsupported) {
+                    try ExhaustableDeclaration.validate(structure, lexicalContext: [Syntax(packed)])
                 }
             }
         }
