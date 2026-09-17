@@ -69,7 +69,21 @@ struct RecursiveOperationTests {
             // Reflect the generated value back
             let reflectedTree = try Interpreters.reflect(gen, with: value)
             #expect(reflectedTree != nil, "Reflection should succeed for generated value: \(value)")
+            let reflected = try #require(reflectedTree)
+            #expect(try Interpreters.replay(gen, using: reflected) == value)
         }
+    }
+
+    @Test("BST reflection decomposes nested nodes and replays their values")
+    func reflectsNestedNodes() throws {
+        let generator = BST.arbitraryRecursive(maxDepth: 3)
+        let value = BST.node(
+            left: .node(left: .leaf, value: 2, right: .leaf),
+            value: 5,
+            right: .node(left: .leaf, value: 8, right: .leaf)
+        )
+        let reflected = try #require(try Interpreters.reflect(generator, with: value))
+        #expect(try Interpreters.replay(generator, using: reflected) == value)
     }
 
     // MARK: - Replay Roundtrip

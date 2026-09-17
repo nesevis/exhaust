@@ -372,7 +372,9 @@ extension Interpreters {
                 var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
                 if isPicked {
                     for (value, pathTree) in reflectionPaths {
-                        guard let path = pathTree.first else { continue }
+                        guard let path = pathTree.first else {
+                            continue
+                        }
                         results.append((value, fingerprint, choice.weight, choice.id, true, path))
                     }
                 }
@@ -391,8 +393,11 @@ extension Interpreters {
                 }
             }
         }
-        if results.isEmpty, let deferredBranchError {
-            throw deferredBranchError
+        if results.isEmpty {
+            if let deferredBranchError {
+                throw deferredBranchError
+            }
+            return []
         }
 
         // Only mark the first matching branch as `.selected` — a pick site should have exactly one selected branch, matching VACTI's output.
