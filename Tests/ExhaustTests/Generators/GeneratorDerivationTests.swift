@@ -190,7 +190,7 @@ struct GeneratorDerivationTests {
         let generator = ReflectiveGenerator<Wrapper>.derived(depth: 2, overriding: .int(in: 0 ... 3))
         let samples = try #example(generator, count: 100)
         #expect(samples.contains { $0.inner.depth > 0 })
-        let direct = Term.defaultGenerator
+        let direct = Term.gen()
         let directSamples = try #example(direct, count: 20, seed: 1337)
         #expect(directSamples.count == 20)
         #expect(directSamples.contains { $0.depth > 0 })

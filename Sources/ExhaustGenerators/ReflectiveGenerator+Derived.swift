@@ -9,10 +9,10 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
 
     /// Derives a generator from the metadata emitted by `@Exhaustable`.
     ///
-    /// Annotated types expose this factory as `Term.derivedGenerator(...)`.
+    /// Annotated types expose this factory as `Term.gen(...)`.
     ///
     /// ```swift
-    /// let terms = Term.derivedGenerator(overriding: .int(in: 0 ... 3))
+    /// let terms = Term.gen(overriding: .int(in: 0 ... 3))
     /// ```
     /// Every case that fits the drawn depth is one arm of a uniform pick. Crossing into another structurally derived type consumes one unit of depth. Arrays, optionals, sets, and dictionaries pass the depth allowance through to their contents; when those contents cannot fit, only the empty container is generated. At depth zero, payload-free cases take precedence when the type has any.
     ///
@@ -20,7 +20,7 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     ///
     /// The ceiling comes from the call, then the type's annotation, then ``defaultMaximumDepth``. A nested type's annotated ceiling also bounds it wherever it occurs as a structural payload. Reflection is best effort, not a derivation requirement: sets, dictionaries, and forward-only payloads do not promise it. Recorded choices still support replay and reduction. When reflection is available, it decomposes a value at the root ceiling, where all shallower constructions are available; a successful reflected replay must reproduce the value.
     ///
-    /// Payload resolution first uses an exact override, then structural derivation for an annotated type, then a standard container recipe, then Exhaust's built-in defaults for standard-library and Foundation types. Container contents use the same resolver, so element overrides are honored inside nested containers. Supply custom payload generators through `overriding:`; a user-defined property named `defaultGenerator` is not discovered automatically. Supplied generators are opaque: depth bounds apply to the derived structure, not to recursion or filtering inside an override.
+    /// Payload resolution first uses an exact override, then structural derivation for an annotated type, then a standard container recipe, then Exhaust's built-in defaults for standard-library and Foundation types. Container contents use the same resolver, so element overrides are honored inside nested containers. Supply custom payload generators through `overriding:`; a user-defined generator property is not discovered automatically. Supplied generators are opaque: depth bounds apply to the derived structure, not to recursion or filtering inside an override.
     ///
     /// Set `stateSpace: .small` to favor collisions with numeric magnitudes up to 100, automatically derived sequence lengths up to 10, and 201 daily dates centered on January 1, 2026 UTC. `.tiny` uses numeric and sequence ceilings of 10 and 5, respectively, and 21 daily dates around the same midpoint. `.medium` uses numeric and sequence ceilings of 10,000 and 20 to reduce processing costs while preserving the full date domain. Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. The default, `.full`, preserves the built-in generators' existing domains and scaling, including sequence lengths up to 100 and `Date.distantPast...Date.distantFuture` at one-minute resolution. This policy propagates through annotated types and container contents. Nested annotations cap it, while explicit payload overrides retain their own domains. See ``GeneratorStateSpace`` for details.
     ///
@@ -59,7 +59,7 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     /// Use this to reproduce a fixed construction budget. Values may terminate earlier; the bound does not require them to reach the requested depth. Reduction operates within that layer rather than lowering a root depth choice. A depth below the type's minimum constructible depth fails a precondition.
     ///
     /// ```swift
-    /// let terms = Term.derivedGenerator(depth: 4, overriding: .int(in: 0 ... 3))
+    /// let terms = Term.gen(depth: 4, overriding: .int(in: 0 ... 3))
     /// ```
     ///
     /// - Parameters:
@@ -87,30 +87,18 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
 }
 
 public extension __Exhaustable.Conformance {
-    /// Builds the derived generator for a type annotated with `@Exhaustable`, using its declared depth and node ceilings.
+    /// Builds the generator derived from this type's `@Exhaustable` annotation.
     ///
-    /// Use this ordinary ``ReflectiveGenerator`` directly with `#example` or as an input to `#gen`. It is available for annotated types when importing `ExhaustGenerators` or `Exhaust`; the application module only needs `Exhaustable`.
-    ///
-    /// ```swift
-    /// let generator = Term.defaultGenerator
-    /// let term = try #example(generator)
-    /// let combined = #gen(generator, generator, .bool())
-    /// ```
-    ///
-    /// Use ``derivedGenerator(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)`` instead when supplying payload overrides, state-space presets, or different ceilings. Other derived types resolve this type structurally; declaring a custom generator property does not change that resolution.
-    static var defaultGenerator: ReflectiveGenerator<Self> {
-        derivedGenerator()
-    }
-
-    /// Builds a generator for an annotated type with configurable depth and node ceilings and payload generators.
+    /// This factory is the test-target counterpart to the application type's annotation: `Term.gen()` is available because `Term` was declared with `@Exhaustable`. Pass arguments to customize the derived depth, node ceiling, state space, or payload generators at the use site.
     ///
     /// ```swift
-    /// let generator = Term.derivedGenerator(maximumDepth: 6, maximumNodes: 128, stateSpace: .small)
+    /// let generator = Term.gen()
     /// let term = try #example(generator)
-    /// let combined = #gen(generator, .bool())
+    /// let configured = Term.gen(maximumDepth: 6, maximumNodes: 128, stateSpace: .small)
+    /// let combined = #gen(configured, .bool())
     /// ```
     ///
-    /// With no arguments, this uses the same policy as ``defaultGenerator``. The root depth is a reducible choice that grows with Exhaust's size parameter. Use ``derivedGenerator(depth:maximumNodes:stateSpace:overriding:)`` to pin it instead. The explicit ceiling overrides the root annotation; nested annotated types retain their own ceilings. A ceiling below the minimum constructible depth, or a type with no finite construction, fails a precondition.
+    /// With no arguments, this uses the annotation's defaults. It is available when importing `ExhaustGenerators` or `Exhaust`; the application's annotated type only needs `Exhaustable`. Use the returned ``ReflectiveGenerator`` directly with `#example` or compose it with `#gen`. Other derived types resolve this type structurally; declaring a custom generator property does not change that resolution. The root depth is a reducible choice that grows with Exhaust's size parameter. Use ``gen(depth:maximumNodes:stateSpace:overriding:)`` to pin it instead. The explicit ceiling overrides the root annotation; nested annotated types retain their own ceilings. A ceiling below the minimum constructible depth, or a type with no finite construction, fails a precondition.
     ///
     /// Overrides match payload types, including elements inside standard containers. They take precedence over structural derivation and built-in defaults. They do not replace the root generator, but can replace occurrences of its type as payloads. Depth bounds do not constrain recursion or filtering inside an override. A node ceiling splits one root allowance among child values and containers; nested ceilings cap the allocated share. Overrides count as one opaque node. See ``ReflectiveGenerator/derived(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)`` for counting, splitting, and reflection details.
     ///
@@ -121,7 +109,7 @@ public extension __Exhaustable.Conformance {
     ///   - scaling: How the drawn depth scales with the size parameter. Defaults to `.linear`.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator with a reducible choice of constructible depth and best-effort reflection.
-    static func derivedGenerator<each Override>(
+    static func gen<each Override>(
         maximumDepth: Int? = nil,
         maximumNodes: Int? = nil,
         stateSpace: GeneratorStateSpace? = nil,
@@ -137,14 +125,16 @@ public extension __Exhaustable.Conformance {
         )
     }
 
-    /// Builds a generator for an annotated type at a fixed depth rather than drawing the depth from the size parameter.
+    /// Builds the generator derived from this type's `@Exhaustable` annotation at a fixed depth.
+    ///
+    /// Use this overload when the test needs a fixed derived depth rather than a depth drawn from Exhaust's size parameter.
     ///
     /// ```swift
-    /// let generator = Term.derivedGenerator(depth: 4, overriding: .int(in: 0 ... 3))
+    /// let generator = Term.gen(depth: 4, overriding: .int(in: 0 ... 3))
     /// let term = try #example(generator)
     /// ```
     ///
-    /// Values may terminate before the requested depth. Reduction stays within this layer instead of lowering a root depth choice. An insufficient depth or a type with no finite construction fails a precondition. Payload overrides and nested type ceilings follow ``derivedGenerator(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)``.
+    /// Values may terminate before the requested depth. Reduction stays within this layer instead of lowering a root depth choice. An insufficient depth or a type with no finite construction fails a precondition. Payload overrides and nested type ceilings follow ``gen(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)``.
     ///
     /// - Parameters:
     ///   - depth: The root nesting bound, overriding the root annotation's ceiling.
@@ -152,7 +142,7 @@ public extension __Exhaustable.Conformance {
     ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds, default sequence lengths, and date ranges still scale with size even though depth is pinned.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator built at the requested depth, with best-effort reflection.
-    static func derivedGenerator<each Override>(
+    static func gen<each Override>(
         depth: Int,
         maximumNodes: Int? = nil,
         stateSpace: GeneratorStateSpace? = nil,

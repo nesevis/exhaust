@@ -11,7 +11,7 @@ struct GeneratorStateSpaceTests {
     ], [1, 25, 50, 100])
     func numericBounds(preset: (GeneratorStateSpace, Int), size: Int) throws {
         let (policy, magnitude) = preset
-        let generator = StateSpaceNumbers.derivedGenerator(depth: 0, stateSpace: policy).resize(size)
+        let generator = StateSpaceNumbers.gen(depth: 0, stateSpace: policy).resize(size)
         let samples = try #example(generator, count: 50, seed: 1337)
         #expect(samples.count == 50)
         for value in samples {
@@ -33,7 +33,7 @@ struct GeneratorStateSpaceTests {
 
     @Test("Tiny integers reflect exactly the rounded size-scaled range up to ten", arguments: 1 ... 100)
     func tinySizeRamp(size: Int) throws {
-        let generator = StateSpaceLeaf.derivedGenerator(depth: 0, stateSpace: .tiny).resize(size)
+        let generator = StateSpaceLeaf.gen(depth: 0, stateSpace: .tiny).resize(size)
         let magnitude = Int((Double(size) / 10).rounded())
         for value in [-magnitude, 0, magnitude] {
             try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
@@ -45,7 +45,7 @@ struct GeneratorStateSpaceTests {
     @Test("The full preset preserves primitive outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
     func fullParity(seed: UInt64) throws {
         for maximumNodes in [Int?.none, 32] {
-            let derived = StateSpaceLeaf.derivedGenerator(depth: 0, maximumNodes: maximumNodes, stateSpace: .full)
+            let derived = StateSpaceLeaf.gen(depth: 0, maximumNodes: maximumNodes, stateSpace: .full)
             let actual = try #example(#gen(derived, .uint64()), count: 100, seed: .numeric(seed))
             // The pre-preset builder retains a pick even for a product's single constructor.
             let reference = try #example(#gen(.oneOf(.int()), .uint64()), count: 100, seed: .numeric(seed))
@@ -63,12 +63,12 @@ struct GeneratorStateSpaceTests {
     func annotationAndFactoryPrecedence() throws {
         #expect(StateSpaceSmall.__generatorDescriptor.stateSpace == .small)
         let target = StateSpaceSmall(value: 500)
-        expectStateSpaceRejection(StateSpaceSmall.defaultGenerator, value: target)
-        try expectStateSpaceReplay(StateSpaceSmall.derivedGenerator(stateSpace: .medium), value: target)
-        try expectStateSpaceReplay(StateSpaceSmall.derivedGenerator(depth: 0, stateSpace: .full), value: target)
+        expectStateSpaceRejection(StateSpaceSmall.gen(), value: target)
+        try expectStateSpaceReplay(StateSpaceSmall.gen(stateSpace: .medium), value: target)
+        try expectStateSpaceReplay(StateSpaceSmall.gen(depth: 0, stateSpace: .full), value: target)
         for generator in [
-            StateSpaceSmall.defaultGenerator,
-            StateSpaceSmall.derivedGenerator(depth: 0),
+            StateSpaceSmall.gen(),
+            StateSpaceSmall.gen(depth: 0),
             ReflectiveGenerator<StateSpaceSmall>.derived(depth: 0),
         ] {
             let samples = try #example(generator.resize(100), count: 100, seed: 1337)
@@ -80,7 +80,7 @@ struct GeneratorStateSpaceTests {
 
     @Test("Shared types and container recipes retain their path's preset", arguments: [Int?.none, 256])
     func inheritedDomains(maximumNodes: Int?) throws {
-        let generator = StateSpaceDiamond.derivedGenerator(depth: 4, maximumNodes: maximumNodes, stateSpace: .small).resize(100)
+        let generator = StateSpaceDiamond.gen(depth: 4, maximumNodes: maximumNodes, stateSpace: .small).resize(100)
         let target = StateSpaceDiamond(
             narrow: StateSpaceNarrow(leaf: StateSpaceLeaf(value: 10), values: [StateSpaceLeaf(value: -10)]),
             wider: StateSpaceWider(leaf: StateSpaceLeaf(value: 80), values: [StateSpaceLeaf(value: -80)]),
@@ -104,7 +104,7 @@ struct GeneratorStateSpaceTests {
 
     @Test("Numeric overrides remain opaque to inherited and declared presets", arguments: [Int?.none, 128])
     func overridesWin(maximumNodes: Int?) throws {
-        let generator = StateSpaceDiamond.derivedGenerator(
+        let generator = StateSpaceDiamond.gen(
             depth: 4,
             maximumNodes: maximumNodes,
             stateSpace: .tiny,
@@ -124,7 +124,7 @@ struct GeneratorStateSpaceTests {
 
     @Test("Optional, set, and dictionary payloads inherit the state-space policy", arguments: [Int?.none, 128])
     func standardContainers(maximumNodes: Int?) throws {
-        let generator = StateSpaceContainers.derivedGenerator(maximumNodes: maximumNodes, stateSpace: .tiny).resize(100)
+        let generator = StateSpaceContainers.gen(maximumNodes: maximumNodes, stateSpace: .tiny).resize(100)
         let samples = try #example(generator, count: 50, seed: 1337)
         #expect(samples.count == 50)
         #expect(samples.contains { $0.optional != nil })
@@ -146,7 +146,7 @@ struct GeneratorStateSpaceTests {
     func sequenceBounds(preset: (GeneratorStateSpace, Int), size: Int) throws {
         let (policy, maximumLength) = preset
         let scaledMaximum = sizeScaledMaximum(maximumLength, size: size)
-        let generator = StateSpaceSequences.derivedGenerator(depth: 0, stateSpace: policy).resize(size)
+        let generator = StateSpaceSequences.gen(depth: 0, stateSpace: policy).resize(size)
         let samples = try #example(generator, count: 100, seed: 1337)
         #expect(samples.count == 100)
         for value in samples {
@@ -190,7 +190,7 @@ struct GeneratorStateSpaceTests {
     @Test("Explicit sequence payload overrides retain their domains")
     func sequenceOverridesWin() throws {
         let name = String(repeating: "a", count: 30)
-        let generator = StateSpaceSequences.derivedGenerator(
+        let generator = StateSpaceSequences.gen(
             depth: 0,
             stateSpace: .tiny,
             overriding: ReflectiveGenerator<String>.just(name)
@@ -214,7 +214,7 @@ struct GeneratorStateSpaceTests {
         let midpoint = Date(timeIntervalSince1970: 1_767_225_600)
         let lowerBound = midpoint.addingTimeInterval(TimeInterval(-dayRadius * 86400))
         let upperBound = midpoint.addingTimeInterval(TimeInterval(dayRadius * 86400))
-        let generator = StateSpaceDate.derivedGenerator(depth: 0, stateSpace: policy)
+        let generator = StateSpaceDate.gen(depth: 0, stateSpace: policy)
         let samples = try #example(generator, count: 200, seed: 1337)
         #expect(samples.count == 200)
         #expect(Set(samples.map(\.value)).count <= dayRadius * 2 + 1)
@@ -256,7 +256,7 @@ struct GeneratorStateSpaceTests {
     @Test("Explicit date payload overrides retain their domains")
     func dateOverridesWin() throws {
         let expected = Date.distantFuture
-        let generator = StateSpaceDate.derivedGenerator(
+        let generator = StateSpaceDate.gen(
             depth: 0,
             stateSpace: .tiny,
             overriding: ReflectiveGenerator<Date>.just(expected)
@@ -306,7 +306,7 @@ struct GeneratorStateSpaceTests {
     ])
     func reflectedBounds(preset: (GeneratorStateSpace, Int)) throws {
         let (policy, magnitude) = preset
-        let generator = StateSpaceLeaf.derivedGenerator(stateSpace: policy)
+        let generator = StateSpaceLeaf.gen(stateSpace: policy)
         for value in [-magnitude, 0, magnitude] {
             try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
         }
@@ -316,7 +316,7 @@ struct GeneratorStateSpaceTests {
 
     @Test("Examine and actual reflected output equality hold for recursive presets", arguments: GeneratorStateSpace.allCases, [Int?.none, 64])
     func recursiveRoundTrips(policy: GeneratorStateSpace, maximumNodes: Int?) throws {
-        let generator = StateSpaceTree.derivedGenerator(maximumDepth: 4, maximumNodes: maximumNodes, stateSpace: policy)
+        let generator = StateSpaceTree.gen(maximumDepth: 4, maximumNodes: maximumNodes, stateSpace: policy)
         let report = #examine(generator, .samples(50), .replay(1337), .suppress(.all)) { $0 == $1 }
         #expect(report.passed, "\(report.failures)")
         #expect(report.reflectionSkipped == false)

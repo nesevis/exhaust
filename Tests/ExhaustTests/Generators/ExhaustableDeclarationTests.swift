@@ -72,7 +72,7 @@ struct ExhaustableDeclarationTests {
         let payloads = try #require(entry.extract(value))
         #expect(payloads.count == 1)
         #expect(payloads[0] as? Int == 7)
-        let generator = DeclarationMetadataNamespace.Product.defaultGenerator
+        let generator = DeclarationMetadataNamespace.Product.gen()
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
         #expect(try Interpreters.replay(generator.gen, using: tree) == value)
     }

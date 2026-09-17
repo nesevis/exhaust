@@ -8,8 +8,8 @@ struct GeneratorNodeBudgetTests {
     @Test("Wide recursive arrays obey one root budget", arguments: [2, 6, 16, 32])
     func recursiveArrays(maximumNodes: Int) throws {
         let generators = [
-            BudgetRose.derivedGenerator(maximumDepth: 5, maximumNodes: maximumNodes),
-            BudgetRose.derivedGenerator(depth: 5, maximumNodes: maximumNodes),
+            BudgetRose.gen(maximumDepth: 5, maximumNodes: maximumNodes),
+            BudgetRose.gen(depth: 5, maximumNodes: maximumNodes),
         ]
         for generator in generators {
             var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
@@ -25,7 +25,7 @@ struct GeneratorNodeBudgetTests {
 
     @Test("The root allowance ramps with size", arguments: [UInt64(1), 25, 50, 100])
     func sizeRamping(size: UInt64) throws {
-        let generator = BudgetRose.derivedGenerator(depth: 5, maximumNodes: 32)
+        let generator = BudgetRose.gen(depth: 5, maximumNodes: 32)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: size)
         let allowance = 2 + Int(30 * size / 100)
         for _ in 0 ..< 30 {
@@ -41,7 +41,7 @@ struct GeneratorNodeBudgetTests {
         #expect(throws: GeneratorDerivationError.insufficientNodes(type: "BudgetPair", minimum: 5, requested: 4)) {
             try builder.root(for: BudgetPair.self, depth: .drawn(ceiling: 2, scaling: .linear), maximumNodes: 4)
         }
-        let generator = BudgetPair.derivedGenerator(maximumDepth: 2, maximumNodes: 5, overriding: .int(in: 7 ... 7))
+        let generator = BudgetPair.gen(maximumDepth: 2, maximumNodes: 5, overriding: .int(in: 7 ... 7))
         let report = #examine(generator, .samples(20), .replay(42), .suppress(.logs)) { first, second in first == second }
         #expect(report.passed)
         #expect(report.reflectionRoundTripSuccesses == 20)
@@ -52,7 +52,7 @@ struct GeneratorNodeBudgetTests {
 
     @Test("The depth draw starts at a layer affordable under the node ceiling")
     func affordableDepth() throws {
-        let generator = BudgetUneven.derivedGenerator(maximumDepth: 4, maximumNodes: 4, overriding: .int(in: 7 ... 7))
+        let generator = BudgetUneven.gen(maximumDepth: 4, maximumNodes: 4, overriding: .int(in: 7 ... 7))
         let samples = try #example(generator, count: 20)
         #expect(samples.allSatisfy { $0 == .wrapped(BudgetWrapper(value: BudgetLeaf(number: 7))) })
         for value in samples {
@@ -64,21 +64,21 @@ struct GeneratorNodeBudgetTests {
     @Test("Nested annotations cap their share and root arguments override only the root")
     func annotationCeilings() throws {
         #expect(BudgetCapped.__generatorDescriptor.maximumNodes == 7)
-        let samples = try #example(BudgetCapped.defaultGenerator, count: 30)
+        let samples = try #example(BudgetCapped.gen(), count: 30)
         #expect(samples.allSatisfy { $0.nodes <= 7 })
-        let smaller = try #example(BudgetCapped.derivedGenerator(maximumNodes: 3), count: 30)
+        let smaller = try #example(BudgetCapped.gen(maximumNodes: 3), count: 30)
         #expect(smaller.allSatisfy { $0.nodes <= 3 })
         let target = BudgetCapped.full(depth: 3)
         #expect(target.nodes == 15)
-        let expanded = BudgetCapped.derivedGenerator(maximumNodes: 15)
+        let expanded = BudgetCapped.gen(maximumNodes: 15)
         let tree = try #require(try Interpreters.reflect(expanded.gen, with: target))
         #expect(try Interpreters.replay(expanded.gen, using: tree) == target)
-        let outsideBudget = try? Interpreters.reflect(BudgetCapped.defaultGenerator.gen, with: target)
+        let outsideBudget = try? Interpreters.reflect(BudgetCapped.gen().gen, with: target)
         #expect(outsideBudget == nil, "\(String(describing: outsideBudget))")
-        let holder = BudgetCappedHolder.derivedGenerator(maximumNodes: 31)
+        let holder = BudgetCappedHolder.gen(maximumNodes: 31)
         let held = try #example(holder, count: 30)
         #expect(held.allSatisfy { $0.first.nodes <= 7 && $0.second.nodes <= 7 })
-        let unbounded = try #example(BudgetCappedHolder.defaultGenerator, count: 20)
+        let unbounded = try #example(BudgetCappedHolder.gen(), count: 20)
         #expect(unbounded.allSatisfy { $0.first.nodes <= 7 && $0.second.nodes <= 7 })
     }
 
@@ -89,7 +89,7 @@ struct GeneratorNodeBudgetTests {
         #expect(throws: GeneratorDerivationError.noFiniteConstructionWithinNodeLimits(type: "BudgetImpossibleHolder", depth: 3)) {
             try builder.root(for: BudgetImpossibleHolder.self, depth: .drawn(ceiling: 3, scaling: .linear), maximumNodes: 20)
         }
-        let values = try #example(BudgetOptionalImpossible.defaultGenerator, count: 20)
+        let values = try #example(BudgetOptionalImpossible.gen(), count: 20)
         #expect(values.allSatisfy { $0.value == nil })
     }
 
@@ -107,7 +107,7 @@ struct GeneratorNodeBudgetTests {
 
     @Test("Every container shares its allowance among its contents")
     func standardContainers() throws {
-        let generator = BudgetContainers.derivedGenerator(depth: 0, maximumNodes: 24, overriding: .int(in: 7 ... 7))
+        let generator = BudgetContainers.gen(depth: 0, maximumNodes: 24, overriding: .int(in: 7 ... 7))
         let samples = try #example(generator, count: 30)
         for value in samples {
             #expect(value.nodes <= 24)
@@ -119,16 +119,16 @@ struct GeneratorNodeBudgetTests {
             let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
             #expect(try Interpreters.replay(generator.gen, using: tree) == value)
         }
-        let empty = try #example(BudgetContainers.derivedGenerator(depth: 0, maximumNodes: 6), count: 10)
+        let empty = try #example(BudgetContainers.gen(depth: 0, maximumNodes: 6), count: 10)
         #expect(empty.allSatisfy { $0.nodes == 6 })
     }
 
     @Test("Mutual recursion and recursive optionals, sets, and dictionaries conserve nodes")
     func recursiveFamilies() throws {
-        let mutual = BudgetMutualFirst.derivedGenerator(maximumDepth: 5, maximumNodes: 6)
-        let optional = BudgetOptional.derivedGenerator(maximumDepth: 4, maximumNodes: 10)
-        let set = BudgetSet.derivedGenerator(depth: 3, maximumNodes: 18)
-        let dictionary = BudgetDictionary.derivedGenerator(depth: 3, maximumNodes: 18)
+        let mutual = BudgetMutualFirst.gen(maximumDepth: 5, maximumNodes: 6)
+        let optional = BudgetOptional.gen(maximumDepth: 4, maximumNodes: 10)
+        let set = BudgetSet.gen(depth: 3, maximumNodes: 18)
+        let dictionary = BudgetDictionary.gen(depth: 3, maximumNodes: 18)
         try checkBudget(mutual, maximumNodes: 6, nodes: { $0.nodes })
         try checkBudget(optional, maximumNodes: 10, nodes: { $0.nodes })
         try checkBudget(set, maximumNodes: 18, nodes: { $0.nodes })
@@ -138,7 +138,7 @@ struct GeneratorNodeBudgetTests {
     @Test("Exact overrides remain opaque one-node leaves")
     func opaqueOverrides() throws {
         let supplied = Array(repeating: 7, count: 100)
-        let generator = BudgetArrayHolder.derivedGenerator(maximumNodes: 2, overriding: .just(supplied))
+        let generator = BudgetArrayHolder.gen(maximumNodes: 2, overriding: .just(supplied))
         let values = try #example(generator, count: 10)
         #expect(values.allSatisfy { $0.values == supplied })
         let target = BudgetArrayHolder(values: supplied)
@@ -201,7 +201,7 @@ struct GeneratorNodeBudgetTests {
     @Test("Budgeted binary trees and recursive arrays pass examine")
     func examinesBudgetedGenerators() {
         let binary = #examine(
-            BudgetBinary.derivedGenerator(maximumDepth: 4, maximumNodes: 15),
+            BudgetBinary.gen(maximumDepth: 4, maximumNodes: 15),
             .samples(30),
             .replay(42),
             .suppress(.logs)
@@ -210,7 +210,7 @@ struct GeneratorNodeBudgetTests {
         #expect(binary.reflectionRoundTripSuccesses == 30)
         #expect(binary.replayDeterminismSuccesses == 30)
         let arrays = #examine(
-            BudgetRose.derivedGenerator(depth: 2, maximumNodes: 12),
+            BudgetRose.gen(depth: 2, maximumNodes: 12),
             .samples(30),
             .replay(42),
             .suppress(.logs)
@@ -219,7 +219,7 @@ struct GeneratorNodeBudgetTests {
         #expect(arrays.reflectionRoundTripSuccesses == 30)
         #expect(arrays.replayDeterminismSuccesses == 30)
         let ramped = #examine(
-            BudgetRose.derivedGenerator(maximumDepth: 3, maximumNodes: 12),
+            BudgetRose.gen(maximumDepth: 3, maximumNodes: 12),
             .samples(30),
             .replay(42),
             .suppress(.logs)
@@ -231,7 +231,7 @@ struct GeneratorNodeBudgetTests {
 
     @Test("Reduction can decrease collection cardinality under a conserved budget")
     func reduction() throws {
-        let generator = BudgetRose.derivedGenerator(depth: 2, maximumNodes: 12)
+        let generator = BudgetRose.gen(depth: 2, maximumNodes: 12)
         let value = BudgetRose.children([.children([]), .children([])])
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
         let result = try Interpreters.choiceGraphReduceCollectingStats(

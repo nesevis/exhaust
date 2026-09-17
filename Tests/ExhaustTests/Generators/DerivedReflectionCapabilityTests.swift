@@ -15,10 +15,10 @@ struct DerivedReflectionCapabilityTests {
 
     @Test("Forced leaf layers do not inherit capabilities from unreachable payloads")
     func leafLayers() {
-        #expect(CapabilityRecursive.derivedGenerator(depth: 0).isReflective)
-        #expect(CapabilityRecursive.derivedGenerator(depth: 0, maximumNodes: 1).isReflective)
-        #expect(CapabilityDictionary.derivedGenerator(depth: 0, maximumNodes: 2).isReflective)
-        #expect(CapabilityDictionary.derivedGenerator(depth: 0, maximumNodes: 4).isReflective == false)
+        #expect(CapabilityRecursive.gen(depth: 0).isReflective)
+        #expect(CapabilityRecursive.gen(depth: 0, maximumNodes: 1).isReflective)
+        #expect(CapabilityDictionary.gen(depth: 0, maximumNodes: 2).isReflective)
+        #expect(CapabilityDictionary.gen(depth: 0, maximumNodes: 4).isReflective == false)
     }
 
     @Test("Forward-only overrides remain forward-only inside derived products and arrays", arguments: [Int?.none, 64])
@@ -26,17 +26,17 @@ struct DerivedReflectionCapabilityTests {
         let forwardOnly = ReflectiveGenerator<Int>.int(in: 0 ... 10).map { $0 + 1 }
         let reversible = ReflectiveGenerator<Int>.int(in: 0 ... 10).mapped(forward: { $0 + 1 }, backward: { $0 - 1 })
         let products = [
-            CapabilityInteger.derivedGenerator(depth: 0, maximumNodes: maximumNodes, overriding: forwardOnly),
-            CapabilityInteger.derivedGenerator(maximumDepth: 3, maximumNodes: maximumNodes, overriding: forwardOnly),
+            CapabilityInteger.gen(depth: 0, maximumNodes: maximumNodes, overriding: forwardOnly),
+            CapabilityInteger.gen(maximumDepth: 3, maximumNodes: maximumNodes, overriding: forwardOnly),
         ]
         #expect(products.allSatisfy { $0.isReflective == false })
-        #expect(CapabilityArray.derivedGenerator(maximumNodes: maximumNodes, overriding: forwardOnly).isReflective == false)
-        #expect(CapabilityInteger.derivedGenerator(maximumNodes: maximumNodes, overriding: reversible).isReflective)
+        #expect(CapabilityArray.gen(maximumNodes: maximumNodes, overriding: forwardOnly).isReflective == false)
+        #expect(CapabilityInteger.gen(maximumNodes: maximumNodes, overriding: reversible).isReflective)
     }
 
     @Test("Recorded dictionary choices replay exactly; any successful reflection preserves the output", arguments: [Int?.none, 64])
     func replayAndBestEffortReflection(maximumNodes: Int?) throws {
-        let generator = CapabilityDictionary.derivedGenerator(maximumDepth: 3, maximumNodes: maximumNodes, stateSpace: .tiny)
+        let generator = CapabilityDictionary.gen(maximumDepth: 3, maximumNodes: maximumNodes, stateSpace: .tiny)
         #expect(generator.isReflective == false)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 1337, sizeOverride: 100)
         for _ in 0 ..< 100 {
@@ -50,7 +50,7 @@ struct DerivedReflectionCapabilityTests {
 
     @Test("Generated dictionary counterexamples reduce from recorded choices without reflection")
     func reduction() throws {
-        let generator = CapabilityDictionary.derivedGenerator(maximumDepth: 3, maximumNodes: 64, stateSpace: .tiny)
+        let generator = CapabilityDictionary.gen(maximumDepth: 3, maximumNodes: 64, stateSpace: .tiny)
         let result = #exhaust(
             generator,
             .budget(.custom(screening: 0, sampling: 100)),
@@ -103,8 +103,8 @@ private func derive<Value: __Exhaustable.Conformance>(
 ) -> ReflectiveGenerator<Value> {
     switch pinned {
         case true:
-            type.derivedGenerator(depth: 3, maximumNodes: maximumNodes)
+            type.gen(depth: 3, maximumNodes: maximumNodes)
         case false:
-            type.derivedGenerator(maximumDepth: 3, maximumNodes: maximumNodes)
+            type.gen(maximumDepth: 3, maximumNodes: maximumNodes)
     }
 }

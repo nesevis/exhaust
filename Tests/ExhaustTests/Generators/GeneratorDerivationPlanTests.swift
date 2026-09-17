@@ -17,7 +17,7 @@ struct GeneratorDerivationPlanTests {
         #expect(samples.allSatisfy { (0 ... 9).contains($0.payload.number) })
         let target = PlanEnvelope(payload: PlanLeaf(number: 7))
         try expectRoundTrip(generator, value: target)
-        try expectRoundTrip(PlanEnvelope.defaultGenerator, value: target)
+        try expectRoundTrip(PlanEnvelope.gen(), value: target)
         try expectRoundTrip(ReflectiveGenerator<PlanEnvelope>.derived(maximumDepth: 1), value: target)
     }
 

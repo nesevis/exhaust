@@ -4,7 +4,7 @@
 public enum __Exhaustable { // swiftlint:disable:this type_name
     /// Supplies construction metadata for an annotated type.
     ///
-    /// Apply `@Exhaustable` rather than conforming manually. Importing `ExhaustGenerators` or `Exhaust` then exposes the annotated type's `defaultGenerator` and `derivedGenerator(...)` factories.
+    /// Apply `@Exhaustable` rather than conforming manually. Importing `ExhaustGenerators` or `Exhaust` then exposes the annotated type's `gen(...)` factory.
     public protocol Conformance {
         /// Describes the type's constructors in declaration order.
         static var __generatorDescriptor: TypeDescriptor<Self> { get }
@@ -91,7 +91,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 
 /// Derives a generator for use with the Exhaust property-testing library.
 ///
-/// Apply this macro to an enum, struct, or final class in the application target while importing only `Exhaustable`. In a test target that imports `ExhaustGenerators` or `Exhaust`, the annotated type gains `defaultGenerator` and `derivedGenerator(...)` factories. Use `Term.defaultGenerator` for the annotation's defaults, or `Term.derivedGenerator(maximumDepth:overriding:)` to customize a generator at its use site. Another derived type that holds a `Term` resolves it structurally without being told.
+/// Apply this macro to an enum, struct, or final class in the application target while importing only `Exhaustable`. In a test target that imports `ExhaustGenerators` or `Exhaust`, the annotated type gains a `gen(...)` factory. Use `Term.gen()` for the annotation's defaults, or pass arguments such as `Term.gen(maximumDepth: 6, overriding: .int(in: 0 ... 9))` to customize a generator at its use site. Another derived type that holds a `Term` resolves it structurally without being told.
 ///
 /// ```swift
 /// @Exhaustable
@@ -120,7 +120,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 /// indirect enum Tree { case children([Tree]) }
 /// ```
 ///
-/// The root allowance grows with Exhaust's size parameter toward the ceiling. A nested annotation caps that type's allocated share; it never replenishes the parent's budget. `Type.derivedGenerator(maximumNodes:)` overrides the root annotation. Without a node limit on the root or its dependencies, the existing depth-only policy is unchanged.
+/// The root allowance grows with Exhaust's size parameter toward the ceiling. A nested annotation caps that type's allocated share; it never replenishes the parent's budget. `Type.gen(maximumNodes:)` overrides the root annotation. Without a node limit on the root or its dependencies, the existing depth-only policy is unchanged.
 ///
 /// Pass `stateSpace: .small` to favor collisions with numeric magnitudes up to 100, automatically derived sequence lengths up to 10, and 201 daily dates centered on January 1, 2026 UTC. `.tiny` uses numeric and sequence ceilings of 10 and 5, respectively, and 21 daily dates around the same midpoint. `.medium` uses numeric and sequence ceilings of 10,000 and 20 to reduce processing costs while preserving the full date domain. Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. The default, `.full`, preserves existing domains and scaling, including sequence lengths up to 100 and `Date.distantPast...Date.distantFuture` at one-minute resolution. The policy propagates through nested types and container contents; nested annotations cap it, and explicit payload overrides take precedence. Other leaf types and structural limits are unchanged. See ``GeneratorStateSpace`` for details.
 ///

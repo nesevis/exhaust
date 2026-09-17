@@ -6,7 +6,7 @@ import Testing
 struct DerivedDepthControlTests {
     @Test("Derived generation and reflection record tagged depth controls")
     func taggedDepth() throws {
-        let generator = DepthControlEnvelope.derivedGenerator(maximumDepth: 20)
+        let generator = DepthControlEnvelope.gen(maximumDepth: 20)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 1)
         let (value, generated) = try #require(try interpreter.next())
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: value))
@@ -33,9 +33,9 @@ struct DerivedDepthControlTests {
             .linearFrom(origin: Int.min), .linearFrom(origin: 7), .linearFrom(origin: Int.max),
             .exponentialFrom(origin: Int.min), .exponentialFrom(origin: 7), .exponentialFrom(origin: Int.max),
         ]
-        let layers = (1 ... 20).map { DepthControlEnvelope.derivedGenerator(depth: $0) }
+        let layers = (1 ... 20).map { DepthControlEnvelope.gen(depth: $0) }
         for scaling in scalings {
-            let generator = DepthControlEnvelope.derivedGenerator(maximumDepth: 20, scaling: scaling)
+            let generator = DepthControlEnvelope.gen(maximumDepth: 20, scaling: scaling)
             // Reproduces the old root depth draw independently of the new depth-control chooser.
             let reference = ReflectiveGenerator<Int>.int(in: 1 ... 20, scaling: scaling).gen._bound(
                 forward: { depth in layers[depth - 1].gen.erase() },

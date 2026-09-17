@@ -9,7 +9,7 @@ private let defaultStateSpaceDateMidpoint = Date(timeIntervalSince1970: 1_767_22
 
 /// Supplies Exhaust's internal catalogue of standard-library and Foundation generators to the derivation resolver.
 ///
-/// This is not a user customization point. Annotated types expose their derived generator through ``__Exhaustable/Conformance/defaultGenerator``; other payload generators are supplied explicitly through `overriding:`. Witness properties stay internal as well, so the catalogue does not add public factory members to standard-library types.
+/// This is not a user customization point. Annotated types expose their derived generator through ``__Exhaustable/Conformance/gen(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)``; other payload generators are supplied explicitly through `overriding:`. Witness properties stay internal as well, so the catalogue does not add public factory members to standard-library types.
 protocol DefaultGenerable {
     /// The generator used for this type when no other is named.
     static var defaultGenerator: ReflectiveGenerator<Self> { get }
