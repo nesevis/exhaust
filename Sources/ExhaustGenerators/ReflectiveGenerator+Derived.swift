@@ -65,7 +65,7 @@ public extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     /// - Parameters:
     ///   - depth: How many nested structurally derived types a value may contain.
     ///   - maximumNodes: An optional positive structural ceiling. Its allowance still scales with size even though depth is pinned.
-    ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds and default sequence lengths still scale with size even though depth is pinned; tiny and small date domains remain fixed.
+    ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds, default sequence lengths, and date ranges still scale with size even though depth is pinned.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator built at the requested depth, with best-effort reflection.
     static func derived<each Override>(
@@ -149,7 +149,7 @@ public extension __Exhaustable.Conformance {
     /// - Parameters:
     ///   - depth: The root nesting bound, overriding the root annotation's ceiling.
     ///   - maximumNodes: An optional positive structural ceiling. Its allowance still scales with size even though depth is pinned.
-    ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds and default sequence lengths still scale with size even though depth is pinned; tiny and small date domains remain fixed.
+    ///   - stateSpace: Overrides the root's payload-domain preset. Numeric bounds, default sequence lengths, and date ranges still scale with size even though depth is pinned.
     ///   - overrides: Generators matched by payload output type, including payloads inside containers.
     /// - Returns: A generator built at the requested depth, with best-effort reflection.
     static func derivedGenerator<each Override>(

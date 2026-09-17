@@ -136,7 +136,7 @@ private func alphanumericString(
 package extension Gen {
     /// Generates dates within the given range, quantized to the grid of `interval` steps from the lower bound.
     ///
-    /// Sub-day intervals produce a fixed-second grid. Calendar intervals (`.days` through `.years`) advance with calendar arithmetic in `timeZone`, so month grids stay on the lower bound's day-of-month and day grids keep the lower bound's wall-clock time across the zone's DST transitions. `timeZone` also selects which zone's DST transitions problematic-value analysis includes; the UTC default has no DST transitions and fixed-length days, keeping screening rows identical across machines. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
+    /// Sub-day intervals produce a fixed-second grid. Calendar intervals (`.days` through `.years`) advance with calendar arithmetic in `timeZone`, so month grids stay on the lower bound's day-of-month and day grids keep the lower bound's wall-clock time across the zone's DST transitions. `timeZone` also selects which zone's DST transitions problematic-value analysis includes; the UTC default has no DST transitions and fixed-length days, keeping screening rows identical across machines. The sampled range grows linearly from the grid's midpoint toward both bounds as size increases. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
     static func date(
         between range: ClosedRange<Date>,
         interval: DateStride,
@@ -162,6 +162,7 @@ package extension Gen {
                 max: grid.stepCount.bitPattern64,
                 tag: .date,
                 isRangeExplicit: true,
+                scaling: .linear(originBits: (grid.stepCount / 2).bitPattern64),
                 typeTagPayload: .date(grid: grid)
             )
         ) { try .pure(Int64(bitPattern64: chooseBitsBitPattern($0))) }

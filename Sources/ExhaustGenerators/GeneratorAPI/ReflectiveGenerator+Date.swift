@@ -13,6 +13,8 @@ public extension ReflectiveGenerator {
     ///
     /// The `timeZone` defaults to UTC, where every day is exactly 86400 seconds and there are no DST transitions, so the default grid and screening rows are identical on every machine. Pass an explicit zone to anchor day-based grids to that zone's wall clock and to include its DST transitions in problematic-value analysis.
     ///
+    /// The available dates expand linearly from the midpoint of the resulting grid as Exhaust's size parameter increases, reaching the entire range at size 100.
+    ///
     /// Reflection rounds off-grid dates down to the nearest grid point. This means `reflecting:` with a date that does not fall exactly on the grid will start reduction from the closest earlier grid point rather than rejecting the value.
     ///
     /// - Note: When the lower bound's day-of-month does not exist in a landing month, `.months` grids clamp to that month's last day: a grid starting January 31 visits February 28 (or 29), March 31, April 30, and so on.
@@ -35,7 +37,7 @@ public extension ReflectiveGenerator {
 
     /// Generates dates within `span` on either side of `anchor`, spaced by `interval`.
     ///
-    /// Calendar spans measure calendar distance from the anchor: `.years(1)` reaches the same calendar date one year back and one year forward, including across leap years.
+    /// Calendar spans measure calendar distance from the anchor: `.years(1)` reaches the same calendar date one year back and one year forward, including across leap years. The available dates expand linearly from the resulting grid's midpoint as Exhaust's size parameter increases.
     ///
     /// ```swift
     /// let gen = #gen(.date(within: .years(1), of: referenceDate, interval: .days(1)))
@@ -53,7 +55,7 @@ public extension ReflectiveGenerator {
 
     /// Generates dates within an asymmetric span around `anchor`, spaced by `interval`.
     ///
-    /// The range bounds are relative to the anchor: negative values go into the past, positive into the future. Calendar spans measure calendar distance from the anchor, so `.months(-1)` reaches the same day-of-month in the previous month rather than 30 days back.
+    /// The range bounds are relative to the anchor: negative values go into the past, positive into the future. Calendar spans measure calendar distance from the anchor, so `.months(-1)` reaches the same day-of-month in the previous month rather than 30 days back. The available dates expand linearly from the resulting grid's midpoint as Exhaust's size parameter increases.
     ///
     /// ```swift
     /// let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))
