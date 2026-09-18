@@ -7,6 +7,7 @@ final class BudgetedGeneratorDerivation {
     let budget: GeneratorNodeBudget
     private(set) var built: [NodeBudgetKey: Any] = [:]
     private(set) var containers: [NodeBudgetKey: ReflectiveGenerator<Any>] = [:]
+    private var countedContainers: [CountedContainerKey: ReflectiveGenerator<Any>] = [:]
 
     init(plan: GeneratorDerivationPlan) {
         self.plan = plan
@@ -246,10 +247,26 @@ final class BudgetedGeneratorDerivation {
             for count in 0 ..< maximumBuiltCount {
                 let elementCount = count + 1
                 let allowances = budget.split(quantisedAllowance((nodes - 1) / elementCount, notBelow: minimum), minima: minima)!
+                let key = CountedContainerKey(
+                    type: ObjectIdentifier(recipe.type),
+                    count: elementCount,
+                    depth: depth,
+                    allowances: allowances,
+                    stateSpace: stateSpace
+                )
+                switch countedContainers[key] {
+                    case let .some(existing):
+                        layers.append(existing)
+                        continue
+                    case .none:
+                        break
+                }
                 let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
-                layers.append(recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
+                let layer = recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
                     isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
-                ))
+                )
+                countedContainers[key] = layer
+                layers.append(layer)
             }
         }
         return recipe.selectCount(maximumGeneratedCount, layers.map { $0.gen }).wrapped(
@@ -291,6 +308,15 @@ struct NodeBudgetKey: Hashable {
     let type: ObjectIdentifier
     let depth: Int
     let nodes: Int?
+    let stateSpace: GeneratorStateSpace
+}
+
+/// Shares identical counted recipes across different enclosing container allowances without rounding either budget.
+private struct CountedContainerKey: Hashable {
+    let type: ObjectIdentifier
+    let count: Int
+    let depth: Int
+    let allowances: [Int]
     let stateSpace: GeneratorStateSpace
 }
 
