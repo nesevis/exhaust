@@ -273,7 +273,11 @@ extension Materializer {
         _ tree: ChoiceTree?
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
-        if case let .group(children, _, _) = tree, children.count == 2 {
+        if case let .group(children, _, false) = tree, children.count == 2 {
+            // A tagged zip is one callee, and two branch alternatives are one pick. Neither shape is the untagged callee/continuation pair emitted by runContinuation.
+            if case .branch = children[0], case .branch = children[1] {
+                return (tree, nil)
+            }
             return (children[0], children[1])
         }
         return (tree, nil)
