@@ -76,6 +76,7 @@ package enum ChoiceTreeAnalysis {
                 sizeOverride: 100
             )
 
+            interpreter.prepareForScreeningAnalysis()
             guard let (_, tree) = try? interpreter.next() else {
                 return nil
             }

@@ -52,6 +52,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         )
     }
 
+    /// Discovers the deepest size-feasible layer for screening analysis without changing the policy of independently created sampling interpreters.
+    package mutating func prepareForScreeningAnalysis() {
+        context.shouldUseMaximumDepthForScreening = true
+    }
+
     /// The PRNG seed used for this interpreter's generation runs.
     public var baseSeed: UInt64 {
         context.baseSeed
@@ -459,7 +464,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ///
     /// `calleeStart` is the flat-buffer index the callee's first entry occupies. Under flat emission the pair group's open marker has to precede entries that are already emitted, and everything from `calleeStart` on is exactly the callee's span, so retro-inserting there shifts only that span.
     @inline(__always)
-    private static func runContinuation(
+    static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
         calleeStart: Int,
@@ -532,6 +537,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             }
             context.emitFlat(.group(false))
             return (final.0, .just)
+        }
+
+        if context.shouldUseMaximumDepthForScreening, context.materializePicks, choices.count > 1 {
+            return try handleAnalysisPick(
+                choices,
+                selectedChoice: selectedChoice,
+                continuation: continuation,
+                context: &context
+            )
         }
 
         if context.materializePicks == false {
@@ -1038,7 +1052,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
                 let boundGen = try forward(innerValue)
                 let savedMaterializePicks = context.materializePicks
-                context.materializePicks = false
+                // Fixed screening controls have one stable dependent layer. Ordinary row-varying binds still record only the selected path.
+                context.materializePicks = savedMaterializePicks && (
+                    isGetSizeBind || (context.shouldUseMaximumDepthForScreening && innerTree.isScreeningContext)
+                )
                 defer { context.materializePicks = savedMaterializePicks }
                 guard let (boundValue, boundTree) = try generateRecursiveAny(
                     boundGen, context: &context
@@ -1110,9 +1127,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             )
         } ?? (min ... max)
         // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
-        let rawBits = scaling?.isPinnedToSize == true
-            ? effectiveRange.lowerBound
-            : context.prng.next(in: effectiveRange)
+        let shouldPinDepth = context.shouldUseMaximumDepthForScreening && tag == .depthControl
+        let rawBits: UInt64 = switch (scaling?.isPinnedToSize == true, shouldPinDepth) {
+            case (true, _):
+                effectiveRange.lowerBound
+            case (false, true):
+                effectiveRange.upperBound
+            case (false, false):
+                context.prng.next(in: effectiveRange)
+        }
         let randomBits = tag.isFloatingPoint
             ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
             : rawBits
