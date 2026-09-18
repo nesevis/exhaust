@@ -12,7 +12,7 @@ public extension __ExhaustRuntime {
 
     /// Validates a generator's reflection, replay, and health, skipping reflection when configured. Runtime target of `#examine` expansion.
     ///
-    /// Falls back to choice-sequence comparison for non-`Equatable` types. Skips reflection for synthesized generators and when the settings contain ``ExamineSettings/skipReflection``.
+    /// Falls back to choice-sequence comparison for non-`Equatable` types. Resolves the skip here, where both sources are in hand: a synthesized generator (``ReflectiveGenerator/isSynthesized``) is forward-only by design, and a test can ask through ``ExamineSettings/skipReflection``.
     @discardableResult
     static func __examine(
         _ refGen: ReflectiveGenerator<some Any>,
@@ -38,7 +38,10 @@ public extension __ExhaustRuntime {
         return gen.validate(
             samples: config.samples,
             seed: seed,
-            skipReflection: refGen.isSynthesized,
+            skipReason: ReflectionSkipReason(
+                isSynthesized: refGen.isSynthesized,
+                isRequested: config.skipReflection
+            ),
             reporting: config,
             fileID: fileID,
             filePath: filePath,
@@ -49,7 +52,7 @@ public extension __ExhaustRuntime {
 
     /// Validates a generator with a user-provided replay determinism check. Runtime target of `#examine` expansion with trailing closure.
     ///
-    /// Skips reflection for synthesized generators and when the settings contain ``ExamineSettings/skipReflection``. Replay and health checks continue in either case.
+    /// Resolves the reflection skip as the overload above does. Replay and health checks continue in either case.
     @discardableResult
     static func __examine<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -76,7 +79,10 @@ public extension __ExhaustRuntime {
         return gen.validate(
             samples: config.samples,
             seed: seed,
-            skipReflection: refGen.isSynthesized,
+            skipReason: ReflectionSkipReason(
+                isSynthesized: refGen.isSynthesized,
+                isRequested: config.skipReflection
+            ),
             replayCheck: { lhs, rhs in
                 guard let lhs = lhs as? Output, let rhs = rhs as? Output else {
                     return false

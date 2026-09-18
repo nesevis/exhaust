@@ -30,6 +30,11 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public fileprivate(set) var reflectionSkipped = false
     /// Names the reason in the rendered report, so a reader can tell an automatic skip from a requested one. Nil whenever ``reflectionSkipped`` is `false`.
     fileprivate var reflectionSkipReason: ReflectionSkipReason?
+    /// Whether the skipped generator was synthesized, which is the only case that has pinned fields to count.
+    fileprivate var isSynthesized: Bool {
+        reflectionSkipReason == .synthesizedGenerator
+    }
+
     /// Number of `.just` (pinned constant) nodes found in a synthesized generator tree. These are fields the synthesizer could not build a full generator for.
     public fileprivate(set) var pinnedFieldCount = 0
     /// All validation failures detected during the run. Empty when the generator is healthy.
@@ -217,12 +222,26 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
 // MARK: - Reflection Skip Reason
 
 /// Separates the skip Exhaust decides on from the one the test asks for. Both leave the same checks running, so the rendered report is the only place a reader can tell them apart.
-private enum ReflectionSkipReason: Sendable {
+package enum ReflectionSkipReason: Sendable {
     /// The generator came from `#gen` with an example value, which builds a forward-only generator that cannot reflect by design.
     case synthesizedGenerator
 
     /// The test passed ``ExamineSettings/skipReflection``.
     case requested
+
+    /// Resolves the reason from the two sources that can ask for a skip, or `nil` when neither does.
+    ///
+    /// A synthesized generator wins over a request: it cannot reflect at all, so naming the request would tell a reader the check was available and declined.
+    package init?(isSynthesized: Bool, isRequested: Bool) {
+        switch (isSynthesized, isRequested) {
+            case (true, _):
+                self = .synthesizedGenerator
+            case (false, true):
+                self = .requested
+            case (false, false):
+                return nil
+        }
+    }
 
     var rendered: String {
         switch self {
@@ -281,7 +300,7 @@ package extension Generator where Operation == ReflectiveOperation {
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    ///   - skipReflection: When `true`, skips the reflection round-trip check because the generator is synthesized and forward-only by design. Generation, replay, and health checks still run. A user-requested skip arrives through `reporting` instead, and the report distinguishes the two.
+    ///   - skipReason: Why the reflection round-trip check is skipped, or `nil` to run it. Generation, replay, and health checks run either way.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -289,7 +308,7 @@ package extension Generator where Operation == ReflectiveOperation {
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
-        skipReflection: Bool = false,
+        skipReason: ReflectionSkipReason? = nil,
         replayCheck: ((Any, Any) -> Bool)? = nil,
         reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
@@ -300,7 +319,7 @@ package extension Generator where Operation == ReflectiveOperation {
         _validate(
             samples: samples,
             seed: seed,
-            skipReflection: skipReflection,
+            skipReason: skipReason,
             replayCheck: replayCheck,
             reporting: reporting,
             fileID: fileID,
@@ -321,7 +340,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    ///   - skipReflection: When `true`, skips the reflection round-trip check because the generator is synthesized and forward-only by design. Generation, replay, and health checks still run. A user-requested skip arrives through `reporting` instead, and the report distinguishes the two.
+    ///   - skipReason: Why the reflection round-trip check is skipped, or `nil` to run it. Generation, replay, and health checks run either way.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -329,7 +348,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
-        skipReflection: Bool = false,
+        skipReason: ReflectionSkipReason? = nil,
         replayCheck: ((Any, Any) -> Bool)? = nil,
         reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
@@ -340,7 +359,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
         _validate(
             samples: samples,
             seed: seed,
-            skipReflection: skipReflection,
+            skipReason: skipReason,
             replayCheck: replayCheck,
             reporting: reporting,
             fileID: fileID,
@@ -358,7 +377,7 @@ private extension Generator where Operation == ReflectiveOperation {
     func _validate(
         samples: Int,
         seed: UInt64?,
-        skipReflection: Bool = false,
+        skipReason: ReflectionSkipReason?,
         replayCheck: ((Any, Any) -> Bool)?,
         reporting: ExamineReportingConfiguration?,
         fileID: StaticString,
@@ -369,15 +388,8 @@ private extension Generator where Operation == ReflectiveOperation {
         let maxFailures = 20
         var report = ExamineReport()
         report.sampleCount = samples
-        report.reflectionSkipReason = switch (skipReflection, reporting?.skipReflection == true) {
-            case (true, _):
-                .synthesizedGenerator
-            case (false, true):
-                .requested
-            case (false, false):
-                nil
-        }
-        report.reflectionSkipped = report.reflectionSkipReason != nil
+        report.reflectionSkipReason = skipReason
+        report.reflectionSkipped = skipReason != nil
         var forwardOnlyDetected = report.reflectionSkipped
         var replaySuccesses = 0
         var uniqueSequenceHashes: Set<UInt64> = []
@@ -427,7 +439,7 @@ private extension Generator where Operation == ReflectiveOperation {
         }
         report.replayDeterminismSuccesses = replayCheck != nil ? replaySuccesses : nil
         report.uniqueChoiceSequences = uniqueSequenceHashes.count
-        report.pinnedFieldCount = skipReflection ? (storedTrees.first?.justNodeCount ?? 0) : 0
+        report.pinnedFieldCount = report.isSynthesized ? (storedTrees.first?.justNodeCount ?? 0) : 0
         report.representativeTree = Self.medianComplexityTree(from: storedTrees)
 
         let nanosecondsPerSecond = 1_000_000_000.0
