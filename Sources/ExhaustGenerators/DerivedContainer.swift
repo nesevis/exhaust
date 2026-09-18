@@ -48,12 +48,7 @@ extension Array: DerivedContainer {
             },
             buildWithin: { maximumCount, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.arrayOf(
-                    element,
-                    within: UInt64(0) ... UInt64(maximumCount),
-                    scaling: .linear,
-                    isLengthRangeExplicit: false
-                ).erase()
+                return Gen.arrayOf(element, derivedLengths(upTo: maximumCount)).erase()
             },
             buildExactly: { count, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
@@ -126,12 +121,7 @@ extension Set: DerivedContainer {
             },
             buildWithin: { maximumCount, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.setOf(
-                    element,
-                    within: UInt64(0) ... UInt64(maximumCount),
-                    scaling: .linear,
-                    isLengthRangeExplicit: false
-                ).erase()
+                return Gen.setOf(element, derivedLengths(upTo: maximumCount)).erase()
             },
             buildExactly: { count, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
@@ -164,13 +154,7 @@ extension Dictionary: DerivedContainer {
             buildWithin: { maximumCount, children in
                 let key: Generator<Key> = children[0].map { $0 as! Key }
                 let value: Generator<Value> = children[1].map { $0 as! Value }
-                return Gen.dictionaryOf(
-                    key,
-                    value,
-                    within: UInt64(0) ... UInt64(maximumCount),
-                    scaling: .linear,
-                    isLengthRangeExplicit: false
-                ).erase()
+                return Gen.dictionaryOf(key, value, derivedLengths(upTo: maximumCount)).erase()
             },
             buildExactly: { count, children in
                 let key: Generator<Key> = children[0].map { $0 as! Key }
@@ -189,6 +173,13 @@ extension Dictionary: DerivedContainer {
 }
 
 // MARK: - Helpers
+
+/// Samples a cardinality in `0 ... maximum` while leaving larger cardinalities reflectable.
+///
+/// A state space or node ceiling narrows what the derivation generates, not what a test can reduce from, so a value that arrives through `reflecting:` with more elements than this ceiling still decomposes.
+func derivedLengths(upTo maximum: Int) -> Generator<UInt64> {
+    Gen.chooseDerived(in: UInt64(0) ... UInt64(maximum), scaling: .linear)
+}
 
 extension ReflectiveGenerator {
     /// Erases the payload type without discarding the capability used by enclosing derived products and containers. This adds no generator operations or random draws.

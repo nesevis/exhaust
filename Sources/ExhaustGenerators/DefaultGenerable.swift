@@ -130,11 +130,7 @@ extension String: DefaultGenerable {
         guard let maximumLength = stateSpace.defaultSequenceLengthMaximum else {
             return defaultGenerator
         }
-        return Gen.string(
-            length: UInt64(0) ... UInt64(maximumLength),
-            scaling: .linear,
-            isLengthRangeExplicit: false
-        )
+        return Gen.string(lengths: derivedLengths(upTo: maximumLength))
     }
 }
 
@@ -185,11 +181,7 @@ extension Data: DefaultGenerable {
         guard let maximumLength = stateSpace.defaultSequenceLengthMaximum else {
             return defaultGenerator
         }
-        return Gen.data(
-            within: UInt64(0) ... UInt64(maximumLength),
-            scaling: .linear,
-            isLengthRangeExplicit: false
-        )
+        return Gen.data(lengths: derivedLengths(upTo: maximumLength))
     }
 }
 

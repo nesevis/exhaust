@@ -257,15 +257,19 @@ package extension Gen {
     static func string(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear,
-        unicodeVersion: UnicodeVersion = .v17,
-        isLengthRangeExplicit: Bool = true
+        unicodeVersion: UnicodeVersion = .v17
     ) -> ReflectiveGenerator<String> {
-        stringGenerator(
-            from: unicodeVersion.scalarRangeSet,
-            length: length,
-            scaling: scaling,
-            isLengthRangeExplicit: isLengthRangeExplicit
-        )
+        stringGenerator(from: unicodeVersion.scalarRangeSet, length: length, scaling: scaling)
+    }
+
+    /// Generates a Unicode string whose length comes from `lengths`, drawing from the version's blocks.
+    ///
+    /// Supply a ``chooseDerived(in:scaling:)`` length when the bounds should narrow sampling without narrowing reflection, so a longer string still reflects and reduces.
+    static func string(
+        lengths: Generator<UInt64>?,
+        unicodeVersion: UnicodeVersion = .v17
+    ) -> ReflectiveGenerator<String> {
+        stringGenerator(from: unicodeVersion.scalarRangeSet, lengths: lengths)
     }
 
     /// Generates a printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -376,8 +380,15 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
 private func stringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,
-    scaling: SizeScaling<UInt64> = .linear,
-    isLengthRangeExplicit: Bool = true
+    scaling: SizeScaling<UInt64> = .linear
+) -> ReflectiveGenerator<String> {
+    stringGenerator(from: srs, lengths: length.map { Gen.choose(in: $0, scaling: scaling) })
+}
+
+/// Builds the string pipeline from a length generator. A `nil` generator leaves the length scaling with the size parameter.
+private func stringGenerator(
+    from srs: ScalarRangeSet,
+    lengths: Generator<UInt64>?
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     let batch = ReflectiveOperation.SequenceElementBatch { bits in
@@ -388,20 +399,7 @@ private func stringGenerator(
         }
         return characters
     }
-    if let length {
-        return Gen.arrayOf(
-            charGen,
-            within: length,
-            scaling: scaling,
-            isLengthRangeExplicit: isLengthRangeExplicit,
-            elementBatch: batch
-        ).wrapped(isReflective: true)
-            .mapped(
-                forward: { String($0) },
-                backward: { $0.unicodeScalars.map { Character($0) } }
-            )
-    }
-    return Gen.arrayOf(charGen, elementBatch: batch).wrapped(isReflective: true)
+    return Gen.arrayOf(charGen, lengths, elementBatch: batch).wrapped(isReflective: true)
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }
@@ -419,25 +417,22 @@ private let asciiScalarRangeSet: ScalarRangeSet =
 package extension Gen {
     /// Generates `Data` with size-scaled length, each byte uniform in 0...255.
     static func data() -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped(isReflective: true)
-            .mapped(
-                forward: { Data($0) },
-                backward: { Array($0) }
-            )
+        data(lengths: nil)
     }
 
     /// Generates `Data` with length in `range`, each byte uniform in 0...255.
     static func data(
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear,
-        isLengthRangeExplicit: Bool = true
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(
-            Gen.choose(in: UInt8.min ... UInt8.max),
-            within: range,
-            scaling: scaling,
-            isLengthRangeExplicit: isLengthRangeExplicit
-        ).wrapped(isReflective: true).mapped(
+        data(lengths: Gen.choose(in: range, scaling: scaling))
+    }
+
+    /// Generates `Data` whose length comes from `lengths`, each byte uniform in 0...255.
+    ///
+    /// Supply a ``chooseDerived(in:scaling:)`` length when the bounds should narrow sampling without narrowing reflection, so longer data still reflects and reduces.
+    static func data(lengths: Generator<UInt64>?) -> ReflectiveGenerator<Data> {
+        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max), lengths).wrapped(isReflective: true).mapped(
             forward: { Data($0) },
             backward: { Array($0) }
         )
