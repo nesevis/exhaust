@@ -9,11 +9,13 @@ struct ScreeningRunnerAccountingTests {
             Gen.choose(in: UInt64(0) ... 1),
             Gen.choose(in: UInt64(0) ... 1)
         )
+        let observedCandidates = SendableBox<[[UInt64]]>([])
         let generator = Gen.filter(
             unfilteredGenerator,
             type: .rejectionSampling,
             predicate: { value in
-                value.0 == 0 && value.1 == 0
+                observedCandidates.withValue { $0.append([value.0, value.1]) }
+                return value.0 == 0 && value.1 == 0
             },
             sourceLocation: FilterSourceLocation(
                 fileID: #fileID,
@@ -22,14 +24,14 @@ struct ScreeningRunnerAccountingTests {
                 column: #column
             )
         )
-        var propertyInvocationCount = 0
+        var acceptedPoints: [[UInt64]] = []
 
         let result = ScreeningRunner.run(
             generator,
             screeningBudget: 4,
             coveringSeed: 0,
-            property: { _ in
-                propertyInvocationCount += 1
+            property: { value in
+                acceptedPoints.append([value.0, value.1])
                 return true
             }
         )
@@ -39,10 +41,15 @@ struct ScreeningRunnerAccountingTests {
             return
         }
         #expect(summary.rowAttempts == 4)
-        #expect(summary.propertyInvocations == 2)
-        #expect(summary.rejectedRows == 2)
+        #expect(summary.propertyInvocations == 1)
+        #expect(summary.rejectedRows == 3)
         #expect(summary.rowAttempts == summary.propertyInvocations + summary.rejectedRows)
-        #expect(propertyInvocationCount == summary.propertyInvocations)
+        #expect(acceptedPoints.count == summary.propertyInvocations)
+        #expect(acceptedPoints == [[0, 0]])
+        // Analysis probes precede screening. Each of the four guided rows invokes this predicate once, including rows rejected before the property runs.
+        let attemptedPoints = observedCandidates.value.suffix(4)
+        #expect(attemptedPoints.count == 4)
+        #expect(Set(attemptedPoints) == Set([[UInt64(0), 0], [0, 1], [1, 0], [1, 1]]))
     }
 
     @Test("A 3-parameter space the budget can finish reports exhaustive")

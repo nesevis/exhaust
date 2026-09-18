@@ -33,11 +33,25 @@ package enum LargeDomainCoveringArrayReplay {
         in tree: ChoiceTree,
         row: CoveringArrayRow,
         profile: LargeDomainProfile,
-        paramIndex: inout Int
+        paramIndex: inout Int,
+        isSequenceElement: Bool = false
     ) -> ChoiceTree? {
+        // Match walkElementTree: nested sequences and ordinary dependent binds consume no element parameters.
+        if isSequenceElement {
+            switch tree {
+                case .sequence:
+                    return tree
+                case let .bind(_, inner, _) where inner.isScreeningContext == false:
+                    return tree
+                default:
+                    break
+            }
+        }
         switch tree {
-            case let .choice(_, metadata):
-                guard metadata.isPinnedToSize == false else {
+            case let .choice(value, metadata):
+                guard metadata.isPinnedToSize == false,
+                      value.tag != .depthControl
+                else {
                     return tree
                 }
                 guard paramIndex < profile.parameters.count else { return nil }
@@ -59,7 +73,8 @@ package enum LargeDomainCoveringArrayReplay {
                         in: child,
                         row: row,
                         profile: profile,
-                        paramIndex: &paramIndex
+                        paramIndex: &paramIndex,
+                        isSequenceElement: isSequenceElement
                     ) else {
                         return nil
                     }
@@ -70,8 +85,8 @@ package enum LargeDomainCoveringArrayReplay {
             case .group(_, isOpaque: true, _):
                 return tree
 
-            case let .group(children, _, _):
-                if ChoiceTreeAnalysis.isPick(children) {
+            case let .group(children, _, isZip):
+                if ChoiceTreeAnalysis.isPick(children), ChoiceTreeAnalysis.isSingletonPick(children) == false {
                     guard paramIndex < profile.parameters.count else { return nil }
                     let param = profile.parameters[paramIndex]
                     let valueIndex = row.values[paramIndex]
@@ -87,22 +102,36 @@ package enum LargeDomainCoveringArrayReplay {
                         in: child,
                         row: row,
                         profile: profile,
-                        paramIndex: &paramIndex
+                        paramIndex: &paramIndex,
+                        isSequenceElement: isSequenceElement
                     ) else {
                         return nil
                     }
                     newChildren.append(newChild)
                 }
-                return .group(newChildren)
+                return .group(newChildren, isZip: isZip)
 
             case let .bind(fingerprint, inner, bound):
                 guard let newInner = substituteParameters(
                     in: inner,
                     row: row,
                     profile: profile,
-                    paramIndex: &paramIndex
+                    paramIndex: &paramIndex,
+                    isSequenceElement: isSequenceElement
                 ) else {
                     return nil
+                }
+                if inner.isScreeningContext {
+                    guard let newBound = substituteParameters(
+                        in: bound,
+                        row: row,
+                        profile: profile,
+                        paramIndex: &paramIndex,
+                        isSequenceElement: isSequenceElement
+                    ) else {
+                        return nil
+                    }
+                    return .bind(fingerprint: fingerprint, inner: newInner, bound: newBound)
                 }
                 return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
@@ -131,7 +160,14 @@ package enum LargeDomainCoveringArrayReplay {
                             let slotParams = effectiveParams[elementIndex]
                             let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
                             let subProfile = LargeDomainProfile(parameters: slotParams)
-                            guard let newElement = Self.buildTree(row: subRow, profile: subProfile) else {
+                            var elementParameterIndex = 0
+                            guard let newElement = substituteParameters(
+                                in: element,
+                                row: subRow,
+                                profile: subProfile,
+                                paramIndex: &elementParameterIndex,
+                                isSequenceElement: true
+                            ), elementParameterIndex == slotParams.count else {
                                 return nil
                             }
                             newElements.append(newElement)
@@ -156,7 +192,8 @@ package enum LargeDomainCoveringArrayReplay {
                             in: element,
                             row: row,
                             profile: profile,
-                            paramIndex: &paramIndex
+                            paramIndex: &paramIndex,
+                            isSequenceElement: true
                         ) else {
                             return nil
                         }
@@ -172,7 +209,8 @@ package enum LargeDomainCoveringArrayReplay {
                     in: b.choice,
                     row: row,
                     profile: profile,
-                    paramIndex: &paramIndex
+                    paramIndex: &paramIndex,
+                    isSequenceElement: isSequenceElement
                 ) else {
                     return nil
                 }

@@ -88,8 +88,8 @@ package enum CoveringArrayReplay {
             case .group(_, isOpaque: true, _):
                 return tree
 
-            case let .group(children, _, _):
-                if ChoiceTreeAnalysis.isPick(children) {
+            case let .group(children, _, isZip):
+                if ChoiceTreeAnalysis.isPick(children), ChoiceTreeAnalysis.isSingletonPick(children) == false {
                     guard paramIndex < profile.parameters.count else { return nil }
                     let param = profile.parameters[paramIndex]
                     let valueIndex = row.values[paramIndex]
@@ -108,10 +108,10 @@ package enum CoveringArrayReplay {
                     }
                     newChildren.append(newChild)
                 }
-                return .group(newChildren)
+                return .group(newChildren, isZip: isZip)
 
             case let .bind(fingerprint, inner, bound):
-                // Substitute parameters in inner only; pass bound through unchanged.
+                // Ordinary dependent binds expose only their input. Fixed screening controls also expose the output of their stable layer.
                 guard let newInner = substituteParameters(
                     in: inner,
                     row: row,
@@ -119,6 +119,17 @@ package enum CoveringArrayReplay {
                     paramIndex: &paramIndex
                 ) else {
                     return nil
+                }
+                if inner.isScreeningContext {
+                    guard let newBound = substituteParameters(
+                        in: bound,
+                        row: row,
+                        profile: profile,
+                        paramIndex: &paramIndex
+                    ) else {
+                        return nil
+                    }
+                    return .bind(fingerprint: fingerprint, inner: newInner, bound: newBound)
                 }
                 return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
