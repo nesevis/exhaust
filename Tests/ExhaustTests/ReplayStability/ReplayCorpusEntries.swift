@@ -24,6 +24,8 @@ struct ReplayCorpusEntry: Sendable, CustomTestStringConvertible {
     static let platformGated: Set<String> = ["cgfloat.default", "int128.default", "uint128.default"]
 
     static let all: [ReplayCorpusEntry] = numericEntries + largeIntegerEntries + coreGraphicsEntries + stringEntries + foundationEntries + collectionEntries + combinatorEntries + synthesisEntries + screeningEntries + runnerEntries + encodingEntries
+        + materializerScreeningEntries
+        + materializerCoverageEntries
 }
 
 // MARK: - Numeric
