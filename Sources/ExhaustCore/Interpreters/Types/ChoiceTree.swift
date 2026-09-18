@@ -435,7 +435,13 @@ package extension ChoiceTree {
 // MARK: - Value Comparison
 
 package extension ChoiceTree {
-    /// Walks two trees in lockstep and compares value choices, ignoring metadata such as valid ranges and the values of paired depth-control choices. Reflection may choose a larger depth allowance for the same output, so depth controls are not evidence of a value mismatch. Bound subtrees and ordinary choices are still compared. Returns `nil` when these checks match, or a description of the first mismatch.
+    /// Walks two trees in lockstep and compares the chosen values, ignoring metadata such as valid ranges.
+    ///
+    /// Where both trees hold a depth-control choice, the two values are not compared. A depth choice records the allowance a recursive generator was given rather than any part of the value it produced, and reflection is free to reconstruct the same output under a larger allowance. Comparing the allowances would fail a round trip that in fact succeeded, for every recursive generator: a hand-written ``Gen/recursive(baseValue:depthRange:extend:)`` emits ``TypeTag/depthControl`` exactly as an `@Exhaustable` derivation does. Reflecting and replaying a recursive generator of any shape is the goal this trade serves.
+    ///
+    /// What it costs is that a genuine depth round-trip defect reads as a match here, and nothing else in this walk will catch it. What still fails is anything the allowance changed on the way to the value: a different arm, a different element count, or a different payload each surface through the bound subtree and the ordinary choices, which are compared as usual. A depth control paired with an ordinary choice is a structural difference, not a difference of allowance, and is reported.
+    ///
+    /// - Returns: `nil` when every compared value matches, or a description of the first mismatch.
     static func compareValues(_ lhs: ChoiceTree, _ rhs: ChoiceTree) -> String? {
         switch (lhs, rhs) {
             case let (.choice(lhsValue, _), .choice(rhsValue, _)):
