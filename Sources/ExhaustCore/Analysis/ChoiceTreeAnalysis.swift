@@ -564,9 +564,10 @@ package enum ChoiceTreeAnalysis {
                 }
                 return true
 
-            case .bind:
-                // Bind inside a sequence element — treat as opaque (dependent parameters)
-                return true
+            case let .bind(_, inner, bound):
+                // Fixed screening contexts cannot change the dependent domain across rows. Ordinary value-dependent binds remain opaque.
+                guard inner.isScreeningContext else { return true }
+                return walkElementTree(bound, elementIndex: elementIndex, parameters: &parameters)
 
             case .getSize:
                 return true
@@ -598,7 +599,9 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [ScreeningParameter]
     ) -> Bool {
         // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
-        guard metadata.isPinnedToSize == false else {
+        guard metadata.isPinnedToSize == false,
+              value.tag != .depthControl
+        else {
             return true
         }
         guard let range = metadata.validRange else {
