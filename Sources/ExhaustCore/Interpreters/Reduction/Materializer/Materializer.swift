@@ -83,6 +83,7 @@ package enum Materializer {
     /// Accepts ``AnyGenerator`` to avoid the per-`Output`-type metadata cache lookups that a generic `<Output>` parameter would impose inside ``generateRecursive``. Callers that hold a typed ``Generator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
     ///
     /// - Parameter collectDecodingReport: When `false`, the result carries a `nil` ``DecodingReport`` and per-coordinate tier recording is skipped. Callers that never read the report (screening rows) opt out to avoid the per-coordinate bookkeeping.
+    /// - Parameter shouldUseMaximumDepthForScreening: Pins guided structural depth controls even inside branches absent from the analysis template. Exact replay and ordinary guided callers keep their existing resolution policy.
     public static func materializeAny(
         _ gen: AnyGenerator,
         prefix: consuming ChoiceSequence,
@@ -91,7 +92,8 @@ package enum Materializer {
         materializePicks: Bool = false,
         precomputedSeed: UInt64? = nil,
         skipTree: Bool = false,
-        collectDecodingReport: Bool = true
+        collectDecodingReport: Bool = true,
+        shouldUseMaximumDepthForScreening: Bool = false
     ) -> Result<Any> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -123,6 +125,7 @@ package enum Materializer {
             decodingReport: collectDecodingReport ? DecodingReport() : nil,
             deadlineNanoseconds: monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
         )
+        context.shouldUseMaximumDepthForScreening = shouldUseMaximumDepthForScreening
 
         do {
             guard let (value, tree) = try generateRecursive(
@@ -507,6 +510,8 @@ extension Materializer {
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
+        /// Keeps depth policy consistent between analyzed paths and branches first reached by a screening row.
+        var shouldUseMaximumDepthForScreening: Bool = false
         /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materializes with the real tree only after the property fails.
         var skipTree: Bool = false
         /// Flat-emission buffer. When non-nil, the walk appends each node's flattened entries here in exactly `ChoiceSequence.flatten` order, so the caller gets the sequence without building a tree. Requires `skipTree` (handlers must not also build real nodes) and `materializePicks == false` (flatten only emits the selected branch). Handlers still return trees, but they are dummies, except `.getSize` leaves, which survive so the bind handler can choose group markers over bind markers.

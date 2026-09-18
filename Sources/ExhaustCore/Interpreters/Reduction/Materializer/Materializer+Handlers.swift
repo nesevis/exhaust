@@ -109,8 +109,8 @@ extension Materializer {
         let randomBits: UInt64
         var reusedChoice: ChoiceValue?
 
-        switch context.mode {
-            case .exact:
+        switch (context.mode, context.shouldUseMaximumDepthForScreening && tag == .depthControl) {
+            case (.exact, _):
                 guard let prefixValue = context.cursor.tryConsumeValue(expecting: tag) else {
                     throw RejectionError()
                 }
@@ -134,7 +134,19 @@ extension Materializer {
                     reusedChoice = prefixValue.choice
                 }
 
-            case .guided:
+            case (.guided, true):
+                let effectiveRange = scaling.map { scaling in
+                    Gen.applyScaling(
+                        min: min,
+                        max: max,
+                        tag: tag,
+                        scaling: scaling,
+                        size: Materializer.currentSize(&context)
+                    )
+                } ?? (min ... max)
+                randomBits = effectiveRange.upperBound
+
+            case (.guided, false):
                 if let prefixValue = context.cursor.tryConsumeValue(expecting: tag) {
                     let bp = prefixValue.choice.bitPattern64
                     // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
@@ -152,7 +164,7 @@ extension Materializer {
                     context.decodingReport?.record(tier: context.cursor.suspended ? .reseeded : .prng)
                 }
 
-            case .generate:
+            case (.generate, _):
                 // Fresh generation honors scaling; replay / guided / minimize operate on the declared range so they can reconstruct or target specific bit patterns without being re-narrowed.
                 let effective = scaling.map { scaling in
                     Gen.applyScaling(
@@ -168,7 +180,7 @@ extension Materializer {
                     ? effective.lowerBound
                     : context.prng.next(in: effective)
 
-            case .minimize:
+            case (.minimize, _):
                 let placeholder = ChoiceValue(min, tag: tag)
                 randomBits = placeholder.reductionTarget(in: min ... max)
         }
