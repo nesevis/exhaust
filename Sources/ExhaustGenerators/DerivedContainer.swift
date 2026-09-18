@@ -15,6 +15,9 @@ package enum ContainerCardinality {
     /// Sampled within `0 ... maximum`, leaving larger counts reflectable so a value that arrives through `reflecting:` still decomposes.
     case within(Int)
 
+    /// Keeps the node-feasible reflection ceiling distinct from the potentially tighter state-space sampling ceiling.
+    case bounded(sampling: Int, reflecting: Int)
+
     /// Exactly this many elements, rejecting every other count.
     ///
     /// The strictness is what lets ``DerivedContainerRecipe/selectCount`` tell its prebuilt layers apart: reflecting a three-element value has to fail against the two-element layer for the selector to land on the three-element one.
@@ -104,7 +107,7 @@ extension Optional: DerivedContainer {
             build: { cardinality, children in
                 let wrapped: Generator<Wrapped> = children.typed(0)
                 switch cardinality {
-                    case .sizeScaled, .within:
+                    case .sizeScaled, .within, .bounded:
                         return ReflectiveGenerator<Wrapped>
                             .optional(wrapped.wrapped(isReflective: true))
                             .gen
@@ -194,6 +197,16 @@ extension ContainerCardinality {
                 derivedLengths(upTo: maximum)
             case let .exactly(count):
                 Gen.choose(in: UInt64(count) ... UInt64(count))
+            case let .bounded(sampling, reflecting):
+                switch sampling < reflecting {
+                    case true:
+                        Gen.chooseDerived(
+                            in: UInt64(0) ... UInt64(reflecting),
+                            samplingWithin: UInt64(0) ... UInt64(sampling)
+                        )
+                    case false:
+                        Gen.choose(in: UInt64(0) ... UInt64(reflecting), scaling: .linear)
+                }
         }
     }
 }

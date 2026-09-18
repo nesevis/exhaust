@@ -244,6 +244,24 @@ final class BudgetedGeneratorDerivation {
                 case true: maximumReflectableCount
                 case false: maximumGeneratedCount
             }
+            // Opaque and standard leaves ignore per-entry allowances. A native sequence therefore has the same domain without hiding element parameters behind a count bind.
+            if maximumBuiltCount > 0,
+               recipe.maximumCount == nil,
+               children.allSatisfy({ payload in
+                   switch payload {
+                       case .supplied, .standard:
+                           true
+                       case .derivedType, .container:
+                           false
+                   }
+               })
+            {
+                let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: 1, stateSpace: stateSpace) }
+                return recipe.build(
+                    .bounded(sampling: maximumGeneratedCount, reflecting: maximumBuiltCount),
+                    generators.map { $0.gen }
+                ).wrapped(isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective })
+            }
             for count in 0 ..< maximumBuiltCount {
                 let elementCount = count + 1
                 let allowances = budget.split(quantisedAllowance((nodes - 1) / elementCount, notBelow: minimum), minima: minima)!
