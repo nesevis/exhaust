@@ -190,18 +190,18 @@ private final class GenericReference<Element> {
 }
 
 @Exhaustable
-private struct GenericAssociated<Values: Collection & SendableMetatype>: Equatable where Values.Element: Hashable & SendableMetatype {
+private struct GenericAssociated<Values: Collection>: Equatable where Values.Element: Hashable {
     let value: Values.Element
 }
 
-private struct GenericScope<Element: Equatable & SendableMetatype> {
+private struct GenericScope<Element: Equatable> {
     @Exhaustable
     struct Nested: Equatable {
         let value: Element
     }
 
     @Exhaustable
-    struct Pair<Other: Equatable & SendableMetatype>: Equatable {
+    struct Pair<Other: Equatable>: Equatable {
         let first: Element
         let second: Other
     }
@@ -239,7 +239,7 @@ private struct GenericProducts: Equatable {
 }
 
 @Exhaustable
-private struct GenericContainers<Element: Hashable & SendableMetatype>: Equatable {
+private struct GenericContainers<Element: Hashable>: Equatable {
     let array: [Element]
     let optional: Element?
     let set: Set<Element>

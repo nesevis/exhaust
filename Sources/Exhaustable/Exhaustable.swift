@@ -11,7 +11,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
     }
 
     /// Describes the constructors of an annotated type. An enum has one constructor per case; a struct or final class has one constructor whose payload is its stored properties.
-    public struct TypeDescriptor<Value>: Sendable {
+    public struct TypeDescriptor<Value> {
         /// Lists constructors in declaration order.
         public let constructors: [ConstructorDescriptor<Value>]
 
@@ -65,7 +65,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
     }
 
     /// Describes one sum-of-products constructor and the inverse operations that construct and decompose its values.
-    public struct ConstructorDescriptor<Value>: Sendable {
+    public struct ConstructorDescriptor<Value> {
         /// Names the enum case or product type without argument labels.
         public let name: String
 
@@ -73,17 +73,17 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
         public let payloadTypes: [Any.Type]
 
         /// Builds the constructor from payload values in declaration order. Each element must have the matching entry's type in ``payloadTypes``.
-        public let embed: @Sendable ([Any]) -> Value
+        public let embed: ([Any]) -> Value
 
         /// Returns the constructor's payload values in declaration order, or `nil` when an enum value belongs to another constructor.
-        public let extract: @Sendable (Value) -> [Any]?
+        public let extract: (Value) -> [Any]?
 
         /// Creates a constructor descriptor for a macro expansion.
         public init(
             name: String,
             payloadTypes: [Any.Type],
-            embed: @escaping @Sendable ([Any]) -> Value,
-            extract: @escaping @Sendable (Value) -> [Any]?
+            embed: @escaping ([Any]) -> Value,
+            extract: @escaping (Value) -> [Any]?
         ) {
             self.name = name
             self.payloadTypes = payloadTypes
@@ -110,7 +110,7 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 ///
 /// Start without arguments. Set limits here only when every derived use of the type should inherit them; an individual test can override the root settings through `Type.gen(...)`.
 ///
-/// The macro supports enums, structs, final classes, and generic forms of those declarations. It diagnoses unsupported storage and initialization patterns at the declaration. Under strict concurrency, protocol-constrained generic parameters and associated types may need a `SendableMetatype` constraint. For example, write `Element: Hashable & SendableMetatype` rather than requiring `Element: Sendable`; generated values themselves need not be sendable.
+/// The macro supports enums, structs, final classes, and generic forms of those declarations. It diagnoses unsupported storage and initialization patterns at the declaration.
 ///
 /// - Parameters:
 ///   - maximumDepth: The default recursive nesting ceiling. Defaults to 10.
