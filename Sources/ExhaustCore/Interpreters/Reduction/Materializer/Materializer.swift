@@ -101,7 +101,7 @@ package enum Materializer {
             case .exact:
                 // The seed only feeds context.prng. In exact mode the PRNG is consulted nowhere except when materializePicks routes jump seeds into non-selected branch contexts. Without materializePicks the O(n) prefix hash buys nothing and a constant seed is byte-identical.
                 seed = precomputedSeed ?? (materializePicks ? ZobristHash.hash(of: prefix) : 0)
-                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing: dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25).
+                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is important: dropping scoping nearly doubles materializations on batch cross-sequence removal.
                 resolvedFallbackTree = fallbackTree
                 maximizeBoundRegionIndices = nil
             case let .guided(s, fb, indices):
