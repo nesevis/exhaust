@@ -66,7 +66,7 @@ final class GeneratorNodeBudget {
         }
     }
 
-    /// Reserves every child's minimum before sharing the spare allowance evenly. A remainder goes to earlier fields in declaration order. Supplied generators are opaque one-node leaves; their unused allowance is not spent elsewhere.
+    /// Reserves every child's minimum before sharing the spare allowance evenly, then rounds each share down onto the grid ``quantisedAllowance(_:)`` defines. A remainder goes to earlier fields in declaration order. Supplied generators are opaque one-node leaves; their unused allowance is not spent elsewhere.
     func split(_ allowance: Int, minima: [Int]) -> [Int]? {
         guard let minimum = sumNodes(minima), minimum <= allowance else {
             return nil
@@ -78,7 +78,7 @@ final class GeneratorNodeBudget {
         let share = spare / minima.count
         let remainder = spare % minima.count
         return minima.enumerated().map { index, minimum in
-            minimum + share + (index < remainder ? 1 : 0)
+            quantisedAllowance(minimum + share + (index < remainder ? 1 : 0), notBelow: minimum)
         }
     }
 }
@@ -96,4 +96,21 @@ func sumNodes(_ values: [Int]) -> Int? {
         total = next
     }
     return total
+}
+
+/// Rounds an allowance down onto a logarithmic grid, keeping five significant bits, but never below `minimum`.
+///
+/// Layers are cached by allowance, so without this a ceiling of 200 builds a distinct layer for almost every integer below it. Snapping nearby allowances together makes the layer count grow with the logarithm of the ceiling rather than with the ceiling. Five bits discards under 6% of an allowance; allowances below 32 are already on the grid and pass through.
+///
+/// Rounding down is what keeps the ceiling exact: nothing receives more than it was allotted, so a declared `maximumNodes` still bounds the value. The budget was already under-spent before this, because splitting among children and drawing a depth meant a ceiling of 200 produced values of about 99 nodes, and the grid takes that to about 95.
+///
+/// `minimum` is required rather than defaulted because rounding an allowance below what its recipient needs does not make the budget coarser, it makes it infeasible: the grid would turn a constructible request into a `nil` split or an empty layer set. The floor only raises the result back toward the unrounded allowance, never past it, so the caller's own ceiling still holds.
+func quantisedAllowance(_ allowance: Int, notBelow minimum: Int) -> Int {
+    let retainedBits = 5
+    guard allowance >= (1 << retainedBits) else {
+        return allowance
+    }
+    let magnitude = Int.bitWidth - 1 - allowance.leadingZeroBitCount
+    let shift = magnitude - (retainedBits - 1)
+    return Swift.max(minimum, (allowance >> shift) << shift)
 }

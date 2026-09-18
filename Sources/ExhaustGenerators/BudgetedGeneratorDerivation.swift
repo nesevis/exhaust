@@ -45,7 +45,7 @@ final class BudgetedGeneratorDerivation {
         let span = maximumNodes - minimum
         return sizeIndexedLayers(
             // Divide before multiplying so even a ceiling near Int.max cannot overflow.
-            key: { size in minimum + (span / 100) * size + ((span % 100) * size) / 100 },
+            key: { size in quantisedAllowance(minimum + (span / 100) * size + ((span % 100) * size) / 100, notBelow: minimum) },
             build: { allowance in
                 rootLayer(
                     for: type,
@@ -245,7 +245,7 @@ final class BudgetedGeneratorDerivation {
             }
             for count in 0 ..< maximumBuiltCount {
                 let elementCount = count + 1
-                let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
+                let allowances = budget.split(quantisedAllowance((nodes - 1) / elementCount, notBelow: minimum), minima: minima)!
                 let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
                 layers.append(recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
                     isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
