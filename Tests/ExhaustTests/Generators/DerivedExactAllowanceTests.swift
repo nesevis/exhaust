@@ -2,18 +2,37 @@ import Exhaust
 import Testing
 @testable import ExhaustGenerators
 
-@Suite("Derived allowance quantisation")
-struct DerivedAllowanceQuantisationTests {
-    @Test("The grid never rounds an allowance below the minimum its recipient needs")
-    func floorHolds() {
-        #expect(quantisedAllowance(33, notBelow: 1) == 32)
-        #expect(quantisedAllowance(33, notBelow: 33) == 33)
-        #expect(quantisedAllowance(16, notBelow: 1) == 16)
-        #expect(quantisedAllowance(201, notBelow: 1) == 200)
-        #expect(quantisedAllowance(201, notBelow: 201) == 201)
+@Suite("Derived exact allowances")
+struct DerivedExactAllowanceTests {
+    @Test("Splitting preserves exact allowances, reserves minima and distributes the remainder")
+    func exactSplit() throws {
+        let plan = try GeneratorDerivationPlan(for: WideProduct.self, overrides: [:])
+        let budget = GeneratorNodeBudget(plan: plan)
+        #expect(budget.split(33, minima: [1]) == [33])
+        #expect(budget.split(33, minima: [33]) == [33])
+        #expect(budget.split(16, minima: [1]) == [16])
+        #expect(budget.split(201, minima: [1]) == [201])
+        #expect(budget.split(201, minima: [201]) == [201])
+        #expect(budget.split(34, minima: [1, 2, 3]) == [11, 11, 12])
+        #expect(budget.split(5, minima: [1, 2, 3]) == nil)
     }
 
-    @Test("A root whose minimum the grid would round below still constructs", arguments: [33, 35, 63])
+    @Test("Every feasible container count receives at least its entry minimum", arguments: [33, 34, 66, 67, 201])
+    func containerSplitFeasibility(availableNodes: Int) throws {
+        let plan = try GeneratorDerivationPlan(for: WideProduct.self, overrides: [:])
+        let budget = GeneratorNodeBudget(plan: plan)
+        let minima = [33]
+        let minimum = try #require(sumNodes(minima))
+        for elementCount in 1 ... availableNodes / minimum {
+            let share = availableNodes / elementCount
+            #expect(share >= minimum)
+            let allowances = try #require(budget.split(share, minima: minima))
+            #expect(allowances == [share])
+            #expect(allowances.reduce(0, +) * elementCount <= availableNodes)
+        }
+    }
+
+    @Test("A root constructs at and above its exact minimum", arguments: [33, 35, 63])
     func rootMinimum(maximumNodes: Int) throws {
         for generator in [
             WideProduct.gen(maximumDepth: 0, maximumNodes: maximumNodes),
@@ -24,13 +43,13 @@ struct DerivedAllowanceQuantisationTests {
         }
     }
 
-    @Test("A nested child whose minimum the grid would round below still constructs")
+    @Test("A nested child constructs when its exact minimum fits")
     func nestedChildMinimum() throws {
         let samples = try #example(NestedWide.gen(maximumDepth: 1, maximumNodes: 35), count: 10)
         #expect(samples.allSatisfy { $0.nodes <= 35 })
     }
 
-    @Test("A container entry whose minimum the grid would round below still constructs")
+    @Test("A container constructs when an entry's exact minimum fits")
     func containerEntryMinimum() throws {
         let samples = try #example(WideArray.gen(maximumDepth: 1, maximumNodes: 35), count: 10)
         #expect(samples.allSatisfy { $0.nodes <= 35 })
@@ -39,7 +58,7 @@ struct DerivedAllowanceQuantisationTests {
 
 // MARK: - Fixtures
 
-/// Costs 33 nodes at minimum: one for the product, one for each field. The grid rounds 33 down to 32, so a ceiling of 33 is only constructible when the floor holds.
+/// Costs exactly 33 nodes: one for the product and one for each field. A ceiling of 33 leaves no spare allowance.
 @Exhaustable
 private struct WideProduct: Equatable {
     let field0: Int

@@ -66,7 +66,7 @@ final class GeneratorNodeBudget {
         }
     }
 
-    /// Reserves every child's minimum before sharing the spare allowance evenly, then rounds each share down onto the grid ``quantisedAllowance(_:)`` defines. A remainder goes to earlier fields in declaration order. Supplied generators are opaque one-node leaves; their unused allowance is not spent elsewhere.
+    /// Reserves every child's minimum before sharing the spare allowance evenly. For nonempty minima, the shares sum to the exact allowance; any remainder goes to earlier fields in declaration order. Supplied generators are opaque one-node leaves; their unused allowance is not spent elsewhere.
     func split(_ allowance: Int, minima: [Int]) -> [Int]? {
         guard let minimum = sumNodes(minima), minimum <= allowance else {
             return nil
@@ -78,7 +78,7 @@ final class GeneratorNodeBudget {
         let share = spare / minima.count
         let remainder = spare % minima.count
         return minima.enumerated().map { index, minimum in
-            quantisedAllowance(minimum + share + (index < remainder ? 1 : 0), notBelow: minimum)
+            minimum + share + (index < remainder ? 1 : 0)
         }
     }
 }
@@ -96,11 +96,4 @@ func sumNodes(_ values: [Int]) -> Int? {
         total = next
     }
     return total
-}
-
-/// Retains exact allowances for the experimental baseline, keeping allocation semantics independent of cache layout.
-///
-/// The signature is unchanged so the experiment isolates quantisation from all other derivation behavior.
-func quantisedAllowance(_ allowance: Int, notBelow _: Int) -> Int {
-    allowance
 }

@@ -46,7 +46,7 @@ final class BudgetedGeneratorDerivation {
         let span = maximumNodes - minimum
         return sizeIndexedLayers(
             // Divide before multiplying so even a ceiling near Int.max cannot overflow.
-            key: { size in quantisedAllowance(minimum + (span / 100) * size + ((span % 100) * size) / 100, notBelow: minimum) },
+            key: { size in minimum + (span / 100) * size + ((span % 100) * size) / 100 },
             build: { allowance in
                 rootLayer(
                     for: type,
@@ -264,7 +264,9 @@ final class BudgetedGeneratorDerivation {
             }
             for count in 0 ..< maximumBuiltCount {
                 let elementCount = count + 1
-                let allowances = budget.split(quantisedAllowance((nodes - 1) / elementCount, notBelow: minimum), minima: minima)!
+                // elementCount <= maximumBuiltCount <= (nodes - 1) / minimum, so this share is at least minimum.
+                // The sum of minima was checked above; split therefore cannot fail for any count in this loop.
+                let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
                 let key = CountedContainerKey(
                     type: ObjectIdentifier(recipe.type),
                     count: elementCount,
