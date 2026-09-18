@@ -34,9 +34,10 @@ struct ConstructorPlan {
 }
 
 /// Stores a completed declaration after resolving its payloads. Recursive edges name identifiers, so a node does not need mutable placeholders or references to other nodes.
+///
+/// The declaration's own ``__Exhaustable/TypeDescriptor`` is not kept. Its limits are copied out here because the graph reads them without knowing `Value`; its constructors are typed, so the builder reads them back from `Value.__generatorDescriptor` where `Value` is still static rather than storing them erased and casting.
 struct TypeDerivationPlan {
     let type: any __Exhaustable.Conformance.Type
-    let descriptor: Any
     let maximumDepth: Int?
     let maximumNodes: Int?
     let stateSpace: GeneratorStateSpace
@@ -48,7 +49,6 @@ struct TypeDerivationPlan {
         constructors: [ConstructorPlan]
     ) {
         self.type = type
-        self.descriptor = descriptor
         maximumDepth = descriptor.maximumDepth
         maximumNodes = descriptor.maximumNodes
         stateSpace = descriptor.stateSpace
@@ -59,6 +59,8 @@ struct TypeDerivationPlan {
 /// Resolves a finite dependency graph, then computes constructible depths without building generators for annotated types.
 ///
 /// Only initialization mutates the graph. Supplied generators are opaque leaves: the plan does not prove that their filters succeed or that their own construction terminates. Standard containers have an empty construction independent of their contents.
+///
+/// The graph stores structure keyed by identity, never a payload type. Anything typed is recovered where that type is still static: an annotated type's constructors from `Value.__generatorDescriptor` in the builder, a container's element generators inside the closures on its ``DerivedContainerRecipe``. The one erasure that stays is ``BudgetedGeneratorDerivation/built``, whose values genuinely differ in type per key, so its cast reads a heterogeneous store rather than recovering a type the caller already knows.
 final class GeneratorDerivationPlan {
     private(set) var types: [ObjectIdentifier: TypeDerivationPlan] = [:]
     private let overrides: [ObjectIdentifier: ReflectiveGenerator<Any>]

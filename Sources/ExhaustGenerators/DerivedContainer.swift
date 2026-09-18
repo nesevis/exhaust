@@ -7,7 +7,21 @@ package protocol DerivedContainer {
     static var derivationRecipe: DerivedContainerRecipe { get }
 }
 
-/// Separates empty, unrestricted, and budgeted construction. Child order matches the factory's positional inputs, including key before value for dictionaries. Budgeted rows share completed child generators across every entry, not their node allowance.
+/// How many elements one built container layer may hold.
+package enum ContainerCardinality {
+    /// The container factory's own size-scaled count, used when neither a node allowance nor a bounded state space applies.
+    case sizeScaled
+
+    /// Sampled within `0 ... maximum`, leaving larger counts reflectable so a value that arrives through `reflecting:` still decomposes.
+    case within(Int)
+
+    /// Exactly this many elements, rejecting every other count.
+    ///
+    /// The strictness is what lets ``DerivedContainerRecipe/selectCount`` tell its prebuilt layers apart: reflecting a three-element value has to fail against the two-element layer for the selector to land on the three-element one.
+    case exactly(Int)
+}
+
+/// Separates the empty construction, the counted construction, and the layer selection. Child order matches the factory's positional inputs, including key before value for dictionaries. Budgeted layers share completed child generators across every entry, not their node allowance.
 package struct DerivedContainerRecipe {
     let type: Any.Type
     let childTypes: [Any.Type]
@@ -21,50 +35,59 @@ package struct DerivedContainerRecipe {
     /// Produces only the container's empty value, and rejects a nonempty reflection target rather than replaying it as empty.
     let empty: AnyGenerator
 
-    /// Builds the factory's own size-scaled cardinality, used when no node allowance and no bounded state space applies.
-    let build: ([AnyGenerator]) -> AnyGenerator
-
-    /// Builds a cardinality capped at the given count, used when a bounded state space narrows the default without a node allowance.
-    let buildWithin: (Int, [AnyGenerator]) -> AnyGenerator
-
-    /// Builds one fixed-cardinality layer, so a node allowance can divide the same remainder among a known number of elements.
-    let buildExactly: (Int, [AnyGenerator]) -> AnyGenerator
+    /// Builds one layer at the given cardinality.
+    let build: (ContainerCardinality, [AnyGenerator]) -> AnyGenerator
 
     /// Samples through the given cardinality while retaining every prebuilt layer for reflection. The value's own count recovers the layer without generation state.
     let selectCount: (Int, [AnyGenerator]) -> AnyGenerator
 }
 
+// MARK: - Conformances
+
 extension Array: DerivedContainer {
     package static var derivationRecipe: DerivedContainerRecipe {
-        DerivedContainerRecipe(
-            type: Self.self,
-            childTypes: [Element.self],
-            maximumCount: nil,
+        .sequence(
+            Self.self,
+            element: Element.self,
             isReflective: true,
-            empty: emptyContainer(Self()) { $0.isEmpty },
-            build: { children in
-                let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.arrayOf(element).erase()
-            },
-            buildWithin: { maximumCount, children in
-                let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.arrayOf(element, derivedLengths(upTo: maximumCount)).erase()
-            },
-            buildExactly: { count, children in
-                let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.arrayOf(element, exactly: UInt64(count)).erase()
-            },
-            selectCount: { maximumGeneratedCount, layers in
-                boundedContainer(
-                    layers,
-                    maximumGeneratedCount: maximumGeneratedCount,
-                    count: { (value: Self) in value.count }
-                )
-            }
+            empty: Self(),
+            isEmpty: { $0.isEmpty },
+            count: { $0.count },
+            build: { element, lengths in Gen.arrayOf(element, lengths) }
         )
     }
 }
 
+extension Set: DerivedContainer {
+    package static var derivationRecipe: DerivedContainerRecipe {
+        .sequence(
+            Self.self,
+            element: Element.self,
+            isReflective: false,
+            empty: Self(),
+            isEmpty: { $0.isEmpty },
+            count: { $0.count },
+            build: { element, lengths in Gen.setOf(element, lengths) }
+        )
+    }
+}
+
+extension Dictionary: DerivedContainer {
+    package static var derivationRecipe: DerivedContainerRecipe {
+        .keyed(
+            Self.self,
+            key: Key.self,
+            value: Value.self,
+            isReflective: false,
+            empty: Self(),
+            isEmpty: { $0.isEmpty },
+            count: { $0.count },
+            build: { key, value, counts in Gen.dictionaryOf(key, value, counts) }
+        )
+    }
+}
+
+/// Written out rather than built from ``DerivedContainerRecipe/sequence(_:element:isReflective:empty:isEmpty:count:build:)`` because presence is not a cardinality draw: ``ReflectiveGenerator/optional(_:)`` picks between the two shapes itself, so there is no length generator to hand it.
 extension Optional: DerivedContainer {
     package static var derivationRecipe: DerivedContainerRecipe {
         DerivedContainerRecipe(
@@ -78,23 +101,18 @@ extension Optional: DerivedContainer {
                 }
                 return true
             },
-            build: { children in
-                let wrapped: Generator<Wrapped> = children[0].map { $0 as! Wrapped }
-                return ReflectiveGenerator<Wrapped>
-                    .optional(wrapped.wrapped(isReflective: true))
-                    .gen
-                    .erase()
-            },
-            buildWithin: { _, children in
-                let wrapped: Generator<Wrapped> = children[0].map { $0 as! Wrapped }
-                return ReflectiveGenerator<Wrapped>
-                    .optional(wrapped.wrapped(isReflective: true))
-                    .gen
-                    .erase()
-            },
-            buildExactly: { _, children in
-                let wrapped: Generator<Wrapped> = children[0].map { $0 as! Wrapped }
-                return wrapped.liftToOptional().erase()
+            build: { cardinality, children in
+                let wrapped: Generator<Wrapped> = children.typed(0)
+                switch cardinality {
+                    case .sizeScaled, .within:
+                        return ReflectiveGenerator<Wrapped>
+                            .optional(wrapped.wrapped(isReflective: true))
+                            .gen
+                            .erase()
+                    case .exactly:
+                        // `maximumCount` caps the selector at one element, so the only exact layer it asks for is the present one.
+                        return wrapped.liftToOptional().erase()
+                }
             },
             selectCount: { maximumGeneratedCount, layers in
                 boundedContainer(
@@ -107,72 +125,87 @@ extension Optional: DerivedContainer {
     }
 }
 
-extension Set: DerivedContainer {
-    package static var derivationRecipe: DerivedContainerRecipe {
-        DerivedContainerRecipe(
-            type: Self.self,
+// MARK: - Recipe Builders
+
+package extension DerivedContainerRecipe {
+    /// A container of one element type whose count comes from a length generator.
+    ///
+    /// The `build` closure receives an element generator already restored to `Element`, so a conformance never writes a cast of its own.
+    static func sequence<Container, Element>(
+        _ type: Container.Type,
+        element _: Element.Type,
+        isReflective: Bool,
+        empty: Container,
+        isEmpty: @escaping (Container) -> Bool,
+        count: @escaping (Container) -> Int,
+        build: @escaping (Generator<Element>, Generator<UInt64>?) -> Generator<Container>
+    ) -> Self {
+        Self(
+            type: type,
             childTypes: [Element.self],
             maximumCount: nil,
-            isReflective: false,
-            empty: emptyContainer(Self()) { $0.isEmpty },
-            build: { children in
-                let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.setOf(element).erase()
-            },
-            buildWithin: { maximumCount, children in
-                let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.setOf(element, derivedLengths(upTo: maximumCount)).erase()
-            },
-            buildExactly: { count, children in
-                let element: Generator<Element> = children[0].map { $0 as! Element }
-                return Gen.setOf(element, exactly: UInt64(count)).erase()
+            isReflective: isReflective,
+            empty: emptyContainer(empty, matches: isEmpty),
+            build: { cardinality, children in
+                build(children.typed(0), cardinality.lengths).erase()
             },
             selectCount: { maximumGeneratedCount, layers in
-                boundedContainer(
-                    layers,
-                    maximumGeneratedCount: maximumGeneratedCount,
-                    count: { (value: Self) in value.count }
-                )
+                boundedContainer(layers, maximumGeneratedCount: maximumGeneratedCount, count: count)
             }
         )
     }
-}
 
-extension Dictionary: DerivedContainer {
-    package static var derivationRecipe: DerivedContainerRecipe {
-        DerivedContainerRecipe(
-            type: Self.self,
+    /// A container of key and value types whose entry count comes from a length generator.
+    static func keyed<Container, Key, Value>(
+        _ type: Container.Type,
+        key _: Key.Type,
+        value _: Value.Type,
+        isReflective: Bool,
+        empty: Container,
+        isEmpty: @escaping (Container) -> Bool,
+        count: @escaping (Container) -> Int,
+        build: @escaping (Generator<Key>, Generator<Value>, Generator<UInt64>?) -> Generator<Container>
+    ) -> Self {
+        Self(
+            type: type,
             childTypes: [Key.self, Value.self],
             maximumCount: nil,
-            isReflective: false,
-            empty: emptyContainer(Self()) { $0.isEmpty },
-            build: { children in
-                let key: Generator<Key> = children[0].map { $0 as! Key }
-                let value: Generator<Value> = children[1].map { $0 as! Value }
-                return Gen.dictionaryOf(key, value).erase()
-            },
-            buildWithin: { maximumCount, children in
-                let key: Generator<Key> = children[0].map { $0 as! Key }
-                let value: Generator<Value> = children[1].map { $0 as! Value }
-                return Gen.dictionaryOf(key, value, derivedLengths(upTo: maximumCount)).erase()
-            },
-            buildExactly: { count, children in
-                let key: Generator<Key> = children[0].map { $0 as! Key }
-                let value: Generator<Value> = children[1].map { $0 as! Value }
-                return Gen.dictionaryOf(key, value, exactly: UInt64(count)).erase()
+            isReflective: isReflective,
+            empty: emptyContainer(empty, matches: isEmpty),
+            build: { cardinality, children in
+                build(children.typed(0), children.typed(1), cardinality.lengths).erase()
             },
             selectCount: { maximumGeneratedCount, layers in
-                boundedContainer(
-                    layers,
-                    maximumGeneratedCount: maximumGeneratedCount,
-                    count: { (value: Self) in value.count }
-                )
+                boundedContainer(layers, maximumGeneratedCount: maximumGeneratedCount, count: count)
             }
         )
     }
 }
 
 // MARK: - Helpers
+
+extension ContainerCardinality {
+    /// The length generator this policy asks a container factory for. A `nil` generator leaves the factory's own size scaling in place.
+    var lengths: Generator<UInt64>? {
+        switch self {
+            case .sizeScaled:
+                nil
+            case let .within(maximum):
+                derivedLengths(upTo: maximum)
+            case let .exactly(count):
+                Gen.choose(in: UInt64(count) ... UInt64(count))
+        }
+    }
+}
+
+extension [AnyGenerator] {
+    /// Restores a child generator's payload type.
+    ///
+    /// The cast is safe wherever the recipe that captured this closure named the same types in `childTypes`, which is what the plan resolves children against. Keeping it here means a container conformance states its element types once instead of re-casting in every closure.
+    func typed<Child>(_ index: Int) -> Generator<Child> {
+        self[index].map { $0 as! Child }
+    }
+}
 
 /// Samples a cardinality in `0 ... maximum` while leaving larger cardinalities reflectable.
 ///

@@ -95,7 +95,7 @@ final class BudgetedGeneratorDerivation {
             return existing
         }
         let typePlan = plan.types[key.type]!
-        let descriptor = typePlan.descriptor as! __Exhaustable.TypeDescriptor<Value>
+        let descriptor = Value.__generatorDescriptor
         let preferPayloadFree = depth == 0 && typePlan.constructors.contains { $0.payloads.isEmpty }
         let arms = typePlan.constructors.enumerated().compactMap { index, entry -> ReflectiveGenerator<Value>? in
             guard preferPayloadFree == false || entry.payloads.isEmpty,
@@ -222,16 +222,9 @@ final class BudgetedGeneratorDerivation {
                 return recipe.empty.wrapped(isReflective: true)
             }
             let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: nil, stateSpace: stateSpace) }
-            let generator = switch stateSpace.defaultSequenceLengthMaximum {
-                case let .some(maximumCount):
-                    recipe.buildWithin(
-                        min(maximumCount, recipe.maximumCount ?? maximumCount),
-                        generators.map { $0.gen }
-                    )
-                case .none:
-                    recipe.build(generators.map { $0.gen })
-            }
-            return generator.wrapped(
+            let cardinality: ContainerCardinality = stateSpace.defaultSequenceLengthMaximum
+                .map { .within(min($0, recipe.maximumCount ?? $0)) } ?? .sizeScaled
+            return recipe.build(cardinality, generators.map { $0.gen }).wrapped(
                 isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
             )
         }
@@ -251,10 +244,10 @@ final class BudgetedGeneratorDerivation {
                 case false: maximumGeneratedCount
             }
             for count in 0 ..< maximumBuiltCount {
-                let cardinality = count + 1
-                let allowances = budget.split((nodes - 1) / cardinality, minima: minima)!
+                let elementCount = count + 1
+                let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
                 let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
-                layers.append(recipe.buildExactly(cardinality, generators.map { $0.gen }).wrapped(
+                layers.append(recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
                     isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
                 ))
             }
