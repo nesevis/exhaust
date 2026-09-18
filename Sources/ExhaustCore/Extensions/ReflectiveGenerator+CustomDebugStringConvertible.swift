@@ -61,6 +61,7 @@ extension Generator where Operation == ReflectiveOperation {
                 switch scaling {
                     case .none: break
                     case .some(.linear): suffix += " [linear]"
+                    case .some(.linearWithin): suffix += " [linear within sampling range]"
                     case .some(.exponential): suffix += " [exponential]"
                     case .some(.size):
                         suffix += " [size]"

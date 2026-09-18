@@ -30,8 +30,8 @@ package struct DerivedContainerRecipe {
     /// Builds one fixed-cardinality layer, so a node allowance can divide the same remainder among a known number of elements.
     let buildExactly: (Int, [AnyGenerator]) -> AnyGenerator
 
-    /// Chooses among the prebuilt cardinality layers, recovering the index from the value's own count so reflection does not depend on generation state.
-    let selectCount: ([AnyGenerator]) -> AnyGenerator
+    /// Samples through the given cardinality while retaining every prebuilt layer for reflection. The value's own count recovers the layer without generation state.
+    let selectCount: (Int, [AnyGenerator]) -> AnyGenerator
 }
 
 extension Array: DerivedContainer {
@@ -51,14 +51,21 @@ extension Array: DerivedContainer {
                 return Gen.arrayOf(
                     element,
                     within: UInt64(0) ... UInt64(maximumCount),
-                    scaling: .linear
+                    scaling: .linear,
+                    isLengthRangeExplicit: false
                 ).erase()
             },
             buildExactly: { count, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
                 return Gen.arrayOf(element, exactly: UInt64(count)).erase()
             },
-            selectCount: { boundedContainer($0, count: { (value: Self) in value.count }) }
+            selectCount: { maximumGeneratedCount, layers in
+                boundedContainer(
+                    layers,
+                    maximumGeneratedCount: maximumGeneratedCount,
+                    count: { (value: Self) in value.count }
+                )
+            }
         )
     }
 }
@@ -94,7 +101,13 @@ extension Optional: DerivedContainer {
                 let wrapped: Generator<Wrapped> = children[0].map { $0 as! Wrapped }
                 return wrapped.liftToOptional().erase()
             },
-            selectCount: { boundedContainer($0, count: { (value: Self) in value == nil ? 0 : 1 }) }
+            selectCount: { maximumGeneratedCount, layers in
+                boundedContainer(
+                    layers,
+                    maximumGeneratedCount: maximumGeneratedCount,
+                    count: { (value: Self) in value == nil ? 0 : 1 }
+                )
+            }
         )
     }
 }
@@ -116,14 +129,21 @@ extension Set: DerivedContainer {
                 return Gen.setOf(
                     element,
                     within: UInt64(0) ... UInt64(maximumCount),
-                    scaling: .linear
+                    scaling: .linear,
+                    isLengthRangeExplicit: false
                 ).erase()
             },
             buildExactly: { count, children in
                 let element: Generator<Element> = children[0].map { $0 as! Element }
                 return Gen.setOf(element, exactly: UInt64(count)).erase()
             },
-            selectCount: { boundedContainer($0, count: { (value: Self) in value.count }) }
+            selectCount: { maximumGeneratedCount, layers in
+                boundedContainer(
+                    layers,
+                    maximumGeneratedCount: maximumGeneratedCount,
+                    count: { (value: Self) in value.count }
+                )
+            }
         )
     }
 }
@@ -148,7 +168,8 @@ extension Dictionary: DerivedContainer {
                     key,
                     value,
                     within: UInt64(0) ... UInt64(maximumCount),
-                    scaling: .linear
+                    scaling: .linear,
+                    isLengthRangeExplicit: false
                 ).erase()
             },
             buildExactly: { count, children in
@@ -156,7 +177,13 @@ extension Dictionary: DerivedContainer {
                 let value: Generator<Value> = children[1].map { $0 as! Value }
                 return Gen.dictionaryOf(key, value, exactly: UInt64(count)).erase()
             },
-            selectCount: { boundedContainer($0, count: { (value: Self) in value.count }) }
+            selectCount: { maximumGeneratedCount, layers in
+                boundedContainer(
+                    layers,
+                    maximumGeneratedCount: maximumGeneratedCount,
+                    count: { (value: Self) in value.count }
+                )
+            }
         )
     }
 }
@@ -173,13 +200,44 @@ extension ReflectiveGenerator {
 /// Selects a completed cardinality layer; reflection recovers cardinality from the value, never from hidden generation state. The layer array contains an empty layer followed by positive-count layers.
 private func boundedContainer<Value>(
     _ layers: [AnyGenerator],
+    maximumGeneratedCount: Int,
     count: @escaping (Value) -> Int
 ) -> AnyGenerator {
-    let generator: Generator<Value> = Gen.choose(in: UInt64(0) ... UInt64(layers.count - 1), scaling: .linear)._bound(
-        forward: { count in layers[Int(count)] },
-        backward: { (value: Value) in UInt64(count(value)) }
-    )
-    return generator.erase()
+    let maximumReflectableCount = layers.count - 1
+    let reflectableRange = UInt64(0) ... UInt64(maximumReflectableCount)
+    switch maximumGeneratedCount < maximumReflectableCount {
+        case true:
+            let countGenerator = Gen.chooseDerived(
+                in: reflectableRange,
+                samplingWithin: UInt64(0) ... UInt64(maximumGeneratedCount)
+            )
+            let generator: Generator<Value> = countGenerator._bound(
+                forward: { selectedCount in layers[Int(selectedCount)] },
+                backward: { (value: Value) in UInt64(count(value)) }
+            )
+            return Gen.comap(
+                { (value: Value) in
+                    let selectedCount = count(value)
+                    guard selectedCount <= maximumReflectableCount else {
+                        throw ReflectionError.inputWasOutOfGeneratorRange(
+                            String(selectedCount),
+                            range: "0...\(maximumReflectableCount)"
+                        )
+                    }
+                    return value
+                },
+                generator
+            ).erase()
+        case false:
+            let generator: Generator<Value> = Gen.choose(
+                in: reflectableRange,
+                scaling: .linear
+            )._bound(
+                forward: { selectedCount in layers[Int(selectedCount)] },
+                backward: { (value: Value) in UInt64(count(value)) }
+            )
+            return generator.erase()
+    }
 }
 
 /// Rejects nonempty reflection targets even when the element type is not Equatable. A bare `just` accepts any target and would replay a nonempty input as an empty container.

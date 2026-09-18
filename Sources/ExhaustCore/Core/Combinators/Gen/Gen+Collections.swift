@@ -40,16 +40,22 @@ package extension Gen {
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements.
     ///   - range: The allowed range for array length.
-    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
+    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`.
+    ///   - isLengthRangeExplicit: Whether reflection must reject lengths outside `range`.
     /// - Returns: A generator that produces arrays with length in the specified range.
     static func arrayOf<Output>(
         _ elementGenerator: Generator<Output>,
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear,
+        isLengthRangeExplicit: Bool = true,
         elementBatch: ReflectiveOperation.SequenceElementBatch? = nil
     ) -> Generator<[Output]> {
+        let lengthGenerator = switch isLengthRangeExplicit {
+            case true: Gen.choose(in: range, scaling: scaling)
+            case false: Gen.chooseDerived(in: range, scaling: scaling)
+        }
         let sequenceOperation = ReflectiveOperation.sequence(
-            length: Gen.choose(in: range, scaling: scaling),
+            length: lengthGenerator,
             gen: elementGenerator.erase(),
             elementBatch: elementBatch ?? inferredElementBatch(for: elementGenerator)
         )
@@ -112,15 +118,25 @@ package extension Gen {
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     ///   - range: The allowed range for the entry count.
-    ///   - scaling: The distribution strategy for the entry count. Defaults to `.linear`
+    ///   - scaling: The distribution strategy for the entry count. Defaults to `.linear`.
+    ///   - isLengthRangeExplicit: Whether reflection must reject counts outside `range`.
     /// - Returns: A generator that produces dictionaries with entry count in the specified range.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: Generator<KeyOutput>,
         _ valueGenerator: Generator<ValueOutput>,
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<UInt64> = .linear,
+        isLengthRangeExplicit: Bool = true
     ) -> Generator<[KeyOutput: ValueOutput]> {
-        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, within: range, scaling: scaling), valueGenerator)
+        dictionaryOf(
+            keyArrays: Gen.arrayOf(
+                keyGenerator,
+                within: range,
+                scaling: scaling,
+                isLengthRangeExplicit: isLengthRangeExplicit
+            ),
+            valueGenerator
+        )
     }
 
     /// Generates dictionaries of exactly the specified entry count.
@@ -200,14 +216,21 @@ package extension Gen {
     /// - Parameters:
     ///   - elementGenerator: The generator for set elements (must be Hashable).
     ///   - range: The allowed range for set size.
-    ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`
+    ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`.
+    ///   - isLengthRangeExplicit: Whether reflection must reject counts outside `range`.
     /// - Returns: A generator that produces sets with size in the specified range.
     static func setOf<Element: Hashable>(
         _ elementGenerator: Generator<Element>,
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<UInt64> = .linear,
+        isLengthRangeExplicit: Bool = true
     ) -> Generator<Set<Element>> {
-        arrayOf(elementGenerator, within: range, scaling: scaling).map { Set($0) }
+        arrayOf(
+            elementGenerator,
+            within: range,
+            scaling: scaling,
+            isLengthRangeExplicit: isLengthRangeExplicit
+        ).map { Set($0) }
     }
 
     /// Generates sets of exactly the specified size.

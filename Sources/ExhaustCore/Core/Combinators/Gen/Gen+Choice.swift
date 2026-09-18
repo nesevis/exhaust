@@ -139,9 +139,9 @@ package extension Gen {
             .map { collection[$0 % count] }
     }
 
-    /// Internal helper for choose ranges derived from runtime context (for example ``getSize``).
+    /// Internal helper for a sampling range that does not limit reflection.
     ///
-    /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
+    /// Use this for bounds derived from runtime context or framework policy. Values outside `range` remain reflectable and reducible.
     static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         type _: Output.Type = Output.self
@@ -150,6 +150,36 @@ package extension Gen {
             in: range,
             type: Output.self,
             isRangeExplicit: false
+        )
+    }
+
+    /// Internal helper for a size-scaled sampling range that does not limit reflection.
+    static func chooseDerived<Output: BitPatternConvertible>(
+        in range: ClosedRange<Output>,
+        scaling: SizeScaling<Output>
+    ) -> Generator<Output> {
+        choose(
+            in: range,
+            type: Output.self,
+            isRangeExplicit: false,
+            scaling: scaling.erased
+        )
+    }
+
+    /// Samples from one unsigned range while retaining a wider range for reflection and reduction.
+    static func chooseDerived(
+        in range: ClosedRange<UInt64>,
+        samplingWithin samplingRange: ClosedRange<UInt64>
+    ) -> Generator<UInt64> {
+        choose(
+            in: range,
+            type: UInt64.self,
+            isRangeExplicit: false,
+            scaling: .linearWithin(
+                minimumBits: samplingRange.lowerBound,
+                maximumBits: samplingRange.upperBound,
+                originBits: nil
+            )
         )
     }
 
@@ -186,6 +216,19 @@ package extension Gen {
         scaling: ChooseBitsScaling,
         size: UInt64
     ) -> ClosedRange<UInt64> {
+        if case let .linearWithin(minimumBits, maximumBits, originBits) = scaling {
+            let samplingMinimum = Swift.max(min, minimumBits)
+            let samplingMaximum = Swift.min(max, maximumBits)
+            precondition(samplingMinimum <= samplingMaximum, "Sampling range must overlap the declared range")
+            return applyScaling(
+                min: samplingMinimum,
+                max: samplingMaximum,
+                tag: tag,
+                scaling: .linear(originBits: originBits),
+                size: size
+            )
+        }
+
         let origin: UInt64?
         let isExponential: Bool
         switch scaling {
@@ -195,6 +238,8 @@ package extension Gen {
             case let .exponential(o):
                 origin = o
                 isExponential = true
+            case .linearWithin:
+                preconditionFailure("Handled before scaling dispatch")
             case .size:
                 // A pinned size collapses the range at every size, including 100, so it never reaches the full-size early return below.
                 let pinned = Swift.min(Swift.max(size, min), max)

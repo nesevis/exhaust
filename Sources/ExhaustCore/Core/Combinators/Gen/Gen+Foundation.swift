@@ -257,9 +257,15 @@ package extension Gen {
     static func string(
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear,
-        unicodeVersion: UnicodeVersion = .v17
+        unicodeVersion: UnicodeVersion = .v17,
+        isLengthRangeExplicit: Bool = true
     ) -> ReflectiveGenerator<String> {
-        stringGenerator(from: unicodeVersion.scalarRangeSet, length: length, scaling: scaling)
+        stringGenerator(
+            from: unicodeVersion.scalarRangeSet,
+            length: length,
+            scaling: scaling,
+            isLengthRangeExplicit: isLengthRangeExplicit
+        )
     }
 
     /// Generates a printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -370,7 +376,8 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
 private func stringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,
-    scaling: SizeScaling<UInt64> = .linear
+    scaling: SizeScaling<UInt64> = .linear,
+    isLengthRangeExplicit: Bool = true
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     let batch = ReflectiveOperation.SequenceElementBatch { bits in
@@ -382,7 +389,13 @@ private func stringGenerator(
         return characters
     }
     if let length {
-        return Gen.arrayOf(charGen, within: length, scaling: scaling, elementBatch: batch).wrapped(isReflective: true)
+        return Gen.arrayOf(
+            charGen,
+            within: length,
+            scaling: scaling,
+            isLengthRangeExplicit: isLengthRangeExplicit,
+            elementBatch: batch
+        ).wrapped(isReflective: true)
             .mapped(
                 forward: { String($0) },
                 backward: { $0.unicodeScalars.map { Character($0) } }
@@ -416,12 +429,14 @@ package extension Gen {
     /// Generates `Data` with length in `range`, each byte uniform in 0...255.
     static func data(
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<UInt64> = .linear,
+        isLengthRangeExplicit: Bool = true
     ) -> ReflectiveGenerator<Data> {
         Gen.arrayOf(
             Gen.choose(in: UInt8.min ... UInt8.max),
             within: range,
-            scaling: scaling
+            scaling: scaling,
+            isLengthRangeExplicit: isLengthRangeExplicit
         ).wrapped(isReflective: true).mapped(
             forward: { Data($0) },
             backward: { Array($0) }

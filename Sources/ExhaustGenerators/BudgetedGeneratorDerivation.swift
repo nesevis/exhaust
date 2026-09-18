@@ -208,7 +208,7 @@ final class BudgetedGeneratorDerivation {
         return result
     }
 
-    /// Preserves the built-in container choice under `.full` when there is no node allowance; bounded state spaces cap its size-scaled cardinality. Budgeted containers always retain a cardinality bind, including empty-only layers, so reflection through deeper layers keeps the empty value's path.
+    /// Preserves the built-in container choice under `.full` when there is no node allowance. State spaces cap sampling, while budgeted reflective containers retain every node-feasible layer and empty-only layers keep their reflection path.
     private func buildContainer(
         _ recipe: DerivedContainerRecipe,
         children: [PayloadPlan],
@@ -236,13 +236,21 @@ final class BudgetedGeneratorDerivation {
             )
         }
         var layers = [recipe.empty.wrapped(isReflective: true)]
+        var maximumGeneratedCount = 0
         if let minima, let minimum = sumNodes(minima) {
-            let policyMaximum = stateSpace.defaultSequenceLengthMaximum ?? Int.max
-            let maximumCount = min(
-                min(recipe.maximumCount ?? Int.max, policyMaximum),
+            let maximumReflectableCount = min(
+                recipe.maximumCount ?? Int.max,
                 (nodes - 1) / minimum
             )
-            for count in 0 ..< maximumCount {
+            maximumGeneratedCount = min(
+                stateSpace.defaultSequenceLengthMaximum ?? maximumReflectableCount,
+                maximumReflectableCount
+            )
+            let maximumBuiltCount = switch recipe.isReflective {
+                case true: maximumReflectableCount
+                case false: maximumGeneratedCount
+            }
+            for count in 0 ..< maximumBuiltCount {
                 let cardinality = count + 1
                 let allowances = budget.split((nodes - 1) / cardinality, minima: minima)!
                 let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
@@ -251,7 +259,9 @@ final class BudgetedGeneratorDerivation {
                 ))
             }
         }
-        return recipe.selectCount(layers.map { $0.gen }).wrapped(isReflective: layers.allSatisfy { $0.isReflective })
+        return recipe.selectCount(maximumGeneratedCount, layers.map { $0.gen }).wrapped(
+            isReflective: layers.allSatisfy { $0.isReflective }
+        )
     }
 
     private func erasedGenerator(

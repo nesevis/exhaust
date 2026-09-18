@@ -1,21 +1,23 @@
-/// Selects default payload domains independently of a derived generator's structural limits.
+/// Controls the breadth of default payloads in an `@Exhaustable`-derived generator.
 ///
-/// ```swift
-/// @Exhaustable(stateSpace: .small)
-/// struct Position { let offset: Int }
-/// ```
+/// Use `.tiny` or `.small` for collisions, `.medium` to cap generated value size, and `.full` for built-in defaults. Limits apply at size 100 and grow with Exhaust's size parameter. Numeric and sequence limits shape generated samples without restricting reflection, so existing values outside them can still be reduced. Date presets retain the domains shown below.
 ///
-/// Bounded state spaces limit fixed-width integers and binary floating-point magnitudes to 10, 100, or 10,000 at full size. They also limit automatically derived array lengths, set and dictionary cardinalities, string lengths, and `Data` lengths to 5, 10, or 20. Numeric bounds, sequence lengths, and date ranges grow with size; unsigned bounds start at zero, and numeric bounds are clipped to the destination type's range. `.tiny` and `.small` favor collisions by limiting `Date` to 21 or 201 daily values centered on January 1, 2026 UTC at full size. `.medium` leaves the default `Date` domain unchanged because its width does not increase generation or reflection work. Explicit payload overrides keep their own domains.
+/// | State space | Numeric magnitude | Sequence maximum | Dates |
+/// | --- | ---: | ---: | --- |
+/// | `.tiny` | 10 | 5 | 21 days centered on January 1, 2026 UTC |
+/// | `.small` | 100 | 10 | 201 days centered on January 1, 2026 UTC |
+/// | `.medium` | 10,000 | 20 | Unchanged |
+/// | `.full` | Unchanged | Unchanged | Unchanged |
 ///
-/// An unconfigured root uses `.full`, preserving each built-in generator's existing domain, including its default sequence maximum of 100 and `Date.distantPast...Date.distantFuture` at one-minute resolution. Nested annotations cap the inherited state space, so a nested `.full` does not widen a parent's `.small`. An explicit factory argument replaces the root annotation, but nested annotations still cap their occurrences. Reflection rejects numeric values and sequence lengths outside the selected size-scaled domain. The underlying date leaf retains its documented behavior of rounding to the preceding grid value and clamping to the selected range; enclosing derived constructors still require the reflected replay to reproduce their complete value.
+/// Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. Nested annotations can narrow an inherited state space; explicit payload overrides keep their own domains.
 public enum GeneratorStateSpace: String, CaseIterable, Sendable {
-    /// Limits numeric magnitudes to 10, default sequence lengths to 5, and dates to 21 daily values centered on January 1, 2026 UTC, encouraging small, repeated values.
+    /// Favors frequent collisions with the smallest default domains.
     case tiny
-    /// Limits numeric magnitudes to 100, default sequence lengths to 10, and dates to 201 daily values centered on January 1, 2026 UTC.
+    /// Favors collisions while retaining more variation than `.tiny`.
     case small
-    /// Limits numeric magnitudes to 10,000 and default sequence lengths to 20 for lower processing costs while preserving the full default date domain.
+    /// Caps expensive defaults without narrowing the default date range.
     case medium
-    /// Preserves each built-in generator's existing domain and scaling policy, including default sequence lengths up to 100.
+    /// Preserves each built-in generator's default domain.
     case full
 
     /// Supplies the full-size magnitude without importing generator infrastructure into an application module.
@@ -58,7 +60,7 @@ public enum GeneratorStateSpace: String, CaseIterable, Sendable {
         }
     }
 
-    /// Prevents a nested annotation from widening the domain selected by its parent.
+    /// Prevents a nested annotation from widening the sampling policy selected by its parent.
     package func limited(by ceiling: Self) -> Self {
         (numericMagnitude ?? Int.max) <= (ceiling.numericMagnitude ?? Int.max) ? self : ceiling
     }

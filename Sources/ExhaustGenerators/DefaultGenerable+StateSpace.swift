@@ -26,7 +26,7 @@ extension DefaultGenerable where Self: BinaryFloatingPoint & BitPatternConvertib
             return defaultGenerator
         }
         let bound = Self(magnitude)
-        return Gen.choose(in: -bound ... bound, scaling: .linear).wrapped(isReflective: true)
+        return Gen.chooseDerived(in: -bound ... bound, scaling: .linear).wrapped(isReflective: true)
     }
 }
 
@@ -36,7 +36,16 @@ extension Int128 {
         guard let magnitude = stateSpace.numericMagnitude else {
             return defaultGenerator
         }
-        return boundedWideInteger(Self.self, magnitude: magnitude)
+        let bits = boundedWideBits(maximumGeneratedValue: UInt64(magnitude * 2))
+        return bits.mapped(
+            forward: { encoded in
+                Int128(bitPattern: encoded >> 1) ^ -Int128(encoded & 1)
+            },
+            backward: { value in
+                let bits = UInt128(bitPattern: value)
+                return (bits << 1) ^ UInt128(bitPattern: value >> 127)
+            }
+        )
     }
 }
 
@@ -46,7 +55,7 @@ extension UInt128 {
         guard let magnitude = stateSpace.numericMagnitude else {
             return defaultGenerator
         }
-        return boundedWideInteger(Self.self, magnitude: magnitude)
+        return boundedWideBits(maximumGeneratedValue: UInt64(magnitude))
     }
 }
 
@@ -56,8 +65,12 @@ extension UInt128 {
             guard let magnitude = stateSpace.numericMagnitude else {
                 return defaultGenerator
             }
-            let bound = CGFloat(magnitude)
-            return .cgfloat(in: -bound ... bound, scaling: .linear)
+            let bound = Double(magnitude)
+            return Gen.isomorphed(
+                Gen.chooseDerived(in: -bound ... bound, scaling: .linear),
+                forward: { CGFloat($0) },
+                backward: { Double($0) }
+            ).gen.wrapped(isReflective: true)
         }
     }
 #endif
@@ -74,28 +87,34 @@ private func boundedInteger<Value: FixedWidthInteger & BitPatternConvertible>(
             let upper = Value((Double(Int(range.upperBound)) * Double(size) / 100).rounded())
             return lower ... upper
         },
-        build: { bounds in Gen.choose(in: bounds).wrapped(isReflective: true) }
+        build: { bounds in Gen.chooseDerived(in: bounds).wrapped(isReflective: true) }
     )
 }
 
-/// Uses an exactly invertible machine-integer representation for bounded 128-bit values; the full state space still uses the original two-half generator.
-private func boundedWideInteger<Value: FixedWidthInteger>(
-    _: Value.Type,
-    magnitude: Int
-) -> ReflectiveGenerator<Value> {
-    let lowerBound = Value.isSigned ? -magnitude : 0
-    let inner = boundedInteger(in: lowerBound ... magnitude)
-    return Gen.isomorphed(
-        inner.gen,
-        forward: { Value($0) },
-        backward: { value in
-            guard let integer = Int(exactly: value) else {
-                throw ReflectionError.inputWasOutOfGeneratorRange(
-                    String(describing: value),
-                    range: "\(lowerBound)...\(magnitude)"
-                )
-            }
-            return integer
+/// Generates small 128-bit samples while keeping both halves open to reflection.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private func boundedWideBits(
+    maximumGeneratedValue: UInt64
+) -> ReflectiveGenerator<UInt128> {
+    sizeIndexedLayers(
+        key: { size in
+            UInt64((Double(maximumGeneratedValue) * Double(size) / 100).rounded())
+        },
+        build: { maximumValue in
+            Gen.zip(
+                Gen.chooseDerived(in: UInt64(0) ... 0),
+                Gen.chooseDerived(in: UInt64(0) ... maximumValue)
+            ).wrapped(isReflective: true).mapped(
+                forward: { high, low in
+                    UInt128(high) << 64 | UInt128(low)
+                },
+                backward: { value in
+                    (
+                        UInt64(truncatingIfNeeded: value >> 64),
+                        UInt64(truncatingIfNeeded: value)
+                    )
+                }
+            )
         }
-    ).gen.wrapped(isReflective: true)
+    )
 }

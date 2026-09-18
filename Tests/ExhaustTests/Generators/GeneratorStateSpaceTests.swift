@@ -1,5 +1,6 @@
 import Exhaust
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 @testable import ExhaustGenerators
@@ -31,15 +32,15 @@ struct GeneratorStateSpaceTests {
         }
     }
 
-    @Test("Tiny integers reflect exactly the rounded size-scaled range up to ten", arguments: 1 ... 100)
+    @Test("Tiny integers sample the rounded size-scaled range while reflecting beyond it", arguments: 1 ... 100)
     func tinySizeRamp(size: Int) throws {
         let generator = StateSpaceLeaf.gen(depth: 0, stateSpace: .tiny).resize(size)
         let magnitude = Int((Double(size) / 10).rounded())
         for value in [-magnitude, 0, magnitude] {
             try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
         }
-        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: magnitude + 1))
-        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: -magnitude - 1))
+        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: magnitude + 1))
+        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
     @Test("The full preset preserves primitive outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
@@ -63,7 +64,7 @@ struct GeneratorStateSpaceTests {
     func annotationAndFactoryPrecedence() throws {
         #expect(StateSpaceSmall.__generatorDescriptor.stateSpace == .small)
         let target = StateSpaceSmall(value: 500)
-        expectStateSpaceRejection(StateSpaceSmall.gen(), value: target)
+        try expectStateSpaceReplay(StateSpaceSmall.gen(), value: target)
         try expectStateSpaceReplay(StateSpaceSmall.gen(stateSpace: .medium), value: target)
         try expectStateSpaceReplay(StateSpaceSmall.gen(depth: 0, stateSpace: .full), value: target)
         for generator in [
@@ -164,27 +165,47 @@ struct GeneratorStateSpaceTests {
             bytes: Data(repeating: 0, count: scaledMaximum)
         )
         try expectStateSpaceReplay(generator, value: boundary)
-        expectStateSpaceRejection(
+        try expectStateSpaceReplay(
             generator,
             value: StateSpaceSequences(
                 names: Array(repeating: "", count: scaledMaximum + 1),
                 bytes: Data()
             )
         )
-        expectStateSpaceRejection(
+        try expectStateSpaceReplay(
             generator,
             value: StateSpaceSequences(
                 names: [String(repeating: "a", count: scaledMaximum + 1)],
                 bytes: Data()
             )
         )
-        expectStateSpaceRejection(
+        try expectStateSpaceReplay(
             generator,
             value: StateSpaceSequences(
                 names: [],
                 bytes: Data(repeating: 0, count: scaledMaximum + 1)
             )
         )
+    }
+
+    @Test("Budgeted containers reflect beyond state-space sampling bounds")
+    func budgetedContainerReflection() throws {
+        let generator = StateSpaceIntegerArray.gen(
+            maximumNodes: 32,
+            stateSpace: .tiny
+        )
+        let target = StateSpaceIntegerArray(values: Array(repeating: 500, count: 6))
+        try expectStateSpaceReplay(generator, value: target)
+        let reduced = try reduceFromReflection(
+            generator.gen,
+            startingAt: target,
+            property: { $0.values.isEmpty }
+        )
+        #expect(reduced.values.count == 1)
+
+        let samples = try #example(generator.resize(100), count: 100, seed: 1337)
+        #expect(samples.count == 100)
+        #expect(samples.allSatisfy { $0.values.count <= 5 })
     }
 
     @Test("Explicit sequence payload overrides retain their domains")
@@ -204,6 +225,20 @@ struct GeneratorStateSpaceTests {
             #expect(value.bytes.count <= 5)
             try expectStateSpaceReplay(generator, value: value)
         }
+    }
+
+    @Test("Explicit sequence override bounds remain strict")
+    func explicitSequenceBounds() {
+        let values = ReflectiveGenerator<[Int]>.array(.int(), length: 1 ... 10)
+        let generator = StateSpaceIntegerArray.gen(
+            stateSpace: .tiny,
+            overriding: values
+        )
+        expectStateSpaceRejection(generator, value: StateSpaceIntegerArray(values: []))
+        expectStateSpaceRejection(
+            generator,
+            value: StateSpaceIntegerArray(values: Array(repeating: 0, count: 11))
+        )
     }
 
     @Test("Date collision presets use a fixed January 1, 2026 midpoint", arguments: [
@@ -301,7 +336,19 @@ struct GeneratorStateSpaceTests {
         }
     }
 
-    @Test("Reflection rejects values outside the selected domain", arguments: [
+    @Test("Values outside sampling bounds remain reducible")
+    func reflectedReduction() throws {
+        let generator = StateSpaceLeaf.gen(stateSpace: .tiny)
+        let reduced = try reduceFromReflection(
+            generator.gen,
+            startingAt: StateSpaceLeaf(value: 5000)
+        ) { value in
+            value.value < 5
+        }
+        #expect(reduced == StateSpaceLeaf(value: 5))
+    }
+
+    @Test("Reflection accepts values outside numeric sampling bounds", arguments: [
         (GeneratorStateSpace.tiny, 10), (.small, 100), (.medium, 10000),
     ])
     func reflectedBounds(preset: (GeneratorStateSpace, Int)) throws {
@@ -310,8 +357,8 @@ struct GeneratorStateSpaceTests {
         for value in [-magnitude, 0, magnitude] {
             try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
         }
-        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: magnitude + 1))
-        expectStateSpaceRejection(generator, value: StateSpaceLeaf(value: -magnitude - 1))
+        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: magnitude + 1))
+        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
     @Test("Examine and actual reflected output equality hold for recursive presets", arguments: GeneratorStateSpace.allCases, [Int?.none, 64])
@@ -348,7 +395,7 @@ struct GeneratorStateSpaceTests {
         #expect(budgeted.built.count == 2)
     }
 
-    @Test("128-bit numeric presets reject unrepresentable backward mappings")
+    @Test("128-bit numeric presets sample narrowly and reflect their full domains")
     func wideIntegers() throws {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
             let signed = Int128.defaultGenerator(stateSpace: .small).resize(100)
@@ -360,9 +407,12 @@ struct GeneratorStateSpaceTests {
             #expect(signedSamples.allSatisfy { (-100 ... 100).contains($0) })
             #expect(unsignedSamples.allSatisfy { $0 <= 100 })
             try expectStateSpaceReplay(signed, value: -100)
+            try expectStateSpaceReplay(signed, value: Int128(Int.max))
+            try expectStateSpaceReplay(signed, value: Int128.min)
+            try expectStateSpaceReplay(signed, value: Int128.max)
             try expectStateSpaceReplay(unsigned, value: 100)
-            expectStateSpaceRejection(signed, value: Int128.max)
-            expectStateSpaceRejection(unsigned, value: UInt128.max)
+            try expectStateSpaceReplay(unsigned, value: UInt128(Int.max))
+            try expectStateSpaceReplay(unsigned, value: UInt128.max)
         }
     }
 }
@@ -425,6 +475,11 @@ private struct StateSpaceContainers: Equatable {
 private struct StateSpaceSequences: Equatable {
     let names: [String]
     let bytes: Data
+}
+
+@Exhaustable
+private struct StateSpaceIntegerArray: Equatable {
+    let values: [Int]
 }
 
 @Exhaustable

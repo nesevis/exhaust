@@ -611,8 +611,6 @@ extension Interpreters {
         var combinedPath: [ChoiceTree] = []
         var combinedResults: [Any] = []
 
-        let isLengthRangeExplicit = lengthGen.associatedRange != nil
-
         for elementTarget in targetArray {
             let elementResults = try reflectRecursive(
                 elementGen,
@@ -634,10 +632,17 @@ extension Interpreters {
             probingPickArm: probingPickArm,
             sizeOverride: sizeOverride
         )
-        let validRange = lengthReflection
-            .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
+        let reflectedMetadata = lengthReflection.firstNonNil { result in
+            result.path.firstNonNil { tree in
+                let metadata = tree.metadata
+                return metadata.validRange == nil ? nil : metadata
+            }
+        }
+        let validRange = reflectedMetadata?.validRange
             ?? lengthGen.associatedRange
             ?? UInt64.bitPatternRange
+        let isLengthRangeExplicit = reflectedMetadata?.isRangeExplicit
+            ?? (lengthGen.associatedRange != nil)
 
         let finalTree = ChoiceTree.sequence(
             elements: combinedPath,
