@@ -68,12 +68,14 @@ final class BudgetedGeneratorDerivation {
             case let .pinned(depth):
                 return generator(for: type, depth: depth, nodes: nodes, stateSpace: stateSpace)
             case let .drawn(ceiling, scaling):
-                let minimum = (0 ... ceiling).first { candidate in
+                guard let minimum = (0 ... ceiling).first(where: { candidate in
                     guard let cost = budget.minimumNodes(for: ObjectIdentifier(type), depth: candidate) else {
                         return false
                     }
                     return nodes.map { cost <= $0 } ?? true
-                }!
+                }) else {
+                    preconditionFailure("A validated root allowance must admit a depth at or below its ceiling")
+                }
                 let layers = (minimum ... ceiling).map { generator(for: type, depth: $0, nodes: nodes, stateSpace: stateSpace) }
                 return Gen.chooseDepth(in: UInt64(minimum) ... UInt64(ceiling), scaling: scaling)._bound(
                     forward: { selected in layers[Int(selected) - minimum].gen.erase() },
@@ -95,7 +97,7 @@ final class BudgetedGeneratorDerivation {
         if let existing = built[key] as? ReflectiveGenerator<Value> {
             return existing
         }
-        let typePlan = plan.types[key.type]!
+        let typePlan = plan.plan(for: key.type)
         let descriptor = Value.__generatorDescriptor
         let preferPayloadFree = depth == 0 && typePlan.constructors.contains { $0.payloads.isEmpty }
         let arms = typePlan.constructors.enumerated().compactMap { index, entry -> ReflectiveGenerator<Value>? in
@@ -104,13 +106,13 @@ final class BudgetedGeneratorDerivation {
             else {
                 return nil
             }
-            let allowances: [Int?] = switch nodes {
+            let allowances: [Int?]? = switch nodes {
                 case let .some(limit):
-                    budget.split(limit - 1, minima: minima)?.map(Optional.some) ?? []
+                    budget.split(limit - 1, minima: minima)?.map(Optional.some)
                 case .none:
                     Array(repeating: nil, count: minima.count)
             }
-            guard allowances.count == entry.payloads.count else {
+            guard let allowances else {
                 return nil
             }
             let children = zip(entry.payloads, allowances).map {
@@ -179,7 +181,7 @@ final class BudgetedGeneratorDerivation {
             case let .standard(type):
                 return plan.defaultGenerator(for: type, stateSpace: stateSpace)
             case let .derivedType(reference):
-                let child = plan.types[reference]!
+                let child = plan.plan(for: reference)
                 let remaining = child.maximumDepth.map { min($0, depth - 1) } ?? (depth - 1)
                 return erasedGenerator(
                     for: child.type,
@@ -217,77 +219,121 @@ final class BudgetedGeneratorDerivation {
         nodes: Int?,
         stateSpace: GeneratorStateSpace
     ) -> ReflectiveGenerator<Any> {
-        let minima = budget.minimumNodes(for: children, depth: depth)
         guard let nodes else {
-            guard let minima, sumNodes(minima) != nil else {
-                return recipe.empty.wrapped(isReflective: true)
+            return buildUnbudgetedContainer(recipe, children: children, depth: depth, stateSpace: stateSpace)
+        }
+        guard let minima = budget.minimumNodes(for: children, depth: depth),
+              let minimum = sumNodes(minima)
+        else {
+            return recipe.selectCount(0, [recipe.empty]).wrapped(isReflective: true)
+        }
+        let maximumReflectableCount = min(recipe.maximumCount ?? Int.max, (nodes - 1) / minimum)
+        let maximumGeneratedCount = min(stateSpace.defaultSequenceLengthMaximum ?? maximumReflectableCount, maximumReflectableCount)
+        let maximumBuiltCount = recipe.isReflective ? maximumReflectableCount : maximumGeneratedCount
+        if let native = buildNativeContainer(
+            recipe,
+            children: children,
+            depth: depth,
+            stateSpace: stateSpace,
+            maximumGeneratedCount: maximumGeneratedCount,
+            maximumBuiltCount: maximumBuiltCount
+        ) {
+            return native
+        }
+        return buildLayeredContainer(
+            recipe,
+            children: children,
+            depth: depth,
+            nodes: nodes,
+            stateSpace: stateSpace,
+            minima: minima,
+            maximumGeneratedCount: maximumGeneratedCount,
+            maximumBuiltCount: maximumBuiltCount
+        )
+    }
+
+    /// Keeps built-in cardinalities when no node allowance applies; state-space presets may still narrow sampling.
+    private func buildUnbudgetedContainer(
+        _ recipe: DerivedContainerRecipe,
+        children: [PayloadPlan],
+        depth: Int,
+        stateSpace: GeneratorStateSpace
+    ) -> ReflectiveGenerator<Any> {
+        guard let minima = budget.minimumNodes(for: children, depth: depth), sumNodes(minima) != nil else {
+            return recipe.empty.wrapped(isReflective: true)
+        }
+        let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: nil, stateSpace: stateSpace) }
+        let cardinality: ContainerCardinality = stateSpace.defaultSequenceLengthMaximum
+            .map { .within(min($0, recipe.maximumCount ?? $0)) } ?? .sizeScaled
+        return recipe.build(cardinality, generators.map { $0.gen }).wrapped(
+            isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
+        )
+    }
+
+    /// Uses a native sequence only when every child ignores per-entry allowances, exposing element parameters without a count bind.
+    private func buildNativeContainer(
+        _ recipe: DerivedContainerRecipe,
+        children: [PayloadPlan],
+        depth: Int,
+        stateSpace: GeneratorStateSpace,
+        maximumGeneratedCount: Int,
+        maximumBuiltCount: Int
+    ) -> ReflectiveGenerator<Any>? {
+        guard maximumBuiltCount > 0,
+              recipe.maximumCount == nil,
+              children.allSatisfy({ payload in
+                  switch payload {
+                      case .supplied, .standard: true
+                      case .derivedType, .container: false
+                  }
+              })
+        else {
+            return nil
+        }
+        let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: 1, stateSpace: stateSpace) }
+        return recipe.build(
+            .bounded(sampling: maximumGeneratedCount, reflecting: maximumBuiltCount),
+            generators.map { $0.gen }
+        ).wrapped(isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective })
+    }
+
+    /// Shares completed count-specific layers by their exact child allowances. Reflection can retain more layers than sampling selects.
+    private func buildLayeredContainer(
+        _ recipe: DerivedContainerRecipe,
+        children: [PayloadPlan],
+        depth: Int,
+        nodes: Int,
+        stateSpace: GeneratorStateSpace,
+        minima: [Int],
+        maximumGeneratedCount: Int,
+        maximumBuiltCount: Int
+    ) -> ReflectiveGenerator<Any> {
+        var layers = [recipe.empty.wrapped(isReflective: true)]
+        for count in 0 ..< maximumBuiltCount {
+            let elementCount = count + 1
+            // The caller bounds maximumBuiltCount by (nodes - 1) / sumNodes(minima).
+            // Each per-entry share therefore covers the validated minima, so split cannot fail.
+            let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
+            let key = CountedContainerKey(
+                type: ObjectIdentifier(recipe.type),
+                count: elementCount,
+                depth: depth,
+                allowances: allowances,
+                stateSpace: stateSpace
+            )
+            switch countedContainers[key] {
+                case let .some(existing):
+                    layers.append(existing)
+                    continue
+                case .none:
+                    break
             }
-            let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: nil, stateSpace: stateSpace) }
-            let cardinality: ContainerCardinality = stateSpace.defaultSequenceLengthMaximum
-                .map { .within(min($0, recipe.maximumCount ?? $0)) } ?? .sizeScaled
-            return recipe.build(cardinality, generators.map { $0.gen }).wrapped(
+            let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
+            let layer = recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
                 isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
             )
-        }
-        var layers = [recipe.empty.wrapped(isReflective: true)]
-        var maximumGeneratedCount = 0
-        if let minima, let minimum = sumNodes(minima) {
-            let maximumReflectableCount = min(
-                recipe.maximumCount ?? Int.max,
-                (nodes - 1) / minimum
-            )
-            maximumGeneratedCount = min(
-                stateSpace.defaultSequenceLengthMaximum ?? maximumReflectableCount,
-                maximumReflectableCount
-            )
-            let maximumBuiltCount = switch recipe.isReflective {
-                case true: maximumReflectableCount
-                case false: maximumGeneratedCount
-            }
-            // Opaque and standard leaves ignore per-entry allowances. A native sequence therefore has the same domain without hiding element parameters behind a count bind.
-            if maximumBuiltCount > 0,
-               recipe.maximumCount == nil,
-               children.allSatisfy({ payload in
-                   switch payload {
-                       case .supplied, .standard:
-                           true
-                       case .derivedType, .container:
-                           false
-                   }
-               })
-            {
-                let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: 1, stateSpace: stateSpace) }
-                return recipe.build(
-                    .bounded(sampling: maximumGeneratedCount, reflecting: maximumBuiltCount),
-                    generators.map { $0.gen }
-                ).wrapped(isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective })
-            }
-            for count in 0 ..< maximumBuiltCount {
-                let elementCount = count + 1
-                // elementCount <= maximumBuiltCount <= (nodes - 1) / minimum, so this share is at least minimum.
-                // The sum of minima was checked above; split therefore cannot fail for any count in this loop.
-                let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
-                let key = CountedContainerKey(
-                    type: ObjectIdentifier(recipe.type),
-                    count: elementCount,
-                    depth: depth,
-                    allowances: allowances,
-                    stateSpace: stateSpace
-                )
-                switch countedContainers[key] {
-                    case let .some(existing):
-                        layers.append(existing)
-                        continue
-                    case .none:
-                        break
-                }
-                let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
-                let layer = recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
-                    isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
-                )
-                countedContainers[key] = layer
-                layers.append(layer)
-            }
+            countedContainers[key] = layer
+            layers.append(layer)
         }
         return recipe.selectCount(maximumGeneratedCount, layers.map { $0.gen }).wrapped(
             isReflective: layers.allSatisfy { $0.isReflective }

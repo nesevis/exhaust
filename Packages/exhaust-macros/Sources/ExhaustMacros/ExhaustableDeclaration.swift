@@ -9,12 +9,10 @@ struct ExhaustableDeclaration {
         case synthesizedMemberwise([StoredProperty])
     }
 
-    /// Retains construction-relevant syntax until validation has decided whether the memberwise strategy is supported. Rendering never substitutes a missing type with `Never`.
+    /// Retains only the validated name and type used by constructor rendering. Storage and initializer restrictions are checked before creating the model.
     struct StoredProperty {
         let name: String
         let type: TypeSyntax
-        let isMutable: Bool
-        let initialValue: ExprSyntax?
     }
 
     let access: String
@@ -76,9 +74,6 @@ struct ExhaustableDeclaration {
         allowingDirectInitializer: Bool = false
     ) throws -> [StoredProperty] {
         let initializers = members.compactMap { $0.decl.as(InitializerDeclSyntax.self) }
-        guard initializers.isEmpty || allowingDirectInitializer else {
-            throw ExhaustableDiagnostic.customInitializerUnsupported
-        }
         var properties: [StoredProperty] = []
         for member in members {
             guard let variable = member.decl.as(VariableDeclSyntax.self),
@@ -99,20 +94,15 @@ struct ExhaustableDeclaration {
                 guard let type = binding.typeAnnotation?.type else {
                     throw ExhaustableDiagnostic.propertyNeedsTypeAnnotation
                 }
-                let property = StoredProperty(
-                    name: identifier.identifier.trimmedDescription,
-                    type: type,
-                    isMutable: variable.bindingSpecifier.tokenKind == .keyword(.var),
-                    initialValue: binding.initializer?.value
-                )
-                guard property.isMutable || property.initialValue == nil else {
+                guard variable.bindingSpecifier.tokenKind == .keyword(.var) || binding.initializer == nil else {
                     throw ExhaustableDiagnostic.initializedConstantUnsupported
                 }
-                properties.append(property)
+                properties.append(StoredProperty(name: identifier.identifier.trimmedDescription, type: type))
             }
         }
         guard initializers.isEmpty || (
-            initializers.count == 1 && initializers.allSatisfy { isDirectMemberwise($0, properties: properties) }
+            allowingDirectInitializer && initializers.count == 1
+                && initializers.allSatisfy { isDirectMemberwise($0, properties: properties) }
         ) else {
             throw ExhaustableDiagnostic.customInitializerUnsupported
         }

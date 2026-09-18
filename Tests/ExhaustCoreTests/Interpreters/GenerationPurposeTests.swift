@@ -4,14 +4,18 @@ import Testing
 @Suite("Generation purpose")
 struct GenerationPurposeTests {
     @Test("Preparing an analysis interpreter does not change independent sampling contexts")
-    func independentPurposes() {
-        var analysis = ValueAndChoiceTreeInterpreter(Gen.just(0), seed: 42)
-        let sampling = ValueAndChoiceTreeInterpreter(Gen.just(0), seed: 42)
-        #expect(analysis.context.purpose == .sampling)
-        #expect(sampling.context.purpose == .sampling)
+    func independentPurposes() throws {
+        let generator = Gen.chooseDepth(in: UInt64(0) ... 5, scaling: .constant)
+        var reference = ValueAndChoiceTreeInterpreter(generator, seed: 42)
+        let (expected, _) = try #require(try reference.next())
+        let expectedState = reference.randomNumberGeneratorSnapshot.state
+        var analysis = ValueAndChoiceTreeInterpreter(generator, seed: 42)
+        var sampling = ValueAndChoiceTreeInterpreter(generator, seed: 42)
         analysis.prepareForScreeningAnalysis()
-        #expect(analysis.context.purpose == .screeningAnalysis)
-        #expect(sampling.context.purpose == .sampling)
+        _ = try #require(try analysis.next())
+        let (actual, _) = try #require(try sampling.next())
+        #expect(actual == expected)
+        #expect(sampling.randomNumberGeneratorSnapshot.state == expectedState)
     }
 
     @Test("Speculative branches inherit their parent's purpose", arguments: [GenerationContext.Purpose.sampling, .screeningAnalysis])

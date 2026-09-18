@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Derived container screening coverage")
 struct DerivedContainerScreeningCoverageTests {
-    @Test("Observe actual product-array cardinalities and element fields", arguments: [Int?.none, 8, 16])
+    @Test("Product arrays cover modeled cardinalities and transparent element fields", arguments: [Int?.none, 8, 16])
     func productArrays(maximumNodes: Int?) throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
         let maximumCount = maximumNodes.map { ($0 - 2) / 3 } ?? 100
@@ -20,11 +20,13 @@ struct DerivedContainerScreeningCoverageTests {
             #expect(values.allSatisfy { 2 + 3 * $0.values.count <= (maximumNodes ?? Int.max) })
             let lengths = Set(values.map { $0.values.count }).sorted()
             let elements = Set(values.flatMap { $0.values }.map { ($0.first ? 2 : 0) + ($0.second ? 1 : 0) }).sorted()
-            if name == "handwritten" {
+            if name == "derived", maximumNodes != nil {
+                // The dependent count layer models every feasible count, but its payloads remain opaque.
+                #expect(lengths == Array(0 ... maximumCount))
+            } else {
                 #expect(elements == [0, 1, 2, 3])
                 #expect(lengths == [0, 1, 2])
             }
-            print("CONTAINER_COVERAGE products budget=\(budgetLabel) source=\(name) lengths=\(lengths) elements=\(elements)")
         }
     }
 
@@ -115,26 +117,24 @@ struct DerivedContainerScreeningCoverageTests {
     func suppliedProductElements() throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
         let generator = ContainerScreeningProducts.gen(depth: 2, overriding: element)
-        let values = try containerScreeningValues(generator, label: "supplied-products")
+        let values = try containerScreeningValues(generator, label: "supplied-products", expectedRows: 21)
         let elements = Set(values.flatMap { $0.values }.map { ($0.first ? 2 : 0) + ($0.second ? 1 : 0) }).sorted()
         #expect(elements == [0, 1, 2, 3])
-        #expect(values.count == 3 * 21)
-        print("CONTAINER_COVERAGE supplied-products elements=\(elements)")
     }
 
-    @Test("Observe native nested sequences without a dependent count bind")
+    @Test("Native nested sequences model outer cardinality without claiming inner coverage")
     func nativeNestedArrays() throws {
         let inner = ReflectiveGenerator<[Bool]>.array(.bool(), length: 0 ... 2, scaling: .constant)
         let generator = ReflectiveGenerator<[[Bool]]>.array(inner, length: 0 ... 2, scaling: .constant)
         let values = try containerScreeningValues(generator, label: "native-nested")
         #expect(values.allSatisfy { $0.count <= 2 && $0.allSatisfy { $0.count <= 2 } })
         let outerLengths = Set(values.map { $0.count }).sorted()
-        let innerLengths = Set(values.flatMap { $0 }.map { $0.count }).sorted()
-        let elements = Set(values.flatMap { $0.flatMap { $0 } }.map { $0 ? 1 : 0 }).sorted()
-        print("CONTAINER_COVERAGE native-nested outer=\(outerLengths) inner=\(innerLengths) elements=\(elements)")
+        #expect(outerLengths == [0, 1, 2])
+        let plan = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+        #expect(plan.domainSizes == [3])
     }
 
-    @Test("Observe actual nested-array cardinalities and Boolean elements", arguments: [8, 16])
+    @Test("Budgeted nested arrays cover every feasible outer count", arguments: [8, 16])
     func nestedArrays(maximumNodes: Int) throws {
         let lengths = ReflectiveGenerator<Int>.int(in: 0 ... maximumNodes - 2, scaling: .linear)
         let arrays: ReflectiveGenerator<[[Bool]]> = lengths.bound(
@@ -154,30 +154,31 @@ struct DerivedContainerScreeningCoverageTests {
             let values = try containerScreeningValues(generator, label: "nested-\(maximumNodes)-\(name)")
             #expect(values.allSatisfy { 2 + $0.values.reduce(0) { $0 + 1 + $1.count } <= maximumNodes })
             let outerLengths = Set(values.map { $0.values.count }).sorted()
-            let innerLengths = Set(values.flatMap { $0.values }.map { $0.count }).sorted()
-            let elements = Set(values.flatMap { $0.values.flatMap { $0 } }.map { $0 ? 1 : 0 }).sorted()
-            print("CONTAINER_COVERAGE nested budget=\(maximumNodes) source=\(name) outer=\(outerLengths) inner=\(innerLengths) elements=\(elements)")
+            #expect(outerLengths == Array(0 ... maximumNodes - 2))
         }
     }
 }
 
-/// Collects property inputs at an explicit full-size context rather than template rows; logs model breadth separately so random fallback values cannot be mistaken for modeled element coverage.
+/// Collects actual full-size property inputs, requiring every screening attempt to reach the property rather than mistaking an empty or rejected run for coverage.
 private func containerScreeningValues<Value>(
     _ source: ReflectiveGenerator<Value>,
-    label: String
+    label: String,
+    expectedRows: Int? = nil
 ) throws -> [Value] {
     let generator = source.resize(100)
-    let plan = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
-    print("CONTAINER_MODEL \(label) parameters=\(plan.parameterCount) domains=\(plan.domainSizes) kind=\(plan.kind)")
+    _ = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
     var values: [Value] = []
     for seed in [UInt64(1), 42, 1337] {
         let result = ScreeningRunner.run(generator.gen, screeningBudget: 200, coveringSeed: seed) { value in
             values.append(value)
             return true
         }
-        #expect(result.summary.propertyInvocations > 0)
+        #expect(result.summary.propertyInvocations > 0, "\(label), seed \(seed)")
         #expect(result.summary.rejectedRows == 0)
-        print("CONTAINER_ROWS \(label) seed=\(seed) attempts=\(result.summary.rowAttempts) accepted=\(result.summary.propertyInvocations)")
+        #expect(result.summary.propertyInvocations == result.summary.rowAttempts)
+        if let expectedRows {
+            #expect(result.summary.propertyInvocations == expectedRows, "\(label), seed \(seed)")
+        }
     }
     return values
 }

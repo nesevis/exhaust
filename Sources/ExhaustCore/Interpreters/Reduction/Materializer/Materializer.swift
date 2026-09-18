@@ -191,7 +191,7 @@ extension Materializer {
         _ tree: ChoiceTree?
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
-        if case let .group(children, _, false) = tree, children.count == 2 {
+        if case let .group(children, _, isZip: false) = tree, children.count == 2 {
             // A tagged zip is one callee, and two branch alternatives are one pick. Neither shape is the untagged callee/continuation pair emitted by runContinuation.
             if case .branch = children[0], case .branch = children[1] {
                 return (tree, nil)
@@ -276,7 +276,7 @@ extension Materializer {
                 // The prefix labels the zip, so this returns nil anywhere other than a real zip site and no shape heuristic is needed to decide whether to trust it.
                 let prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
                 if let fallbackTree,
-                   case let .group(children, _, false) = fallbackTree, children.count == 2,
+                   case let .group(children, _, isZip: false) = fallbackTree, children.count == 2,
                    case let .group(inner, _, true) = children[0], inner.count == generators.count
                 {
                     // `group[zipCallee, continuation]`: an untagged wrapper whose first child is the tagged zip. Before the tag this reading was indistinguishable from a zip whose own first child happened to be a two-child group.

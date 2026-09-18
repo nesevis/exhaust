@@ -182,11 +182,15 @@ struct DerivedScreeningParityTests {
     @Test("Screening analysis does not change subsequent sampling of the same generator")
     func samplingRemainsDepthScaled() throws {
         let generator = ScreeningRecursive.gen(maximumDepth: 5, maximumNodes: 32)
-        let before = try screeningSamplingValues(generator)
-        _ = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
-        let after = try screeningSamplingValues(generator)
-        #expect(before == after)
-        #expect(Set(before.map { $0.depth }).count > 1)
+        let baseline = try screeningSamplingValues(generator)
+        #expect(Set(baseline.map { $0.depth }).count > 1)
+        let seeds = #gen(.uint64())
+        #exhaust(seeds, .budget(.extensive)) { seed in
+            let before = try screeningSamplingValues(generator, seed: seed)
+            _ = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+            let after = try screeningSamplingValues(generator, seed: seed)
+            #expect(before == after)
+        }
     }
 
     @Test("Nested products expose fields through nonrecursive derived edges", arguments: [Int?.none, 200])
@@ -222,6 +226,8 @@ private func expectScreeningParity<Value: Equatable>(
             actualRows.append(value)
             return true
         }
+        #expect(expectedRows.count == expected.summary.rowAttempts)
+        #expect(actualRows.count == actual.summary.rowAttempts)
         #expect(expected.summary.rowAttempts == 200)
         #expect(expected.summary.rejectedRows == 0)
         #expect(actual.summary.rowAttempts == expected.summary.rowAttempts)
@@ -254,6 +260,8 @@ private func matchingScreeningRows<Value: Equatable>(
             actualRows.append(value)
             return true
         }
+        #expect(expectedRows.count == expected.summary.rowAttempts)
+        #expect(actualRows.count == actual.summary.rowAttempts)
         #expect(expected.summary.rowAttempts > 0)
         #expect(expected.summary.rejectedRows == 0)
         #expect(actual.summary.rowAttempts == expected.summary.rowAttempts)
@@ -284,12 +292,15 @@ private func screeningDepthControls(in tree: ChoiceTree) -> [UInt64] {
 
 /// Recreates the same sampling context on either side of analysis so changes to a shared generator cannot hide behind different seeds or size schedules.
 private func screeningSamplingValues(
-    _ generator: ReflectiveGenerator<ScreeningRecursive>
+    _ generator: ReflectiveGenerator<ScreeningRecursive>,
+    seed: UInt64 = 42
 ) throws -> [ScreeningRecursive] {
-    var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
+    var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: seed, sizeOverride: 100)
     var values: [ScreeningRecursive] = []
     for _ in 0 ..< 50 {
-        let (value, _) = try #require(try interpreter.next())
+        guard let (value, _) = try interpreter.next() else {
+            throw GeneratorError.choiceTreeConstructionFailed
+        }
         values.append(value)
     }
     return values

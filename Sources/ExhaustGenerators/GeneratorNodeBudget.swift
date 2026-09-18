@@ -24,7 +24,7 @@ final class GeneratorNodeBudget {
         if let cost = costs[key] {
             return cost
         }
-        let type = plan.types[reference]!
+        let type = plan.plan(for: reference)
         let minimum = type.constructors.compactMap { entry -> Int? in
             guard let children = minimumNodes(for: entry.payloads, depth: depth),
                   let subtotal = sumNodes(children)
@@ -55,7 +55,7 @@ final class GeneratorNodeBudget {
             case .supplied, .standard, .container:
                 return 1
             case let .derivedType(reference):
-                let child = plan.types[reference]!
+                let child = plan.plan(for: reference)
                 let remaining = child.maximumDepth.map { min($0, depth - 1) } ?? (depth - 1)
                 guard let minimum = minimumNodes(for: reference, depth: remaining),
                       child.maximumNodes.map({ minimum <= $0 }) ?? true
@@ -68,13 +68,13 @@ final class GeneratorNodeBudget {
 
     /// Reserves every child's minimum before sharing the spare allowance evenly. For nonempty minima, the shares sum to the exact allowance; any remainder goes to earlier fields in declaration order. Supplied generators are opaque one-node leaves; their unused allowance is not spent elsewhere.
     func split(_ allowance: Int, minima: [Int]) -> [Int]? {
-        guard let minimum = sumNodes(minima), minimum <= allowance else {
+        guard let totalMinimum = sumNodes(minima), totalMinimum <= allowance else {
             return nil
         }
         guard minima.isEmpty == false else {
             return []
         }
-        let spare = allowance - minimum
+        let spare = allowance - totalMinimum
         let share = spare / minima.count
         let remainder = spare % minima.count
         return minima.enumerated().map { index, minimum in

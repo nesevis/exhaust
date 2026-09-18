@@ -34,15 +34,14 @@ struct MaterializerContextTests {
         let generator = Gen.choose(in: UInt64(0) ... 10)
         let embedded = try #require(try Interpreters.reflect(generator, with: UInt64(7)))
         let supplied = try #require(try Interpreters.reflect(generator, with: UInt64(9)))
-        var context = Materializer.Context(
+        let context = Materializer.Context(
             prefix: ChoiceSequence(),
             mode: .guided(seed: 42, fallbackTree: embedded),
             fallbackTree: supplied,
             precomputedSeed: 1337,
             collectDecodingReport: collectDecodingReport
         )
-        var expected = Xoshiro256(seed: 42)
-        #expect(context.prng.next() == expected.next())
+        #expect(context.prng.seed == 42)
         #expect(context.deadlineNanoseconds == 0)
         guard case let .success(value, _, report) = Materializer.materialize(generator, context: consume context) else {
             Issue.record("Guided context failed to materialize its fallback")
@@ -68,22 +67,32 @@ struct MaterializerContextTests {
         #expect(value == 9)
     }
 
-    @Test("Context retains reseed and screening policies until execution")
-    func executionPolicies() {
-        let context = Materializer.Context(
-            prefix: ChoiceSequence(),
-            mode: .guided(seed: 42, fallbackTree: nil, maximizeBoundRegionIndices: [3]),
-            skipTree: true,
-            collectDecodingReport: false,
-            shouldUseMaximumDepthForScreening: true,
-            reseedRanges: [0 ... 2]
+    @Test("Screening pins depth while honoring tree and report emission", arguments: [false, true])
+    func executionPolicies(skipTree: Bool) {
+        let result = Materializer.materialize(
+            Gen.chooseDepth(in: UInt64(0) ... 5),
+            context: .init(
+                prefix: ChoiceSequence(),
+                mode: .guided(seed: 42, fallbackTree: nil),
+                skipTree: skipTree,
+                collectDecodingReport: false,
+                shouldUseMaximumDepthForScreening: true
+            )
         )
-        #expect(context.skipTree == true)
-        #expect(context.shouldUseMaximumDepthForScreening == true)
-        #expect(context.decodingReport == nil)
-        #expect(context.maximizeBoundRegionIndices == [3])
-        #expect(context.reseedRanges == [0 ... 2])
-        #expect(context.hasPendingReseed == true)
-        #expect(context.deadlineNanoseconds == 0)
+        guard case let .success(value, tree, report) = result else {
+            Issue.record("Screening depth materialization failed")
+            return
+        }
+        #expect(value == 5)
+        #expect(report == nil)
+        switch (skipTree, tree) {
+            case (true, .just):
+                break
+            case let (false, .choice(choice, _)):
+                #expect(choice.tag == .depthControl)
+                #expect(choice.bitPattern64 == value)
+            default:
+                Issue.record("Tree emission did not follow the requested policy")
+        }
     }
 }

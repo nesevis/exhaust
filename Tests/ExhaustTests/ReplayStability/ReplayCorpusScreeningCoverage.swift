@@ -82,7 +82,11 @@ extension ReplayCorpusTests {
     @Test("Tree-building screening matches value-only screening and addressed rows match their stream")
     func screeningEmissionAndAddressParity() async throws {
         let entries = ReplayCorpusEntry.materializerCoverageEntries
-        for entry in entries where entry.name.contains(".tree.") {
+        let treeEntries = entries.filter { $0.name.contains(".tree.") }
+        let addressedEntries = entries.filter { $0.name.hasSuffix(".addressed") }
+        #expect(treeEntries.isEmpty == false)
+        #expect(addressedEntries.isEmpty == false)
+        for entry in treeEntries {
             let valueName = entry.name.replacingOccurrences(of: ".tree.", with: ".value.")
             let valueEntry = try #require(entries.first { $0.name == valueName })
             for seed in ReplayCorpusEntry.seeds {
@@ -91,7 +95,7 @@ extension ReplayCorpusTests {
                 #expect(withTree == withoutTree)
             }
         }
-        for entry in entries where entry.name.hasSuffix(".addressed") {
+        for entry in addressedEntries {
             let streamName = entry.name.replacingOccurrences(of: ".addressed", with: ".stream")
             let streamEntry = try #require(entries.first { $0.name == streamName })
             for seed in ReplayCorpusEntry.seeds {
@@ -169,6 +173,8 @@ private func captureScreeningCoverage<Output>(
     }
     #expect(report.randomSamplingInvocations == 0)
     #expect(report.screeningRows > 0)
+    #expect(report.screeningInvocations > 0)
+    #expect(recorder.values.count == report.screeningInvocations)
     let expectedStatistics = shouldBuildTrees ? report.screeningInvocations : 0
     #expect(report.openPBTStatsLines.count == expectedStatistics)
     var values = recorder.values

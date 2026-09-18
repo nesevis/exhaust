@@ -242,39 +242,33 @@ private func boundedContainer<Value>(
 ) -> AnyGenerator {
     let maximumReflectableCount = layers.count - 1
     let reflectableRange = UInt64(0) ... UInt64(maximumReflectableCount)
-    switch maximumGeneratedCount < maximumReflectableCount {
+    let countGenerator = switch maximumGeneratedCount < maximumReflectableCount {
         case true:
-            let countGenerator = Gen.chooseDerived(
+            Gen.chooseDerived(
                 in: reflectableRange,
                 samplingWithin: UInt64(0) ... UInt64(maximumGeneratedCount)
             )
-            let generator: Generator<Value> = countGenerator._bound(
-                forward: { selectedCount in layers[Int(selectedCount)] },
-                backward: { (value: Value) in UInt64(count(value)) }
-            )
-            return Gen.comap(
-                { (value: Value) in
-                    let selectedCount = count(value)
-                    guard selectedCount <= maximumReflectableCount else {
-                        throw ReflectionError.inputWasOutOfGeneratorRange(
-                            String(selectedCount),
-                            range: "0...\(maximumReflectableCount)"
-                        )
-                    }
-                    return value
-                },
-                generator
-            ).erase()
         case false:
-            let generator: Generator<Value> = Gen.choose(
-                in: reflectableRange,
-                scaling: .linear
-            )._bound(
-                forward: { selectedCount in layers[Int(selectedCount)] },
-                backward: { (value: Value) in UInt64(count(value)) }
-            )
-            return generator.erase()
+            Gen.choose(in: reflectableRange, scaling: .linear)
     }
+    let generator: Generator<Value> = countGenerator._bound(
+        forward: { selectedCount in layers[Int(selectedCount)] },
+        backward: { (value: Value) in UInt64(count(value)) }
+    )
+    // chooseDerived retains a wider reflection domain than its sampling range. Check cardinality before either count generator reaches the layer lookup.
+    return Gen.comap(
+        { (value: Value) in
+            let selectedCount = count(value)
+            guard (0 ... maximumReflectableCount).contains(selectedCount) else {
+                throw ReflectionError.inputWasOutOfGeneratorRange(
+                    String(selectedCount),
+                    range: "0...\(maximumReflectableCount)"
+                )
+            }
+            return value
+        },
+        generator
+    ).erase()
 }
 
 /// Rejects nonempty reflection targets even when the element type is not Equatable. A bare `just` accepts any target and would replay a nonempty input as an empty container.

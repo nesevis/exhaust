@@ -24,11 +24,11 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
             let valueType = specializedName(for: declaration, fallback: typeName)
             let caseEntries: [String] = switch model.construction {
                 case let .enumeration(cases):
-                    cases.map { caseEntry(for: $0, typeName: valueType) }
+                    cases.map { caseEntry(for: $0, valueType: valueType) }
                 case let .memberwise(properties), let .synthesizedMemberwise(properties):
                     [productEntry(properties: properties, typeName: typeName, valueType: valueType)]
             }
-            let entries = caseEntries.joined(separator: ",\n            ")
+            let entries = caseEntries.joined(separator: ",\n")
             let limits = ["maximumDepth", "maximumNodes", "stateSpace"].compactMap { label in
                 limitArgument(label, of: node).map { ", \(label): \($0)" }
             }.joined()
@@ -107,13 +107,11 @@ private func productEntry(properties: [ExhaustableDeclaration.StoredProperty], t
         ? "{ _ in \(valueType)() }"
         : "{ values in \(valueType)(\(embedArguments.joined(separator: ", "))) }"
     let extractBody = "{ value in [\(properties.map { "value.\($0.name)" }.joined(separator: ", "))] }"
-    return """
-    __Exhaustable.ConstructorDescriptor(name: "\(typeName)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))
-    """
+    return constructorEntry(name: typeName, payloadTypes: payloadTypes, embedBody: embedBody, extractBody: extractBody)
 }
 
 /// Preserves enum argument labels while using positional bindings to recover associated values.
-private func caseEntry(for element: EnumCaseElementSyntax, typeName: String) -> String {
+private func caseEntry(for element: EnumCaseElementSyntax, valueType: String) -> String {
     let caseName = element.name.trimmedDescription
     let parameters = element.parameterClause?.parameters.map { $0 } ?? []
     let payloadTypes = parameters.map { metatypeExpression($0.type) }
@@ -124,15 +122,20 @@ private func caseEntry(for element: EnumCaseElementSyntax, typeName: String) -> 
         return "\(label)values[\(index)] as! \(parameter.type.trimmedDescription)"
     }
     let embedBody = parameters.isEmpty
-        ? "{ _ in \(typeName).\(caseName) }"
-        : "{ values in \(typeName).\(caseName)(\(embedArguments.joined(separator: ", "))) }"
+        ? "{ _ in \(valueType).\(caseName) }"
+        : "{ values in \(valueType).\(caseName)(\(embedArguments.joined(separator: ", "))) }"
     let bindings = parameters.indices.map { "value\($0)" }
     let extractPattern = parameters.isEmpty
         ? ".\(caseName)"
         : "let .\(caseName)(\(bindings.joined(separator: ", ")))"
     let extractBody = "{ value in if case \(extractPattern) = value { return [\(bindings.joined(separator: ", "))] } else { return nil } }"
-    return """
-    __Exhaustable.ConstructorDescriptor(name: "\(caseName)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))
+    return constructorEntry(name: caseName, payloadTypes: payloadTypes, embedBody: embedBody, extractBody: extractBody)
+}
+
+/// Keeps product and enum constructor metadata in the same generated shape; their embedding and extraction expressions are the only structural differences.
+private func constructorEntry(name: String, payloadTypes: [String], embedBody: String, extractBody: String) -> String {
+    """
+    __Exhaustable.ConstructorDescriptor(name: "\(name)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))
     """
 }
 

@@ -12,7 +12,7 @@ struct ReflectionContext {
     static let root = Self()
 
     /// Enters a pick arm.
-    var probingPickArm: Self {
+    func enteringPickArm() -> Self {
         var entered = self
         entered.isProbingPickArm = true
         return entered

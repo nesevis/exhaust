@@ -189,11 +189,7 @@ private func sharedBuilder(for type: (some __Exhaustable.Conformance).Type) -> S
 
 /// Resolves the dependency graph for a type with no overrides, turning a structural failure into a precondition the way `gen(...)` does.
 private func resolvedPlan(for type: (some __Exhaustable.Conformance).Type) -> GeneratorDerivationPlan {
-    do {
-        return try GeneratorDerivationPlan(for: type, overrides: [:])
-    } catch {
-        preconditionFailure(String(describing: error))
-    }
+    requiring { try GeneratorDerivationPlan(for: type, overrides: [:]) }
 }
 
 /// Builds one root layer set through an existing builder, reusing whatever layers it already holds.
@@ -204,11 +200,7 @@ private func rootGenerator<Value: __Exhaustable.Conformance>(
     maximumNodes: Int?,
     stateSpace: GeneratorStateSpace
 ) -> ReflectiveGenerator<Value> {
-    do {
-        return try builder.root(for: type, depth: depth, maximumNodes: maximumNodes, stateSpace: stateSpace)
-    } catch {
-        preconditionFailure(String(describing: error))
-    }
+    requiring { try builder.root(for: type, depth: depth, maximumNodes: maximumNodes, stateSpace: stateSpace) }
 }
 
 /// Builds a derivation that cannot be shared, because its overrides are part of what it produces. Keeps resolution, depth, and node-budget diagnostics on one nonthrowing boundary, so a caller of `gen(...)` sees a precondition failure rather than an error to handle.
@@ -219,7 +211,7 @@ private func builtGenerator<Value: __Exhaustable.Conformance>(
     stateSpace: GeneratorStateSpace,
     overrides: [ObjectIdentifier: ReflectiveGenerator<Any>]
 ) -> ReflectiveGenerator<Value> {
-    do {
+    requiring {
         let plan = try GeneratorDerivationPlan(for: type, overrides: overrides)
         return try BudgetedGeneratorDerivation(plan: plan).root(
             for: type,
@@ -227,6 +219,13 @@ private func builtGenerator<Value: __Exhaustable.Conformance>(
             maximumNodes: maximumNodes,
             stateSpace: stateSpace
         )
+    }
+}
+
+/// Keeps structural derivation errors at the nonthrowing generator API boundary, with the original diagnostic as the precondition message.
+private func requiring<Value>(_ work: () throws -> Value) -> Value {
+    do {
+        return try work()
     } catch {
         preconditionFailure(String(describing: error))
     }

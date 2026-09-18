@@ -1,20 +1,33 @@
 import Exhaust
+import ExhaustCore
 import Testing
 @testable import ExhaustGenerators
 
 @Suite("Derived exact allowances")
 struct DerivedExactAllowanceTests {
     @Test("Splitting preserves exact allowances, reserves minima and distributes the remainder")
-    func exactSplit() throws {
-        let plan = try GeneratorDerivationPlan(for: WideProduct.self, overrides: [:])
-        let budget = GeneratorNodeBudget(plan: plan)
-        #expect(budget.split(33, minima: [1]) == [33])
-        #expect(budget.split(33, minima: [33]) == [33])
-        #expect(budget.split(16, minima: [1]) == [16])
-        #expect(budget.split(201, minima: [1]) == [201])
-        #expect(budget.split(201, minima: [201]) == [201])
-        #expect(budget.split(34, minima: [1, 2, 3]) == [11, 11, 12])
-        #expect(budget.split(5, minima: [1, 2, 3]) == nil)
+    func exactSplit() {
+        let inputs = #gen(.int(in: 1 ... 256).array(length: 0 ... 32), .int(in: 0 ... 8192))
+        #exhaust(inputs, .budget(.extensive)) { minima, allowance in
+            let plan = try GeneratorDerivationPlan(for: WideProduct.self, overrides: [:])
+            let budget = GeneratorNodeBudget(plan: plan)
+            let result = budget.split(allowance, minima: minima)
+            if minima.reduce(0, +) > allowance {
+                #expect(result == nil)
+            } else {
+                let shares = try #require(result)
+                #expect(shares.count == minima.count)
+                #expect(zip(shares, minima).allSatisfy { $0 >= $1 })
+                if minima.isEmpty == false {
+                    #expect(shares.reduce(0, +) == allowance)
+                    let surplus = zip(shares, minima).map { $0 - $1 }
+                    #expect(zip(surplus, surplus.dropFirst()).allSatisfy { $0 >= $1 })
+                    let largest = try #require(surplus.max())
+                    let smallest = try #require(surplus.min())
+                    #expect(largest - smallest <= 1)
+                }
+            }
+        }
     }
 
     @Test("Every feasible container count receives at least its entry minimum", arguments: [33, 34, 66, 67, 201])
@@ -25,34 +38,54 @@ struct DerivedExactAllowanceTests {
         let minimum = try #require(sumNodes(minima))
         for elementCount in 1 ... availableNodes / minimum {
             let share = availableNodes / elementCount
-            #expect(share >= minimum)
             let allowances = try #require(budget.split(share, minima: minima))
             #expect(allowances == [share])
             #expect(allowances.reduce(0, +) * elementCount <= availableNodes)
         }
     }
 
-    @Test("A root constructs at and above its exact minimum", arguments: [33, 35, 63])
+    @Test("A root rejects an insufficient allowance and constructs at its exact minimum", arguments: [32, 33, 35, 63])
     func rootMinimum(maximumNodes: Int) throws {
-        for generator in [
-            WideProduct.gen(maximumDepth: 0, maximumNodes: maximumNodes),
-            WideProduct.gen(depth: 0, maximumNodes: maximumNodes),
-        ] {
-            let samples = try #example(generator, count: 10)
-            #expect(samples.allSatisfy { $0.nodes <= maximumNodes })
+        for depth in [RootDepth.pinned(0), .drawn(ceiling: 0, scaling: .linear)] {
+            let plan = try GeneratorDerivationPlan(for: WideProduct.self, overrides: [:])
+            let builder = BudgetedGeneratorDerivation(plan: plan)
+            if maximumNodes < 33 {
+                #expect(throws: GeneratorDerivationError.insufficientNodes(type: "WideProduct", minimum: 33, requested: maximumNodes)) {
+                    try builder.root(for: WideProduct.self, depth: depth, maximumNodes: maximumNodes)
+                }
+            } else {
+                let generator = try builder.root(for: WideProduct.self, depth: depth, maximumNodes: maximumNodes)
+                var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, maxRuns: 1, sizeOverride: 100)
+                _ = try #require(try interpreter.next())
+            }
         }
     }
 
-    @Test("A nested child constructs when its exact minimum fits")
-    func nestedChildMinimum() throws {
-        let samples = try #example(NestedWide.gen(maximumDepth: 1, maximumNodes: 35), count: 10)
-        #expect(samples.allSatisfy { $0.nodes <= 35 })
+    @Test("A nested child requires its own nodes plus the enclosing product", arguments: [33, 34, 35])
+    func nestedChildMinimum(maximumNodes: Int) throws {
+        let plan = try GeneratorDerivationPlan(for: NestedWide.self, overrides: [:])
+        let builder = BudgetedGeneratorDerivation(plan: plan)
+        if maximumNodes < 34 {
+            #expect(throws: GeneratorDerivationError.insufficientNodes(type: "NestedWide", minimum: 34, requested: maximumNodes)) {
+                try builder.root(for: NestedWide.self, depth: .pinned(1), maximumNodes: maximumNodes)
+            }
+        } else {
+            let generator = try builder.root(for: NestedWide.self, depth: .pinned(1), maximumNodes: maximumNodes)
+            var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, maxRuns: 1, sizeOverride: 100)
+            _ = try #require(try interpreter.next())
+        }
     }
 
     @Test("A container constructs when an entry's exact minimum fits")
     func containerEntryMinimum() throws {
-        let samples = try #example(WideArray.gen(maximumDepth: 1, maximumNodes: 35), count: 10)
+        let generator = WideArray.gen(maximumDepth: 1, maximumNodes: 35)
+        let samples = try #example(generator, count: 10)
         #expect(samples.allSatisfy { $0.nodes <= 35 })
+        let entry = try #example(WideProduct.gen(depth: 0), seed: 42)
+        let target = WideArray(entries: [entry])
+        let reflected = try #require(try Interpreters.reflect(generator.gen, with: target))
+        let replayed = try #require(try Interpreters.replay(generator.gen, using: reflected))
+        #expect(replayed == target)
     }
 }
 
@@ -95,17 +128,13 @@ private struct WideProduct: Equatable {
     let field31: Int
 
     var nodes: Int {
-        1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1
+        33
     }
 }
 
 @Exhaustable
 private struct NestedWide: Equatable {
     let wide: WideProduct
-
-    var nodes: Int {
-        1 + wide.nodes
-    }
 }
 
 @Exhaustable

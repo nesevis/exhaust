@@ -142,7 +142,7 @@ extension Interpreters {
         var deferredBranchError: ReflectionError?
         let results = try candidates.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
-                let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, context: context.probingPickArm)
+                let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, context: context.enteringPickArm())
                 let value = reflectionPaths.firstNonNil { $0.value }
 
                 var isPicked = false
@@ -240,6 +240,7 @@ extension Interpreters {
                 declaredRange
         }
 
+        // Prefer a value's explicit bit-pattern representation to sequence cardinality when it offers both. Cardinality is only a fallback for sequence length reflection; pinned sizes take precedence over either.
         var convertibleValue: (any BitPatternConvertible)?
         if scaling?.isPinnedToSize == true, context.sizeOverride != nil {
             convertibleValue = UInt64(effectiveRange.lowerBound)

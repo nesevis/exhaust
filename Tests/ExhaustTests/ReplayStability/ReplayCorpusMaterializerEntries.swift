@@ -1,6 +1,5 @@
 import Exhaust
 import ExhaustCore
-import Foundation
 import Testing
 
 extension ReplayCorpusEntry {
@@ -36,7 +35,9 @@ extension ReplayCorpusTests {
             let erased = fixture.generator.gen.erase()
             for seed in ReplayCorpusEntry.seeds {
                 var rows = ScreeningRunner.Rows(plan: plan, coveringSeed: seed, skipToRow: nil)
+                var materializedRows = 0
                 while let (index, row) = rows.next() {
+                    materializedRows += 1
                     let materialized: (value: (Int, Bool), tree: ChoiceTree)? = ScreeningRunner.materializeRow(
                         erased,
                         row: row,
@@ -73,6 +74,7 @@ extension ReplayCorpusTests {
                         #expect(actual.1 == expected.1)
                     }
                 }
+                #expect(materializedRows == fixture.screeningRows)
             }
         }
     }
@@ -125,61 +127,6 @@ extension ReplayCorpusTests {
                     #expect(actual.0 == expected.0)
                     #expect(actual.1 == expected.1)
                     #expect(renderMaterializerSequence(emitted) == renderMaterializerSequence(sequence))
-                }
-            }
-        }
-    }
-
-    @Test(
-        "Export replay observations without replacing corpus expectations",
-        .enabled(if: ProcessInfo.processInfo.environment["EXHAUST_MATERIALIZER_ISOLATION"] != nil)
-    )
-    func materializerIsolationCapture() async throws {
-        for entry in ReplayCorpusEntry.all {
-            for seed in ReplayCorpusEntry.seeds {
-                let line = await ReplayCorpus.Line(entry: entry.name, seed: seed, values: entry.capture(seed))
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.sortedKeys]
-                let data = try encoder.encode(line)
-                let serialized = try #require(String(bytes: data, encoding: .utf8))
-                print("ISOLATION_CORPUS " + serialized)
-            }
-        }
-        for fixture in MaterializerReplayFixture.all {
-            for seed in ReplayCorpusEntry.seeds {
-                var interpreter = ValueAndChoiceTreeInterpreter(
-                    fixture.generator.gen,
-                    materializePicks: true,
-                    seed: seed,
-                    sizeOverride: 100
-                )
-                for index in 0 ..< ReplayCorpusEntry.sampleCount {
-                    let (value, tree) = try #require(try interpreter.next())
-                    let sequence = ChoiceSequence(tree)
-                    for mode in ["exact", "guided-prefix", "guided-fallback"] {
-                        let result = Materializer.materializeAny(
-                            fixture.generator.gen.erase(),
-                            context: .init(
-                                prefix: mode == "guided-fallback" ? ChoiceSequence() : sequence,
-                                mode: mode == "exact" ? .exact : .guided(seed: seed, fallbackTree: nil),
-                                fallbackTree: tree,
-                                materializePicks: true,
-                                shouldUseMaximumDepthForScreening: false
-                            )
-                        )
-                        let observation: [String: Any] = [
-                            "fixture": fixture.name,
-                            "seed": seed,
-                            "index": index,
-                            "mode": mode,
-                            "original": renderMaterializerValue(value),
-                            "inputSequence": renderMaterializerSequence(sequence),
-                            "result": renderMaterializerResult(result),
-                        ]
-                        let data = try JSONSerialization.data(withJSONObject: observation, options: [.sortedKeys])
-                        let serialized = try #require(String(bytes: data, encoding: .utf8))
-                        print("ISOLATION_REPLAY " + serialized)
-                    }
                 }
             }
         }
@@ -238,25 +185,6 @@ private final class MaterializerValueRecorder: @unchecked Sendable {
 
 private func renderMaterializerValue(_ value: (Int, Bool)) -> String {
     "\(value.0),\(value.1)"
-}
-
-/// Records flattened choices as well as values; identical outputs alone do not establish that later replay or reduction sees the same trace.
-private func renderMaterializerResult(_ result: Materializer.Result<Any>) -> [String: Any] {
-    switch result {
-        case let .success(value, tree, _):
-            guard let typed = value as? (Int, Bool) else {
-                return ["status": "wrong-type"]
-            }
-            return [
-                "status": "success",
-                "value": renderMaterializerValue(typed),
-                "sequence": renderMaterializerSequence(ChoiceSequence(tree)),
-            ]
-        case .rejected:
-            return ["status": "rejected"]
-        case .failed:
-            return ["status": "failed"]
-    }
 }
 
 /// Uses the flattened entry representation to retain structural markers and metadata rather than relying on depth-insensitive tree equivalence.
