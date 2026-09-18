@@ -185,6 +185,15 @@ package enum ChoiceTreeAnalysis {
 
             case let .bind(_, inner, bound):
                 guard walkTree(inner, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
+                // Size, maximum feasible depth, and constant inputs are fixed for this screening model rather than varied by its covering rows.
+                if inner.isScreeningContext {
+                    return walkTree(
+                        bound,
+                        expandSequencePairs: expandSequencePairs,
+                        compositeThreshold: compositeThreshold,
+                        parameters: &parameters
+                    )
+                }
                 return walkTreeValidateOnly(bound)
 
             case let .sequence(elements, metadata):
