@@ -299,12 +299,14 @@ package enum ScreeningRunner {
         let mode = Materializer.Mode.guided(seed: UInt64(rowIndex), fallbackTree: nil)
         switch Materializer.materializeAny(
             erasedGen,
-            prefix: ChoiceSequence(),
-            mode: mode,
-            fallbackTree: tree,
-            skipTree: needsTree == false,
-            collectDecodingReport: false,
-            shouldUseMaximumDepthForScreening: true
+            context: .init(
+                prefix: ChoiceSequence(),
+                mode: mode,
+                fallbackTree: tree,
+                skipTree: needsTree == false,
+                collectDecodingReport: false,
+                shouldUseMaximumDepthForScreening: true
+            )
         ) {
             case let .success(anyValue, freshTree, _):
                 // swiftlint:disable:next force_cast

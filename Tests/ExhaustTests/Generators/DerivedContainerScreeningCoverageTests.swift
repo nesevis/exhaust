@@ -67,9 +67,11 @@ struct DerivedContainerScreeningCoverageTests {
                         for usesFallback in [false, true] {
                             let replay = Materializer.materializeAny(
                                 generator.gen.erase(),
-                                prefix: ChoiceSequence(tree),
-                                mode: .exact,
-                                fallbackTree: usesFallback ? tree : nil
+                                context: .init(
+                                    prefix: ChoiceSequence(tree),
+                                    mode: .exact,
+                                    fallbackTree: usesFallback ? tree : nil
+                                )
                             )
                             guard case let .success(replayed, _, _) = replay else {
                                 Issue.record("Exact element replay failed: \(name), seed \(seed)")

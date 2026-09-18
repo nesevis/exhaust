@@ -225,7 +225,9 @@ struct ReducerSimplifyValuesTests {
             try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) else {
             Issue.record("Expected .success")
             return
         }

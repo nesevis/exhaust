@@ -248,8 +248,12 @@ private func assertBothPathsAgree(
     fallbackTree: ChoiceTree,
     sourceLocation: SourceLocation
 ) {
-    let treeResult = Materializer.materializeAny(erased, prefix: prefix, mode: mode, fallbackTree: fallbackTree)
-    let flatResult = Materializer.materializeAnyFlat(erased, prefix: prefix, mode: mode, fallbackTree: fallbackTree)
+    let treeResult = Materializer.materializeAny(erased, context: .init(
+        prefix: prefix, mode: mode, fallbackTree: fallbackTree
+    ))
+    let flatResult = Materializer.materializeAnyFlat(erased, context: .init(
+        prefix: prefix, mode: mode, fallbackTree: fallbackTree
+    ))
     switch (treeResult, flatResult) {
         case let (.success(_, freshTree, treeReport), .success(_, flatSequence, flatReport)):
             let flattened = ChoiceSequence.flatten(freshTree)

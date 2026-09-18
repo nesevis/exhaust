@@ -38,7 +38,9 @@ struct GenerateMacroIntegrationTests {
         let tree = try #require(try Interpreters.reflect(personGen, with: target))
 
         let sequence = ChoiceSequence(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(personGen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(personGen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) else {
             Issue.record("Expected .success")
             return
         }
@@ -61,7 +63,9 @@ struct GenerateMacroIntegrationTests {
         let tree = try #require(try Interpreters.reflect(coordGen, with: target))
 
         let sequence = ChoiceSequence(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(coordGen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(coordGen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) else {
             Issue.record("Expected .success")
             return
         }
@@ -83,7 +87,9 @@ struct GenerateMacroIntegrationTests {
         while let (generated, _) = try iterator.next() {
             let reflectedTree = try #require(try Interpreters.reflect(personGen, with: generated))
             let sequence = ChoiceSequence(reflectedTree)
-            guard case let .success(roundTripped, _, _) = Materializer.materialize(personGen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+            guard case let .success(roundTripped, _, _) = Materializer.materialize(personGen, context: .init(
+                prefix: sequence, mode: .exact, fallbackTree: reflectedTree
+            )) else {
                 Issue.record("Expected .success")
                 continue
             }
@@ -106,7 +112,9 @@ struct GenerateMacroIntegrationTests {
         let tree = try #require(try Interpreters.reflect(personGen, with: target))
 
         let sequence = ChoiceSequence(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(personGen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(personGen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) else {
             Issue.record("Expected .success")
             return
         }

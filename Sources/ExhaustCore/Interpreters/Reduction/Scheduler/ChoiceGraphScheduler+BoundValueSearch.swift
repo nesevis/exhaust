@@ -85,10 +85,12 @@ extension ChoiceGraphScheduler {
         .bindPivot(GraphBindPivotEncoder(lift: { candidate, fallbackTree in
             guard case let .success(_, freshTree, _) = Materializer.materializeAny(
                 gen,
-                prefix: candidate,
-                mode: .guided(seed: 0, fallbackTree: fallbackTree),
-                fallbackTree: fallbackTree,
-                materializePicks: true
+                context: .init(
+                    prefix: candidate,
+                    mode: .guided(seed: 0, fallbackTree: fallbackTree),
+                    fallbackTree: fallbackTree,
+                    materializePicks: true
+                )
             ) else {
                 return nil
             }
@@ -125,10 +127,12 @@ extension ChoiceGraphScheduler {
         //    the bound-value composition's lift configuration.
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(
             gen,
-            prefix: upstreamCandidate,
-            mode: .guided(seed: 0, fallbackTree: parent.tree),
-            fallbackTree: parent.tree,
-            materializePicks: true
+            context: .init(
+                prefix: upstreamCandidate,
+                mode: .guided(seed: 0, fallbackTree: parent.tree),
+                fallbackTree: parent.tree,
+                materializePicks: true
+            )
         ) else {
             Self.logReducer("bound_value_lift_failed", isInstrumented: isInstrumented, metadata: [
                 "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",

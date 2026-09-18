@@ -818,7 +818,9 @@ struct CharacterProblematicIndicesTests {
                 guard let tree = profile.buildTree(from: row) else { continue }
                 let mode = Materializer.Mode.guided(seed: UInt64(rowsTested), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
-                    gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    gen, context: .init(
+                        prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    )
                 ) else { continue }
                 for char in chars {
                     for scalar in char.unicodeScalars {
@@ -836,7 +838,9 @@ struct CharacterProblematicIndicesTests {
                 guard let tree = profile.buildTree(from: row) else { continue }
                 let mode = Materializer.Mode.guided(seed: UInt64(i), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
-                    gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    gen, context: .init(
+                        prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    )
                 ) else { continue }
                 for char in chars {
                     for scalar in char.unicodeScalars {

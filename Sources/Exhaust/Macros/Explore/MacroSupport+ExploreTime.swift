@@ -405,8 +405,10 @@ public extension __ExhaustRuntime {
         for cluster in report.clusters {
             let result = Materializer.materialize(
                 gen,
-                prefix: cluster.reducedSequence,
-                mode: .exact
+                context: .init(
+                    prefix: cluster.reducedSequence,
+                    mode: .exact
+                )
             )
             guard case let .success(value, _, _) = result else {
                 continue
@@ -429,8 +431,10 @@ public extension __ExhaustRuntime {
         for cluster in report.clusters {
             let result = Materializer.materialize(
                 gen,
-                prefix: cluster.reducedSequence,
-                mode: .exact
+                context: .init(
+                    prefix: cluster.reducedSequence,
+                    mode: .exact
+                )
             )
             guard case let .success(value, _, _) = result else {
                 continue

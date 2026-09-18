@@ -108,11 +108,13 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
             for rowIndex in 0 ..< 50 {
                 let result = Materializer.materializeAny(
                     erased,
-                    prefix: ChoiceSequence(),
-                    mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil),
-                    fallbackTree: fixture.tree,
-                    skipTree: true,
-                    collectDecodingReport: false
+                    context: .init(
+                        prefix: ChoiceSequence(),
+                        mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil),
+                        fallbackTree: fixture.tree,
+                        skipTree: true,
+                        collectDecodingReport: false
+                    )
                 )
                 guard case .success = result else { continue }
             }
@@ -132,9 +134,11 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
             for _ in 0 ..< 50 {
                 let result = Materializer.materializeAny(
                     erased,
-                    prefix: fixture.sequence,
-                    mode: .exact,
-                    fallbackTree: fixture.tree
+                    context: .init(
+                        prefix: fixture.sequence,
+                        mode: .exact,
+                        fallbackTree: fixture.tree
+                    )
                 )
                 guard case .success = result else { fatalError("exact replay rejected") }
             }
@@ -159,8 +163,10 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let candidate = FuzzMutator.mutate(fixture.sequence, intensity: intensity, prng: &prng)
                 let result = Materializer.materializeAny(
                     erased,
-                    prefix: candidate,
-                    mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
+                    context: .init(
+                        prefix: candidate,
+                        mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
+                    )
                 )
                 guard case let .success(_, freshTree, _) = result else { continue }
                 let sequence = ChoiceSequence.flatten(freshTree)
@@ -188,8 +194,10 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let candidate = FuzzMutator.mutate(fixture.sequence, intensity: intensity, prng: &prng)
                 let result = Materializer.materializeAnyFlat(
                     erased,
-                    prefix: candidate,
-                    mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
+                    context: .init(
+                        prefix: candidate,
+                        mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
+                    )
                 )
                 guard case let .success(_, sequence, _) = result else { continue }
                 _ = ZobristHash.hash(of: sequence)
@@ -216,9 +224,11 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let candidate = FuzzMutator.mutate(fixture.sequence, intensity: intensity, prng: &prng)
                 let result = Materializer.materializeAny(
                     erased,
-                    prefix: candidate,
-                    mode: .guided(seed: prng.next(), fallbackTree: fixture.tree),
-                    skipTree: true
+                    context: .init(
+                        prefix: candidate,
+                        mode: .guided(seed: prng.next(), fallbackTree: fixture.tree),
+                        skipTree: true
+                    )
                 )
                 guard case .success = result else { continue }
             }

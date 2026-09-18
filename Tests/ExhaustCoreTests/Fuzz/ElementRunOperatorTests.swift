@@ -105,9 +105,11 @@ struct ElementRunOperatorTests {
             #expect(trailing == lastValueIndex ... lastValueIndex)
             guard case let .success(_, child, _) = Materializer.materializeAnyFlat(
                 gen.erase(),
-                prefix: cut.candidate,
-                mode: .guided(seed: seed, fallbackTree: parentTree),
-                reseedRanges: cut.reseedRanges
+                context: .init(
+                    prefix: cut.candidate,
+                    mode: .guided(seed: seed, fallbackTree: parentTree),
+                    reseedRanges: cut.reseedRanges
+                )
             ) else {
                 Issue.record("shortened candidate did not materialise")
                 continue

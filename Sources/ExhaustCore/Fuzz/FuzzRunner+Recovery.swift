@@ -183,9 +183,11 @@ extension FuzzRunner {
             {
                 if case let .success(_, fullTree, _) = Materializer.materializeAny(
                     erasedGen,
-                    prefix: corpus.entries[admittedIndex].sequence,
-                    mode: .exact,
-                    materializePicks: true
+                    context: .init(
+                        prefix: corpus.entries[admittedIndex].sequence,
+                        mode: .exact,
+                        materializePicks: true
+                    )
                 ) {
                     corpus.upgradeToFullTree(at: admittedIndex, fullTree: fullTree)
                 }
@@ -245,7 +247,9 @@ extension FuzzRunner {
     private func rejudge(
         _ sequence: ChoiceSequence
     ) -> (value: Output, tree: ChoiceTree, verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)])? {
-        let result = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact)
+        let result = Materializer.materializeAny(erasedGen, context: .init(
+            prefix: sequence, mode: .exact
+        ))
         guard case let .success(anyValue, tree, _) = result, let value = anyValue as? Output else {
             return nil
         }

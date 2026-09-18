@@ -132,10 +132,12 @@ struct BindPivotEncoderTests {
             liftCount.value += 1
             guard case let .success(_, tree, _) = Materializer.materializeAny(
                 nestedGen.gen.erase(),
-                prefix: candidate,
-                mode: .guided(seed: 0, fallbackTree: fallbackTree),
-                fallbackTree: fallbackTree,
-                materializePicks: true
+                context: .init(
+                    prefix: candidate,
+                    mode: .guided(seed: 0, fallbackTree: fallbackTree),
+                    fallbackTree: fallbackTree,
+                    materializePicks: true
+                )
             ) else {
                 return nil
             }
@@ -226,10 +228,12 @@ private func nestedFixture() throws -> (scope: EncoderInput, pickNodeID: Int) {
     try #require(generated.value == (2, 2))
     guard case let .success(_, tree, _) = Materializer.materializeAny(
         nestedGen.gen.erase(),
-        prefix: ChoiceSequence.flatten(generated.tree),
-        mode: .exact,
-        fallbackTree: generated.tree,
-        materializePicks: true
+        context: .init(
+            prefix: ChoiceSequence.flatten(generated.tree),
+            mode: .exact,
+            fallbackTree: generated.tree,
+            materializePicks: true
+        )
     ) else {
         throw FixtureError.materialization
     }

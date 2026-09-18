@@ -74,8 +74,10 @@ struct CoverageGuidedReviewTests {
         let entry = try #require(runner.corpus.entries.first)
         let materialized = Materializer.materializeAny(
             generator.erase(),
-            prefix: entry.sequence,
-            mode: .exact
+            context: .init(
+                prefix: entry.sequence,
+                mode: .exact
+            )
         )
         guard case let .success(value, _, _) = materialized else {
             Issue.record("Expected the stored sequence to materialize exactly")

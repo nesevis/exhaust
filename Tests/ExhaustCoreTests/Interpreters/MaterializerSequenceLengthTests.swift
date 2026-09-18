@@ -32,8 +32,10 @@ struct MaterializerSequenceLengthTests {
         )
         let result = Materializer.materializeAnyFlat(
             gen.erase(),
-            prefix: ChoiceSequence(),
-            mode: .guided(seed: 0xF00D, fallbackTree: fallback)
+            context: .init(
+                prefix: ChoiceSequence(),
+                mode: .guided(seed: 0xF00D, fallbackTree: fallback)
+            )
         )
         guard case let .success(value, _, _) = result else {
             Issue.record("expected the fallback element count to resolve the length")
@@ -61,8 +63,10 @@ struct MaterializerSequenceLengthTests {
                 let candidate = FuzzMutator.mutate(parentSequence, intensity: .high, prng: &prng)
                 let result = Materializer.materializeAnyFlat(
                     erased,
-                    prefix: candidate,
-                    mode: .guided(seed: prng.next(), fallbackTree: tree)
+                    context: .init(
+                        prefix: candidate,
+                        mode: .guided(seed: prng.next(), fallbackTree: tree)
+                    )
                 )
                 guard case let .success(value, _, _) = result else {
                     continue
