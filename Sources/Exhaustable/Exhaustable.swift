@@ -1,3 +1,8 @@
+// MARK: - Module Surface
+
+//
+// ExhaustGenerators re-exports this module whole, because a macro cannot be named in a scoped `@_exported import`. A new `public` declaration here joins the ExhaustGenerators and Exhaust surfaces with no line to add anywhere else, so treat one as public API and prefer `package` for anything the macro expansion and the annotation's arguments do not name.
+
 /// Namespaces the metadata and conformance emitted by ``Exhaustable(maximumDepth:maximumNodes:stateSpace:)``.
 ///
 /// These declarations are public only because macro expansions in application modules must name them. They are implementation infrastructure, not user conformance or customization points. The namespace has no dependency on ExhaustCore, so an annotated application type does not link generator or interpreter code.

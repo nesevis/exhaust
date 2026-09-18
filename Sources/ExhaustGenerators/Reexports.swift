@@ -10,4 +10,5 @@
 @_exported import enum ExhaustCore.UnicodeVersion
 
 // Re-export the annotation and its expansion infrastructure so clients can use `@Exhaustable` without a second import.
+// Unlike the ExhaustCore types above, this module is re-exported whole: a macro has no import kind, so `@Exhaustable` cannot be listed on its own. Every `public` declaration in Exhaustable therefore reaches clients without a line here.
 @_exported import Exhaustable

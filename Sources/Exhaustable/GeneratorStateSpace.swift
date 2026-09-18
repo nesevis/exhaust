@@ -10,7 +10,7 @@
 /// | `.full` | Unchanged | Unchanged | Unchanged |
 ///
 /// Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. Nested annotations can narrow an inherited state space; explicit payload overrides keep their own domains.
-public enum GeneratorStateSpace: String, CaseIterable, Sendable {
+public enum GeneratorStateSpace: CaseIterable, Sendable {
     /// Favors frequent collisions with the smallest default domains.
     case tiny
     /// Favors collisions while retaining more variation than `.tiny`.
