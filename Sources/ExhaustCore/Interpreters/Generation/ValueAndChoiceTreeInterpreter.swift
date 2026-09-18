@@ -52,9 +52,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         )
     }
 
-    /// Discovers the deepest size-feasible layer for screening analysis without changing the policy of independently created sampling interpreters.
+    /// Selects the coordinated depth, pick, and bind policies for discovering a screening template. Independently created interpreters retain their sampling purpose.
     package mutating func prepareForScreeningAnalysis() {
-        context.shouldUseMaximumDepthForScreening = true
+        context.purpose = .screeningAnalysis
     }
 
     /// The PRNG seed used for this interpreter's generation runs.
@@ -539,7 +539,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return (final.0, .just)
         }
 
-        if context.shouldUseMaximumDepthForScreening, context.materializePicks, choices.count > 1 {
+        if context.purpose == .screeningAnalysis, context.materializePicks, choices.count > 1 {
             return try handleAnalysisPick(
                 choices,
                 selectedChoice: selectedChoice,
@@ -1054,7 +1054,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let savedMaterializePicks = context.materializePicks
                 // Fixed screening controls have one stable dependent layer. Ordinary row-varying binds still record only the selected path.
                 context.materializePicks = savedMaterializePicks && (
-                    isGetSizeBind || (context.shouldUseMaximumDepthForScreening && innerTree.isScreeningContext)
+                    isGetSizeBind || (context.purpose == .screeningAnalysis && innerTree.isScreeningContext)
                 )
                 defer { context.materializePicks = savedMaterializePicks }
                 guard let (boundValue, boundTree) = try generateRecursiveAny(
@@ -1127,7 +1127,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             )
         } ?? (min ... max)
         // A pinned size never touches the PRNG, so the seed stream matches a raw getSize read.
-        let shouldPinDepth = context.shouldUseMaximumDepthForScreening && tag == .depthControl
+        let shouldPinDepth = context.purpose == .screeningAnalysis && tag == .depthControl
         let rawBits: UInt64 = switch (scaling?.isPinnedToSize == true, shouldPinDepth) {
             case (true, _):
                 effectiveRange.lowerBound

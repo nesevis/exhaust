@@ -413,7 +413,7 @@ package enum SequenceCoveringArray {
         return slot
     }
 
-    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to ``LargeDomainCoveringArrayReplay`` to build the sub-tree.
+    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to ``CoveringArrayReplay`` to build the sub-tree.
     private static func buildArgTree(
         localIndex: UInt64,
         params: [ScreeningParameter]
@@ -428,7 +428,7 @@ package enum SequenceCoveringArray {
 
         let row = CoveringArrayRow(values: valueIndices)
         let profile = LargeDomainProfile(parameters: params)
-        return LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+        return CoveringArrayReplay.buildTree(row: row, profile: profile)
     }
 }
 

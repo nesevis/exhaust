@@ -156,7 +156,7 @@ struct LargeDomainCoveringArrayReplayTests {
 
         var replayedCount = 0
         while let row = generator.next() {
-            guard let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+            guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
             let value: (Int, Int)? = try Interpreters.replay(gen, using: tree)
@@ -178,7 +178,7 @@ struct LargeDomainCoveringArrayReplayTests {
 
         var seenValues: Set<Int> = []
         while let row = generator.next() {
-            guard let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+            guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
             if let (a, b): (Int, Int) = try Interpreters.replay(gen, using: tree) {

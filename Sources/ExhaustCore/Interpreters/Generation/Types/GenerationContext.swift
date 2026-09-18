@@ -66,8 +66,8 @@ package struct GenerationContext: ~Copyable {
 
     /// Whether to record materialized pick metadata in the choice tree.
     package var materializePicks: Bool = false
-    /// Pins structural depth controls to their feasible upper bounds during screening analysis only. Sampling contexts retain ordinary depth draws.
-    package var shouldUseMaximumDepthForScreening: Bool = false
+    /// Selects sampling behavior or the coordinated depth, pick, and bind policies used to discover a screening model.
+    package var purpose: Purpose = .sampling
     /// Whether this context materializes an unselected pick branch. Such branches are best-effort alternatives recorded for structural encoders, never the run's output, so a generator failure inside one is swallowed by the caller and must not reach the user as a diagnostic.
     package var isSpeculative: Bool = false
     /// Number of property invocations completed so far.
@@ -115,7 +115,7 @@ package struct GenerationContext: ~Copyable {
             sizeOverride: sizeOverride,
             prng: .init(seed: seed),
             materializePicks: materializePicks,
-            shouldUseMaximumDepthForScreening: shouldUseMaximumDepthForScreening,
+            purpose: purpose,
             isSpeculative: true,
             runs: runs
         )
