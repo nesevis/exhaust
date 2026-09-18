@@ -55,8 +55,10 @@ package enum CoveringArrayReplay {
         paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
-            case let .choice(_, metadata):
-                guard metadata.isPinnedToSize == false else {
+            case let .choice(value, metadata):
+                guard metadata.isPinnedToSize == false,
+                      value.tag != .depthControl
+                else {
                     return tree
                 }
                 guard paramIndex < profile.parameters.count else { return nil }
