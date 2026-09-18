@@ -308,6 +308,14 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [ScreeningParameter]
     ) -> Bool {
         if isPick(children) {
+            if isSingletonPick(children), case let .branch(branch) = children[0] {
+                return walkTree(
+                    branch.choice,
+                    expandSequencePairs: expandSequencePairs,
+                    compositeThreshold: compositeThreshold,
+                    parameters: &parameters
+                )
+            }
             return walkPick(children, parameters: &parameters)
         }
 
@@ -315,6 +323,16 @@ package enum ChoiceTreeAnalysis {
             guard walkTree(child, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
         }
         return true
+    }
+
+    /// Distinguishes a genuinely one-arm pick from a multi-arm pick whose trace recorded only the selected branch.
+    static func isSingletonPick(_ children: [ChoiceTree]) -> Bool {
+        guard children.count == 1,
+              case let .branch(branch) = children[0]
+        else {
+            return false
+        }
+        return branch.branchCount == 1
     }
 
     static func isPick(_ children: [ChoiceTree]) -> Bool {
@@ -532,6 +550,9 @@ package enum ChoiceTreeAnalysis {
 
             case let .group(children, _, _):
                 if isPick(children) {
+                    if isSingletonPick(children), case let .branch(branch) = children[0] {
+                        return walkElementTree(branch.choice, elementIndex: elementIndex, parameters: &parameters)
+                    }
                     return walkPick(children, parameters: &parameters)
                 }
                 for child in children {
