@@ -172,7 +172,7 @@ package enum ReflectiveOperation {
     ///   - max: Maximum bit pattern value (inclusive).
     ///   - tag: Type tag for proper interpretation of bit patterns.
     ///   - isRangeExplicit: Whether `min...max` came from an explicit, stable bound that reflection should preserve and validate.
-    ///   - scaling: Optional size-scaling strategy. When non-nil, generation interpreters consult the current size and narrow the effective sampling range relative to `min...max` before drawing. Reflection, analysis, and tree construction ignore this field — the declared range is authoritative for them.
+    ///   - scaling: Optional size-scaling strategy. When non-nil, generation interpreters consult the current size and narrow the effective sampling range relative to `min...max` before drawing. Reflection enforces the effective range inside an explicit resize and otherwise uses the size-100 range. Analysis and tree metadata retain the declared range.
     case chooseBits(
         min: UInt64,
         max: UInt64,

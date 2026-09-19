@@ -8,7 +8,7 @@
 public extension ReflectiveGenerator {
     /// Creates a generator whose definition depends on the current size parameter.
     ///
-    /// The size parameter grows from 1 through 100 as a property test progresses. Use it to increase generated complexity over time, such as widening a numeric range or increasing a recursive depth. During reflection, Exhaust uses size 100 so the dependent generator exposes its full range.
+    /// The size parameter grows from 1 through 100 as a property test progresses. Use it to increase generated complexity over time, such as widening a numeric range or increasing a recursive depth. During reflection, Exhaust uses the innermost enclosing ``resize(_:)`` value, or size 100 when no explicit resize is present.
     ///
     /// ```swift
     /// let adaptive = ReflectiveGenerator<UInt64>.getSize { size in
@@ -37,6 +37,8 @@ public extension ReflectiveGenerator {
     }
 
     /// Runs this generator with a temporarily modified size parameter.
+    ///
+    /// Generation and reflection both apply `newSize` to nested size-dependent generators and size-scaled choices. Reflection rejects finite values outside the resulting effective range.
     ///
     /// ```swift
     /// let small = #gen(.int().array()).resize(10)

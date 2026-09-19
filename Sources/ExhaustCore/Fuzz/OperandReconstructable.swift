@@ -9,7 +9,7 @@ import Foundation
 /// Reconstruction is partial by nature. A fixed-width scalar always decodes (its bytes are its representation); a `String` decodes only when the bytes are valid, non-control UTF-8, so the flag word of a small-string comparison or an unrelated integer operand is rejected. Whatever survives is offered to reflection, whose domain check rejects values outside the generator's declared range — so this type never has to know the range, only the encoding.
 ///
 /// - Note: The trace-cmp hooks widen a `cmp1`/`cmp2`/`cmp4` operand into the 64-bit word and drop the real width. A narrow, signed-negative operand therefore reconstructs into a 64-bit signed type as its zero-extended value: a `trace_cmp4` of `0xFFFFFFFF` becomes `Int(4294967295)`, not `Int(-1)`. The self-truncating narrow types (`Int32`, `Int16`, `Int8`) are unaffected, because they take only their own low bytes. Resolving the wide case needs the hooks to record the operand width, which they do not.
-package protocol OperandReconstructable {
+package protocol OperandReconstructable: SendableMetatype {
     /// Reconstructs a value from a harvested operand word, or nil when the word is not a natural value of this type.
     static func reconstruct(fromOperand word: UInt64) -> Self?
 }

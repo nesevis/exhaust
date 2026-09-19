@@ -66,7 +66,7 @@ package enum GeneratorSynthesizer {
 
     /// Returns the pre-configured generator for a top-level leaf or collection type, or `nil` when the type needs the discovery pass.
     ///
-    /// Lifts the per-field dispatch the discovery pass already applies to nested values to the root: ``ExhaustGenerable`` types use their default generator, and standard-library collections of generable elements use their ``SynthesizableCollection`` generator.
+    /// Lifts the per-field dispatch the discovery pass already applies to nested values to the root: ``SynthesisGenerable`` types use their default generator, and standard-library collections of generable elements use their ``SynthesizableCollection`` generator.
     private static func rootGenerator<T>(for _: T.Type) -> Generator<T>? {
         resolveGenerator(for: T.self).map { anyGenerator in
             anyGenerator.map { $0 as! T }

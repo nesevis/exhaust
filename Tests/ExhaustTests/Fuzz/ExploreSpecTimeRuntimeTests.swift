@@ -243,7 +243,9 @@ struct ExploreSpecTimeRuntimeTests {
         for index in runner.corpus.parentIndices {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
-                adapter.generator, prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
+                adapter.generator, context: .init(
+                    prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
+                )
             ) else {
                 continue
             }
@@ -360,7 +362,9 @@ struct ExploreSpecTimeRuntimeTests {
         for index in runner.corpus.parentIndices {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
-                adapter.generator, prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
+                adapter.generator, context: .init(
+                    prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
+                )
             ) else {
                 continue
             }

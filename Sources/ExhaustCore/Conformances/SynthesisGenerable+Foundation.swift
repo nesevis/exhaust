@@ -4,31 +4,31 @@ import Foundation
     import CoreGraphics
 #endif
 
-extension String: ExhaustGenerable {
+extension String: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.string().gen.erase()
     }
 }
 
-extension Character: ExhaustGenerable {
+extension Character: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.character().gen.erase()
     }
 }
 
-extension UUID: ExhaustGenerable {
+extension UUID: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.uuid().gen.erase()
     }
 }
 
-extension URL: ExhaustGenerable {
+extension URL: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.url().gen.erase()
     }
 }
 
-extension Date: ExhaustGenerable {
+extension Date: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.date(
             between: Date.distantPast ... Date.distantFuture,
@@ -37,14 +37,14 @@ extension Date: ExhaustGenerable {
     }
 }
 
-extension Data: ExhaustGenerable {
+extension Data: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.data().gen.erase()
     }
 }
 
 #if canImport(CoreGraphics)
-    extension CGFloat: ExhaustGenerable {
+    extension CGFloat: SynthesisGenerable {
         package static var defaultGenerator: AnyGenerator {
             Gen.choose(
                 in: nil as ClosedRange<Double>?,
@@ -56,7 +56,7 @@ extension Data: ExhaustGenerable {
     }
 #endif
 
-extension Decimal: ExhaustGenerable {
+extension Decimal: SynthesisGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.decimal(
             in: Decimal(Int64.min) / 100 ... Decimal(Int64.max) / 100,

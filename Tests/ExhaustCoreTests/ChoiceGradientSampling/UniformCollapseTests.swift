@@ -51,7 +51,9 @@ struct UniformCollapseTests {
                 },
                 "Tuned generation elided the user pick's branch entry"
             )
-            switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+            switch Materializer.materialize(gen, context: .init(
+                prefix: sequence, mode: .exact, fallbackTree: tree
+            )) {
                 case let .success(materialized, _, _):
                     #expect(anyEquals(materialized, value))
                 case .rejected, .failed:

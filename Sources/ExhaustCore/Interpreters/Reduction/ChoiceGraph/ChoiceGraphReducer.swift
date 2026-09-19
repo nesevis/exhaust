@@ -65,9 +65,11 @@ package extension Interpreters {
         if config.visualize, let (resultSequence, _) = outcome.counterexample {
             let resultTree = Materializer.materialize(
                 gen,
-                prefix: resultSequence,
-                mode: .exact,
-                fallbackTree: tree
+                context: .init(
+                    prefix: resultSequence,
+                    mode: .exact,
+                    fallbackTree: tree
+                )
             )
             if case let .success(_, resultChoiceTree, _) = resultTree {
                 print("── After reduction ──")
@@ -106,9 +108,11 @@ package extension Interpreters {
         if config.visualize, let (resultSequence, _) = result.outcome.counterexample {
             let resultTree = Materializer.materialize(
                 gen,
-                prefix: resultSequence,
-                mode: .exact,
-                fallbackTree: tree
+                context: .init(
+                    prefix: resultSequence,
+                    mode: .exact,
+                    fallbackTree: tree
+                )
             )
             if case let .success(_, resultChoiceTree, _) = resultTree {
                 print("── After reduction ──")
@@ -128,8 +132,10 @@ package extension Interpreters {
     ) throws -> ReductionOutcome<Output> {
         let prefix = ChoiceSequence.flatten(tree)
         guard case let .success(output, _, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact, fallbackTree: tree,
-            materializePicks: true
+            gen, context: .init(
+                prefix: prefix, mode: .exact, fallbackTree: tree,
+                materializePicks: true
+            )
         ) else {
             return .failure
         }

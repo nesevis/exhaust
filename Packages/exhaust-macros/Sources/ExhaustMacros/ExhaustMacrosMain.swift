@@ -25,5 +25,6 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         SetupMacro.self,
         InvariantMacro.self,
         EquivalenceMacro.self,
+        ExhaustableMacro.self,
     ]
 }

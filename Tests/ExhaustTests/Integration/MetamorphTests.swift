@@ -215,7 +215,9 @@ struct MetamorphTests {
             let (original, tree) = try #require(try iterator.next())
             let prefix = ChoiceSequence(tree)
 
-            switch Materializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) {
+            switch Materializer.materialize(gen, context: .init(
+                prefix: prefix, mode: .exact, fallbackTree: tree
+            )) {
                 case let .success(output, _, _):
                     let materialized = output
                     #expect(materialized.count == original.count)

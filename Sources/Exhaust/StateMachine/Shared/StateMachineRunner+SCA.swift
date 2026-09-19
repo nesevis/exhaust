@@ -158,7 +158,9 @@ extension __ExhaustRuntime {
                     ),
                     fallbackTree: tree
                 )
-                let materialized = Materializer.materialize(tierGen, prefix: ChoiceSequence(), mode: mode)
+                let materialized = Materializer.materialize(tierGen, context: .init(
+                    prefix: ChoiceSequence(), mode: mode
+                ))
                 guard case let .success(rowValue, freshTree, _) = materialized else {
                     // Failed predicate attempts on record mean the row was lost to a filter: a pinned-value rejection or an exhausted retry budget.
                     if case let .failed(report) = materialized,

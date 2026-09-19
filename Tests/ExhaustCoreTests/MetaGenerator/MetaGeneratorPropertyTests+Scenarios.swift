@@ -97,7 +97,9 @@ extension MetaGeneratorPropertyTests {
                 let reflectedTree = try #require(try Interpreters.reflect(gen, with: value), "Zip must reflect for recipe: \(recipe)")
                 let replayed = try #require(try Interpreters.replay(gen, using: reflectedTree), "Zip must replay for recipe: \(recipe)")
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
+                    prefix: sequence, mode: .exact, fallbackTree: reflectedTree
+                )) else {
                     Issue.record("Zip must materialize for recipe: \(recipe)")
                     continue
                 }
@@ -154,7 +156,9 @@ extension MetaGeneratorPropertyTests {
                 let reflectedTree = try #require(try Interpreters.reflect(gen, with: value), "Optional must reflect for recipe: \(recipe)")
                 let replayed = try #require(try Interpreters.replay(gen, using: reflectedTree), "Optional must replay for recipe: \(recipe)")
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
+                    prefix: sequence, mode: .exact, fallbackTree: reflectedTree
+                )) else {
                     Issue.record("Optional must materialize for recipe: \(recipe)")
                     continue
                 }

@@ -94,6 +94,32 @@ package extension Generator where Operation == ReflectiveOperation {
         ))
     }
 
+    /// Chains this generator with a dependent generator whose output cannot be decomposed back into the value that selected it.
+    ///
+    /// Sequencing through ``FreerMonad/bind(_:)`` instead would leave no node, and a generator whose shape depends on a drawn value would read as fixed to anything inspecting the graph — including the screening analysis that decides whether a domain was enumerated. Reifying the dependence is what makes it visible; the absent inverse is what makes the result non-reflective.
+    ///
+    /// - Parameter forward: Function that takes the generated value and returns the dependent generator.
+    /// - Returns: A generator that sequences the two computations, carrying no backward pass.
+    func boundForwardOnly<NewValue>(
+        forward: @escaping (Value) throws -> Generator<NewValue>,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) rethrows -> Generator<NewValue> {
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                // swiftlint:disable:next force_cast
+                forward: { try forward($0 as! Value).erase() },
+                backward: nil,
+                inputType: Value.self,
+                outputType: NewValue.self
+            ),
+            inner: erase()
+        ))
+    }
+
     /// Chains this generator with a dependent generator that is already type-erased, with a backward extraction function for reflection.
     ///
     /// Use this when `forward` selects from generators that exist before the bind is constructed: the typed overload erases whatever `forward` returns on every draw, boxing a fresh node and copying its operation. Use the typed overload when `forward` builds a generator per call, since erasing has to happen somewhere and doing it inside the bind keeps the call site typed. The two are semantically identical, since `erase()` is the identity on an already-erased generator.

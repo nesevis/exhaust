@@ -147,9 +147,11 @@ struct PublicGeneratorAPIReviewTests {
 
         switch Materializer.materialize(
             generator.gen,
-            prefix: sequence,
-            mode: .exact,
-            fallbackTree: tree
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
         ) {
             case let .success(materialized, freshTree, _):
                 #expect(materialized == value)
@@ -175,9 +177,11 @@ struct PublicGeneratorAPIReviewTests {
 
         switch Materializer.materialize(
             generator.gen,
-            prefix: sequence,
-            mode: .exact,
-            fallbackTree: tree
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
         ) {
             case let .success(materialized, freshTree, _):
                 #expect(materialized == value)

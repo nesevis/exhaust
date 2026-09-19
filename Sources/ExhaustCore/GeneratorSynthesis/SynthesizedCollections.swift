@@ -3,15 +3,15 @@ import Foundation
 // MARK: - Collection Generator Construction
 
 //
-// Conditional conformances to ``ExhaustGenerable`` (Array, Dictionary, Set) are not reliably resolved at runtime in xcframework builds — the linker may strip conformance records that are only reachable via dynamic `as?` casts.
+// Conditional conformances to ``SynthesisGenerable`` (Array, Dictionary, Set) are not reliably resolved at runtime in xcframework builds — the linker may strip conformance records that are only reachable via dynamic `as?` casts.
 //
-// ``SynthesizableCollection`` is an unconditional conformance on each collection type (no `where` clause), so it is always present in the binary. The element/key/value type's ``ExhaustGenerable`` conformance is checked at runtime inside the property, where unconditional conformances resolve correctly.
+// ``SynthesizableCollection`` is an unconditional conformance on each collection type (no `where` clause), so it is always present in the binary. The element/key/value type's ``SynthesisGenerable`` conformance is checked at runtime inside the property, where unconditional conformances resolve correctly.
 
-/// Provides a generator for standard library collection types without relying on conditional ``ExhaustGenerable`` conformances.
+/// Provides a generator for standard library collection types without relying on conditional ``SynthesisGenerable`` conformances.
 ///
-/// Each conformance is unconditional (no `where` clause) so the linker cannot strip it. The element type's ``ExhaustGenerable`` conformance is checked at runtime inside ``synthesizedGenerator``, returning `nil` when the element type has no generator.
+/// Each conformance is unconditional (no `where` clause) so the linker cannot strip it. The element type's ``SynthesisGenerable`` conformance is checked at runtime inside ``synthesizedGenerator``, returning `nil` when the element type has no generator.
 package protocol SynthesizableCollection {
-    /// Returns a generator for this collection type, or `nil` if the element/key/value types do not conform to ``ExhaustGenerable``.
+    /// Returns a generator for this collection type, or `nil` if the element/key/value types do not conform to ``SynthesisGenerable``.
     static var synthesizedGenerator: AnyGenerator? { get }
 }
 
@@ -45,9 +45,9 @@ extension Set: SynthesizableCollection {
     }
 }
 
-/// Resolves a generator for any type, trying ``ExhaustGenerable`` first and ``SynthesizableCollection`` as a fallback for collection types whose conditional conformances may not survive xcframework linking.
+/// Resolves a generator for any type, trying ``SynthesisGenerable`` first and ``SynthesizableCollection`` as a fallback for collection types whose conditional conformances may not survive xcframework linking.
 func resolveGenerator(for type: Any.Type) -> AnyGenerator? {
-    if let generable = type as? ExhaustGenerable.Type {
+    if let generable = type as? SynthesisGenerable.Type {
         return generable.defaultGenerator
     }
     if let collection = type as? SynthesizableCollection.Type {
@@ -59,11 +59,11 @@ func resolveGenerator(for type: Any.Type) -> AnyGenerator? {
 // MARK: - Discovered Collection Generators
 
 //
-// ``SynthesizableCollection`` only covers collections whose element/key/value types are themselves ``ExhaustGenerable``. A collection of a nested `Decodable` type — `[Address]`, `Set<Shape>`, `[String: Lineitem]` — has no built-in element generator, so without this it would pin to the example. ``DiscoverableCollection`` discovers the element type's shape from a representative element of the example and builds a real element generator, wrapped in the standard collection combinator so the length and contents vary like a hand-written collection generator.
+// ``SynthesizableCollection`` only covers collections whose element/key/value types are themselves ``SynthesisGenerable``. A collection of a nested `Decodable` type — `[Address]`, `Set<Shape>`, `[String: Lineitem]` — has no built-in element generator, so without this it would pin to the example. ``DiscoverableCollection`` discovers the element type's shape from a representative element of the example and builds a real element generator, wrapped in the standard collection combinator so the length and contents vary like a hand-written collection generator.
 //
 // The conformances are unconditional (matching ``SynthesizableCollection``) so they survive xcframework linking; the element type's `Decodable` conformance is checked at runtime inside each property.
 
-/// Builds a generator for a standard library collection of a non-``ExhaustGenerable`` element type by discovering the element from a representative example value.
+/// Builds a generator for a standard library collection of a non-``SynthesisGenerable`` element type by discovering the element from a representative example value.
 package protocol DiscoverableCollection {
     /// Returns a generator that varies the collection's length and contents, or `nil` when the element type is not `Decodable` or the example has no representative element to discover from.
     static func discoveredGenerator(fromExample jsonValue: Any, codingPath: [any CodingKey]) -> AnyGenerator?
@@ -134,7 +134,7 @@ private func discoverElementGenerator(
     return build(elementType)
 }
 
-/// Builds an example-driven generator for a collection of a non-``ExhaustGenerable`` element type, or `nil` when `type` is not such a collection.
+/// Builds an example-driven generator for a collection of a non-``SynthesisGenerable`` element type, or `nil` when `type` is not such a collection.
 func makeDiscoveredCollectionGenerator(
     for type: Any.Type,
     fromExample jsonValue: Any,

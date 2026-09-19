@@ -34,8 +34,10 @@ extension FuzzRunner {
         let fieldIndex = Int(prng.next(upperBound: UInt64(FuzzTunables.reflectionGraftPositionSpan)))
         guard case let .success(anyParent, _, _) = Materializer.materializeAny(
             erasedGen,
-            prefix: parent.sequence,
-            mode: .exact
+            context: .init(
+                prefix: parent.sequence,
+                mode: .exact
+            )
         ),
             let parentValue = anyParent as? Output
         else {
@@ -52,8 +54,10 @@ extension FuzzRunner {
         let sequence = ChoiceSequence.flatten(tree)
         guard case let .success(anyValue, _, _) = Materializer.materializeAny(
             erasedGen,
-            prefix: sequence,
-            mode: .exact
+            context: .init(
+                prefix: sequence,
+                mode: .exact
+            )
         ),
             let value = anyValue as? Output
         else {

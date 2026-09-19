@@ -4,7 +4,7 @@
 ///
 /// This exists instead of the standard library's `Duration` so the `time:` mode carries no availability floor: `Duration` requires macOS 13 / iOS 16, while a fuzz run is otherwise deployable to the package's own minimum. Construct one with the unit factories, which keep the call site self-documenting (`.minutes(15)`, `.seconds(8)`) and admit no bare, unit-ambiguous number.
 ///
-/// - Important: The `#explore(time:)` mode is experimental. Its settings, report format, and search behavior may change in any release; every call site for that mode emits a build warning until it stabilizes.
+/// - Important: The `#explore(time:)` mode is experimental. Its settings, report format, and search behavior may change in any release.
 ///
 /// ```swift
 /// #explore(messageGen, time: .minutes(15)) { message in

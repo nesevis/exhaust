@@ -19,7 +19,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             let profile = try #require(analyzeLargeDomain(gen))
             let row = CoveringArrayRow(values: [0])
 
-            let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
             #expect(tree != nil)
         }
 
@@ -30,7 +30,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             // Too many values
             let row = CoveringArrayRow(values: [0, 1])
 
-            let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
             #expect(tree == nil)
         }
 
@@ -40,7 +40,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             let profile = try #require(analyzeLargeDomain(gen))
             let row = CoveringArrayRow(values: [0])
 
-            let tree = try #require(LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile))
+            let tree = try #require(CoveringArrayReplay.buildTree(row: row, profile: profile))
             // Single parameter should not be wrapped in a group
             if case .group = tree {
                 Issue.record("Single parameter should not be wrapped in group")
@@ -53,7 +53,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             let profile = try #require(analyzeLargeDomain(gen))
             let row = CoveringArrayRow(values: [0, 0])
 
-            let tree = try #require(LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile))
+            let tree = try #require(CoveringArrayReplay.buildTree(row: row, profile: profile))
             if case .group = tree {
                 // Expected
             } else {
@@ -73,7 +73,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             let valueCount = UInt64(profile.parameters[0].values.count)
             let row = CoveringArrayRow(values: [valueCount]) // one past the end
 
-            let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
             #expect(tree == nil)
         }
 
@@ -84,7 +84,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
 
             for i in 0 ..< UInt64(profile.parameters[0].values.count) {
                 let row = CoveringArrayRow(values: [i])
-                let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+                let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
                 #expect(tree != nil, "Index \(i) should produce a valid tree")
             }
         }
@@ -111,7 +111,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
 
             for i in 0 ..< UInt64(profile.parameters[0].values.count) {
                 let row = CoveringArrayRow(values: [i])
-                let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+                let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
                 #expect(tree != nil, "Pick index \(i) should produce a tree")
             }
         }
@@ -130,7 +130,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
 
             let badIndex = UInt64(profile.parameters[0].values.count)
             let row = CoveringArrayRow(values: [badIndex])
-            let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
             #expect(tree == nil)
         }
 
@@ -161,7 +161,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
                     values.append(0)
                 }
                 let row = CoveringArrayRow(values: values)
-                let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+                let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
                 #expect(tree != nil, "Pick index \(pickIndex) should produce a tree")
             }
         }
@@ -186,7 +186,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
                 }
                 let row = CoveringArrayRow(values: values)
                 let tree = try #require(
-                    LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    CoveringArrayReplay.buildTree(row: row, profile: profile),
                     "buildTree failed for pick index \(pickIndex)"
                 )
                 let value: (Bool, Int)? = try Interpreters.replay(gen, using: tree)
@@ -214,7 +214,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
                     values.append(0)
                 }
                 let row = CoveringArrayRow(values: values)
-                let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+                let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
                 #expect(tree != nil, "Sequence with length index \(i) should produce a tree")
             }
         }
@@ -235,7 +235,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
                 values.append(0)
             }
             let row = CoveringArrayRow(values: values)
-            let tree = try #require(LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile))
+            let tree = try #require(CoveringArrayReplay.buildTree(row: row, profile: profile))
 
             // Should contain a sequence with length 0
             let sequence = ChoiceSequence(tree)
@@ -260,7 +260,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             }
 
             let row = CoveringArrayRow(values: [0])
-            let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
+            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
             #expect(tree != nil)
         }
     }
@@ -279,7 +279,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             for i in 0 ..< UInt64(expectedCount) {
                 let row = CoveringArrayRow(values: [i])
                 let tree = try #require(
-                    LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    CoveringArrayReplay.buildTree(row: row, profile: profile),
                     "buildTree failed for value index \(i)"
                 )
                 let value = try #require(
@@ -306,7 +306,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             while let row = generator.next() {
                 rowCount += 1
                 let tree = try #require(
-                    LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    CoveringArrayReplay.buildTree(row: row, profile: profile),
                     "buildTree failed for row \(rowCount)"
                 )
                 let (a, b) = try #require(
@@ -335,7 +335,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
                 while let row = generator.next() {
                     rowCount += 1
                     let tree = try #require(
-                        LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                        CoveringArrayReplay.buildTree(row: row, profile: profile),
                         "buildTree failed for row \(rowCount)"
                     )
                     let array = try #require(
@@ -352,7 +352,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
                 for valueIndex in 0 ..< profile.domainSizes[0] {
                     let row = CoveringArrayRow(values: [valueIndex])
                     let tree = try #require(
-                        LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                        CoveringArrayReplay.buildTree(row: row, profile: profile),
                         "buildTree failed for value index \(valueIndex)"
                     )
                     let array = try #require(
@@ -380,7 +380,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             for valueIndex in 0 ..< UInt64(expectedCount) {
                 let row = CoveringArrayRow(values: [valueIndex])
                 let tree = try #require(
-                    LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    CoveringArrayReplay.buildTree(row: row, profile: profile),
                     "buildTree failed for value index \(valueIndex)"
                 )
                 let value = try #require(
@@ -412,7 +412,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             while let row = generator.next() {
                 replayedCount += 1
                 let tree = try #require(
-                    LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile),
+                    CoveringArrayReplay.buildTree(row: row, profile: profile),
                     "buildTree failed for row \(replayedCount)"
                 )
                 let (resized, plain) = try #require(

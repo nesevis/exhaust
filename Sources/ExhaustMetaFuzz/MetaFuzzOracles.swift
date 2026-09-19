@@ -371,7 +371,9 @@ extension MetaFuzz {
         value: Any,
         _ fuzzCase: MetaFuzzCase
     ) throws {
-        switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+        switch Materializer.materialize(gen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) {
             case let .success(materialized, freshTree, _):
                 guard anyEquals(materialized, value) else {
                     throw ExactRoundTripViolation("exact materialization produced \(materialized), not \(value), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
@@ -403,13 +405,17 @@ extension MetaFuzz {
     ) throws {
         let guidedSeed = prng.next()
         let mode = Materializer.Mode.guided(seed: guidedSeed, fallbackTree: fallbackTree)
-        switch Materializer.materialize(gen, prefix: mutated, mode: mode) {
+        switch Materializer.materialize(gen, context: .init(
+            prefix: mutated, mode: mode
+        )) {
             case let .success(_, freshTree, report):
                 if let convergence = report?.convergence, (0.0 ... 1.0).contains(convergence) == false {
                     throw GuidedTotalityViolation("convergence \(convergence) outside 0...1 for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                 }
                 let key = ChoiceSequence.flatten(freshTree, skipBindInners: true).clusterKey
-                switch Materializer.materialize(gen, prefix: mutated, mode: mode) {
+                switch Materializer.materialize(gen, context: .init(
+                    prefix: mutated, mode: mode
+                )) {
                     case let .success(_, secondTree, _):
                         let secondKey = ChoiceSequence.flatten(secondTree, skipBindInners: true).clusterKey
                         guard key == secondKey else {
@@ -432,8 +438,12 @@ extension MetaFuzz {
         fallbackTree: ChoiceTree?,
         _ fuzzCase: MetaFuzzCase
     ) throws {
-        let treeResult = Materializer.materializeAny(gen, prefix: prefix, mode: mode, fallbackTree: fallbackTree)
-        let flatResult = Materializer.materializeAnyFlat(gen, prefix: prefix, mode: mode, fallbackTree: fallbackTree)
+        let treeResult = Materializer.materializeAny(gen, context: .init(
+            prefix: prefix, mode: mode, fallbackTree: fallbackTree
+        ))
+        let flatResult = Materializer.materializeAnyFlat(gen, context: .init(
+            prefix: prefix, mode: mode, fallbackTree: fallbackTree
+        ))
         switch (treeResult, flatResult) {
             case let (.success(_, freshTree, treeReport), .success(_, flatSequence, flatReport)):
                 let flattened = ChoiceSequence.flatten(freshTree)
@@ -482,7 +492,9 @@ extension MetaFuzz {
         guard originalSequence.shortLexPrecedes(reducedSequence) == false else {
             throw ReductionShortlexViolation("reduction enlarged the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
-        switch Materializer.materialize(gen, prefix: reducedSequence, mode: .exact, fallbackTree: reducedTree) {
+        switch Materializer.materialize(gen, context: .init(
+            prefix: reducedSequence, mode: .exact, fallbackTree: reducedTree
+        )) {
             case let .success(materialized, _, _):
                 guard anyEquals(materialized, shrunk) else {
                     throw ReductionClosedLoopViolation("reduced sequence materializes to \(materialized), not the reported \(shrunk), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")

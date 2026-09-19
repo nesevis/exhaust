@@ -40,7 +40,7 @@ package extension Gen {
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements.
     ///   - range: The allowed range for array length.
-    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
+    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`.
     /// - Returns: A generator that produces arrays with length in the specified range.
     static func arrayOf<Output>(
         _ elementGenerator: Generator<Output>,
@@ -95,13 +95,15 @@ package extension Gen {
     /// - Parameters:
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
+    ///   - count: Optional generator for the entry count. Defaults to size-based count.
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
     /// - Note: Reflection decomposes the dictionary into key/value arrays via `Dictionary/keys` and `Dictionary/values`. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may degrade reduction quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: Generator<KeyOutput>,
-        _ valueGenerator: Generator<ValueOutput>
+        _ valueGenerator: Generator<ValueOutput>,
+        _ count: Generator<UInt64>? = nil
     ) -> Generator<[KeyOutput: ValueOutput]> {
-        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator), valueGenerator)
+        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, count), valueGenerator)
     }
 
     /// Generates dictionaries with entry count constrained to explicit bounds.
@@ -112,7 +114,7 @@ package extension Gen {
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     ///   - range: The allowed range for the entry count.
-    ///   - scaling: The distribution strategy for the entry count. Defaults to `.linear`
+    ///   - scaling: The distribution strategy for the entry count. Defaults to `.linear`.
     /// - Returns: A generator that produces dictionaries with entry count in the specified range.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: Generator<KeyOutput>,
@@ -200,7 +202,7 @@ package extension Gen {
     /// - Parameters:
     ///   - elementGenerator: The generator for set elements (must be Hashable).
     ///   - range: The allowed range for set size.
-    ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`
+    ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`.
     /// - Returns: A generator that produces sets with size in the specified range.
     static func setOf<Element: Hashable>(
         _ elementGenerator: Generator<Element>,
@@ -229,12 +231,14 @@ package extension Gen {
     ///
     /// Reduction drives sort keys toward zero, converging on the original generation order (identity permutation). Identical keys preserve relative order (stable sort), so partial reduction is well-behaved.
     ///
+    /// The key count depends on the drawn collection, so the dependence is reified as a forward-only bind: a shuffled array cannot be decomposed back into the order it came from, and analysis that cannot see the dependence would treat the shape as fixed.
+    ///
     /// - Parameter gen: An array generator whose output should be shuffled.
     /// - Returns: A generator that produces a randomly permuted array.
     static func shuffled<Element>(
         _ gen: Generator<some Collection<Element>>
     ) -> Generator<[Element]> {
-        gen.bind { array in
+        gen.boundForwardOnly { array in
             guard array.count > 1 else { return .pure(Array(array)) }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
@@ -309,14 +313,14 @@ package extension Gen {
 
     /// Generates a contiguous subrange of a generated collection.
     ///
-    /// Composes the input generator with ``slice(of:)`` via bind. Reduction comes for free: ``slice(of:)`` reduces toward shorter subranges and earlier start positions, and the inner generator reduces its elements independently.
+    /// Composes the input generator with ``slice(of:)`` via a forward-only bind. Reduction comes for free: ``slice(of:)`` reduces toward shorter subranges and earlier start positions, and the inner generator reduces its elements independently.
     ///
     /// - Parameter gen: A generator that produces a collection.
     /// - Returns: A generator that produces a contiguous subrange of the generated collection.
     static func slice<C: Collection>(
         of gen: Generator<C>
     ) -> Generator<C.SubSequence> {
-        gen.bind { collection in
+        gen.boundForwardOnly { collection in
             slice(of: collection)
         }
     }

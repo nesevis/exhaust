@@ -58,9 +58,10 @@ extension Generator where Operation == ReflectiveOperation {
             case let .chooseBits(min, max, tag, isRangeExplicit, scaling, _):
                 let range = formatBitRange(min: min, max: max, tag: tag)
                 var suffix = isRangeExplicit ? "" : " [derived]"
-                switch scaling {
+                switch scaling?.kind {
                     case .none: break
-                    case .some(.linear): suffix += " [linear]"
+                    case .some(.linear):
+                        suffix += scaling?.samplingBounds == nil ? " [linear]" : " [linear within sampling range]"
                     case .some(.exponential): suffix += " [exponential]"
                     case .some(.size):
                         suffix += " [size]"

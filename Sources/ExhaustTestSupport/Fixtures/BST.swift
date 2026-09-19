@@ -21,9 +21,17 @@ package enum BST: Equatable, Hashable, CustomStringConvertible {
 
     package static func arbitraryRecursive(maxDepth: UInt64 = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> Generator<BST> {
         Gen.recursive(baseValue: .leaf, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
-            let nodeBranch = Gen.zip(recurse(), Gen.choose(in: valueRange), recurse()).map { left, value, right in
-                BST.node(left: left, value: value, right: right)
-            }
+            let nodeBranch = Gen.contramap(
+                { (tree: BST) throws -> (BST, UInt, BST) in
+                    guard case let .node(left, value, right) = tree else {
+                        throw ReflectionError.couldNotMapInputToGenerator
+                    }
+                    return (left, value, right)
+                },
+                Gen.zip(recurse(), Gen.choose(in: valueRange), recurse()).map { left, value, right in
+                    BST.node(left: left, value: value, right: right)
+                }
+            )
             return Gen.pick(choices: [(1, Gen.just(.leaf)), (Int(remaining), nodeBranch)])
         }
     }

@@ -67,6 +67,34 @@ struct DateGeneratorTests {
             #expect(dates1 == dates2)
         }
 
+        @Test("Size scaling expands from the grid midpoint")
+        func sizeScalingExpandsFromTheGridMidpoint() throws {
+            let lower = DateGeneratorTests.epoch
+            let upper = lower.addingTimeInterval(86400 * 10)
+            let midpoint = lower.addingTimeInterval(86400 * 5)
+            let generator = #gen(.date(between: lower ... upper, interval: .days(1)))
+
+            let smallestDates = try #example(generator.resize(1), count: 20, seed: 42)
+            #expect(smallestDates.count == 20)
+            #expect(smallestDates.allSatisfy { $0 == midpoint })
+
+            let halfSizeGenerator = generator.resize(50)
+            let halfSizeDates = try #example(halfSizeGenerator, count: 50, seed: 42)
+            let expectedLower = lower.addingTimeInterval(86400 * 2)
+            let expectedUpper = lower.addingTimeInterval(86400 * 8)
+            #expect(halfSizeDates.count == 50)
+            #expect(halfSizeDates.allSatisfy { (expectedLower ... expectedUpper).contains($0) })
+            do {
+                _ = try Interpreters.reflect(halfSizeGenerator.gen, with: lower)
+                Issue.record("Expected reflection to reject a date outside the size-scaled range")
+            } catch let error as ReflectionError {
+                guard case .inputWasOutOfGeneratorRange = error else {
+                    Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
+                    return
+                }
+            }
+        }
+
         @Test("Week stride covers expected range")
         func weekStrideCoversExpectedRange() throws {
             let lower = DateGeneratorTests.jan1_2025

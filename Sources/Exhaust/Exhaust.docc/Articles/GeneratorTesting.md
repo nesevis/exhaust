@@ -10,7 +10,7 @@ A passing property test gives no signal about whether the generator explored its
 }
 ```
 
-`#examine` generates 200 samples (configurable), checks that each value roundtrips through the generator's backward pass (reflection), and records how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
+`#examine` generates 200 samples (configurable), checks each value through the generator's backward pass (reflection) when enabled, and records how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
 
 ```
 #examine: 200 samples, 0.115ms/sample
@@ -40,6 +40,16 @@ A passing property test gives no signal about whether the generator explored its
 - **Reflection round-trip**: each generated value is reflected back through the generator and the recovered choice tree is compared against the generation tree. A mismatch indicates a bug in a `mapped` or `bound` backward function, or a lossy mapping (such as unordered sets or dictionaries where reflection cannot recover the original element order). Forward-only generators (those using `.map` or `.bind` without a backward direction) are reported. Synthesised generators skip this check automatically.
 - **Replay determinism** (opt-in): when a trailing comparison closure is provided, each sample's choice tree is replayed twice and the two values are compared using the closure. A mismatch indicates non-determinism in the generator or its output type.
 - **Filter health**: for filtered generators, the acceptance rate and CGS tuning effectiveness are reported.
+
+### Skipping reflection
+
+Some generators intentionally discard information that reflection would need. Set and dictionary generators, for example, discard draw order and can collapse duplicate elements or keys. Use `.skipReflection` to skip that check while generation, coverage, filter health, and the optional replay check still run:
+
+```swift
+#examine(dictionaryGen, .skipReflection)
+```
+
+The examination can still pass when the remaining checks succeed, and the report sets `reflectionSkipped`. `.reflection(.silent)` has different behaviour: reflection still runs, failures remain in the report, and Exhaust suppresses only the issue output.
 
 ### Providing a replay check
 
@@ -89,6 +99,7 @@ Correctness checks (reflection round-trip, filter health) can fail the test. Cov
 | `.samples(N)` | 200 | Number of values to generate and validate. Takes a plain `Int`, unlike the other macros' budgets. |
 | `.replay(seed)` | — | Deterministic validation run. Accepts a raw `UInt64` or an encoded seed string. |
 | `.severity(.warning)` | `.error` | Default severity for all checks. `.error` fails the test, `.warning` reports without failing, `.silent` only populates the report. |
-| `.reflection(.warning)` | inherits | Severity override for reflection round-trip failures. |
+| `.reflection(.warning)` | inherits | Severity override for reflection round-trip failures. `.silent` retains failures in the report without producing issue output. |
+| `.skipReflection` | — | Skips the reflection round-trip check. Generation, coverage, filter health, and the optional replay check still run. |
 | `.filterHealth(.warning)` | inherits | Severity override for filter validity failures (a validity rate below 5% fails the check). |
 | `.suppress(.issueReporting)` | — | Silences issue reporting; assert on the returned `ExamineReport` instead. `.suppress(.logs)` and `.suppress(.all)` also available. |

@@ -98,7 +98,9 @@ extension MetaGeneratorPropertyTests {
                     continue
                 }
                 guard case let .success(materialized, _, _) = Materializer.materialize(
-                    gen, prefix: sequence, mode: .exact, fallbackTree: reducedTree
+                    gen, context: .init(
+                        prefix: sequence, mode: .exact, fallbackTree: reducedTree
+                    )
                 ) else {
                     Issue.record("Reduced sequence failed to materialize for recipe: \(recipe)")
                     continue

@@ -4,7 +4,7 @@
 //
 //  Canonical implementations for the Foundation-type generators. The public
 //  `ReflectiveGenerator.*` factories in the `Exhaust` module and the
-//  `ExhaustGenerable.defaultGenerator` conformances both forward here, so the
+//  `SynthesisGenerable.defaultGenerator` conformances both forward here, so the
 //  per-sample transform closures are authored — and therefore compiled
 //  optimized — inside the prebuilt `ExhaustCore` binary rather than in the
 //  consumer's debug build.
@@ -136,7 +136,7 @@ private func alphanumericString(
 package extension Gen {
     /// Generates dates within the given range, quantized to the grid of `interval` steps from the lower bound.
     ///
-    /// Sub-day intervals produce a fixed-second grid. Calendar intervals (`.days` through `.years`) advance with calendar arithmetic in `timeZone`, so month grids stay on the lower bound's day-of-month and day grids keep the lower bound's wall-clock time across the zone's DST transitions. `timeZone` also selects which zone's DST transitions problematic-value analysis includes; the UTC default has no DST transitions and fixed-length days, keeping screening rows identical across machines. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
+    /// Sub-day intervals produce a fixed-second grid. Calendar intervals (`.days` through `.years`) advance with calendar arithmetic in `timeZone`, so month grids stay on the lower bound's day-of-month and day grids keep the lower bound's wall-clock time across the zone's DST transitions. `timeZone` also selects which zone's DST transitions problematic-value analysis includes; the UTC default has no DST transitions and fixed-length days, keeping screening rows identical across machines. The sampled range grows linearly from the grid's midpoint toward both bounds as size increases. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
     static func date(
         between range: ClosedRange<Date>,
         interval: DateStride,
@@ -162,6 +162,7 @@ package extension Gen {
                 max: grid.stepCount.bitPattern64,
                 tag: .date,
                 isRangeExplicit: true,
+                scaling: .linear(originBits: (grid.stepCount / 2).bitPattern64),
                 typeTagPayload: .date(grid: grid)
             )
         ) { try .pure(Int64(bitPattern64: chooseBitsBitPattern($0))) }
@@ -259,6 +260,16 @@ package extension Gen {
         unicodeVersion: UnicodeVersion = .v17
     ) -> ReflectiveGenerator<String> {
         stringGenerator(from: unicodeVersion.scalarRangeSet, length: length, scaling: scaling)
+    }
+
+    /// Generates a Unicode string whose length comes from `lengths`, drawing from the version's blocks.
+    ///
+    /// Supply a ``chooseDerived(in:scaling:)`` length when the bounds should narrow sampling without narrowing reflection, so a longer string still reflects and reduces.
+    static func string(
+        lengths: Generator<UInt64>?,
+        unicodeVersion: UnicodeVersion = .v17
+    ) -> ReflectiveGenerator<String> {
+        stringGenerator(from: unicodeVersion.scalarRangeSet, lengths: lengths)
     }
 
     /// Generates a printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -371,6 +382,14 @@ private func stringGenerator(
     length: ClosedRange<UInt64>? = nil,
     scaling: SizeScaling<UInt64> = .linear
 ) -> ReflectiveGenerator<String> {
+    stringGenerator(from: srs, lengths: length.map { Gen.choose(in: $0, scaling: scaling) })
+}
+
+/// Builds the string pipeline from a length generator. A `nil` generator leaves the length scaling with the size parameter.
+private func stringGenerator(
+    from srs: ScalarRangeSet,
+    lengths: Generator<UInt64>?
+) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     let batch = ReflectiveOperation.SequenceElementBatch { bits in
         var characters: [Character] = []
@@ -380,14 +399,7 @@ private func stringGenerator(
         }
         return characters
     }
-    if let length {
-        return Gen.arrayOf(charGen, within: length, scaling: scaling, elementBatch: batch).wrapped(isReflective: true)
-            .mapped(
-                forward: { String($0) },
-                backward: { $0.unicodeScalars.map { Character($0) } }
-            )
-    }
-    return Gen.arrayOf(charGen, elementBatch: batch).wrapped(isReflective: true)
+    return Gen.arrayOf(charGen, lengths, elementBatch: batch).wrapped(isReflective: true)
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }
@@ -405,11 +417,7 @@ private let asciiScalarRangeSet: ScalarRangeSet =
 package extension Gen {
     /// Generates `Data` with size-scaled length, each byte uniform in 0...255.
     static func data() -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped(isReflective: true)
-            .mapped(
-                forward: { Data($0) },
-                backward: { Array($0) }
-            )
+        data(lengths: nil)
     }
 
     /// Generates `Data` with length in `range`, each byte uniform in 0...255.
@@ -417,11 +425,14 @@ package extension Gen {
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(
-            Gen.choose(in: UInt8.min ... UInt8.max),
-            within: range,
-            scaling: scaling
-        ).wrapped(isReflective: true).mapped(
+        data(lengths: Gen.choose(in: range, scaling: scaling))
+    }
+
+    /// Generates `Data` whose length comes from `lengths`, each byte uniform in 0...255.
+    ///
+    /// Supply a ``chooseDerived(in:scaling:)`` length when the bounds should narrow sampling without narrowing reflection, so longer data still reflects and reduces.
+    static func data(lengths: Generator<UInt64>?) -> ReflectiveGenerator<Data> {
+        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max), lengths).wrapped(isReflective: true).mapped(
             forward: { Data($0) },
             backward: { Array($0) }
         )

@@ -29,6 +29,11 @@ extension Materializer {
         /// While set, every read returns nothing and every skip is a no-op, without marking the cursor exhausted. A value reseed sets it for the walk of one subtree whose entries the cursor has already jumped past, so the subtree draws from the PRNG and the entries after it are still read from the prefix.
         var suspended = false
 
+        /// Sizes the flat-output reservation without exposing or copying the owned prefix.
+        var entryCount: Int {
+            entries.count
+        }
+
         static var empty: Cursor {
             Cursor(from: ChoiceSequence())
         }

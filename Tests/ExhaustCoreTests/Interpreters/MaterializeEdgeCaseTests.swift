@@ -63,13 +63,17 @@ struct MaterializeEdgeCaseTests {
             .value(.init(choice: ChoiceValue(0 as UInt64, tag: .double), validRange: 0 ... UInt64.max)),
         ]
         guard case let .success(guidedValue, guidedTree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .guided(seed: 1, fallbackTree: nil)
+            gen, context: .init(
+                prefix: prefix, mode: .guided(seed: 1, fallbackTree: nil)
+            )
         ) else {
             Issue.record("guided materialization rejected the prefix")
             return
         }
         let emitted = ChoiceSequence.flatten(guidedTree)
-        guard case let .success(exactValue, exactTree, _) = Materializer.materialize(gen, prefix: emitted, mode: .exact) else {
+        guard case let .success(exactValue, exactTree, _) = Materializer.materialize(gen, context: .init(
+            prefix: emitted, mode: .exact
+        )) else {
             Issue.record("exact materialization rejected the sequence guided materialization emitted")
             return
         }

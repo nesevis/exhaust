@@ -19,7 +19,9 @@ struct ReductionMaterializerTests {
             .value(.init(choice: ChoiceValue(UInt64(50), tag: .uint64), validRange: 0 ... 100)),
         ]
 
-        let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
+        let result = Materializer.materialize(gen, context: .init(
+            prefix: prefix, mode: .exact
+        ))
         guard case .rejected = result else {
             Issue.record("Expected .rejected for out-of-range inner value, got \(result)")
             return
@@ -48,8 +50,10 @@ struct ReductionMaterializerTests {
 
         let result = Materializer.materialize(
             generator,
-            prefix: prefix,
-            mode: .exact
+            context: .init(
+                prefix: prefix,
+                mode: .exact
+            )
         )
         guard case .rejected = result else {
             Issue.record("Expected .rejected for a filtered-out exact candidate, got \(result)")
@@ -77,8 +81,10 @@ struct ReductionMaterializerTests {
 
         guard case .failed = Materializer.materialize(
             generator,
-            prefix: prefix,
-            mode: .exact
+            context: .init(
+                prefix: prefix,
+                mode: .exact
+            )
         ) else {
             Issue.record("Expected .failed for a throwing transform")
             return
@@ -97,7 +103,9 @@ struct ReductionMaterializerTests {
             .value(.init(choice: ChoiceValue(UInt64(5), tag: .uint64), validRange: 0 ... 10)),
         ]
 
-        let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
+        let result = Materializer.materialize(gen, context: .init(
+            prefix: prefix, mode: .exact
+        ))
         guard case .rejected = result else {
             Issue.record("Expected .rejected for exhausted prefix")
             return
@@ -129,8 +137,10 @@ struct ReductionMaterializerTests {
 
         guard case let .success(value, tree, _) = Materializer.materialize(
             generator,
-            prefix: prefix,
-            mode: .exact
+            context: .init(
+                prefix: prefix,
+                mode: .exact
+            )
         ) else {
             Issue.record("Expected .success for stale branch metadata")
             return
@@ -174,8 +184,10 @@ struct ReductionMaterializerTests {
 
         guard case .rejected = Materializer.materialize(
             generator,
-            prefix: prefix,
-            mode: .exact
+            context: .init(
+                prefix: prefix,
+                mode: .exact
+            )
         ) else {
             Issue.record("Expected .rejected for an unavailable branch ID")
             return
@@ -198,7 +210,9 @@ struct ReductionMaterializerTests {
 
         // Exact mode should replay both inner AND bound values from prefix.
         guard case let .success(value, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, context: .init(
+                prefix: prefix, mode: .exact
+            )
         ) else {
             Issue.record("Expected .success for bind replay")
             return
@@ -227,7 +241,9 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(value, _, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, context: .init(
+                prefix: prefix, mode: .exact
+            )
         ) else {
             Issue.record("Expected .success — bound value should be clamped, not rejected")
             return
@@ -249,8 +265,10 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(value, tree, _) = Materializer.materialize(
-            gen, prefix: prefix,
-            mode: .guided(seed: 42, fallbackTree: nil)
+            gen, context: .init(
+                prefix: prefix,
+                mode: .guided(seed: 42, fallbackTree: nil)
+            )
         ) else {
             Issue.record("Expected .success — guided should clamp, not reject")
             return
@@ -272,8 +290,10 @@ struct ReductionMaterializerTests {
         let prefix: ChoiceSequence = []
 
         guard case let .success(value, _, _) = Materializer.materialize(
-            gen, prefix: prefix,
-            mode: .guided(seed: 42, fallbackTree: nil)
+            gen, context: .init(
+                prefix: prefix,
+                mode: .guided(seed: 42, fallbackTree: nil)
+            )
         ) else {
             Issue.record("Expected .success — guided should fall back to PRNG")
             return
@@ -297,8 +317,10 @@ struct ReductionMaterializerTests {
 
         // Guided mode with fallback tree should succeed.
         guard case let .success(_, tree, _) = Materializer.materialize(
-            gen, prefix: prefix,
-            mode: .guided(seed: ZobristHash.hash(of: prefix), fallbackTree: originalTree)
+            gen, context: .init(
+                prefix: prefix,
+                mode: .guided(seed: ZobristHash.hash(of: prefix), fallbackTree: originalTree)
+            )
         ) else {
             Issue.record("Expected .success for guided bind materialization")
             return
@@ -325,7 +347,9 @@ struct ReductionMaterializerTests {
 
         // ReductionMaterializer should produce all branches.
         guard case let .success(value, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact, materializePicks: true
+            gen, context: .init(
+                prefix: prefix, mode: .exact, materializePicks: true
+            )
         ) else {
             Issue.record("Expected .success for pick materialization")
             return
@@ -356,13 +380,17 @@ struct ReductionMaterializerTests {
 
         // Run twice with same prefix — should produce deterministic results.
         guard case let .success(value1, tree1, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact, materializePicks: true
+            gen, context: .init(
+                prefix: prefix, mode: .exact, materializePicks: true
+            )
         ) else {
             Issue.record("First materialization failed")
             return
         }
         guard case let .success(value2, tree2, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact, materializePicks: true
+            gen, context: .init(
+                prefix: prefix, mode: .exact, materializePicks: true
+            )
         ) else {
             Issue.record("Second materialization failed")
             return
@@ -384,7 +412,9 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(_, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, context: .init(
+                prefix: prefix, mode: .exact
+            )
         ) else {
             Issue.record("Expected .success")
             return
@@ -410,7 +440,9 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(_, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, context: .init(
+                prefix: prefix, mode: .exact
+            )
         ) else {
             Issue.record("Expected .success")
             return
@@ -449,7 +481,9 @@ struct ReductionMaterializerTests {
         }
 
         guard case let .success(_, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, context: .init(
+                prefix: prefix, mode: .exact
+            )
         ) else {
             Issue.record("Expected .success")
             return
@@ -476,8 +510,10 @@ struct ReductionMaterializerTests {
 
         // Empty prefix, with fallback tree — should use fallback value.
         guard case let .success(value, _, _) = Materializer.materialize(
-            gen, prefix: [],
-            mode: .guided(seed: 42, fallbackTree: fallbackTree)
+            gen, context: .init(
+                prefix: [],
+                mode: .guided(seed: 42, fallbackTree: fallbackTree)
+            )
         ) else {
             Issue.record("Expected .success")
             return
@@ -507,8 +543,10 @@ struct ReductionMaterializerTests {
 
         guard case .rejected = Materializer.materialize(
             generator,
-            prefix: prefix,
-            mode: .exact
+            context: .init(
+                prefix: prefix,
+                mode: .exact
+            )
         ) else {
             Issue.record("Expected .rejected for \(elementCount) elements")
             return
@@ -528,8 +566,10 @@ struct ReductionMaterializerTests {
 
         guard case let .success(value, _, _) = Materializer.materialize(
             generator,
-            prefix: prefix,
-            mode: .exact
+            context: .init(
+                prefix: prefix,
+                mode: .exact
+            )
         ) else {
             Issue.record("Expected .success")
             return
@@ -555,8 +595,10 @@ struct ReductionMaterializerTests {
 
         guard case let .success(value, tree, _) = Materializer.materialize(
             generator,
-            prefix: [],
-            mode: .guided(seed: 42, fallbackTree: fallbackTree)
+            context: .init(
+                prefix: [],
+                mode: .guided(seed: 42, fallbackTree: fallbackTree)
+            )
         ) else {
             Issue.record("Expected .success")
             return
@@ -583,7 +625,9 @@ struct ReductionMaterializerTests {
         let prefix = ChoiceSequence(originalTree)
 
         guard case let .success(value, _, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, context: .init(
+                prefix: prefix, mode: .exact
+            )
         ) else {
             Issue.record("Expected .success")
             return

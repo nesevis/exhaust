@@ -139,9 +139,9 @@ package extension Gen {
             .map { collection[$0 % count] }
     }
 
-    /// Internal helper for choose ranges derived from runtime context (for example ``getSize``).
+    /// Internal helper for a sampling range that does not limit reflection.
     ///
-    /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
+    /// Use this for bounds derived from runtime context or framework policy. Values outside `range` remain reflectable and reducible.
     static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         type _: Output.Type = Output.self
@@ -153,9 +153,35 @@ package extension Gen {
         )
     }
 
+    /// Internal helper for a size-scaled sampling range that does not limit reflection.
+    static func chooseDerived<Output: BitPatternConvertible>(
+        in range: ClosedRange<Output>,
+        scaling: SizeScaling<Output>
+    ) -> Generator<Output> {
+        choose(
+            in: range,
+            type: Output.self,
+            isRangeExplicit: false,
+            scaling: scaling.erased
+        )
+    }
+
+    /// Samples from one unsigned range while retaining a wider range for reflection and reduction.
+    static func chooseDerived(
+        in range: ClosedRange<UInt64>,
+        samplingWithin samplingRange: ClosedRange<UInt64>
+    ) -> Generator<UInt64> {
+        choose(
+            in: range,
+            type: UInt64.self,
+            isRangeExplicit: false,
+            scaling: .linear(originBits: nil, samplingWithin: samplingRange)
+        )
+    }
+
     /// Generates a random value within a range, using a ``SizeScaling`` distribution to control how tightly values cluster around an origin at small sizes.
     ///
-    /// The scaling strategy is erased to ``ChooseBitsScaling`` and attached directly to the emitted ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` operation. Generation interpreters consult the active generation size at sample time and narrow the effective sampling range relative to `range`. Reflection, analysis, and the reducer observe the declared range unchanged.
+    /// The scaling strategy is erased to ``ChooseBitsScaling`` and attached directly to the emitted ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` operation. Generation interpreters consult the active generation size at sample time and narrow the effective sampling range relative to `range`. Reflection enforces that effective range inside an explicit resize and otherwise uses the full size-100 range. Analysis and the reducer observe the declared range unchanged.
     ///
     /// - Parameters:
     ///   - range: The full range of values to generate from at size 100.
@@ -186,42 +212,46 @@ package extension Gen {
         scaling: ChooseBitsScaling,
         size: UInt64
     ) -> ClosedRange<UInt64> {
+        let sampled = scaling.samplingRange(within: min ... max)
+        let lowerBits = sampled.lowerBound
+        let upperBits = sampled.upperBound
+
         let origin: UInt64?
         let isExponential: Bool
-        switch scaling {
-            case let .linear(o):
-                origin = o
+        switch scaling.kind {
+            case let .linear(configuredOrigin):
+                origin = configuredOrigin
                 isExponential = false
-            case let .exponential(o):
-                origin = o
+            case let .exponential(configuredOrigin):
+                origin = configuredOrigin
                 isExponential = true
             case .size:
                 // A pinned size collapses the range at every size, including 100, so it never reaches the full-size early return below.
-                let pinned = Swift.min(Swift.max(size, min), max)
+                let pinned = Swift.min(Swift.max(size, lowerBits), upperBits)
                 return pinned ... pinned
         }
 
         let fraction = Swift.min(Double(size) / 100.0, 1.0)
         guard fraction < 1.0 else {
-            return min ... max
+            return sampled
         }
 
         if tag.isFloatingPoint {
             return applyFloatingPointScaling(
-                min: min, max: max, tag: tag,
+                min: lowerBits, max: upperBits, tag: tag,
                 originBits: origin, fraction: fraction,
                 isExponential: isExponential
             )
         }
 
-        let originBits = Swift.min(Swift.max(origin ?? tag.simplestBitPattern, min), max)
+        let originBits = Swift.min(Swift.max(origin ?? tag.simplestBitPattern, lowerBits), upperBits)
         let lowerDistance = scaledDistance(
-            originBits - min,
+            originBits - lowerBits,
             fraction: fraction,
             isExponential: isExponential
         )
         let upperDistance = scaledDistance(
-            max - originBits,
+            upperBits - originBits,
             fraction: fraction,
             isExponential: isExponential
         )

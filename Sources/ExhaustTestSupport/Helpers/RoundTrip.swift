@@ -18,9 +18,11 @@ package func roundTripBatch<Output: Equatable>(
         let sequence = ChoiceSequence(tree)
         guard case let .success(materialized, _, _) = Materializer.materialize(
             generator,
-            prefix: sequence,
-            mode: .exact,
-            fallbackTree: tree
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
         ) else {
             Issue.record("Expected .success")
             continue

@@ -211,10 +211,12 @@ package struct ReductionMachine: ProbeSessionState {
         var tree = initialTree
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             erasedGen,
-            prefix: sequence,
-            mode: .exact,
-            fallbackTree: initialTree,
-            materializePicks: true
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: initialTree,
+                materializePicks: true
+            )
         ) {
             tree = fullTree
             sequence = ChoiceSequence(fullTree)

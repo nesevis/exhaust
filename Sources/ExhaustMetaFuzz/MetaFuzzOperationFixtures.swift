@@ -176,10 +176,12 @@ package let metaFuzzOperationFixtures: [MetaFuzzOperationFixture] = [
     .init(
         name: "getSize",
         recipe: .combinator(.getSized),
-        publicConstruction: .direct(entryPoint: "ReflectiveGenerator.getSize(_:)"),
+        publicConstruction: .packageOnly(
+            reason: "Uses Gen.getSize's raw size-read bind; public ReflectiveGenerator.getSize emits a reducible size-pinned choice instead"
+        ),
         interpreterCapabilities: .init(
             backward: .normalizing,
-            screening: .dependentChoicesUnsupported
+            screening: .supported
         )
     ),
     .init(

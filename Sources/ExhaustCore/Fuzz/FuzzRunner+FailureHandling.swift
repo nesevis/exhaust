@@ -211,11 +211,13 @@ extension FuzzRunner {
             parentGeneration = parent.generation
             if case let .success(value, _, _) = Materializer.materializeAny(
                 erasedGen,
-                prefix: parent.sequence,
-                mode: .exact,
-                fallbackTree: parent.tree,
-                skipTree: true,
-                collectDecodingReport: false
+                context: .init(
+                    prefix: parent.sequence,
+                    mode: .exact,
+                    fallbackTree: parent.tree,
+                    skipTree: true,
+                    collectDecodingReport: false
+                )
             ) {
                 parentValue = String(reflecting: value)
             }

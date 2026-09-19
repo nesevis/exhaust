@@ -46,7 +46,9 @@ struct MetaGeneratorPropertyTests {
                     return nil
                 }
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
+                    prefix: sequence, mode: .exact, fallbackTree: reflectedTree
+                )) else {
                     return nil
                 }
                 return anyEquals(materialized, replayed)

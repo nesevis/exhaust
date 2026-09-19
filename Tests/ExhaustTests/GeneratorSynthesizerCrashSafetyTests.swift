@@ -18,7 +18,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
         #expect(values.allSatisfy { $0.payload == nil })
     }
 
-    /// A top-level array of a non-ExhaustGenerable element discovers the element type from a representative element of the example, so the array varies in both length and contents rather than pinning to the example.
+    /// A top-level array of a non-SynthesisGenerable element discovers the element type from a representative element of the example, so the array varies in both length and contents rather than pinning to the example.
     @Test("Top-level collection of non-generable elements varies in length and contents")
     func topLevelStructArrayVaries() throws {
         let generator = try #gen([Member].self, from: """
@@ -92,7 +92,7 @@ struct GeneratorSynthesizerKeyAddressingTests {
     }
 }
 
-/// Regression tests for collection-element recursion: a collection of a non-ExhaustGenerable struct discovers its element type from a representative example element and varies in length and contents, rather than pinning the whole collection to the example.
+/// Regression tests for collection-element recursion: a collection of a non-SynthesisGenerable struct discovers its element type from a representative example element and varies in length and contents, rather than pinning the whole collection to the example.
 @Suite("Generator Synthesizer — collection element recursion")
 struct GeneratorSynthesizerCollectionTests {
     @Test("Nested array of a non-generable struct varies")
@@ -154,7 +154,7 @@ struct GeneratorSynthesizerNestedContainerTests {
     }
 }
 
-/// Regression tests for unkeyed element discovery: a custom `init(from:)` that decodes non-`ExhaustGenerable` types from an unkeyed container records each element's generator, so the shape reflects all positions and every field varies.
+/// Regression tests for unkeyed element discovery: a custom `init(from:)` that decodes non-`SynthesisGenerable` types from an unkeyed container records each element's generator, so the shape reflects all positions and every field varies.
 @Suite("Generator Synthesizer — unkeyed non-primitive elements")
 struct SynthesizerUnkeyedElementTests {
     @Test("Non-primitive elements decoded from an unkeyed container are recorded and vary")
@@ -184,7 +184,7 @@ struct SynthesizerSuperDecoderTests {
     }
 }
 
-/// Regression tests for single-value element discovery: a newtype wrapper that decodes a non-`ExhaustGenerable` type through a single-value container records the inner type's generator, so the wrapper varies instead of pinning.
+/// Regression tests for single-value element discovery: a newtype wrapper that decodes a non-`SynthesisGenerable` type through a single-value container records the inner type's generator, so the wrapper varies instead of pinning.
 @Suite("Generator Synthesizer — single-value non-primitive")
 struct SynthesizerSingleValueTests {
     @Test("Non-primitive type decoded through a single-value container varies")

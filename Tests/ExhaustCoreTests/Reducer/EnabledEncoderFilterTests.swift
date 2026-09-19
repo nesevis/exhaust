@@ -106,7 +106,9 @@ struct EnabledEncoderFilterTests {
 
         // Rematerialize tree for pass 2
         guard case let .success(_, pass1Tree, _) = Materializer.materialize(
-            gen, prefix: afterStructuralSequence, mode: .exact, fallbackTree: tree, materializePicks: true
+            gen, context: .init(
+                prefix: afterStructuralSequence, mode: .exact, fallbackTree: tree, materializePicks: true
+            )
         ) else {
             Issue.record("Failed to rematerialize after structural pass")
             return

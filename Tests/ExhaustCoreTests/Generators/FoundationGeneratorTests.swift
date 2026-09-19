@@ -4,7 +4,7 @@
 //
 //  Exercises the consolidated `Gen.*` Foundation factories directly at the
 //  package level. The public `ReflectiveGenerator.*` API and the
-//  `ExhaustGenerable.defaultGenerator` conformances both forward here, so these
+//  `SynthesisGenerable.defaultGenerator` conformances both forward here, so these
 //  tests guard the single source of truth for both paths.
 //
 

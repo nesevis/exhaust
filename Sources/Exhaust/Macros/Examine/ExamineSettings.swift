@@ -46,6 +46,15 @@ public enum ExamineSettings: Sendable {
     /// The reflection check generates a value, reflects it back through the generator to obtain a choice tree, replays that tree, and compares the result. A mismatch indicates a broken `backward` mapping or a non-injective generator that reflection cannot invert.
     case reflection(ExamineSeverity)
 
+    /// Skips the reflection round-trip check while generation, replay, and health checks continue.
+    ///
+    /// Use this for dictionaries, sets, forward-only transforms, or derived generators whose reflection is best effort. Supply a trailing equivalence closure to check replay determinism. Unlike `.reflection(.silent)`, this skips reflection instead of merely suppressing its diagnostics.
+    ///
+    /// ```swift
+    /// #examine(generator, .skipReflection) { $0 == $1 }
+    /// ```
+    case skipReflection
+
     /// Controls the severity of filter validity rate failures.
     ///
     /// The filter health check monitors what fraction of generated candidates survive each filter predicate. A validity rate below 5% triggers a failure, indicating that the generator is spending most of its budget on rejection.
@@ -81,6 +90,8 @@ public enum ExamineSettings: Sendable {
 package struct ExamineReportingConfiguration {
     /// Severity for reflection round-trip failures.
     var reflectionSeverity: ExamineSeverity
+    /// Skips only the reflection round-trip check; generation, replay, and health checks still run.
+    var skipReflection: Bool
     /// Severity for filter validity rate failures.
     var filterHealthSeverity: ExamineSeverity
     /// Number of values to generate and validate.
@@ -98,6 +109,7 @@ package struct ExamineReportingConfiguration {
     init(from settings: [ExamineSettings]) {
         var globalSeverity: ExamineSeverity?
         var reflectionOverride: ExamineSeverity?
+        var skipReflection = false
         var filterHealthOverride: ExamineSeverity?
         var samples = 200
         var replaySeed: ReplaySeed?
@@ -109,6 +121,8 @@ package struct ExamineReportingConfiguration {
                     globalSeverity = value
                 case let .reflection(value):
                     reflectionOverride = value
+                case .skipReflection:
+                    skipReflection = true
                 case let .filterHealth(value):
                     filterHealthOverride = value
                 case let .samples(count):
@@ -123,6 +137,7 @@ package struct ExamineReportingConfiguration {
 
         let base = globalSeverity ?? .error
         reflectionSeverity = reflectionOverride ?? base
+        self.skipReflection = skipReflection
         filterHealthSeverity = filterHealthOverride ?? base
         self.samples = samples
         self.replaySeed = replaySeed
