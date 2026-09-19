@@ -87,10 +87,12 @@ extension ReductionMachine {
             case .rematerialize:
                 if case let .success(_, fullTree, _) = Materializer.materializeAny(
                     gen,
-                    prefix: sequence,
-                    mode: .exact,
-                    fallbackTree: tree,
-                    materializePicks: true
+                    context: .init(
+                        prefix: sequence,
+                        mode: .exact,
+                        fallbackTree: tree,
+                        materializePicks: true
+                    )
                 ) {
                     tree = fullTree
                 }

@@ -72,7 +72,7 @@ package struct LargeDomainProfile: @unchecked Sendable {
 
     /// The screening parameters extracted from the generator's choice tree.
     package let parameters: [ScreeningParameter]
-    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``LargeDomainCoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``CoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     package let originalTree: ChoiceTree?
 
     /// Creates a profile with the given parameters and optional original tree template.
@@ -99,7 +99,7 @@ extension LargeDomainProfile: ScreeningProfile {
     }
 
     package func buildTree(from row: CoveringArrayRow) -> ChoiceTree? {
-        LargeDomainCoveringArrayReplay.buildTree(row: row, profile: self)
+        CoveringArrayReplay.buildTree(row: row, profile: self)
     }
 }
 

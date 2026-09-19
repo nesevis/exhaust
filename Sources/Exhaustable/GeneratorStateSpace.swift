@@ -9,8 +9,8 @@
 /// | `.medium` | 10,000 | 20 | Unchanged |
 /// | `.full` | Unchanged | Unchanged | Unchanged |
 ///
-/// Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. Nested annotations can narrow an inherited state space; explicit payload overrides keep their own domains.
-public enum GeneratorStateSpace: CaseIterable, Sendable {
+/// Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. Nested annotations can narrow an inherited state space; explicit payload overrides keep their own domains. Presets compare in declaration order, from narrowest to widest, independently of any individual domain limit.
+public enum GeneratorStateSpace: CaseIterable, Comparable, Sendable {
     /// Favors frequent collisions with the smallest default domains.
     case tiny
     /// Favors collisions while retaining more variation than `.tiny`.
@@ -62,6 +62,6 @@ public enum GeneratorStateSpace: CaseIterable, Sendable {
 
     /// Prevents a nested annotation from widening the sampling policy selected by its parent.
     package func limited(by ceiling: Self) -> Self {
-        (numericMagnitude ?? Int.max) <= (ceiling.numericMagnitude ?? Int.max) ? self : ceiling
+        min(self, ceiling)
     }
 }

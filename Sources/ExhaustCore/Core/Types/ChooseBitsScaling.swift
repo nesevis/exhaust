@@ -47,9 +47,12 @@ package struct ChooseBitsScaling: Sendable, Hashable {
         Self(kind: .linear(originBits: originBits), samplingBounds: samplingBounds)
     }
 
-    /// Exponential scaling across the declared range.
-    package static func exponential(originBits: UInt64?) -> Self {
-        Self(kind: .exponential(originBits: originBits), samplingBounds: nil)
+    /// Exponential scaling, optionally confined to bounds narrower than the declared range.
+    package static func exponential(
+        originBits: UInt64?,
+        samplingWithin samplingBounds: ClosedRange<UInt64>? = nil
+    ) -> Self {
+        Self(kind: .exponential(originBits: originBits), samplingBounds: samplingBounds)
     }
 
     /// Pins the sample to the current generation size.

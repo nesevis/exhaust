@@ -10,9 +10,11 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
     /// Supplies construction metadata for an annotated type.
     ///
     /// Apply `@Exhaustable` rather than conforming manually. Importing `ExhaustGenerators` or `Exhaust` then exposes the annotated type's `gen(...)` factory.
-    public protocol Conformance {
+    public protocol Conformance: SendableMetatype {
         /// Describes the type's constructors in declaration order.
-        static var __generatorDescriptor: TypeDescriptor<Self> { get }
+        ///
+        /// The requirement is `nonisolated` because derivation reads it synchronously from whichever thread draws a value. A global-actor-isolated type satisfies it whenever its construction and its stored-property reads are themselves nonisolated, which covers a value type of `Sendable` payloads and a final class whose initializer the macro generates. Isolated state that genuinely needs the actor fails to compile at the annotated declaration rather than escaping the actor at run time.
+        nonisolated static var __generatorDescriptor: TypeDescriptor<Self> { get }
     }
 
     /// Describes the constructors of an annotated type. An enum has one constructor per case; a struct or final class has one constructor whose payload is its stored properties.
@@ -116,6 +118,8 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 /// Start without arguments. Set limits here only when every derived use of the type should inherit them; an individual test can override the root settings through `Type.gen(...)`.
 ///
 /// The macro supports enums, structs, final classes, and generic forms of those declarations. It diagnoses unsupported storage and initialization patterns at the declaration.
+///
+/// - Important: `@Exhaustable` is experimental. Its arguments, supported declarations, generated members, diagnostics, and source compatibility may change in any release.
 ///
 /// - Parameters:
 ///   - maximumDepth: The default recursive nesting ceiling. Defaults to 10.

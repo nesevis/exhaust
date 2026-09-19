@@ -156,7 +156,7 @@ struct LargeDomainCoveringArrayReplayTests {
 
         var replayedCount = 0
         while let row = generator.next() {
-            guard let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+            guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
             let value: (Int, Int)? = try Interpreters.replay(gen, using: tree)
@@ -178,7 +178,7 @@ struct LargeDomainCoveringArrayReplayTests {
 
         var seenValues: Set<Int> = []
         while let row = generator.next() {
-            guard let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+            guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
             if let (a, b): (Int, Int) = try Interpreters.replay(gen, using: tree) {
@@ -818,7 +818,9 @@ struct CharacterProblematicIndicesTests {
                 guard let tree = profile.buildTree(from: row) else { continue }
                 let mode = Materializer.Mode.guided(seed: UInt64(rowsTested), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
-                    gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    gen, context: .init(
+                        prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    )
                 ) else { continue }
                 for char in chars {
                     for scalar in char.unicodeScalars {
@@ -836,7 +838,9 @@ struct CharacterProblematicIndicesTests {
                 guard let tree = profile.buildTree(from: row) else { continue }
                 let mode = Materializer.Mode.guided(seed: UInt64(i), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
-                    gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    gen, context: .init(
+                        prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                    )
                 ) else { continue }
                 for char in chars {
                     for scalar in char.unicodeScalars {

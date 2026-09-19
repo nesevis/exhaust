@@ -120,9 +120,11 @@ private func materialize<Output: Equatable>(
     let sequence = ChoiceSequence.flatten(tree)
     guard case let .success(value, _, _) = Materializer.materialize(
         gen.gen,
-        prefix: sequence,
-        mode: .exact,
-        fallbackTree: tree
+        context: .init(
+            prefix: sequence,
+            mode: .exact,
+            fallbackTree: tree
+        )
     ),
         let typed = value as? Output
     else {

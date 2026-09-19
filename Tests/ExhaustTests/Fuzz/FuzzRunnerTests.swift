@@ -108,9 +108,9 @@ struct FuzzRunnerTests {
 
         #expect(result.counts.totalAttempts == 4)
         #expect(result.counts.screeningAttempts == 4)
-        #expect(result.counts.screeningRejectedAttempts == 2)
-        #expect(result.counts.evaluatedSearchCases == 2)
-        #expect(result.counts.totalPropertyInvocations == 2)
+        #expect(result.counts.screeningRejectedAttempts == 3)
+        #expect(result.counts.evaluatedSearchCases == 1)
+        #expect(result.counts.totalPropertyInvocations == 1)
     }
 
     @Test("Phase skipping starts the run directly in the mutation phase")

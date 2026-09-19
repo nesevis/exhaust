@@ -7,6 +7,7 @@ final class BudgetedGeneratorDerivation {
     let budget: GeneratorNodeBudget
     private(set) var built: [NodeBudgetKey: Any] = [:]
     private(set) var containers: [NodeBudgetKey: ReflectiveGenerator<Any>] = [:]
+    private var countedContainers: [CountedContainerKey: ReflectiveGenerator<Any>] = [:]
 
     init(plan: GeneratorDerivationPlan) {
         self.plan = plan
@@ -67,12 +68,14 @@ final class BudgetedGeneratorDerivation {
             case let .pinned(depth):
                 return generator(for: type, depth: depth, nodes: nodes, stateSpace: stateSpace)
             case let .drawn(ceiling, scaling):
-                let minimum = (0 ... ceiling).first { candidate in
+                guard let minimum = (0 ... ceiling).first(where: { candidate in
                     guard let cost = budget.minimumNodes(for: ObjectIdentifier(type), depth: candidate) else {
                         return false
                     }
                     return nodes.map { cost <= $0 } ?? true
-                }!
+                }) else {
+                    preconditionFailure("A validated root allowance must admit a depth at or below its ceiling")
+                }
                 let layers = (minimum ... ceiling).map { generator(for: type, depth: $0, nodes: nodes, stateSpace: stateSpace) }
                 return Gen.chooseDepth(in: UInt64(minimum) ... UInt64(ceiling), scaling: scaling)._bound(
                     forward: { selected in layers[Int(selected) - minimum].gen.erase() },
@@ -83,7 +86,7 @@ final class BudgetedGeneratorDerivation {
 
     /// Builds one layer: a uniform pick over the constructors that fit this depth and allowance.
     ///
-    /// A constructor drops out when any payload is unconstructible here, or when the allowance cannot cover its children's minima. At depth zero a type with payload-free cases offers only those, so recursion terminates on a case that carries no structure rather than on whichever payload happens to bottom out. Arms whose payloads reach another derived type are wrapped in `lazy`, which keeps the recursive layer from being constructed while this one is still being built. Layers are cached by type, depth, allowance, and state space, so a shared child generator is built once and reused wherever those four agree.
+    /// A constructor drops out when any payload is unconstructible here, or when the allowance cannot cover its children's minima. At depth zero a type with payload-free cases offers only those, so recursion terminates on a case that carries no structure rather than on whichever payload happens to bottom out. Arms whose payloads reach another derived type are wrapped in `lazy`. Construction has already finished by that point, and terminates on its own: depth falls by one across every derived-type edge, and a depth-zero layer offers only payload-free constructors. What the wrapper adds is a bind boundary at the arm, which keeps reduction and mutation inside the recursive subtree instead of spreading across the whole layer. Layers are cached by type, depth, allowance, and state space, so a shared child generator is built once and reused wherever those four agree.
     func generator<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         depth: Int,
@@ -94,7 +97,7 @@ final class BudgetedGeneratorDerivation {
         if let existing = built[key] as? ReflectiveGenerator<Value> {
             return existing
         }
-        let typePlan = plan.types[key.type]!
+        let typePlan = plan.plan(for: key.type)
         let descriptor = Value.__generatorDescriptor
         let preferPayloadFree = depth == 0 && typePlan.constructors.contains { $0.payloads.isEmpty }
         let arms = typePlan.constructors.enumerated().compactMap { index, entry -> ReflectiveGenerator<Value>? in
@@ -103,13 +106,13 @@ final class BudgetedGeneratorDerivation {
             else {
                 return nil
             }
-            let allowances: [Int?] = switch nodes {
+            let allowances: [Int?]? = switch nodes {
                 case let .some(limit):
-                    budget.split(limit - 1, minima: minima)?.map(Optional.some) ?? []
+                    budget.split(limit - 1, minima: minima)?.map(Optional.some)
                 case .none:
                     Array(repeating: nil, count: minima.count)
             }
-            guard allowances.count == entry.payloads.count else {
+            guard let allowances else {
                 return nil
             }
             let children = zip(entry.payloads, allowances).map {
@@ -132,22 +135,14 @@ final class BudgetedGeneratorDerivation {
         return result
     }
 
+    /// Packs a constructor's children, embedding a value per draw rather than reusing one built here.
+    ///
+    /// A payload-free constructor takes the same path as any other, with no children to zip. Embedding once and replaying that value would hand every draw the same class instance.
     private func arm<Value>(
         _ entry: __Exhaustable.ConstructorDescriptor<Value>,
         children: [ReflectiveGenerator<Any>],
         recursive: Bool
     ) -> ReflectiveGenerator<Value> {
-        if children.isEmpty {
-            return Gen.contramap(
-                { (value: Value) throws -> Value in
-                    guard entry.extract(value) != nil else {
-                        throw ReflectionError.couldNotMapInputToGenerator
-                    }
-                    return value
-                },
-                Gen.just(entry.embed([]))
-            ).wrapped(isReflective: true)
-        }
         let result = Gen.zippedReflective(
             ContiguousArray(children.map { $0.gen }),
             pack: { entry.embed($0) },
@@ -158,6 +153,7 @@ final class BudgetedGeneratorDerivation {
                 return payloads
             },
             isReflective: children.allSatisfy { $0.isReflective }
+                && (children.isEmpty == false || isPayloadFreeReflectable(Value.self))
         )
         guard recursive else {
             return result
@@ -178,7 +174,7 @@ final class BudgetedGeneratorDerivation {
             case let .standard(type):
                 return plan.defaultGenerator(for: type, stateSpace: stateSpace)
             case let .derivedType(reference):
-                let child = plan.types[reference]!
+                let child = plan.plan(for: reference)
                 let remaining = child.maximumDepth.map { min($0, depth - 1) } ?? (depth - 1)
                 return erasedGenerator(
                     for: child.type,
@@ -216,41 +212,121 @@ final class BudgetedGeneratorDerivation {
         nodes: Int?,
         stateSpace: GeneratorStateSpace
     ) -> ReflectiveGenerator<Any> {
-        let minima = budget.minimumNodes(for: children, depth: depth)
         guard let nodes else {
-            guard let minima, sumNodes(minima) != nil else {
-                return recipe.empty.wrapped(isReflective: true)
+            return buildUnbudgetedContainer(recipe, children: children, depth: depth, stateSpace: stateSpace)
+        }
+        guard let minima = budget.minimumNodes(for: children, depth: depth),
+              let minimum = sumNodes(minima)
+        else {
+            return recipe.selectCount(0, [recipe.empty]).wrapped(isReflective: true)
+        }
+        let maximumReflectableCount = min(recipe.maximumCount ?? Int.max, (nodes - 1) / minimum)
+        let maximumGeneratedCount = min(stateSpace.defaultSequenceLengthMaximum ?? maximumReflectableCount, maximumReflectableCount)
+        let maximumBuiltCount = recipe.isReflective ? maximumReflectableCount : maximumGeneratedCount
+        if let native = buildNativeContainer(
+            recipe,
+            children: children,
+            depth: depth,
+            stateSpace: stateSpace,
+            maximumGeneratedCount: maximumGeneratedCount,
+            maximumBuiltCount: maximumBuiltCount
+        ) {
+            return native
+        }
+        return buildLayeredContainer(
+            recipe,
+            children: children,
+            depth: depth,
+            nodes: nodes,
+            stateSpace: stateSpace,
+            minima: minima,
+            maximumGeneratedCount: maximumGeneratedCount,
+            maximumBuiltCount: maximumBuiltCount
+        )
+    }
+
+    /// Keeps built-in cardinalities when no node allowance applies; state-space presets may still narrow sampling.
+    private func buildUnbudgetedContainer(
+        _ recipe: DerivedContainerRecipe,
+        children: [PayloadPlan],
+        depth: Int,
+        stateSpace: GeneratorStateSpace
+    ) -> ReflectiveGenerator<Any> {
+        guard let minima = budget.minimumNodes(for: children, depth: depth), sumNodes(minima) != nil else {
+            return recipe.empty.wrapped(isReflective: true)
+        }
+        let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: nil, stateSpace: stateSpace) }
+        let cardinality: ContainerCardinality = stateSpace.defaultSequenceLengthMaximum
+            .map { .within(min($0, recipe.maximumCount ?? $0)) } ?? .sizeScaled
+        return recipe.build(cardinality, generators.map { $0.gen }).wrapped(
+            isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
+        )
+    }
+
+    /// Uses a native sequence only when every child ignores per-entry allowances, exposing element parameters without a count bind.
+    private func buildNativeContainer(
+        _ recipe: DerivedContainerRecipe,
+        children: [PayloadPlan],
+        depth: Int,
+        stateSpace: GeneratorStateSpace,
+        maximumGeneratedCount: Int,
+        maximumBuiltCount: Int
+    ) -> ReflectiveGenerator<Any>? {
+        guard maximumBuiltCount > 0,
+              recipe.maximumCount == nil,
+              children.allSatisfy({ payload in
+                  switch payload {
+                      case .supplied, .standard: true
+                      case .derivedType, .container: false
+                  }
+              })
+        else {
+            return nil
+        }
+        let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: 1, stateSpace: stateSpace) }
+        return recipe.build(
+            .bounded(sampling: maximumGeneratedCount, reflecting: maximumBuiltCount),
+            generators.map { $0.gen }
+        ).wrapped(isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective })
+    }
+
+    /// Shares completed count-specific layers by their exact child allowances. Reflection can retain more layers than sampling selects.
+    private func buildLayeredContainer(
+        _ recipe: DerivedContainerRecipe,
+        children: [PayloadPlan],
+        depth: Int,
+        nodes: Int,
+        stateSpace: GeneratorStateSpace,
+        minima: [Int],
+        maximumGeneratedCount: Int,
+        maximumBuiltCount: Int
+    ) -> ReflectiveGenerator<Any> {
+        var layers = [recipe.empty.wrapped(isReflective: true)]
+        for count in 0 ..< maximumBuiltCount {
+            let elementCount = count + 1
+            // The caller bounds maximumBuiltCount by (nodes - 1) / sumNodes(minima).
+            // Each per-entry share therefore covers the validated minima, so split cannot fail.
+            let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
+            let key = CountedContainerKey(
+                type: ObjectIdentifier(recipe.type),
+                count: elementCount,
+                depth: depth,
+                allowances: allowances,
+                stateSpace: stateSpace
+            )
+            switch countedContainers[key] {
+                case let .some(existing):
+                    layers.append(existing)
+                    continue
+                case .none:
+                    break
             }
-            let generators = children.map { payloadGenerator(for: $0, depth: depth, nodes: nil, stateSpace: stateSpace) }
-            let cardinality: ContainerCardinality = stateSpace.defaultSequenceLengthMaximum
-                .map { .within(min($0, recipe.maximumCount ?? $0)) } ?? .sizeScaled
-            return recipe.build(cardinality, generators.map { $0.gen }).wrapped(
+            let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
+            let layer = recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
                 isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
             )
-        }
-        var layers = [recipe.empty.wrapped(isReflective: true)]
-        var maximumGeneratedCount = 0
-        if let minima, let minimum = sumNodes(minima) {
-            let maximumReflectableCount = min(
-                recipe.maximumCount ?? Int.max,
-                (nodes - 1) / minimum
-            )
-            maximumGeneratedCount = min(
-                stateSpace.defaultSequenceLengthMaximum ?? maximumReflectableCount,
-                maximumReflectableCount
-            )
-            let maximumBuiltCount = switch recipe.isReflective {
-                case true: maximumReflectableCount
-                case false: maximumGeneratedCount
-            }
-            for count in 0 ..< maximumBuiltCount {
-                let elementCount = count + 1
-                let allowances = budget.split((nodes - 1) / elementCount, minima: minima)!
-                let generators = zip(children, allowances).map { payloadGenerator(for: $0, depth: depth, nodes: $1, stateSpace: stateSpace) }
-                layers.append(recipe.build(.exactly(elementCount), generators.map { $0.gen }).wrapped(
-                    isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
-                ))
-            }
+            countedContainers[key] = layer
+            layers.append(layer)
         }
         return recipe.selectCount(maximumGeneratedCount, layers.map { $0.gen }).wrapped(
             isReflective: layers.allSatisfy { $0.isReflective }
@@ -294,8 +370,26 @@ struct NodeBudgetKey: Hashable {
     let stateSpace: GeneratorStateSpace
 }
 
+/// Shares identical counted recipes across different enclosing container allowances without rounding either budget.
+private struct CountedContainerKey: Hashable {
+    let type: ObjectIdentifier
+    let count: Int
+    let depth: Int
+    let allowances: [Int]
+    let stateSpace: GeneratorStateSpace
+}
+
 // MARK: - Helpers
 
 private func capped(_ allowance: Int?, at ceiling: Int?) -> Int? {
     [allowance, ceiling].compactMap { $0 }.min()
+}
+
+/// Reports whether reflection can recognize a value a payload-free constructor rebuilds.
+///
+/// Reflection picks an arm by comparing the value it rebuilt against the target, and a rebuild produces a fresh instance. A payload-free class carries nothing to compare: `Mirror` exposes no children, so the two instances match only if the type's own `==` ignores identity, which is not knowable here. An `Equatable` conformance is not enough of an answer, because an identity-based `==` would claim reflection this arm cannot deliver. Structs and enum cases compare by shape or case name and stay reflectable.
+///
+/// Decided from the metatype: asking an instance would mean constructing and discarding one before any sample is drawn, which a `deinit` observes.
+private func isPayloadFreeReflectable(_ type: (some Any).Type) -> Bool {
+    type is AnyClass == false
 }

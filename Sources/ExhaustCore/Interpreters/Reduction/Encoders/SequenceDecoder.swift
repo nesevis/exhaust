@@ -105,11 +105,13 @@ package enum SequenceDecoder {
         let candidateForPhase2 = copy candidate
 
         switch Materializer.materializeAny(
-            gen, prefix: consume candidate,
-            mode: .exact, fallbackTree: fallbackTree,
-            materializePicks: false,
-            precomputedSeed: precomputedHash,
-            skipTree: true
+            gen, context: .init(
+                prefix: consume candidate,
+                mode: .exact, fallbackTree: fallbackTree,
+                materializePicks: false,
+                precomputedSeed: precomputedHash,
+                skipTree: true
+            )
         ) {
             case let .success(output, _, decodingReport):
                 mergeFilterObservations(from: decodingReport, into: &filterObservations)
@@ -118,10 +120,12 @@ package enum SequenceDecoder {
                 }
 
                 switch Materializer.materializeAny(
-                    gen, prefix: candidateForPhase2,
-                    mode: .exact, fallbackTree: fallbackTree,
-                    materializePicks: materializePicks,
-                    precomputedSeed: precomputedHash
+                    gen, context: .init(
+                        prefix: candidateForPhase2,
+                        mode: .exact, fallbackTree: fallbackTree,
+                        materializePicks: materializePicks,
+                        precomputedSeed: precomputedHash
+                    )
                 ) {
                     case let .success(_, freshTree, _):
                         let freshSequence = ChoiceSequence(freshTree)
@@ -166,14 +170,16 @@ package enum SequenceDecoder {
 
         switch Materializer.materializeAny(
             gen,
-            prefix: consume candidate,
-            mode: .guided(
-                seed: seed,
-                fallbackTree: fallbackTree,
-                maximizeBoundRegionIndices: maximizeBoundRegionIndices
-            ),
-            materializePicks: false,
-            skipTree: true
+            context: .init(
+                prefix: consume candidate,
+                mode: .guided(
+                    seed: seed,
+                    fallbackTree: fallbackTree,
+                    maximizeBoundRegionIndices: maximizeBoundRegionIndices
+                ),
+                materializePicks: false,
+                skipTree: true
+            )
         ) {
             case let .success(output, _, decodingReport):
                 mergeFilterObservations(from: decodingReport, into: &filterObservations)
@@ -188,13 +194,15 @@ package enum SequenceDecoder {
 
                 switch Materializer.materializeAny(
                     gen,
-                    prefix: candidateForPhase2,
-                    mode: .guided(
-                        seed: seed,
-                        fallbackTree: fallbackTree,
-                        maximizeBoundRegionIndices: maximizeBoundRegionIndices
-                    ),
-                    materializePicks: materializePicks
+                    context: .init(
+                        prefix: candidateForPhase2,
+                        mode: .guided(
+                            seed: seed,
+                            fallbackTree: fallbackTree,
+                            maximizeBoundRegionIndices: maximizeBoundRegionIndices
+                        ),
+                        materializePicks: materializePicks
+                    )
                 ) {
                     case let .success(_, freshTree, phase2Report):
                         let freshSequence = ChoiceSequence(freshTree)

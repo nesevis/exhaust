@@ -84,7 +84,9 @@ extension __ExhaustRuntime {
         let prunedSequence = ChoiceSequence.flatten(prunedTree)
         let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: prunedTree)
         if case let .success(rematerialized, rematerializedTree, _) = Materializer.materialize(
-            generator, prefix: prunedSequence, mode: prunedMode
+            generator, context: .init(
+                prefix: prunedSequence, mode: prunedMode
+            )
         ) {
             if requireFailurePreserved == false || property(rematerialized) == false {
                 return (rematerialized, rematerializedTree)
@@ -188,7 +190,9 @@ extension __ExhaustRuntime {
                 currentTree = reducedTree
                 currentSequence = sequence
                 if case let .success(value, tree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact
+                    generator, context: .init(
+                        prefix: sequence, mode: .exact
+                    )
                 ) {
                     currentOutput = value
                     currentTree = tree
@@ -218,7 +222,9 @@ extension __ExhaustRuntime {
                 currentTree = reducedTree
                 currentSequence = sequence
                 if case let .success(value, tree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact
+                    generator, context: .init(
+                        prefix: sequence, mode: .exact
+                    )
                 ) {
                     currentOutput = value
                     currentTree = tree

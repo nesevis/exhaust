@@ -6,7 +6,7 @@ import ExhaustCore
 ///
 /// A `time:` run catalogs failures instead of stopping at the first one, so the report carries the fault clusters the run discovered. Cluster count is a lower bound on distinct bugs: reduction preserves failure rather than the *reason* for failure, so a fault whose inputs reduce toward another fault's counterexample is absorbed into it and never reported separately. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 public struct FuzzReport: Sendable {
     /// One fault cluster the run discovered: a unique reduced counterexample with its membership counts. A cluster is an identity over reduced forms, not over root causes.
     ///

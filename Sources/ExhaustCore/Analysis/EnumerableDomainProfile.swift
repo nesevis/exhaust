@@ -31,14 +31,33 @@ package struct EnumerableDomainProfile: @unchecked Sendable {
     public let parameters: [EnumerableParameter]
     /// Product of all domainSizes. Capped at UInt64.max on overflow.
     public let totalSpace: UInt64
-    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, `CoveringArrayReplay.buildTree` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
-    public let originalTree: ChoiceTree?
+    /// The tree VACTI produced, paired with whether it witnessed the whole domain.
+    public let template: AnalysisTemplate?
 
-    /// Creates a profile with the given parameters, precomputed total space, and optional original tree template.
-    public init(parameters: [EnumerableParameter], totalSpace: UInt64, originalTree: ChoiceTree? = nil) {
+    /// Creates a profile with the given parameters, precomputed total space, and optional template.
+    public init(parameters: [EnumerableParameter], totalSpace: UInt64, template: AnalysisTemplate? = nil) {
         self.parameters = parameters
         self.totalSpace = totalSpace
-        self.originalTree = originalTree
+        self.template = template
+    }
+}
+
+/// The ChoiceTree screening rebuilds rows from, carrying whether the run that produced it saw the whole domain.
+///
+/// The tree is a template rather than a trace: screening analysis records only the pick arm it selected, so a question about the whole domain cannot be answered by walking it. ``isTotalWitness`` is the answer to that question, decided where the elision happened. The tree is reachable only as ``substitutionTemplate``, which names the one job it is complete enough for.
+package struct AnalysisTemplate: @unchecked Sendable {
+    // @unchecked Sendable: `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+
+    /// Positional template for ``CoveringArrayReplay``, which substitutes parameter values at matching positions and preserves structural nodes.
+    public let substitutionTemplate: ChoiceTree
+
+    /// Whether every choice the generator can make is accounted for by the extracted parameters. False when a pick arm was skipped whose shape depends on a drawn value, or when the tree itself binds.
+    public let isTotalWitness: Bool
+
+    /// Creates a template and records whether it witnessed the whole domain.
+    public init(substitutionTemplate: ChoiceTree, isTotalWitness: Bool) {
+        self.substitutionTemplate = substitutionTemplate
+        self.isTotalWitness = isTotalWitness
     }
 }
 

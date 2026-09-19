@@ -239,7 +239,9 @@ struct InterpreterFlatEmissionTests {
         var run = 0
         while let (_, sequence) = try interpreter.nextFlat() {
             defer { run += 1 }
-            guard case let .success(_, tree, _) = Materializer.materializeAny(erased, prefix: sequence, mode: .exact) else {
+            guard case let .success(_, tree, _) = Materializer.materializeAny(erased, context: .init(
+                prefix: sequence, mode: .exact
+            )) else {
                 Issue.record("run \(run): exact materialization rejected a sequence the flat draw emitted")
                 continue
             }

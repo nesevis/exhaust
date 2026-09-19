@@ -37,7 +37,7 @@ struct ReducerSimplifyValuesTests {
         #expect(output.allSatisfy { $0 == 0 })
     }
 
-    @Test("Adaptive probe batches simplification around a load-bearing value")
+    @Test("Adaptive probe batches simplification around an important value")
     func adaptiveProbeBatchesAroundLoadBearing() throws {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
 
@@ -57,12 +57,12 @@ struct ReducerSimplifyValuesTests {
         )
 
         #expect(output.count == 5)
-        // Non-load-bearing values simplified to 0
+        // Unimportant values simplified to 0
         #expect(output[0] == 0)
         #expect(output[1] == 0)
         #expect(output[3] == 0)
         #expect(output[4] == 0)
-        // Load-bearing value preserved (simplified to 1, the smallest non-zero)
+        // Important value preserved (simplified to 1, the smallest non-zero)
         #expect(output[2] >= 1)
     }
 
@@ -225,7 +225,9 @@ struct ReducerSimplifyValuesTests {
             try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) else {
             Issue.record("Expected .success")
             return
         }

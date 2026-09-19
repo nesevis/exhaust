@@ -22,25 +22,30 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
             }
             let typeName = type.trimmedDescription
             let valueType = specializedName(for: declaration, fallback: typeName)
-            let caseEntries: [String] = switch model.construction {
-                case let .enumeration(cases):
-                    cases.map { caseEntry(for: $0, typeName: valueType) }
-                case let .memberwise(properties), let .synthesizedMemberwise(properties):
-                    [productEntry(properties: properties, typeName: typeName, valueType: valueType)]
-            }
-            let entries = caseEntries.joined(separator: ",\n            ")
-            let limits = ["maximumDepth", "maximumNodes", "stateSpace"].compactMap { label in
+            let trailing = ["maximumDepth", "maximumNodes", "stateSpace"].compactMap { label in
                 limitArgument(label, of: node).map { ", \(label): \($0)" }
             }.joined()
-            let extensionDeclaration: DeclSyntax = """
-            extension \(raw: typeName): __Exhaustable.Conformance {
-                \(raw: model.access)static var __generatorDescriptor: __Exhaustable.TypeDescriptor<\(raw: valueType)> {
-                    __Exhaustable.TypeDescriptor(constructors: [
-                        \(raw: entries)
-                    ]\(raw: limits), fileID: \(location.file), line: \(location.line), column: \(location.column))
-                }
+                + ", fileID: \(location.file.trimmedDescription)"
+                + ", line: \(location.line.trimmedDescription)"
+                + ", column: \(location.column.trimmedDescription)"
+            let entries: [(text: String, availability: ExhaustableDeclaration.CaseAvailability)] = switch model.construction {
+                case let .enumeration(cases):
+                    cases.compactMap { entry in
+                        guard case .never = entry.availability else {
+                            return (caseEntry(for: entry.element, valueType: valueType), entry.availability)
+                        }
+                        return nil
+                    }
+                case let .memberwise(properties), let .synthesizedMemberwise(properties, _):
+                    [(productEntry(properties: properties, typeName: typeName, valueType: valueType), .always)]
             }
-            """
+            let extensionDeclaration = conformanceExtension(
+                typeName: typeName,
+                valueType: valueType,
+                access: model.access,
+                entries: entries,
+                trailing: trailing
+            )
             guard let extensionSyntax = extensionDeclaration.as(ExtensionDeclSyntax.self) else {
                 return []
             }
@@ -52,6 +57,8 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
     }
 
     /// Emits a final class's memberwise initializer only when the extension role can describe that same construction.
+    ///
+    /// The initializer is `nonisolated` so a global-actor-isolated class can still be constructed on the thread that draws a value. Payloads that genuinely need the actor make this initializer fail to compile, which is where the isolation error belongs.
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -59,7 +66,7 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         guard let model = try? ExhaustableDeclaration.validate(declaration, lexicalContext: context.lexicalContext),
-              case let .synthesizedMemberwise(properties) = model.construction,
+              case let .synthesizedMemberwise(properties, initializerAccess) = model.construction,
               context.location(of: node, at: .afterLeadingTrivia, filePathMode: .fileID) != nil
         else {
             return []
@@ -70,7 +77,7 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
         }.joined(separator: ", ")
         let assignments = properties.map { "self.\($0.name) = \($0.name)" }.joined(separator: "\n    ")
         let initializer: DeclSyntax = """
-        \(raw: model.access)init(\(raw: parameters)) {
+        \(raw: initializerAccess)nonisolated init(\(raw: parameters)) {
             \(raw: assignments)
         }
         """
@@ -106,14 +113,63 @@ private func productEntry(properties: [ExhaustableDeclaration.StoredProperty], t
     let embedBody = properties.isEmpty
         ? "{ _ in \(valueType)() }"
         : "{ values in \(valueType)(\(embedArguments.joined(separator: ", "))) }"
-    let extractBody = "{ value in [\(properties.map { "value.\($0.name)" }.joined(separator: ", "))] }"
+    // Each element is cast explicitly: an Optional field coerced into `[Any]` warns, which fails a build using -warnings-as-errors. `as Any` keeps a `.none` boxed for `embed` to cast back.
+    let extractBody = "{ value in [\(properties.map { "value.\($0.name) as Any" }.joined(separator: ", "))] }"
+    return constructorEntry(name: typeName, payloadTypes: payloadTypes, embedBody: embedBody, extractBody: extractBody)
+}
+
+/// Builds the conformance extension, keeping the descriptor's constructors in a plain array whenever every entry is namable in every build.
+///
+/// A version-gated case cannot sit in an array literal, because that expression is evaluated wherever the property is read. Those entries are appended inside `#available` instead, which makes the constructor list depend on the running system: a case introduced in a later release contributes no constructor on an older one, so nothing references a case the compiler would reject there.
+private func conformanceExtension(
+    typeName: String,
+    valueType: String,
+    access: String,
+    entries: [(text: String, availability: ExhaustableDeclaration.CaseAvailability)],
+    trailing: String
+) -> DeclSyntax {
+    guard entries.contains(where: { entry in
+        guard case .guarded = entry.availability else {
+            return false
+        }
+        return true
+    }) else {
+        let literal = entries.map(\.text).joined(separator: ",\n")
+        return """
+        extension \(raw: typeName): nonisolated __Exhaustable.Conformance {
+            \(raw: access)nonisolated static var __generatorDescriptor: __Exhaustable.TypeDescriptor<\(raw: valueType)> {
+                __Exhaustable.TypeDescriptor(constructors: [
+                    \(raw: literal)
+                ]\(raw: trailing))
+            }
+        }
+        """
+    }
+    let statements = entries.map { entry in
+        switch entry.availability {
+            case .always, .never:
+                "constructors.append(\(entry.text))"
+            case let .guarded(versions):
+                """
+                if #available(\(versions.joined(separator: ", ")), *) {
+                    constructors.append(\(entry.text))
+                }
+                """
+        }
+    }.joined(separator: "\n")
     return """
-    __Exhaustable.ConstructorDescriptor(name: "\(typeName)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))
+    extension \(raw: typeName): nonisolated __Exhaustable.Conformance {
+        \(raw: access)nonisolated static var __generatorDescriptor: __Exhaustable.TypeDescriptor<\(raw: valueType)> {
+            var constructors: [__Exhaustable.ConstructorDescriptor<\(raw: valueType)>] = []
+            \(raw: statements)
+            return __Exhaustable.TypeDescriptor(constructors: constructors\(raw: trailing))
+        }
+    }
     """
 }
 
 /// Preserves enum argument labels while using positional bindings to recover associated values.
-private func caseEntry(for element: EnumCaseElementSyntax, typeName: String) -> String {
+private func caseEntry(for element: EnumCaseElementSyntax, valueType: String) -> String {
     let caseName = element.name.trimmedDescription
     let parameters = element.parameterClause?.parameters.map { $0 } ?? []
     let payloadTypes = parameters.map { metatypeExpression($0.type) }
@@ -124,15 +180,21 @@ private func caseEntry(for element: EnumCaseElementSyntax, typeName: String) -> 
         return "\(label)values[\(index)] as! \(parameter.type.trimmedDescription)"
     }
     let embedBody = parameters.isEmpty
-        ? "{ _ in \(typeName).\(caseName) }"
-        : "{ values in \(typeName).\(caseName)(\(embedArguments.joined(separator: ", "))) }"
+        ? "{ _ in \(valueType).\(caseName) }"
+        : "{ values in \(valueType).\(caseName)(\(embedArguments.joined(separator: ", "))) }"
     let bindings = parameters.indices.map { "value\($0)" }
     let extractPattern = parameters.isEmpty
         ? ".\(caseName)"
         : "let .\(caseName)(\(bindings.joined(separator: ", ")))"
-    let extractBody = "{ value in if case \(extractPattern) = value { return [\(bindings.joined(separator: ", "))] } else { return nil } }"
-    return """
-    __Exhaustable.ConstructorDescriptor(name: "\(caseName)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))
+    let extracted = bindings.map { "\($0) as Any" }.joined(separator: ", ")
+    let extractBody = "{ value in if case \(extractPattern) = value { return [\(extracted)] } else { return nil } }"
+    return constructorEntry(name: caseName, payloadTypes: payloadTypes, embedBody: embedBody, extractBody: extractBody)
+}
+
+/// Keeps product and enum constructor metadata in the same generated shape; their embedding and extraction expressions are the only structural differences.
+private func constructorEntry(name: String, payloadTypes: [String], embedBody: String, extractBody: String) -> String {
+    """
+    __Exhaustable.ConstructorDescriptor(name: "\(name)", payloadTypes: [\(payloadTypes.joined(separator: ", "))], embed: \(embedBody), extract: \(extractBody))
     """
 }
 

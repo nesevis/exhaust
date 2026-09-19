@@ -47,25 +47,16 @@ package enum Materializer {
     ///
     /// - Parameters:
     ///   - gen: The generator to materialize.
-    ///   - prefix: The choice sequence to replay from.
-    ///   - mode: How to resolve values at each choice point.
+    ///   - context: One-shot execution state, including the prefix and resolution policy.
     /// - Returns: A `Result` containing the output value and fresh tree on success.
     public static func materialize<Output>(
         _ gen: Generator<Output>,
-        prefix: consuming ChoiceSequence,
-        mode: Mode,
-        fallbackTree: ChoiceTree? = nil,
-        materializePicks: Bool = false,
-        precomputedSeed: UInt64? = nil
+        context: consuming Context
     ) -> Result<Output> {
         // Generic public entry point — erases the input generator and casts the result back to ``Output`` at the boundary, delegating to the non-generic ``materializeAny``. Hot-path callers (schedulers, decoders) should hold an already-erased ``AnyGenerator`` and call ``materializeAny`` directly to avoid the per-call erasure cost.
         let anyResult = materializeAny(
             gen.erase(),
-            prefix: consume prefix,
-            mode: mode,
-            fallbackTree: fallbackTree,
-            materializePicks: materializePicks,
-            precomputedSeed: precomputedSeed
+            context: consume context
         )
         switch anyResult {
             case let .success(value, tree, report):
@@ -80,49 +71,13 @@ package enum Materializer {
 
     /// Materializes a value from an already-erased generator and a choice-sequence prefix.
     ///
-    /// Accepts ``AnyGenerator`` to avoid the per-`Output`-type metadata cache lookups that a generic `<Output>` parameter would impose inside ``generateRecursive``. Callers that hold a typed ``Generator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
-    ///
-    /// - Parameter collectDecodingReport: When `false`, the result carries a `nil` ``DecodingReport`` and per-coordinate tier recording is skipped. Callers that never read the report (screening rows) opt out to avoid the per-coordinate bookkeeping.
+    /// Accepts ``AnyGenerator`` to avoid per-output-type metadata lookups inside the recursive engine. Typed callers can use ``materialize(_:context:)``. The context is consumed once; construct a fresh context for each replay.
     public static func materializeAny(
         _ gen: AnyGenerator,
-        prefix: consuming ChoiceSequence,
-        mode: Mode,
-        fallbackTree: ChoiceTree? = nil,
-        materializePicks: Bool = false,
-        precomputedSeed: UInt64? = nil,
-        skipTree: Bool = false,
-        collectDecodingReport: Bool = true
+        context: consuming Context
     ) -> Result<Any> {
-        let seed: UInt64
-        let resolvedFallbackTree: ChoiceTree?
-        let maximizeBoundRegionIndices: Set<Int>?
-
-        switch mode {
-            case .exact:
-                // The seed only feeds context.prng. In exact mode the PRNG is consulted nowhere except when materializePicks routes jump seeds into non-selected branch contexts. Without materializePicks the O(n) prefix hash buys nothing and a constant seed is byte-identical.
-                seed = precomputedSeed ?? (materializePicks ? ZobristHash.hash(of: prefix) : 0)
-                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing: dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25).
-                resolvedFallbackTree = fallbackTree
-                maximizeBoundRegionIndices = nil
-            case let .guided(s, fb, indices):
-                seed = s
-                resolvedFallbackTree = fb ?? fallbackTree
-                maximizeBoundRegionIndices = indices
-        }
-
-        var context = Context(
-            cursor: Cursor(from: consume prefix),
-            prng: Xoshiro256(seed: seed),
-            mode: mode.internalMode,
-            // Use max size (100) so size-scaled generators produce their full range.
-            // Size 1 (scaledSize(forRun: 0)) would produce tiny ranges that reject or clamp valid values from larger-size generations.
-            size: 100,
-            maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-            materializePicks: materializePicks,
-            skipTree: skipTree,
-            decodingReport: collectDecodingReport ? DecodingReport() : nil,
-            deadlineNanoseconds: monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
-        )
+        let resolvedFallbackTree = context.rootFallbackTree
+        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         do {
             guard let (value, tree) = try generateRecursive(
@@ -130,10 +85,7 @@ package enum Materializer {
             ) else {
                 var report = context.decodingReport
                 report?.filterObservations = context.filterObservations
-                switch mode {
-                    case .exact: return .rejected(decodingReport: report)
-                    case .guided: return .failed(decodingReport: report)
-                }
+                return context.mode == .exact ? .rejected(decodingReport: report) : .failed(decodingReport: report)
             }
             var report = context.decodingReport
             report?.filterObservations = context.filterObservations
@@ -167,48 +119,17 @@ package extension Materializer {
     ///
     /// The returned sequence is entry-for-entry identical to `ChoiceSequence.flatten` of the tree that `materializeAny` would produce for the same inputs, and cursor and PRNG consumption match exactly, so a later tree-building rematerialization with the same inputs reproduces this result. Use this when the caller needs the sequence (deduplication, hashing, corpus identity) but not the tree; rebuild the tree on demand with `materializeAny`.
     ///
-    /// Non-selected pick branches are never emitted (flatten only includes the selected branch), so there is no `materializePicks` parameter.
+    /// Non-selected pick branches are never emitted, so the context must have pick materialization disabled. This entry point enables flat emission regardless of the context's tree-emission setting.
     static func materializeAnyFlat(
         _ gen: AnyGenerator,
-        prefix: consuming ChoiceSequence,
-        mode: Mode,
-        fallbackTree: ChoiceTree? = nil,
-        precomputedSeed: UInt64? = nil,
-        collectDecodingReport: Bool = true,
-        reseedRanges: [ClosedRange<Int>] = []
+        context: consuming Context
     ) -> FlatResult {
-        let prefixCount = prefix.count
-        let seed: UInt64
-        let resolvedFallbackTree: ChoiceTree?
-        let maximizeBoundRegionIndices: Set<Int>?
-
-        switch mode {
-            case .exact:
-                // Same reasoning as materializeAny: with materializePicks off (always, here), the PRNG output is discarded in exact mode, so the prefix hash is skipped.
-                seed = precomputedSeed ?? 0
-                resolvedFallbackTree = fallbackTree
-                maximizeBoundRegionIndices = nil
-            case let .guided(s, fb, indices):
-                seed = s
-                resolvedFallbackTree = fb ?? fallbackTree
-                maximizeBoundRegionIndices = indices
-        }
-
-        var context = Context(
-            cursor: Cursor(from: consume prefix),
-            prng: Xoshiro256(seed: seed),
-            mode: mode.internalMode,
-            size: 100,
-            maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-            materializePicks: false,
-            skipTree: true,
-            decodingReport: collectDecodingReport ? DecodingReport() : nil,
-            deadlineNanoseconds: monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
-        )
+        precondition(context.materializePicks == false, "Flat emission cannot materialize unselected branches")
+        let resolvedFallbackTree = context.rootFallbackTree
+        context.skipTree = true
         context.flatOutput = ChoiceSequence()
-        context.flatOutput!.reserveCapacity(Swift.max(64, prefixCount))
-        context.reseedRanges = reseedRanges
-        context.hasPendingReseed = reseedRanges.isEmpty == false
+        context.flatOutput!.reserveCapacity(Swift.max(64, context.cursor.entryCount))
+        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         do {
             guard let (value, _) = try generateRecursive(
@@ -216,10 +137,7 @@ package extension Materializer {
             ) else {
                 var report = context.decodingReport
                 report?.filterObservations = context.filterObservations
-                switch mode {
-                    case .exact: return .rejected(decodingReport: report)
-                    case .guided: return .failed(decodingReport: report)
-                }
+                return context.mode == .exact ? .rejected(decodingReport: report) : .failed(decodingReport: report)
             }
             var report = context.decodingReport
             report?.filterObservations = context.filterObservations
@@ -273,7 +191,11 @@ extension Materializer {
         _ tree: ChoiceTree?
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
-        if case let .group(children, _, _) = tree, children.count == 2 {
+        if case let .group(children, _, isZip: false) = tree, children.count == 2 {
+            // A tagged zip is one callee, and two branch alternatives are one pick. Neither shape is the untagged callee/continuation pair emitted by runContinuation.
+            if case .branch = children[0], case .branch = children[1] {
+                return (tree, nil)
+            }
             return (children[0], children[1])
         }
         return (tree, nil)
@@ -354,7 +276,7 @@ extension Materializer {
                 // The prefix labels the zip, so this returns nil anywhere other than a real zip site and no shape heuristic is needed to decide whether to trust it.
                 let prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
                 if let fallbackTree,
-                   case let .group(children, _, false) = fallbackTree, children.count == 2,
+                   case let .group(children, _, isZip: false) = fallbackTree, children.count == 2,
                    case let .group(inner, _, true) = children[0], inner.count == generators.count
                 {
                     // `group[zipCallee, continuation]`: an untagged wrapper whose first child is the tagged zip. Before the tag this reading was indistinguishable from a zip whose own first child happened to be a two-child group.
@@ -489,8 +411,11 @@ extension Materializer {
 
 // MARK: - Context
 
-extension Materializer {
+package extension Materializer {
+    /// Owns one materialization's policy and mutable traversal state. Entry points consume it so cursor and PRNG state cannot accidentally be reused across attempts.
     struct Context: ~Copyable {
+        /// Retains the resolved root fallback; recursive handlers receive the relevant subtree separately.
+        var rootFallbackTree: ChoiceTree?
         var cursor: Cursor
         var prng: Xoshiro256
         var mode: InternalMode
@@ -503,6 +428,8 @@ extension Materializer {
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
+        /// Keeps depth policy consistent between analyzed paths and branches first reached by a screening row.
+        var shouldUseMaximumDepthForScreening: Bool = false
         /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materializes with the real tree only after the property fails.
         var skipTree: Bool = false
         /// Flat-emission buffer. When non-nil, the walk appends each node's flattened entries here in exactly `ChoiceSequence.flatten` order, so the caller gets the sequence without building a tree. Requires `skipTree` (handlers must not also build real nodes) and `materializePicks == false` (flatten only emits the selected branch). Handlers still return trees, but they are dummies, except `.getSize` leaves, which survive so the bind handler can choose group markers over bind markers.

@@ -98,7 +98,9 @@ struct LaneCollapseEncoderTests {
 
         // Verify the reflected value round-trips correctly before reducing
         let prefix = ChoiceSequence.flatten(tree)
-        if case let .success(roundTripped, _, _) = Materializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree, materializePicks: true) {
+        if case let .success(roundTripped, _, _) = Materializer.materialize(gen, context: .init(
+            prefix: prefix, mode: .exact, fallbackTree: tree, materializePicks: true
+        )) {
             #expect(roundTripped.count == value.count, "Reflected value should round-trip: got \(roundTripped.map(\.0))")
         }
 

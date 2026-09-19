@@ -275,8 +275,10 @@ struct GraphMutationOperatorTests {
         for candidate in candidates {
             let result = Materializer.materializeAny(
                 erased,
-                prefix: candidate,
-                mode: .guided(seed: seed, fallbackTree: tree)
+                context: .init(
+                    prefix: candidate,
+                    mode: .guided(seed: seed, fallbackTree: tree)
+                )
             )
             guard case .success = result else {
                 Issue.record("Operator candidate was not absorbed by guided materialization, seed \(seed)")

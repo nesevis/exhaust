@@ -137,8 +137,10 @@ struct FuzzMutatorTests {
                 let mutated = FuzzMutator.mutate(sequence, intensity: intensity, prng: &prng)
                 let result = Materializer.materializeAny(
                     erased,
-                    prefix: mutated,
-                    mode: .guided(seed: UInt64(round) &+ seed, fallbackTree: tree)
+                    context: .init(
+                        prefix: mutated,
+                        mode: .guided(seed: UInt64(round) &+ seed, fallbackTree: tree)
+                    )
                 )
                 switch result {
                     case let .success(value, _, report):
@@ -169,8 +171,10 @@ struct FuzzMutatorTests {
 
         let result = Materializer.materializeAny(
             gen.erase(),
-            prefix: spliced,
-            mode: .guided(seed: 1, fallbackTree: recipientTree)
+            context: .init(
+                prefix: spliced,
+                mode: .guided(seed: 1, fallbackTree: recipientTree)
+            )
         )
         guard case let .success(value, _, _) = result else {
             Issue.record("Spliced sequence did not materialize")

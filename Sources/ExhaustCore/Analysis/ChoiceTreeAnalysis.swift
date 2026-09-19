@@ -24,7 +24,7 @@
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
 /// - `.compositeSequence`: a single parameter encoding all valid `(length, [element problematic values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
 /// - `.sequenceLength`, `.sequenceElement`: legacy cases used by the ``SequenceCoveringArray`` pipeline. Not produced by ``walkSequence``.
-/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer and all branches are structurally valid. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
+/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch. Screening analysis records only the selected arm, so the arms it skips are reported through ``AnalysisTemplate/isTotalWitness`` rather than being visible here.
 ///
 /// ## Analyzability
 ///
@@ -65,6 +65,7 @@ package enum ChoiceTreeAnalysis {
         let effectiveCompositeThreshold = compositeThreshold ?? enumerableDomainThreshold
         var bestParameters: [ScreeningParameter]?
         var bestTree: ChoiceTree?
+        var bestElidedDataDependentArm = false
 
         for seed in seeds {
             // `sizeOverride: 100` ensures size-scaled sequences produce non-empty element subtrees during VACTI so that ``walkSequence`` can extract element parameters. The declared range itself is already stored directly on each `chooseBits` (with scaling attached as metadata), so the analyzer doesn't need a specific size for range visibility — just a size at which sequences produce enough elements to walk.
@@ -76,6 +77,7 @@ package enum ChoiceTreeAnalysis {
                 sizeOverride: 100
             )
 
+            interpreter.prepareForScreeningAnalysis()
             guard let (_, tree) = try? interpreter.next() else {
                 return nil
             }
@@ -88,6 +90,7 @@ package enum ChoiceTreeAnalysis {
             if bestParameters == nil || parameters.count > (bestParameters?.count ?? 0) {
                 bestParameters = parameters
                 bestTree = tree
+                bestElidedDataDependentArm = interpreter.hasElidedDataDependentArm
             }
 
             let hasIncompleteSequence = parameters.contains { param in
@@ -140,10 +143,17 @@ package enum ChoiceTreeAnalysis {
                 }
                 totalSpace = product
             }
+            // A bind in the recorded tree and a skipped data-dependent arm are the same failure from two directions: a choice the parameter model does not account for.
+            let template = bestTree.map { tree in
+                AnalysisTemplate(
+                    substitutionTemplate: tree,
+                    isTotalWitness: tree.containsBind == false && bestElidedDataDependentArm == false
+                )
+            }
             let profile = EnumerableDomainProfile(
                 parameters: enumerableParams,
                 totalSpace: totalSpace,
-                originalTree: bestTree
+                template: template
             )
             return .enumerable(profile)
         } else {
@@ -158,34 +168,63 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Tree Walk
 
     //
-    // Dispatches on ChoiceTree node type. getSize and resize pass through transparently. Returns false only for bare .branch nodes (which never appear in practice — they are always inside pick-pattern groups).
+    // The shared shape classifier chooses traversable edges and parameter sites; domain builders decide whether those sites fit the screening model.
 
     /// Recursively walks a ``ChoiceTree``, extracting independent parameters into `parameters`.
     ///
-    /// For `.choice` nodes, delegates to `walkChoice`. For `.group` nodes, detects pick patterns (a group containing a `.selected` child) and routes to `walkPick`; otherwise recurses into children. Returns `false` only for bare `.branch` nodes.
+    /// Uses the same shape classification as row reconstruction, including the narrower traversal inside sequence slots. Domain construction remains specific to each parameter kind.
     private static func walkTree(
         _ tree: ChoiceTree,
         expandSequencePairs: Bool,
         compositeThreshold: UInt64,
+        scope: ScreeningScope = .root,
         parameters: inout [ScreeningParameter]
     ) -> Bool {
-        switch tree {
+        switch tree.screeningShape(in: scope) {
+            case .preserved:
+                return true
+            case .invalid:
+                return false
             case let .choice(value, metadata):
-                return walkChoice(value: value, metadata: metadata, parameters: &parameters)
-
-            case .just:
+                return walkChoice(value: value, metadata: metadata, scope: scope, parameters: &parameters)
+            case let .pick(children):
+                return walkPick(children, parameters: &parameters)
+            case let .singleton(branch, _):
+                return walkTree(
+                    branch.choice,
+                    expandSequencePairs: expandSequencePairs,
+                    compositeThreshold: compositeThreshold,
+                    scope: scope,
+                    parameters: &parameters
+                )
+            case let .group(children, _), let .resize(_, children):
+                for child in children {
+                    guard walkTree(
+                        child,
+                        expandSequencePairs: expandSequencePairs,
+                        compositeThreshold: compositeThreshold,
+                        scope: scope,
+                        parameters: &parameters
+                    ) else { return false }
+                }
                 return true
-
-            case .group(_, isOpaque: true, _):
-                return true
-
-            case let .group(children, _, _):
-                return walkGroup(children, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters)
-
-            case let .bind(_, inner, bound):
-                guard walkTree(inner, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
-                return walkTreeValidateOnly(bound)
-
+            case let .bind(_, inner, bound, visitsBound):
+                guard walkTree(
+                    inner,
+                    expandSequencePairs: expandSequencePairs,
+                    compositeThreshold: compositeThreshold,
+                    scope: scope,
+                    parameters: &parameters
+                ) else { return false }
+                // A bound subtree screening does not visit contributes no parameters. Its contents are the materializer's to fill, so there is nothing here to accept or reject.
+                guard visitsBound else { return true }
+                return walkTree(
+                    bound,
+                    expandSequencePairs: expandSequencePairs,
+                    compositeThreshold: compositeThreshold,
+                    scope: scope,
+                    parameters: &parameters
+                )
             case let .sequence(elements, metadata):
                 return walkSequence(
                     length: UInt64(elements.count),
@@ -195,18 +234,6 @@ package enum ChoiceTreeAnalysis {
                     compositeThreshold: compositeThreshold,
                     parameters: &parameters
                 )
-
-            case .getSize:
-                return true
-
-            case let .resize(_, children):
-                for child in children {
-                    guard walkTree(child, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
-                }
-                return true
-
-            case .branch:
-                return false
         }
     }
 
@@ -215,43 +242,23 @@ package enum ChoiceTreeAnalysis {
     //
     // Walks a subtree without extracting parameters. Used for bound subtrees in bind nodes where the structure must be valid but parameters are opaque. Always returns true — no node type is rejected in validation-only mode.
 
-    private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
-        switch tree {
-            case .choice, .just, .getSize, .resize:
-                true
-            case .group(_, isOpaque: true, _):
-                true
-            case let .group(children, _, _):
-                children.allSatisfy { walkTreeValidateOnly($0) }
-            case let .bind(_, inner, bound):
-                walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
-            case let .sequence(elements, _):
-                elements.allSatisfy { walkTreeValidateOnly($0) }
-            case let .branch(b):
-                walkTreeValidateOnly(b.choice)
-        }
-    }
-
     // MARK: - Choice
 
     //
-    // Processes a single numeric choice node. Requires explicit range metadata (non-explicit ranges come from size scaling and are not analyzable). Computes domain size via subtractingReportingOverflow to handle full-range UInt64. Small domains (< 256) enumerate all values; large domains delegate to ProblematicValues for synthetic problematic values.
+    // Processes numeric sites approved by the shape classifier. Computes domain size via subtractingReportingOverflow to handle full-range UInt64. Small domains enumerate all values; large domains use problematic-value representatives.
 
     private static func walkChoice(
         value: ChoiceValue,
         metadata: ChoiceMetadata,
+        scope: ScreeningScope,
         parameters: inout [ScreeningParameter]
     ) -> Bool {
-        // `isRangeExplicit: false` is accepted because ``analyze(_:)`` runs VACTI with `sizeOverride: 100`, at which point the stored range from a size-scaled `chooseDerived` equals the user-declared range.
-        guard metadata.isPinnedToSize == false else {
-            return true
-        }
+        // Size-scaled ranges are visible because analysis runs at size 100; participation is decided by screeningShape.
         guard let range = metadata.validRange else {
             return false
         }
 
         let typeTag = value.tag
-        if case .laneControl = typeTag { return true }
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
         let isSmall = overflow == false && domainSize < enumerableDomainThreshold
 
@@ -268,50 +275,28 @@ package enum ChoiceTreeAnalysis {
             let problematicValues = ProblematicValues.computeProblematicValues(
                 min: range.lowerBound, max: range.upperBound, tag: typeTag, payload: metadata.typeTagPayload
             )
+            let kind: ScreeningParameterKind = switch scope {
+                case .root: .chooseBits(range: range, tag: typeTag)
+                case let .element(index): .sequenceElement(elementIndex: index, range: range, tag: typeTag)
+            }
             let param = ScreeningParameter(
                 index: parameters.count,
                 values: problematicValues,
                 domainSize: UInt64(problematicValues.count),
-                kind: .chooseBits(range: range, tag: typeTag)
+                kind: kind
             )
             parameters.append(param)
         }
         return true
     }
 
-    // MARK: - Group / Pick
+    // MARK: - Pick Domains
 
     //
-    // A group is classified as a pick when it contains at least one .selected child and all children are .selected or .branch — the pattern VACTI produces with materializePicks = true.
-    //
-    // Pick analysis requires ≤ 256 branches and structurally valid subtrees. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
+    // Pick analysis requires ≤ 256 branches. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch, so a branch subtree has no shape this walk needs to accept or reject.
     //
     // Synthetic PickTuples are created with .pure(()) generators because the original branch generators are not available from the ChoiceTree.
     // The fingerprint, weight, id, and branchCount metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
-
-    private static func walkGroup(
-        _ children: [ChoiceTree],
-        expandSequencePairs: Bool,
-        compositeThreshold: UInt64,
-        parameters: inout [ScreeningParameter]
-    ) -> Bool {
-        if isPick(children) {
-            return walkPick(children, parameters: &parameters)
-        }
-
-        for child in children {
-            guard walkTree(child, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
-        }
-        return true
-    }
-
-    static func isPick(_ children: [ChoiceTree]) -> Bool {
-        guard children.isEmpty == false else { return false }
-        guard children.contains(where: \.isSelected) else { return false }
-        return children.allSatisfy { child in
-            child.isSelected || child.isBranch
-        }
-    }
 
     private static func walkPick(
         _ children: [ChoiceTree],
@@ -319,11 +304,6 @@ package enum ChoiceTreeAnalysis {
     ) -> Bool {
         let domainSize = UInt64(children.count)
         guard domainSize <= enumerableDomainThreshold else { return false }
-
-        for child in children {
-            guard case let .branch(b) = child else { return false }
-            guard walkTreeValidateOnly(b.choice) else { return false }
-        }
 
         // Create synthetic PickTuples from branch metadata for replay compatibility
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()
@@ -369,9 +349,11 @@ package enum ChoiceTreeAnalysis {
         var elementSlotParams: [[ScreeningParameter]] = []
         for elementIndex in 0 ..< maxElementSlots {
             var slotParams: [ScreeningParameter] = []
-            guard walkElementTree(
+            guard walkTree(
                 elements[elementIndex],
-                elementIndex: elementIndex,
+                expandSequencePairs: expandSequencePairs,
+                compositeThreshold: compositeThreshold,
+                scope: .element(elementIndex),
                 parameters: &slotParams
             ) else {
                 return false
@@ -489,114 +471,5 @@ package enum ChoiceTreeAnalysis {
             result[1][paramIndex] = result[1][paramIndex].withValues(secondHalf)
         }
         return result
-    }
-
-    // MARK: - Element Walk
-
-    //
-    // Same as walkTree but for elements within a sequence. Nested sequences are treated as opaque (parameters not extracted, but analysis continues). Bare branches are rejected. Picks within elements are supported and route to the shared walkPick logic.
-    //
-    // walkElementChoice differs from walkChoice only in the parameter kind: large-domain elements use .sequenceElement (with elementIndex) instead of .chooseBits. These element parameters are collected into per-slot arrays and embedded in the parent `.compositeSequence` parameter.
-
-    private static func walkElementTree(
-        _ tree: ChoiceTree,
-        elementIndex: Int,
-        parameters: inout [ScreeningParameter]
-    ) -> Bool {
-        switch tree {
-            case let .choice(value, metadata):
-                return walkElementChoice(
-                    value: value,
-                    metadata: metadata,
-                    elementIndex: elementIndex,
-                    parameters: &parameters
-                )
-
-            case .just:
-                return true
-
-            case .group(_, isOpaque: true, _):
-                return true
-
-            case let .group(children, _, _):
-                if isPick(children) {
-                    return walkPick(children, parameters: &parameters)
-                }
-                for child in children {
-                    guard walkElementTree(
-                        child,
-                        elementIndex: elementIndex,
-                        parameters: &parameters
-                    ) else { return false }
-                }
-                return true
-
-            case .bind:
-                // Bind inside a sequence element — treat as opaque (dependent parameters)
-                return true
-
-            case .getSize:
-                return true
-
-            case let .sequence(_, metadata):
-                // Nested sequence (for example, a String inside an array of structs). Extracting inner sequence parameters would explode the composite domain, so treat it as opaque — the outer sequence still contributes its own length and non-sequence element parameters.
-                if metadata.validRange != nil { return true }
-                return false
-
-            case let .resize(_, children):
-                for child in children {
-                    guard walkElementTree(
-                        child,
-                        elementIndex: elementIndex,
-                        parameters: &parameters
-                    ) else { return false }
-                }
-                return true
-
-            case .branch:
-                return false
-        }
-    }
-
-    private static func walkElementChoice(
-        value: ChoiceValue,
-        metadata: ChoiceMetadata,
-        elementIndex: Int,
-        parameters: inout [ScreeningParameter]
-    ) -> Bool {
-        // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
-        guard metadata.isPinnedToSize == false else {
-            return true
-        }
-        guard let range = metadata.validRange else {
-            return false
-        }
-
-        let typeTag = value.tag
-        let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
-        let isSmall = overflow == false && domainSize < enumerableDomainThreshold
-
-        if isSmall {
-            let count = domainSize + 1
-            let param = ScreeningParameter(
-                index: parameters.count,
-                values: Array(range.lowerBound ... range.upperBound),
-                domainSize: count,
-                kind: .enumerableChooseBits(range: range, tag: typeTag)
-            )
-            parameters.append(param)
-        } else {
-            let problematicValues = ProblematicValues.computeProblematicValues(
-                min: range.lowerBound, max: range.upperBound, tag: typeTag, payload: metadata.typeTagPayload
-            )
-            let param = ScreeningParameter(
-                index: parameters.count,
-                values: problematicValues,
-                domainSize: UInt64(problematicValues.count),
-                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: typeTag)
-            )
-            parameters.append(param)
-        }
-        return true
     }
 }

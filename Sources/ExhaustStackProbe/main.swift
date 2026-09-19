@@ -79,7 +79,9 @@ final class ResultBox: @unchecked Sendable {
         }
         _ = replayed
         let sequence = ChoiceSequence.flatten(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
+            prefix: sequence, mode: .exact, fallbackTree: tree
+        )) else {
             continue
         }
         _ = materialized

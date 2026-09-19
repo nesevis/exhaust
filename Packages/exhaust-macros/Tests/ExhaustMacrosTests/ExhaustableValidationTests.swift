@@ -244,8 +244,8 @@
                 let model = try ExhaustableDeclaration.validate(declaration, lexicalContext: [])
                 let payloadTypes = switch model.construction {
                     case let .enumeration(cases):
-                        cases.flatMap { $0.parameterClause?.parameters.map { $0.type.trimmedDescription } ?? [] }
-                    case let .memberwise(properties), let .synthesizedMemberwise(properties):
+                        cases.flatMap { $0.element.parameterClause?.parameters.map { $0.type.trimmedDescription } ?? [] }
+                    case let .memberwise(properties), let .synthesizedMemberwise(properties, _):
                         properties.map { $0.type.trimmedDescription }
                 }
                 #expect(payloadTypes == ["Value"])
@@ -290,7 +290,7 @@
             }
         }
 
-        @Test("A product model retains mutability and default expressions with nonoptional types")
+        @Test("A product model keeps every constructible stored property in declaration order")
         func retainsConstructionInformation() throws {
             let declaration: DeclSyntax = """
             struct Value {
@@ -309,8 +309,59 @@
             }
             #expect(properties.map(\.name) == ["count", "label", "observed"])
             #expect(properties.map { $0.type.trimmedDescription } == ["Int", "String", "Int"])
-            #expect(properties.map(\.isMutable) == [false, true, true])
-            #expect(properties.map { $0.initialValue?.trimmedDescription } == [nil, "\"initial\"", "0"])
+        }
+
+        @Test("A Swift version restriction on a case is rejected rather than lowered to #available")
+        func rejectsSwiftVersionAvailability() throws {
+            for attribute in ["@available(swift 99)", "@available(swift, introduced: 99)"] {
+                let declaration = DeclSyntax(stringLiteral: """
+                enum Signal {
+                    case ready
+                    \(attribute)
+                    case future
+                }
+                """)
+                let enumeration = try #require(declaration.as(EnumDeclSyntax.self))
+                #expect(throws: ExhaustableDiagnostic.caseAvailabilityUnsupported) {
+                    try ExhaustableDeclaration.validate(enumeration, lexicalContext: [])
+                }
+            }
+        }
+
+        @Test("An operating-system version on a case becomes a runtime availability check")
+        func acceptsPlatformAvailability() throws {
+            let declaration: DeclSyntax = """
+            enum Signal {
+                case ready
+                @available(macOS 99, *)
+                case future
+            }
+            """
+            let enumeration = try #require(declaration.as(EnumDeclSyntax.self))
+            let model = try ExhaustableDeclaration.validate(enumeration, lexicalContext: [])
+            guard case let .enumeration(cases) = model.construction else {
+                Issue.record("Expected enumeration construction")
+                return
+            }
+            #expect(cases.count == 2)
+            guard case let .guarded(versions) = cases[1].availability else {
+                Issue.record("Expected the annotated case to be guarded")
+                return
+            }
+            #expect(versions == ["macOS 99"])
+        }
+
+        @Test("An initialized constant has no memberwise argument and is rejected before the model exists")
+        func rejectsInitializedConstant() throws {
+            let declaration: DeclSyntax = """
+            struct Value {
+                let count: Int = 0
+            }
+            """
+            let structure = try #require(declaration.as(StructDeclSyntax.self))
+            #expect(throws: ExhaustableDiagnostic.initializedConstantUnsupported) {
+                try ExhaustableDeclaration.validate(structure, lexicalContext: [])
+            }
         }
     }
 

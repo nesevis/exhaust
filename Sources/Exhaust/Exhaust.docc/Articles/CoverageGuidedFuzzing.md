@@ -2,7 +2,7 @@
 
 Give Exhaust a time budget and let it search for bugs by observing which branches your code takes.
 
-> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behaviour may change in any release. Every call site emits a build warning until the mode stabilises.
+> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behavior may change in any release.
 
 ## Overview
 

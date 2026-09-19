@@ -280,10 +280,12 @@ extension __ExhaustRuntime {
     ) {
         let fullTree = Materializer.materialize(
             gen,
-            prefix: ChoiceSequence.flatten(failure.tree),
-            mode: .exact,
-            fallbackTree: failure.tree,
-            materializePicks: true
+            context: .init(
+                prefix: ChoiceSequence.flatten(failure.tree),
+                mode: .exact,
+                fallbackTree: failure.tree,
+                materializePicks: true
+            )
         )
         let reductionTree: ChoiceTree? = switch fullTree {
             case let .success(_, rematerialized, _):

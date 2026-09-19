@@ -27,7 +27,10 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public fileprivate(set) var uniqueChoiceSequences = 0
     /// Indicates whether Exhaust skipped the reflection round-trip check automatically or through ``ExamineSettings/skipReflection``. The rendered report names which.
-    public fileprivate(set) var reflectionSkipped = false
+    public var reflectionSkipped: Bool {
+        reflectionSkipReason != nil
+    }
+
     /// Names the reason in the rendered report, so a reader can tell an automatic skip from a requested one. Nil whenever ``reflectionSkipped`` is `false`.
     fileprivate var reflectionSkipReason: ReflectionSkipReason?
     /// Whether the skipped generator was synthesized, which is the only case that has pinned fields to count.
@@ -389,7 +392,6 @@ private extension Generator where Operation == ReflectiveOperation {
         var report = ExamineReport()
         report.sampleCount = samples
         report.reflectionSkipReason = skipReason
-        report.reflectionSkipped = skipReason != nil
         var forwardOnlyDetected = report.reflectionSkipped
         var replaySuccesses = 0
         var uniqueSequenceHashes: Set<UInt64> = []

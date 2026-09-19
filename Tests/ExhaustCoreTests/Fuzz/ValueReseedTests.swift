@@ -192,9 +192,11 @@ private func flatChild(
 ) -> ChoiceSequence? {
     guard case let .success(_, sequence, report) = Materializer.materializeAnyFlat(
         gen.erase(),
-        prefix: prefix,
-        mode: .guided(seed: seed, fallbackTree: tree),
-        reseedRanges: ranges
+        context: .init(
+            prefix: prefix,
+            mode: .guided(seed: seed, fallbackTree: tree),
+            reseedRanges: ranges
+        )
     ) else {
         return nil
     }

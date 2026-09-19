@@ -251,9 +251,11 @@ struct SetupChoiceSequenceTests {
             let setupSequence = ChoiceSequence.flatten(split.setupTree)
             let materialized = Materializer.materialize(
                 setupGen.gen,
-                prefix: setupSequence,
-                mode: .exact,
-                fallbackTree: split.setupTree
+                context: .init(
+                    prefix: setupSequence,
+                    mode: .exact,
+                    fallbackTree: split.setupTree
+                )
             )
             guard case let .success(step, _, _) = materialized else {
                 Issue.record("Exact materialization of the extracted setup child failed for seed \(seed)")

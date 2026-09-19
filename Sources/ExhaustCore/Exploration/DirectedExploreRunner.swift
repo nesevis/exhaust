@@ -329,10 +329,12 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
     ) -> ReducedFailure<Output> {
         let fullTree = Materializer.materialize(
             gen,
-            prefix: ChoiceSequence.flatten(tunedTree),
-            mode: .exact,
-            fallbackTree: tunedTree,
-            materializePicks: true
+            context: .init(
+                prefix: ChoiceSequence.flatten(tunedTree),
+                mode: .exact,
+                fallbackTree: tunedTree,
+                materializePicks: true
+            )
         )
         let reductionTree: ChoiceTree? = switch fullTree {
             case let .success(_, rematerialized, _): rematerialized

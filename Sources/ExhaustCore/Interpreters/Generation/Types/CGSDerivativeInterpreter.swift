@@ -13,7 +13,7 @@
 
 /// Generates values without building a ``ChoiceTree`` or allocating a ``GenerationContext``.
 ///
-/// Used by CGS derivative evaluation in ``OnlineCGSInterpreter/handlePick`` where only the output matters. The absence of ``GenerationContext`` eliminates per-sample allocation overhead that is load-bearing at the derivative sampling scale (thousands of samples per pick operation).
+/// Used by CGS derivative evaluation in ``OnlineCGSInterpreter/handlePick`` where only the output matters. The absence of ``GenerationContext`` eliminates per-sample allocation overhead that is vital at the derivative sampling scale (thousands of samples per pick operation).
 package enum CGSDerivativeInterpreter {
     /// Produces a single value from the generator using the provided PRNG, or returns `nil` if generation fails.
     @inline(__always)

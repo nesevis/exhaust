@@ -116,9 +116,11 @@ struct ReductionPropertyTests {
 
         guard case let .success(_, secondTree, _) = Materializer.materialize(
             gen,
-            prefix: firstSequence,
-            mode: .exact,
-            fallbackTree: tree
+            context: .init(
+                prefix: firstSequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
         ) else {
             Issue.record("Failed to materialize reduced sequence")
             return

@@ -16,7 +16,7 @@ extension ChoiceGraph {
     ///   - bindNodeID: The ``ChoiceGraphNodeKind/bind(_:)`` node to classify.
     ///   - gen: The erased generator used to materialize each endpoint lift.
     ///   - baseSequence: The live ``ChoiceSequence``. The classifier overwrites a single upstream entry to construct each endpoint candidate.
-    ///   - fallbackTree: The live ``ChoiceTree``. Passed to ``Materializer/materializeAny(_:prefix:mode:fallbackTree:materializePicks:)`` as the guided-mode fallback so downstream positions outside the probed endpoint's domain re-resolve coherently.
+    ///   - fallbackTree: The live ``ChoiceTree``. Passed to ``Materializer/materializeAny(_:context:)`` as the guided-mode fallback so downstream positions outside the probed endpoint's domain re-resolve coherently.
     ///   - upstreamLeafNodeID: The ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf whose valid range defines the probe endpoints. Typically the bind's inner child.
     mutating func classifyBind(
         at bindNodeID: Int,
@@ -124,10 +124,12 @@ extension ChoiceGraph {
         ))
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(
             gen,
-            prefix: candidate,
-            mode: .guided(seed: 0, fallbackTree: fallbackTree),
-            fallbackTree: fallbackTree,
-            materializePicks: true
+            context: .init(
+                prefix: candidate,
+                mode: .guided(seed: 0, fallbackTree: fallbackTree),
+                fallbackTree: fallbackTree,
+                materializePicks: true
+            )
         ) else {
             return nil
         }

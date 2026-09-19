@@ -202,9 +202,11 @@ private func assertReplayMaterializerEquivalence<Output>(
         // Reproduction is `.exact` mode: it reads every choice — including branch selection — from the flattened prefix. `.guided` re-selects pick branches from its seed (it is for exploration, not reproduction), so it agrees with replay only for branch-free generators.
         let materializeResult = Materializer.materialize(
             gen,
-            prefix: ChoiceSequence.flatten(tree),
-            mode: .exact,
-            fallbackTree: tree
+            context: .init(
+                prefix: ChoiceSequence.flatten(tree),
+                mode: .exact,
+                fallbackTree: tree
+            )
         )
         guard case let .success(materialized, _, _) = materializeResult else { return false }
 

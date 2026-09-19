@@ -742,9 +742,11 @@ package final class FuzzRunner<Output> {
         let guidedSeed = prng.next()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
-            prefix: mutated,
-            mode: .guided(seed: guidedSeed, fallbackTree: parent.tree),
-            reseedRanges: reseedRanges
+            context: .init(
+                prefix: mutated,
+                mode: .guided(seed: guidedSeed, fallbackTree: parent.tree),
+                reseedRanges: reseedRanges
+            )
         )
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.attempts.record(.mutation, origin, .rejectedByMaterializer)
@@ -883,9 +885,11 @@ package final class FuzzRunner<Output> {
             // The stored sequence, not the candidate's: under a prune hook the corpus holds the pruned form, and a full tree materialised from the longer original would give the donor index spans past the end of the entry's sequence.
             if case let .success(_, fullTree, _) = Materializer.materializeAny(
                 erasedGen,
-                prefix: corpus.entries[admittedIndex].sequence,
-                mode: .exact,
-                materializePicks: true
+                context: .init(
+                    prefix: corpus.entries[admittedIndex].sequence,
+                    mode: .exact,
+                    materializePicks: true
+                )
             ) {
                 corpus.upgradeToFullTree(at: admittedIndex, fullTree: fullTree)
             }
@@ -952,8 +956,10 @@ package final class FuzzRunner<Output> {
     ///
     /// The comparison ignores size-derived length ranges: a fresh draw made at size *s* records `0 ... s` on a default `.array()`'s sequence marker, and the exact rebuild at size 100 records `0 ... 100` for the same choices. Comparing those as identity rejected every fresh draw not made at size 100, which held those draws' failures unreduced with no cluster and kept them out of the corpus.
     private func rebuildTree(for sequence: ChoiceSequence) -> ChoiceTree? {
-        guard case let .success(_, tree, _) = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact),
-              ChoiceSequence.flatten(tree).matchesIgnoringDerivedLengthRanges(sequence)
+        guard case let .success(_, tree, _) = Materializer.materializeAny(erasedGen, context: .init(
+            prefix: sequence, mode: .exact
+        )),
+            ChoiceSequence.flatten(tree).matchesIgnoringDerivedLengthRanges(sequence)
         else {
             ExhaustLog.error(
                 category: .propertyTest,

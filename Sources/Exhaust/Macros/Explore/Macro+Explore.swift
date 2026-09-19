@@ -68,7 +68,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 ///
 /// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)
@@ -94,7 +94,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 ///
 /// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)
@@ -120,7 +120,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 ///
 /// Settings are variadic ``StateMachineFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, fail-fast stopping (``StateMachineFuzzSettings/failFast``), and the per-sequence command limit (``StateMachineFuzzSettings/commandLimit(_:)``).
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 ///
 /// - Note: A spec's `failureDescription()` is not surfaced in `time:` mode; the reported counterexample is the reduced command sequence.
 ///
@@ -148,7 +148,7 @@ public macro explore<Spec: StateMachineSpec>(
 ///
 /// Settings are variadic ``StateMachineFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, fail-fast stopping (``StateMachineFuzzSettings/failFast``), the per-sequence command limit (``StateMachineFuzzSettings/commandLimit(_:)``), and the lane count (``StateMachineFuzzSettings/parallelize(lanes:)``).
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 ///
 /// - Note: A spec's `failureDescription()` is not surfaced in `time:` mode; the reported counterexample is the reduced command sequence.
 ///

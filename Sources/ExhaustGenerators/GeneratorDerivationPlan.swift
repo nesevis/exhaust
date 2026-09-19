@@ -82,6 +82,14 @@ final class GeneratorDerivationPlan {
         analyzeDepths()
     }
 
+    /// Retrieves a registered dependency. Every symbolic derived-type edge must resolve before depth analysis or generator construction begins.
+    func plan(for reference: ObjectIdentifier) -> TypeDerivationPlan {
+        guard let entry = types[reference] else {
+            preconditionFailure("Every derived-type reference must have a registered construction plan: \(reference)")
+        }
+        return entry
+    }
+
     /// Shares built-in leaves by type and effective state space without applying that state space to explicit overrides.
     func defaultGenerator(for type: any DefaultGenerable.Type, stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Any> {
         let key = DefaultGeneratorKey(type: ObjectIdentifier(type), stateSpace: stateSpace)
@@ -132,7 +140,7 @@ final class GeneratorDerivationPlan {
             case .supplied, .standard, .container:
                 return 0
             case let .derivedType(reference):
-                let child = types[reference]!
+                let child = plan(for: reference)
                 guard let minimum = minimumDepths[reference],
                       child.maximumDepth.map({ minimum <= $0 }) ?? true
                 else {
@@ -148,7 +156,7 @@ final class GeneratorDerivationPlan {
         while changed {
             changed = false
             for reference in discoveryOrder {
-                let typePlan = types[reference]!
+                let typePlan = plan(for: reference)
                 let minimum = typePlan.constructors.compactMap { minimumDepth(for: $0.payloads) }.min()
                 if minimum != minimumDepths[reference] {
                     minimumDepths[reference] = minimum
@@ -236,7 +244,7 @@ final class GeneratorDerivationPlan {
         var visited: Set<ObjectIdentifier> = []
         var current = root
         while true {
-            let typePlan = types[current]!
+            let typePlan = plan(for: current)
             path.append(String(describing: typePlan.type))
             guard visited.insert(current).inserted else {
                 return path

@@ -7,6 +7,18 @@ import Testing
 
 @Suite("Derived state spaces")
 struct GeneratorStateSpaceTests {
+    @Test("Nested presets retain an operand no wider than either input")
+    func presetLimit() {
+        let preset = #gen(.element(from: GeneratorStateSpace.allCases))
+        let inputs = #gen(preset, preset)
+        #exhaust(inputs) { policy, ceiling in
+            let result = policy.limited(by: ceiling)
+            #expect(result == policy || result == ceiling)
+            #expect(result <= policy)
+            #expect(result <= ceiling)
+        }
+    }
+
     @Test("Numeric presets scale linearly and clip narrow integer types", arguments: [
         (GeneratorStateSpace.tiny, 10), (.small, 100), (.medium, 10000),
     ], [1, 25, 50, 100])
