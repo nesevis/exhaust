@@ -47,4 +47,7 @@ package enum EncoderName: String, Hashable, Sendable, CaseIterable {
 
     /// Drives ``TypeTag/laneControl`` chooseBits values toward zero (the sequential prefix). Each lane marker moved to zero removes one command from the concurrent interleaving space.
     case laneCollapse
+
+    /// Binary searches a ``TypeTag/depthControl`` chooseBits value toward its range floor. Each accepted step drops one layer of a recursive generator, which the materializer rebuilds at the lowered depth.
+    case depthCollapse
 }

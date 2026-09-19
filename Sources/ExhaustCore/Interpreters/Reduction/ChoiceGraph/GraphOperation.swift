@@ -49,6 +49,7 @@ enum GraphOperation {
             case .minimize(.boundValue): .boundValueSearch
             case .minimize(.bindPivot): .bindPivot
             case .minimize(.laneCollapse): .laneCollapse
+            case .minimize(.depthCollapse): .depthCollapse
             case .exchange(.redistribution): .redistribution
             case .exchange(.tandem): .lockstep
             case .exchange(.relation): .relationSearch

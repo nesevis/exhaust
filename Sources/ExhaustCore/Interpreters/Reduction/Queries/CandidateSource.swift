@@ -189,6 +189,12 @@ enum CandidateSourceBuilder {
             sources.append(.sorted(SortedCandidateSource(laneCollapseCandidates)))
         }
 
+        // Depth collapse.
+        let depthCollapseCandidates = buildDepthCollapseCandidates(graph: graph)
+        if depthCollapseCandidates.isEmpty == false {
+            sources.append(.sorted(SortedCandidateSource(depthCollapseCandidates)))
+        }
+
         // Minimization.
         let minimizationCandidates = buildMinimizationCandidates(graph: graph, deferBindInner: deferBindInner)
         if minimizationCandidates.isEmpty == false {

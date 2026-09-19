@@ -247,6 +247,9 @@ struct GraphValueEncoder: GraphEncoder {
             case .laneCollapse:
                 assertionFailure("laneCollapse scopes must route through GraphLaneCollapseEncoder, not GraphValueEncoder")
                 mode = .idle
+            case .depthCollapse:
+                assertionFailure("depthCollapse scopes must route through GraphDepthCollapseEncoder, not GraphValueEncoder")
+                mode = .idle
             case .bindPivot:
                 assertionFailure("bindPivot scopes must route through GraphBindPivotEncoder, not GraphValueEncoder")
                 mode = .idle

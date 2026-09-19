@@ -198,6 +198,8 @@ enum ChoiceGraphScheduler {
                 .swap(GraphSwapEncoder())
             case .minimize(.laneCollapse):
                 .laneCollapse(GraphLaneCollapseEncoder())
+            case .minimize(.depthCollapse):
+                .depthCollapse(GraphDepthCollapseEncoder())
             case .minimize(.bindPivot):
                 makeBindPivotEncoder(gen: gen)
             case .minimize:

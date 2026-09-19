@@ -24,7 +24,7 @@ extension CandidateSourceBuilder {
                     bindScope.boundSubtreeSize
                 case let .bindPivot(pivotScope):
                     pivotScope.boundSubtreeSize
-                case .laneCollapse:
+                case .laneCollapse, .depthCollapse:
                     0
             }
 
@@ -39,7 +39,7 @@ extension CandidateSourceBuilder {
                         : min(64, bindScope.downstreamNodeIDs.count * 8))
                 case let .bindPivot(pivotScope):
                     pivotScope.estimatedProbes
-                case .laneCollapse:
+                case .laneCollapse, .depthCollapse:
                     0
             }
 
@@ -137,5 +137,22 @@ extension CandidateSourceBuilder {
                 estimatedCost: 1
             )
         )]
+    }
+
+    /// One transformation per depth-control leaf, or none when the graph holds no depth control.
+    ///
+    /// The structural benefit is the leaf's distance to its floor: every layer dropped removes a whole subtree, which is structural rather than value work, and the deepest leaf is tried first. The cost is the binary search's step count over that distance.
+    static func buildDepthCollapseCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
+        DepthCollapseQuery.build(graph: graph).map { scope in
+            GraphTransformation(
+                operation: .minimize(scope),
+                priority: DispatchPriority(
+                    structuralBenefit: DepthCollapseQuery.distanceToFloor(of: scope, graph: graph),
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: DepthCollapseQuery.estimatedProbes(of: scope, graph: graph)
+                )
+            )
+        }
     }
 }

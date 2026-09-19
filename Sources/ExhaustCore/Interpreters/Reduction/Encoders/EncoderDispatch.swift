@@ -8,6 +8,7 @@ indirect enum EncoderDispatch {
     case swap(GraphSwapEncoder)
     case reorder(GraphReorderEncoder)
     case laneCollapse(GraphLaneCollapseEncoder)
+    case depthCollapse(GraphDepthCollapseEncoder)
     case binarySearch(GraphBinarySearchEncoder)
     case boundValueCovering(GraphBoundValueCoveringEncoder)
     case composed(GraphComposedEncoder)
@@ -25,6 +26,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .swap(encoder): encoder.name
             case let .reorder(encoder): encoder.name
             case let .laneCollapse(encoder): encoder.name
+            case let .depthCollapse(encoder): encoder.name
             case let .binarySearch(encoder): encoder.name
             case let .boundValueCovering(encoder): encoder.name
             case let .composed(encoder): encoder.name
@@ -58,6 +60,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .laneCollapse(encoder):
                 encoder.start(scope: scope)
                 self = .laneCollapse(encoder)
+            case var .depthCollapse(encoder):
+                encoder.start(scope: scope)
+                self = .depthCollapse(encoder)
             case var .binarySearch(encoder):
                 encoder.start(scope: scope)
                 self = .binarySearch(encoder)
@@ -107,6 +112,10 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .laneCollapse(encoder)
                 return result
+            case var .depthCollapse(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .depthCollapse(encoder)
+                return result
             case var .binarySearch(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .binarySearch(encoder)
@@ -136,6 +145,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .swap(encoder): encoder.hadReplacementShortlexRejection
             case let .reorder(encoder): encoder.hadReplacementShortlexRejection
             case let .laneCollapse(encoder): encoder.hadReplacementShortlexRejection
+            case let .depthCollapse(encoder): encoder.hadReplacementShortlexRejection
             case let .binarySearch(encoder): encoder.hadReplacementShortlexRejection
             case let .boundValueCovering(encoder): encoder.hadReplacementShortlexRejection
             case let .composed(encoder): encoder.hadReplacementShortlexRejection
@@ -153,6 +163,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .swap(encoder): encoder.convergenceRecords
             case let .reorder(encoder): encoder.convergenceRecords
             case let .laneCollapse(encoder): encoder.convergenceRecords
+            case let .depthCollapse(encoder): encoder.convergenceRecords
             case let .binarySearch(encoder): encoder.convergenceRecords
             case let .boundValueCovering(encoder): encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
@@ -186,6 +197,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .laneCollapse(encoder):
                 encoder.flushPartialConvergence()
                 self = .laneCollapse(encoder)
+            case var .depthCollapse(encoder):
+                encoder.flushPartialConvergence()
+                self = .depthCollapse(encoder)
             case var .binarySearch(encoder):
                 encoder.flushPartialConvergence()
                 self = .binarySearch(encoder)
