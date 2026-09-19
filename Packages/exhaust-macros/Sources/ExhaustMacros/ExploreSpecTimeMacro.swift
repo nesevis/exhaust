@@ -33,11 +33,6 @@ private func expandExploreSpecTimeCall(
 ) -> ExprSyntax {
     let arguments = Array(node.arguments)
 
-    context.diagnose(Diagnostic(
-        node: Syntax(node),
-        message: ExhaustMacroDiagnostic.exploreTimeExperimental
-    ))
-
     guard arguments.count >= 1 else {
         context.diagnose(Diagnostic(
             node: Syntax(node),

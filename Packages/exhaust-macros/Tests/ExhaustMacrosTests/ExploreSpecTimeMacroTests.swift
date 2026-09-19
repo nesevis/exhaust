@@ -14,12 +14,6 @@
                 """
                 #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
                 """
-            } diagnostics: {
-                """
-                #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
-                ┬────────────────────────────────────────────────────────────────────
-                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
-                """
             } expansion: {
                 """
                 __ExhaustRuntime.__runStateMachineTimeDispatch(
@@ -46,7 +40,6 @@
                 """
                 #explore(BoundedQueueSpec.self)
                 ┬──────────────────────────────
-                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                 ╰─ 🛑 #explore(time:) requires a 'time:' argument
                 """
             }
@@ -63,7 +56,6 @@
                 """
                 #explore(BoundedQueueSpec.self, time: .minutes(5))
                 ┬─────────────────────────────────────────────────
-                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                 ╰─ 🛑 #explore requires a 'mode:' argument (.sequential or .tasks)
                 """
             }
@@ -75,12 +67,6 @@
                 assertMacro {
                     """
                     #explore(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
-                    """
-                } diagnostics: {
-                    """
-                    #explore(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
-                    ┬──────────────────────────────────────────────────────────────────────────────────────────────────
-                    ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                     """
                 } expansion: {
                     """
@@ -104,12 +90,6 @@
             assertMacro {
                 """
                 #explore(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
-                """
-            } diagnostics: {
-                """
-                #explore(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
-                ┬──────────────────────────────────────────────────────────────────────────────────
-                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                 """
             } expansion: {
                 """

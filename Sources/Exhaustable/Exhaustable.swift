@@ -119,6 +119,8 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 ///
 /// The macro supports enums, structs, final classes, and generic forms of those declarations. It diagnoses unsupported storage and initialization patterns at the declaration.
 ///
+/// - Important: `@Exhaustable` is experimental. Its arguments, supported declarations, generated members, diagnostics, and source compatibility may change in any release.
+///
 /// - Parameters:
 ///   - maximumDepth: The default recursive nesting ceiling. Defaults to 10.
 ///   - maximumNodes: An optional default structural node ceiling. Defaults to no node ceiling.

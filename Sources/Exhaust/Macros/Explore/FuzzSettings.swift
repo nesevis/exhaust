@@ -9,7 +9,7 @@ import ExhaustCore
 ///
 /// Searching a `@StateMachine` spec takes ``StateMachineFuzzSettings`` instead, which adds the two settings that need command sequences to mean anything.
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 public enum PropertyFuzzSettings: Sendable {
     /// A fixed seed for replaying a prior run (reproduction, benchmarking, regression).
     ///
@@ -50,7 +50,7 @@ public enum PropertyFuzzSettings: Sendable {
 ///
 /// Carries the same replay, suppression, log, and fail-fast settings as ``PropertyFuzzSettings``, plus the two that describe command sequences. Those two are absent from the generator form because a generator produces one value rather than a sequence of commands, so writing them there is a compile error.
 ///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 public enum StateMachineFuzzSettings: Sendable {
     /// A fixed seed for replaying a prior run (reproduction, benchmarking, regression).
     ///
