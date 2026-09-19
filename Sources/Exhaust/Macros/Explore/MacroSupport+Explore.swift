@@ -415,7 +415,7 @@ public extension __ExhaustRuntime {
         #if canImport(Testing)
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
-        return await dispatchToGCD(reserving: LaneReservation.single) {
+        return await dispatchToGCD(reserving: LaneReservation.single) { _ in
             let run = {
                 __explore(
                     refGen,
@@ -457,7 +457,7 @@ public extension __ExhaustRuntime {
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
 
-        var report = await dispatchToGCD(reserving: LaneReservation.single) { () -> ExploreReport<Output> in
+        var report = await dispatchToGCD(reserving: LaneReservation.single) { (_: UInt64) -> ExploreReport<Output> in
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
             // The framework is named rather than resolved: this runs on a GCD thread, where Test.current is nil and resolution reports XCTest for a Swift Testing run. The async path is always in a Swift Testing context.
             #if canImport(Testing)

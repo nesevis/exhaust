@@ -118,11 +118,13 @@ package extension __ExhaustRuntime {
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop. This deadlocks under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD's global queue is far larger than the fixed cooperative pool, so this avoids that starvation — but it is not unbounded: a top-level concurrent queue caps at 64 threads, so aggregate lane demand is bounded by `LaneGate` (via `dispatchToGCD(reserving:)`) to keep it under that wall.
         let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         let searchAbandonments = UnsafeSendableBox(0)
-        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) {
-            ExhaustLog.withConfiguration(config.logConfiguration) {
+        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) { gateWaitNanoseconds in
+            var admittedConfig = config
+            admittedConfig.postponeDeadline(by: gateWaitNanoseconds)
+            return ExhaustLog.withConfiguration(admittedConfig.logConfiguration) {
                 runCooperativeMachine(
                     Spec.self,
-                    config: config,
+                    config: admittedConfig,
                     regressionSeeds: regressionSeeds,
                     timeoutProbeCounts: timeoutProbeCounts,
                     searchAbandonments: searchAbandonments,

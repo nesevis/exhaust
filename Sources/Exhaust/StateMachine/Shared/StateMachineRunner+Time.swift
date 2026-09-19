@@ -250,7 +250,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        return await dispatchToGCD(reserving: LaneReservation.fuzz) {
+        return await dispatchToGCD(reserving: LaneReservation.fuzz) { _ in
             guard let adapter = makeAdapter() else {
                 return .empty(
                     termination: .invalidConfiguration("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure."),

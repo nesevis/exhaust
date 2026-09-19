@@ -50,6 +50,17 @@ struct ResolvedConcurrentConfig {
         parse(settings).config.logConfiguration
     }
 
+    /// Pushes the deadline back by `nanoseconds`, so that span does not count against the run's budget.
+    ///
+    /// ``parse(_:)`` stamps the deadline when it reads the settings, which is before the run is admitted at the ``LaneGate``. Time parked there is spent queueing behind other runs rather than probing, so the runners discount it once they hold their lanes. Without the discount a run admitted late reports a deadline it never got to use, having executed nothing.
+    ///
+    /// A deadline already saturated at ``UInt64/max`` stays there, and a run with no deadline is unaffected.
+    mutating func postponeDeadline(by nanoseconds: UInt64) {
+        guard let deadline = deadlineNanoseconds else { return }
+        let (postponed, overflow) = deadline.addingReportingOverflow(nanoseconds)
+        deadlineNanoseconds = overflow ? .max : postponed
+    }
+
     mutating func applySuppress(_ option: SuppressOption) {
         suppress.apply(option)
     }

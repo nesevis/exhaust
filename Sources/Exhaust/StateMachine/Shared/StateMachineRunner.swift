@@ -167,11 +167,13 @@ package extension __ExhaustRuntime {
 
         let logConfiguration = config.logConfiguration
 
-        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) {
-            ExhaustLog.withConfiguration(logConfiguration) {
+        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) { gateWaitNanoseconds in
+            var admittedConfig = config
+            admittedConfig.postponeDeadline(by: gateWaitNanoseconds)
+            return ExhaustLog.withConfiguration(logConfiguration) {
                 runAsyncSequentialPipeline(
                     specType,
-                    config: config,
+                    config: admittedConfig,
                     regressionSeeds: regressionSeeds,
                     fileID: fileID,
                     filePath: filePath,

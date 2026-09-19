@@ -1,4 +1,4 @@
-/// Lightweight monotonic timer that produces elapsed milliseconds. Built on ``monotonicNanoseconds()`` for cross-platform support (Darwin, Linux, Windows).
+/// Lightweight monotonic timer that produces elapsed time. Built on ``monotonicNanoseconds()`` for cross-platform support (Darwin, Linux, Windows).
 package struct Stopwatch: Sendable {
     private let startNanos: UInt64
 
@@ -6,8 +6,13 @@ package struct Stopwatch: Sendable {
         startNanos = monotonicNanoseconds()
     }
 
+    /// Nanoseconds elapsed since this stopwatch was created.
+    package var elapsedNanoseconds: UInt64 {
+        monotonicNanoseconds() &- startNanos
+    }
+
     /// Milliseconds elapsed since this stopwatch was created.
     package var elapsedMilliseconds: Double {
-        Double(monotonicNanoseconds() &- startNanos) / 1_000_000
+        Double(elapsedNanoseconds) / 1_000_000
     }
 }

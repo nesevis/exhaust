@@ -64,11 +64,13 @@ package extension __ExhaustRuntime {
         let commandLimit = config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
-            ExhaustLog.withConfiguration(config.logConfiguration) {
+        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) { gateWaitNanoseconds in
+            var admittedConfig = config
+            admittedConfig.postponeDeadline(by: gateWaitNanoseconds)
+            return ExhaustLog.withConfiguration(admittedConfig.logConfiguration) {
                 runPreemptiveMachine(
                     innerBackend: innerBackend,
-                    config: config,
+                    config: admittedConfig,
                     regressionSeeds: regressionSeeds,
                     timeoutProbeCounts: timeoutProbeCounts,
                     fileID: fileID,

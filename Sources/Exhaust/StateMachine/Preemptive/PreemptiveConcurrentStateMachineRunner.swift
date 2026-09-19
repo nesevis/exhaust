@@ -62,11 +62,13 @@ package extension __ExhaustRuntime {
 
         let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         // Gate + offload: acquire a lane reservation, then run the (synchronous) machine on a GCD worker. The gate bounds how many preemptive runs execute at once so their lanes are not starved of threads under `--parallel`; the GCD hop frees the cooperative thread. Reporting is deferred to the async return context where Swift Testing's task-locals are available.
-        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
-            ExhaustLog.withConfiguration(config.logConfiguration) {
+        let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) { gateWaitNanoseconds in
+            var admittedConfig = config
+            admittedConfig.postponeDeadline(by: gateWaitNanoseconds)
+            return ExhaustLog.withConfiguration(admittedConfig.logConfiguration) {
                 runPreemptiveMachine(
                     innerBackend: innerBackend,
-                    config: config,
+                    config: admittedConfig,
                     regressionSeeds: regressionSeeds,
                     timeoutProbeCounts: timeoutProbeCounts,
                     fileID: fileID,

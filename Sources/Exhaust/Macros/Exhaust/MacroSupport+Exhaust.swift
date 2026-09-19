@@ -823,7 +823,7 @@ public extension __ExhaustRuntime {
             let reportDelivery = DeferredReportDelivery(settings: settings)
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
-        return await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) {
+        return await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) { _ in
             let run: () -> Output? = {
                 #if canImport(Testing)
                     if let regression = replayRegressionSeeds(
@@ -971,7 +971,7 @@ public extension __ExhaustRuntime {
             // Resolved here rather than on the GCD worker: Test.current is task-local, so a worker resolves a Swift Testing run as XCTest. dispatchToGCD already binds the DeferredIssueSink this scope's sync counterpart binds for itself.
             let absorbed = AbsorbedIssues()
 
-            await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) {
+            await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) { _ in
                 #if canImport(Testing)
                     ExhaustTraitConfiguration.$current.withValue(traitConfig) {
                         absorbed.absorbing {

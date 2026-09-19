@@ -90,7 +90,7 @@ public extension __ExhaustRuntime {
         replay: ((inout FuzzReport, _ suppressIssueReporting: Bool) async -> Void)? = nil
     ) async -> FuzzReport {
         let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
-        var report = await dispatchToGCD(reserving: LaneReservation.fuzz) {
+        var report = await dispatchToGCD(reserving: LaneReservation.fuzz) { _ in
             runCore(persistence)
         }
         let parsedSettings = ParsedPropertyFuzzSettings(settings)
