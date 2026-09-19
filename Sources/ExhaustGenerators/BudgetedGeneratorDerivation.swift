@@ -86,7 +86,7 @@ final class BudgetedGeneratorDerivation {
 
     /// Builds one layer: a uniform pick over the constructors that fit this depth and allowance.
     ///
-    /// A constructor drops out when any payload is unconstructible here, or when the allowance cannot cover its children's minima. At depth zero a type with payload-free cases offers only those, so recursion terminates on a case that carries no structure rather than on whichever payload happens to bottom out. Arms whose payloads reach another derived type are wrapped in `lazy`, which keeps the recursive layer from being constructed while this one is still being built. Layers are cached by type, depth, allowance, and state space, so a shared child generator is built once and reused wherever those four agree.
+    /// A constructor drops out when any payload is unconstructible here, or when the allowance cannot cover its children's minima. At depth zero a type with payload-free cases offers only those, so recursion terminates on a case that carries no structure rather than on whichever payload happens to bottom out. Arms whose payloads reach another derived type are wrapped in `lazy`. Construction has already finished by that point, and terminates on its own: depth falls by one across every derived-type edge, and a depth-zero layer offers only payload-free constructors. What the wrapper adds is a bind boundary at the arm, which keeps reduction and mutation inside the recursive subtree instead of spreading across the whole layer. Layers are cached by type, depth, allowance, and state space, so a shared child generator is built once and reused wherever those four agree.
     func generator<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         depth: Int,
@@ -135,22 +135,14 @@ final class BudgetedGeneratorDerivation {
         return result
     }
 
+    /// Packs a constructor's children, embedding a value per draw rather than reusing one built here.
+    ///
+    /// A payload-free constructor takes the same path as any other, with no children to zip. Embedding once and replaying that value would hand every draw the same class instance.
     private func arm<Value>(
         _ entry: __Exhaustable.ConstructorDescriptor<Value>,
         children: [ReflectiveGenerator<Any>],
         recursive: Bool
     ) -> ReflectiveGenerator<Value> {
-        if children.isEmpty {
-            return Gen.contramap(
-                { (value: Value) throws -> Value in
-                    guard entry.extract(value) != nil else {
-                        throw ReflectionError.couldNotMapInputToGenerator
-                    }
-                    return value
-                },
-                Gen.just(entry.embed([]))
-            ).wrapped(isReflective: true)
-        }
         let result = Gen.zippedReflective(
             ContiguousArray(children.map { $0.gen }),
             pack: { entry.embed($0) },
@@ -161,6 +153,7 @@ final class BudgetedGeneratorDerivation {
                 return payloads
             },
             isReflective: children.allSatisfy { $0.isReflective }
+                && (children.isEmpty == false || isPayloadFreeReflectable(Value.self))
         )
         guard recursive else {
             return result
@@ -390,4 +383,13 @@ private struct CountedContainerKey: Hashable {
 
 private func capped(_ allowance: Int?, at ceiling: Int?) -> Int? {
     [allowance, ceiling].compactMap { $0 }.min()
+}
+
+/// Reports whether reflection can recognize a value a payload-free constructor rebuilds.
+///
+/// Reflection picks an arm by comparing the value it rebuilt against the target, and a rebuild produces a fresh instance. A payload-free class carries nothing to compare: `Mirror` exposes no children, so the two instances match only if the type's own `==` ignores identity, which is not knowable here. An `Equatable` conformance is not enough of an answer, because an identity-based `==` would claim reflection this arm cannot deliver. Structs and enum cases compare by shape or case name and stay reflectable.
+///
+/// Decided from the metatype: asking an instance would mean constructing and discarding one before any sample is drawn, which a `deinit` observes.
+private func isPayloadFreeReflectable(_ type: (some Any).Type) -> Bool {
+    type is AnyClass == false
 }

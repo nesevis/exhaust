@@ -144,8 +144,8 @@ struct ExhaustReportTests {
 
         let report = try #require(capturedReport)
         #expect(report.screeningRows == 4)
-        #expect(report.screeningInvocations == 2)
-        #expect(report.screeningRejectedRows == 2)
+        #expect(report.screeningInvocations == 1)
+        #expect(report.screeningRejectedRows == 3)
         #expect(report.screeningRows == report.screeningInvocations + report.screeningRejectedRows)
         #expect(report.propertyInvocations == report.screeningInvocations)
     }

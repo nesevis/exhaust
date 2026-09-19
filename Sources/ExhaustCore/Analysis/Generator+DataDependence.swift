@@ -14,7 +14,7 @@ package extension FreerMonad where Operation == ReflectiveOperation {
     ///
     /// Reports `true` for a reified bind, and for a graph deeper than ``dataDependenceDepthLimit``. Over-reporting costs a sampling phase that was not strictly needed; under-reporting would let screening claim a domain it never enumerated, so every uncertain case resolves to `true`. The operation switch is deliberately exhaustive: a new operation kind has to state its own answer rather than inherit a default that reads as safe.
     ///
-    /// - Note: Reads the reified node, so a combinator that sequences through ``FreerMonad/bind(_:)`` without emitting one is invisible here. ``Gen/shuffled(_:)`` and ``Gen/slice(of:)`` are built that way. Their shape dependence has never been visible to this question — a materialized tree does not record it either — so this walk matches what a fully materialized arm would have reported, and no more.
+    /// - Note: Reads the reified node, so a combinator that sequences through ``FreerMonad/bind(_:)`` without emitting one would be invisible here. ``FreerMonad/boundForwardOnly(forward:fileID:line:column:)`` exists for that reason, and ``Gen/shuffled(_:)`` and ``Gen/slice(of:)`` use it; a combinator added later has to do the same to be seen.
     /// - Complexity: O(*n*) in the number of graph nodes visited, which stops at the first bind.
     var hasDataDependentShape: Bool {
         Self.hasDataDependentShape(erase(), depth: 0)

@@ -4,15 +4,33 @@ import SwiftSyntax
 /// Validates the construction strategy before either macro role emits code. The extension role owns diagnostics; the member role uses the same validation but emits nothing on failure.
 struct ExhaustableDeclaration {
     enum Construction {
-        case enumeration([EnumCaseElementSyntax])
+        case enumeration([EnumCase])
         case memberwise([StoredProperty])
-        case synthesizedMemberwise([StoredProperty])
+
+        /// Carries its own access because a generated initializer may not be more visible than the payload types it names, and a `private` payload admits no other level. The descriptor witness cannot borrow that level: it lives in an extension, where `private` would scope it to the extension alone.
+        case synthesizedMemberwise([StoredProperty], initializerAccess: String)
     }
 
     /// Retains only the validated name and type used by constructor rendering. Storage and initializer restrictions are checked before creating the model.
     struct StoredProperty {
         let name: String
         let type: TypeSyntax
+    }
+
+    /// Pairs a case element with the availability of the `case` declaration that introduced it. The element alone does not carry those attributes, and one declaration can introduce several elements that all share them.
+    struct EnumCase {
+        let element: EnumCaseElementSyntax
+        let availability: CaseAvailability
+    }
+
+    /// Decides how a case reaches the descriptor: written plainly, written inside a version check, or left out because no build can name it.
+    enum CaseAvailability {
+        case always
+
+        /// Platform-version specifications for an `#available` check, without the trailing wildcard.
+        case guarded([String])
+
+        case never
     }
 
     let access: String
@@ -32,11 +50,12 @@ struct ExhaustableDeclaration {
             throw ExhaustableDiagnostic.conditionalMembersUnsupported
         }
         if let enumeration = declaration.as(EnumDeclSyntax.self) {
-            let cases = enumeration.memberBlock.members.flatMap { member -> [EnumCaseElementSyntax] in
+            let cases = try enumeration.memberBlock.members.flatMap { member -> [EnumCase] in
                 guard let entry = member.decl.as(EnumCaseDeclSyntax.self) else {
                     return []
                 }
-                return Array(entry.elements)
+                let availability = try caseAvailability(of: entry.attributes)
+                return entry.elements.map { EnumCase(element: $0, availability: availability) }
             }
             return Self(
                 access: accessPrefix(for: enumeration.modifiers, lexicalContext: lexicalContext),
@@ -49,7 +68,7 @@ struct ExhaustableDeclaration {
                 construction: .memberwise(productProperties(
                     in: structure.memberBlock.members,
                     allowingDirectInitializer: true
-                ))
+                ).properties)
             )
         }
         if let classDeclaration = declaration.as(ClassDeclSyntax.self) {
@@ -60,21 +79,93 @@ struct ExhaustableDeclaration {
             guard classDeclaration.inheritanceClause == nil else {
                 throw ExhaustableDiagnostic.classInheritanceUnsupported
             }
-            return try Self(
-                access: accessPrefix(for: classDeclaration.modifiers, lexicalContext: lexicalContext),
-                construction: .synthesizedMemberwise(productProperties(in: classDeclaration.memberBlock.members))
+            let stored = try productProperties(in: classDeclaration.memberBlock.members)
+            let declared = accessLevel(for: classDeclaration.modifiers, lexicalContext: lexicalContext)
+            return Self(
+                access: max(declared, .fileScope).prefix,
+                construction: .synthesizedMemberwise(
+                    stored.properties,
+                    initializerAccess: min(max(declared, .fileScope), stored.access).prefix
+                )
             )
         }
         throw ExhaustableDiagnostic.requiresEnumStructOrFinalClass
     }
 
+    /// Reads a case declaration's availability so the renderer can reference the case only where the compiler accepts it.
+    ///
+    /// An introduced version becomes an `#available` check. A case that no build can name contributes no constructor at all, because generating one would require an expression that never type-checks. Deprecation, renaming, and messages leave constructibility alone and are ignored.
+    private static func caseAvailability(of attributes: AttributeListSyntax) throws -> CaseAvailability {
+        var versions: [String] = []
+        for element in attributes {
+            guard let attribute = element.as(AttributeSyntax.self),
+                  attribute.attributeName.trimmedDescription == "available",
+                  case let .availability(arguments) = attribute.arguments
+            else {
+                continue
+            }
+            var platform: String?
+            var isWildcard = false
+            for argument in arguments {
+                switch argument.argument {
+                    case let .token(token):
+                        switch token.text {
+                            case "*":
+                                isWildcard = true
+                            case "unavailable":
+                                // A platform-specific `unavailable` leaves the case namable in other builds, which no single check expresses.
+                                guard isWildcard || platform == nil else {
+                                    throw ExhaustableDiagnostic.caseAvailabilityUnsupported
+                                }
+                                return .never
+                            case "deprecated", "noasync":
+                                break
+                            default:
+                                platform = token.text
+                        }
+                    case let .availabilityVersionRestriction(restriction):
+                        guard isRuntimePlatform(restriction.platform.text) else {
+                            throw ExhaustableDiagnostic.caseAvailabilityUnsupported
+                        }
+                        versions.append(restriction.trimmedDescription)
+                    case let .availabilityLabeledArgument(labeled):
+                        switch labeled.label.text {
+                            case "introduced":
+                                guard let platform, isRuntimePlatform(platform) else {
+                                    throw ExhaustableDiagnostic.caseAvailabilityUnsupported
+                                }
+                                versions.append("\(platform) \(labeled.value.trimmedDescription)")
+                            case "obsoleted":
+                                // The case is namable below the obsoletion version and not at or above it, which `#available` states only in reverse.
+                                throw ExhaustableDiagnostic.caseAvailabilityUnsupported
+                            default:
+                                break
+                        }
+                }
+            }
+        }
+        return versions.isEmpty ? .always : .guarded(versions)
+    }
+
+    /// Whether a version restriction names an operating system, which is the only kind `#available` can test.
+    ///
+    /// A `swift` or `_PackageDescription` restriction gates compilation rather than execution. `#available` rejects it outright, and the guarded case stays unavailable inside the check, so neither half of the runtime path works.
+    private static func isRuntimePlatform(_ platform: String) -> Bool {
+        platform != "swift" && platform != "_PackageDescription"
+    }
+
     /// Allows only products whose stored fields can be passed directly to a memberwise initializer and recovered unchanged by extraction.
+    ///
+    /// The reported access is the narrowest access any stored property has, counting an unwritten modifier as internal.
+    ///
+    /// Valid source cannot give a property a wider access than its own type, so this level also bounds how visible a generated initializer naming those types may be. Syntax cannot resolve a type's access, so the property's own access is the only sound proxy: a `public` class holding an unannotated field of an internal type would otherwise be given a `public` initializer that names an internal type and does not compile. Capping at internal matches Swift, which never synthesizes a `public` memberwise initializer either.
     private static func productProperties(
         in members: MemberBlockItemListSyntax,
         allowingDirectInitializer: Bool = false
-    ) throws -> [StoredProperty] {
+    ) throws -> (properties: [StoredProperty], access: AccessLevel) {
         let initializers = members.compactMap { $0.decl.as(InitializerDeclSyntax.self) }
         var properties: [StoredProperty] = []
+        var access = AccessLevel.publicScope
         for member in members {
             guard let variable = member.decl.as(VariableDeclSyntax.self),
                   variable.modifiers.contains(where: { $0.name.text == "static" || $0.name.text == "class" }) == false
@@ -97,6 +188,7 @@ struct ExhaustableDeclaration {
                 guard variable.bindingSpecifier.tokenKind == .keyword(.var) || binding.initializer == nil else {
                     throw ExhaustableDiagnostic.initializedConstantUnsupported
                 }
+                access = min(access, accessLevel(variable.modifiers) ?? .moduleScope)
                 properties.append(StoredProperty(name: identifier.identifier.trimmedDescription, type: type))
             }
         }
@@ -106,7 +198,7 @@ struct ExhaustableDeclaration {
         ) else {
             throw ExhaustableDiagnostic.customInitializerUnsupported
         }
-        return properties
+        return (properties, access)
     }
 
     /// Accepts only the same field order, labels, types, and assignments as synthesized memberwise construction. Transformations, overloads, effects, defaults, and extra statements remain unsupported.
@@ -168,24 +260,31 @@ struct ExhaustableDeclaration {
             ?? declaration.as(StructDeclSyntax.self)?.genericParameterClause
             ?? declaration.as(ClassDeclSyntax.self)?.genericParameterClause
             ?? declaration.as(ActorDeclSyntax.self)?.genericParameterClause
-        return parameters?.parameters.contains { $0.eachKeyword != nil } ?? false
+        return parameters?.parameters.contains { $0.specifier != nil } ?? false
     }
 
-    /// Uses the effective enclosing access so an extension on a nested private type does not expose that type through an internal descriptor property.
+    /// Uses the effective enclosing access so an extension on a nested private type does not expose that type through an internal descriptor property. Raising `private` to `fileprivate` is what lets the expansion's separate extension still see the type.
     private static func accessPrefix(for modifiers: DeclModifierListSyntax, lexicalContext: [Syntax]) -> String {
+        max(accessLevel(for: modifiers, lexicalContext: lexicalContext), .fileScope).prefix
+    }
+
+    private static func accessLevel(for modifiers: DeclModifierListSyntax, lexicalContext: [Syntax]) -> AccessLevel {
         let enclosing = lexicalContext.compactMap { declaration in
             declaration.as(EnumDeclSyntax.self)?.modifiers
                 ?? declaration.as(StructDeclSyntax.self)?.modifiers
                 ?? declaration.as(ClassDeclSyntax.self)?.modifiers
                 ?? declaration.as(ActorDeclSyntax.self)?.modifiers
         }
-        let access = ([modifiers] + enclosing).map(accessLevel).min() ?? .moduleScope
-        return access.prefix
+        return ([modifiers] + enclosing).compactMap { accessLevel($0) ?? .moduleScope }.min() ?? .moduleScope
     }
 
-    private static func accessLevel(_ modifiers: DeclModifierListSyntax) -> AccessLevel {
+    /// Returns nil when no access modifier is written, leaving each caller to supply the default its own question needs.
+    private static func accessLevel(_ modifiers: DeclModifierListSyntax) -> AccessLevel? {
         let names = modifiers.map(\.name.text)
-        if names.contains("private") || names.contains("fileprivate") {
+        if names.contains("private") {
+            return .typeScope
+        }
+        if names.contains("fileprivate") {
             return .fileScope
         }
         if names.contains("package") {
@@ -194,11 +293,14 @@ struct ExhaustableDeclaration {
         if names.contains("public") || names.contains("open") {
             return .publicScope
         }
-        return .moduleScope
+        return nil
     }
 
-    /// Orders effective visibility so a nested declaration cannot expose its enclosing type. Private declarations need a fileprivate witness because the expansion lives in a separate extension.
+    /// Orders effective visibility so a nested declaration cannot expose its enclosing type.
+    ///
+    /// ``typeScope`` and ``fileScope`` stay apart because the compiler accepts only `private` on a member whose signature names a `private` type; `fileprivate` is rejected there. Each expansion site picks its own floor: a witness in a separate extension raises `typeScope` away, an initializer emitted into the type body keeps it.
     private enum AccessLevel: Int, Comparable {
+        case typeScope
         case fileScope
         case moduleScope
         case packageScope
@@ -206,6 +308,8 @@ struct ExhaustableDeclaration {
 
         var prefix: String {
             switch self {
+                case .typeScope:
+                    "private "
                 case .fileScope:
                     "fileprivate "
                 case .moduleScope:
@@ -237,6 +341,7 @@ enum ExhaustableDiagnostic: String, Error, DiagnosticMessage {
     case propertyStorageUnsupported
     case propertyPatternUnsupported
     case conditionalMembersUnsupported
+    case caseAvailabilityUnsupported
 
     var message: String {
         switch self {
@@ -264,6 +369,8 @@ enum ExhaustableDiagnostic: String, Error, DiagnosticMessage {
                 "@Exhaustable does not support tuple destructuring in a stored property; declare each property on its own"
             case .conditionalMembersUnsupported:
                 "@Exhaustable does not support conditional compilation in the declaration's members; move the #if outside the type so each variant is its own annotated declaration"
+            case .caseAvailabilityUnsupported:
+                "@Exhaustable supports an introduced operating-system version or an unconditional @available(*, unavailable) on an enum case, but not a Swift version, obsoletion, or platform-specific unavailability; write a generator for this type instead"
         }
     }
 

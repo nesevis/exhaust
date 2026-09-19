@@ -113,6 +113,76 @@ struct ExhaustableDeclarationTests {
         #expect(structure.extract(structure.embed([]))?.isEmpty == true)
         #expect(record.extract(record.embed([]))?.isEmpty == true)
     }
+
+    @Test("A payload-free constructor embeds a new value on every draw")
+    func payloadFreeDrawsAreDistinct() throws {
+        let generator = ReflectiveGenerator<DeclarationEmptyClass>.derived(depth: 0)
+        var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 1337, sizeOverride: 100)
+        let (first, _) = try #require(try interpreter.next())
+        let (second, _) = try #require(try interpreter.next())
+        #expect(first !== second)
+    }
+
+    @Test("Payload-free reflection follows whether a rebuilt value can be recognized")
+    func payloadFreeReflectionCapability() throws {
+        #expect(ReflectiveGenerator<DeclarationEmptyStruct>.derived(depth: 0).isReflective)
+        #expect(ReflectiveGenerator<DeclarationEmptyEnum>.derived(depth: 0).isReflective)
+        // A payload-free class carries nothing to compare a rebuilt instance against, and an Equatable conformance does not say whether its == ignores identity, so neither form claims reflection.
+        #expect(ReflectiveGenerator<DeclarationEmptyEquatableClass>.derived(depth: 0).isReflective == false)
+        #expect(ReflectiveGenerator<DeclarationEmptyClass>.derived(depth: 0).isReflective == false)
+
+        let structure = ReflectiveGenerator<DeclarationEmptyStruct>.derived(depth: 0)
+        #expect(try Interpreters.reflect(structure.gen, with: DeclarationEmptyStruct()) != nil)
+        let enumeration = ReflectiveGenerator<DeclarationEmptyEnum>.derived(depth: 0)
+        #expect(try Interpreters.reflect(enumeration.gen, with: DeclarationEmptyEnum.only) != nil)
+    }
+
+    @Test("A main actor isolated payload derives off the main actor")
+    func isolatedPayloadDerivation() async {
+        let generator = await Task.detached {
+            ReflectiveGenerator<DeclarationIsolatedOwner>.derived(depth: 1)
+        }.value
+        #expect(generator.isReflective)
+    }
+
+    @Test("Version-gated cases contribute constructors only where the case exists")
+    func availabilityGatedCases() {
+        let names = DeclarationAvailability.__generatorDescriptor.constructors.map(\.name)
+        #expect(names.contains("ready"))
+        // @available(*, unavailable) leaves no build able to name the case, so it has no constructor at all.
+        #expect(names.contains("retired") == false)
+        #expect(names.contains("future") == availabilityAdmitsFutureCase)
+    }
+
+    @Test("Building a payload-free generator constructs no value")
+    func payloadFreeBuildingConstructsNothing() {
+        DeclarationDeinitCounter.count.withValue { $0 = 0 }
+        _ = ReflectiveGenerator<DeclarationObservedEmptyClass>.derived(depth: 0)
+        // Probing the constructor to decide reflection support would build and discard an instance here.
+        #expect(DeclarationDeinitCounter.count.withValue { $0 } == 0)
+    }
+
+    @Test("An optional payload survives extraction as a boxed value")
+    func optionalPayloadExtraction() throws {
+        let entry = try #require(DeclarationOptionalPayload.__generatorDescriptor.constructors.first)
+        for name in [String?.some("set"), nil] {
+            let value = entry.embed([name as Any, 3])
+            #expect(value.name == name)
+            let payloads = try #require(entry.extract(value))
+            // `.none` has to arrive still wrapped, or the embed cast on the way back finds a bare Any.
+            #expect(payloads[0] as? String? == name)
+            #expect(payloads[1] as? Int == 3)
+        }
+    }
+
+    @Test("A private payload keeps its generated initializer inside the type")
+    func privatePayloadConstruction() throws {
+        let entry = try #require(DeclarationPrivatePayload.__generatorDescriptor.constructors.first)
+        #expect(entry.payloadTypes.count == 2)
+        let value = entry.embed([DeclarationPrivatePayload.makeHidden(7), 9])
+        #expect(value.count == 9)
+        #expect(try #require(entry.extract(value)).count == 2)
+    }
 }
 
 // MARK: - Compile-time fixtures
@@ -196,3 +266,89 @@ private struct DeclarationEmptyStruct {}
 
 @Exhaustable
 private final class DeclarationEmptyClass {}
+
+@Exhaustable
+private final class DeclarationEmptyEquatableClass {}
+
+extension DeclarationEmptyEquatableClass: Equatable {
+    static func == (_: DeclarationEmptyEquatableClass, _: DeclarationEmptyEquatableClass) -> Bool {
+        true
+    }
+}
+
+@Exhaustable
+private enum DeclarationEmptyEnum {
+    case only
+}
+
+/// Checks that a payload whose conformance the compiler infers as main actor isolated still resolves through the erased dependency graph.
+@MainActor
+@Exhaustable
+private struct DeclarationIsolatedPayload {
+    let count: Int
+}
+
+@Exhaustable
+private struct DeclarationIsolatedOwner {
+    let inner: DeclarationIsolatedPayload
+}
+
+@Exhaustable
+private enum DeclarationAvailability {
+    case ready
+
+    @available(macOS 99, iOS 42, *)
+    case future
+
+    @available(*, unavailable)
+    case retired
+}
+
+private var availabilityAdmitsFutureCase: Bool {
+    if #available(macOS 99, iOS 42, *) {
+        return true
+    }
+    return false
+}
+
+private enum DeclarationDeinitCounter {
+    static let count = SendableBox(0)
+}
+
+@Exhaustable
+private final class DeclarationObservedEmptyClass {
+    deinit {
+        DeclarationDeinitCounter.count.withValue { $0 += 1 }
+    }
+}
+
+@Exhaustable
+private struct DeclarationOptionalPayload {
+    let name: String?
+    let count: Int
+}
+
+/// Checks that a public class holding an unannotated field of an internal type still compiles. The generated initializer may not be public, because its signature names that internal type.
+struct DeclarationInternalPayload {
+    let count: Int
+}
+
+@Exhaustable
+public final class DeclarationPublicBox {
+    let payload: DeclarationInternalPayload
+}
+
+/// Checks that a generated initializer naming a private payload type compiles, which it does only at `private`.
+@Exhaustable
+private final class DeclarationPrivatePayload {
+    private struct Hidden {
+        let value: Int
+    }
+
+    private let hidden: Hidden
+    let count: Int
+
+    static func makeHidden(_ value: Int) -> Any {
+        Hidden(value: value)
+    }
+}
