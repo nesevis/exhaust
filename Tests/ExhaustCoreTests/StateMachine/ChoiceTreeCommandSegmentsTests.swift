@@ -93,14 +93,19 @@ struct ChoiceTreeCommandSegmentsTests {
         let elementGen: Generator<Int> = Gen.choose(in: 0 ... 1000)
         let arrayGen = Gen.arrayOf(elementGen, within: 3 ... 3, scaling: .constant)
 
-        var interpreter = ValueAndChoiceTreeInterpreter(arrayGen, materializePicks: true, seed: 42, maxRuns: 1)
-        let (value, tree) = try #require(try interpreter.next())
-
-        let segments = try #require(tree.perElementSegments())
-
-        if value[0] != value[1] {
+        var compared = 0
+        for seed in UInt64(1) ... 50 {
+            var interpreter = ValueAndChoiceTreeInterpreter(arrayGen, materializePicks: true, seed: seed, maxRuns: 1)
+            let (value, tree) = try #require(try interpreter.next())
+            guard value[0] != value[1] else {
+                continue
+            }
+            let segments = try #require(tree.perElementSegments())
             #expect(segments[0] != segments[1])
+            compared += 1
+            break
         }
+        #expect(compared > 0, "No seed in 1 ... 50 drew two different values in the first two positions")
     }
 
     @Test("Segments reconstruct the sequence content of the full flatten across seeds and structures")

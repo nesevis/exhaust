@@ -237,7 +237,10 @@ struct ChoiceGraphScopeQueryTests {
         #expect(bindNodeID != nil)
         guard let bindNodeID else { return }
 
-        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+            Issue.record("Expected the located node to carry bind metadata")
+            return
+        }
         let innerLeafID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
         let boundLeafID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
 
@@ -265,7 +268,10 @@ struct ChoiceGraphScopeQueryTests {
         #expect(bindNodeID != nil)
         guard let bindNodeID else { return }
 
-        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+            Issue.record("Expected the located node to carry bind metadata")
+            return
+        }
         let innerContainerID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
         let boundLeafID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
 
@@ -344,7 +350,11 @@ struct ChoiceGraphScopeQueryTests {
         let innerBindID = bindIDs[1]
 
         guard case let .bind(outerMeta) = graph.nodes[outerBindID].kind,
-              case let .bind(innerMeta) = graph.nodes[innerBindID].kind else { return }
+              case let .bind(innerMeta) = graph.nodes[innerBindID].kind
+        else {
+            Issue.record("Expected both located nodes to carry bind metadata")
+            return
+        }
         let leafAID = graph.nodes[innerBindID].children[innerMeta.innerChildIndex]
 
         #expect(graph.nodes[leafAID].scopeAnnotation.controllingBindNodeID == outerBindID)

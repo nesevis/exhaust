@@ -211,15 +211,6 @@ extension MetaGeneratorPropertyTests {
         #expect(anyEquals(replayed, value))
     }
 
-    @Test("anyEquals correctly compares optional values")
-    func optionalEquality() {
-        #expect(anyEquals(Any?.none as Any, Any?.none as Any))
-        #expect(anyEquals(Any?.some(42) as Any, Any?.some(42) as Any))
-        #expect(anyEquals(Any?.some(42) as Any, 42 as Any))
-        #expect(anyEquals(Any?.none as Any, Any?.some(42) as Any) == false)
-        #expect(anyEquals(Any?.some(1) as Any, Any?.some(2) as Any) == false)
-    }
-
     // MARK: 14. Per-Combinator Reflection Coverage
 
     /// Asserts every reflectable combinator actually reflects and round-trips at least one of its own generated values.

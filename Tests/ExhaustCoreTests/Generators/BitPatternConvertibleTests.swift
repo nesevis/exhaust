@@ -4,8 +4,6 @@
 //
 //  Tests for BitPatternConvertible implementations, particularly Int.
 //
-//  NOTE: All #exhaust calls converted to exhaustCheck helper since #exhaust is Exhaust-only.
-//
 
 import ExhaustCore
 import ExhaustTestSupport

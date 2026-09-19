@@ -36,7 +36,7 @@ struct DateLargeDomainCoverageAnalysis {
         BudgetTier(name: "extensive (2000)", budget: 2000),
     ]
 
-    @Test("3 params: per-parameter coverage at each budget tier", arguments: tiers)
+    @Test("3 params: per-parameter coverage at each budget tier", .disabled("Diagnostic output only; asserts nothing"), arguments: tiers)
     func threeParamCoverage(tier: BudgetTier) throws {
         let dateGen = #gen(.date(
             between: Self.year2024, interval: .hours(1), timeZone: Self.usEastern
@@ -120,7 +120,7 @@ struct DateLargeDomainCoverageAnalysis {
         print()
     }
 
-    @Test("3 params: per-parameter coverage at each budget tier (rotated)", arguments: tiers)
+    @Test("3 params: per-parameter coverage at each budget tier (rotated)", .disabled("Diagnostic output only; asserts nothing"), arguments: tiers)
     func threeParamCoverageRotated(tier: BudgetTier) throws {
         let dateGen = #gen(.date(
             between: Self.year2024, interval: .hours(1), timeZone: Self.usEastern
@@ -227,7 +227,7 @@ struct DateLargeDomainCoverageAnalysis {
         print()
     }
 
-    @Test("3 params: BCAG per-parameter coverage at each budget tier", arguments: tiers)
+    @Test("3 params: BCAG per-parameter coverage at each budget tier", .disabled("Diagnostic output only; asserts nothing"), arguments: tiers)
     func threeParamCoverageBCAG(tier: BudgetTier) throws {
         let dateGen = #gen(.date(
             between: Self.year2024, interval: .hours(1), timeZone: Self.usEastern

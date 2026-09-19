@@ -102,6 +102,29 @@ struct BreadcrumbSidecarTests {
             #expect(FuzzBreadcrumb.readSurvivor(fileURL: url) == nil)
         }
     }
+
+    #if canImport(Darwin) || canImport(Glibc)
+        @Test("The breadcrumb records, reads back, and clears")
+        func breadcrumbRoundTrip() throws {
+            let directory = scratchDirectory()
+            let fileURL = directory.appendingPathComponent("breadcrumb.bin")
+            defer {
+                try? FileManager.default.removeItem(at: directory)
+            }
+
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL, recordsCandidateSequence: true))
+            #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
+
+            breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222, kind: .reduction)
+            let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
+            #expect(survivor.candidateHash == 0xAAAA_BBBB)
+            #expect(survivor.parentHash == 0x1111_2222)
+            #expect(survivor.kind == .reduction)
+
+            breadcrumb.clear()
+            #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
+        }
+    #endif
 }
 
 // MARK: - Helpers

@@ -458,7 +458,7 @@ struct FuzzRunnerTests {
         #expect(result.coveredEdgeCount == 4)
     }
 
-    @Test("The adaptive fresh mixture follows the producers' admission rates and falls to the cap only when both starve")
+    @Test("The adaptive fresh mixture follows the producers' admission rates and falls to the cap only when both starve", .enabled(if: FuzzTunables.freshMixtureAdaptive, "EXHAUST_FRESH_ADAPTIVE=0 selects the starvation ramp"))
     func adaptiveFreshMixtureFollowsAdmissionRates() {
         let runner = FuzzRunner(
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
@@ -484,9 +484,7 @@ struct FuzzRunnerTests {
             runner.noteMixtureOutcome(phase: .mutation, origin: .freshSample, admitted: false)
         }
         #expect(runner.mutationAdmissionRate > runner.freshAdmissionRate)
-        // The rule is computed from the same rates the runner keeps, so the expectation does not depend on the env flag.
-        let adaptiveShare = min(cap, max(floor, runner.freshAdmissionRate / (runner.freshAdmissionRate + runner.mutationAdmissionRate)))
-        #expect(adaptiveShare == floor)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: 0) == floor)
         #expect(runner.mixtureObservations >= ramp)
         // Both producers silent for several ramps: the rates decay below one admission per ramp, the starvation case.
         for _ in 0 ..< ramp * 20 {
@@ -494,6 +492,7 @@ struct FuzzRunnerTests {
             runner.noteMixtureOutcome(phase: .mutation, origin: .freshSample, admitted: false)
         }
         #expect(runner.freshAdmissionRate + runner.mutationAdmissionRate < 1 / Double(ramp))
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: 0) == cap)
         // A generator that admits where the mutator does not: the share rises with its portion.
         for attempt in 0 ..< ramp * 4 {
             runner.noteMixtureOutcome(phase: .mutation, origin: .freshSample, admitted: attempt % 50 == 0)
@@ -501,6 +500,7 @@ struct FuzzRunnerTests {
         }
         let generatorShare = runner.freshAdmissionRate / (runner.freshAdmissionRate + runner.mutationAdmissionRate)
         #expect(generatorShare > 0.8)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: 0) > floor)
     }
 
     @Test("The starvation ramp climbs with attempts since admission and resets on admission")

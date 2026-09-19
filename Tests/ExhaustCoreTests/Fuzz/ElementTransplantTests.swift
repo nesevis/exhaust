@@ -66,6 +66,9 @@ private func elementPick() -> Generator<UInt64> {
     Gen.pick(choices: [(1, Gen.choose(in: UInt64(0) ... 9)), (1, Gen.choose(in: UInt64(100) ... 109))])
 }
 
+/// A second pick site whose body matches ``elementPick()`` on purpose.
+///
+/// A pick's site identity is its source location, so two declarations with identical bodies are still two sites, which is exactly what `differentSitesAreNotPaired` needs. Deduplicating the two functions would silently make the test pass for the wrong reason.
 private func otherPick() -> Generator<UInt64> {
     Gen.pick(choices: [(1, Gen.choose(in: UInt64(0) ... 9)), (1, Gen.choose(in: UInt64(100) ... 109))])
 }

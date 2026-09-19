@@ -107,66 +107,6 @@ struct FuzzPersistenceTests {
         #expect(loaded.clusters.count == 1)
     }
 
-    #if canImport(Darwin) || canImport(Glibc)
-        @Test("The breadcrumb records, reads back, and clears")
-        func breadcrumbRoundTrip() throws {
-            let directory = scratchDirectory()
-            let fileURL = directory.appendingPathComponent("breadcrumb.bin")
-            defer {
-                try? FileManager.default.removeItem(at: directory)
-            }
-
-            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL, recordsCandidateSequence: true))
-            #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
-
-            breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222, kind: .reduction)
-            let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
-            #expect(survivor.candidateHash == 0xAAAA_BBBB)
-            #expect(survivor.parentHash == 0x1111_2222)
-            #expect(survivor.kind == .reduction)
-
-            breadcrumb.clear()
-            #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
-        }
-    #endif
-
-    @Test("Quarantined hashes leave parent selection and stay out on re-admission")
-    func corpusQuarantine() {
-        let corpus = FuzzCorpus(edgeCount: 8)
-        var sequences: [ChoiceSequence] = []
-        for value in 0 ..< 4 {
-            let sequence: ChoiceSequence = [
-                .value(ChoiceSequenceValue.Value(
-                    choice: ChoiceValue(UInt64(value), tag: .int64),
-                    validRange: nil
-                )),
-            ]
-            sequences.append(sequence)
-            let admission = corpus.offer(
-                sequence: sequence,
-                tree: .just,
-                hits: [(edge: value, hitCount: 1)],
-                convergence: 1.0,
-                generation: 0,
-                phase: .sampling
-            )
-            guard case .admitted = admission else {
-                Issue.record("Expected admission for entry \(value)")
-                return
-            }
-        }
-        #expect(corpus.parentIndices.count == 4)
-
-        let quarantinedHash = ZobristHash.hash(of: sequences[1])
-        corpus.quarantine(sequenceHash: quarantinedHash)
-        #expect(corpus.parentIndices.count == 3)
-        for draw in stride(from: 0.0, to: 1.0, by: 0.05) {
-            if let (_, entry) = corpus.pickParent(random: draw) {
-                #expect(entry.hash != quarantinedHash)
-            }
-        }
-    }
-
     #if os(macOS)
         @Test("The breadcrumb survives a Swift trap in a child process", .timeLimit(.minutes(2)))
         func breadcrumbSurvivesTrap() throws {
@@ -199,7 +139,7 @@ struct FuzzPersistenceTests {
 
 // MARK: - Helpers
 
-private func scratchDirectory() -> URL {
+func scratchDirectory() -> URL {
     FileManager.default.temporaryDirectory
         .appendingPathComponent("exhaust-persistence-tests")
         .appendingPathComponent(UUID().uuidString)

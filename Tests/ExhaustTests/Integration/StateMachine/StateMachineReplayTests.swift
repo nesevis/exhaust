@@ -64,13 +64,11 @@ struct StateMachineReplayTests {
                 BrokenModuloSpec.self,
                 mode: .sequential,
                 .commandLimit(4),
+                .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.all)
             )
         )
-        guard initial.discoveryMethod == .screening else {
-            // SCA was skipped or failure came from sampling — not testable for screening replay
-            return
-        }
+        #expect(initial.discoveryMethod == .screening)
         let replaySeed = try #require(initial.replaySeed)
         #expect(replaySeed.contains("-U"), "SCA replay seed should carry a U row marker")
 
@@ -213,10 +211,9 @@ struct ConcurrentStateMachineReplayTests {
             )
         )
         #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
-        if initial.discoveryMethod == .screening {
-            #expect(replayed.discoveryMethod == .screening)
-            #expect(replayed.replaySeed == replaySeed)
-        }
+        #expect(initial.discoveryMethod == .screening)
+        #expect(replayed.discoveryMethod == .screening)
+        #expect(replayed.replaySeed == replaySeed)
     }
 }
 
@@ -314,63 +311,6 @@ actor ReplayableNonAtomicCounter: CustomDebugStringConvertible {
 
     func decrement() {
         _value -= 1
-    }
-}
-
-// MARK: - Preemptive Concurrent Spec
-
-@StateMachine
-final class PreemptiveReplayableSpec {
-    var expected: Int = 0
-    @SystemUnderTest var counter: PreemptiveRacyCounter = .init()
-
-    @Equivalence
-    func oracleMatches(other: PreemptiveRacyCounter) -> Bool {
-        counter.value == other.value
-    }
-
-    @Command(weight: 3)
-    func increment() throws {
-        expected += 1
-        counter.increment()
-    }
-
-    @Command(weight: 2)
-    func decrement() throws {
-        guard expected > 0 else {
-            throw skip()
-        }
-        expected -= 1
-        counter.decrement()
-    }
-
-    func failureDescription() -> String? {
-        "\(counter)"
-    }
-}
-
-/// Non-thread-safe counter for preemptive race detection.
-final class PreemptiveRacyCounter: @unchecked Sendable, CustomDebugStringConvertible {
-    private var _value: Int = 0
-
-    var value: Int {
-        _value
-    }
-
-    var debugDescription: String {
-        "PreemptiveRacyCounter(value: \(_value))"
-    }
-
-    func increment() {
-        let current = _value
-        Thread.sleep(forTimeInterval: 0.0001)
-        _value = current + 1
-    }
-
-    func decrement() {
-        let current = _value
-        Thread.sleep(forTimeInterval: 0.0001)
-        _value = current - 1
     }
 }
 

@@ -17,12 +17,16 @@ struct LazyZipExactDecodeTests {
             })
         )
 
-        var iteration = 0
-        var generated = try generate(pairGen.gen, iteration: iteration)
-        while generated.value == nil || generated.value! == (0, 0) {
-            iteration += 1
-            generated = try generate(pairGen.gen, iteration: iteration)
+        var fixture: (value: (Int, Int)?, tree: ChoiceTree)?
+        for iteration in 0 ..< 200 {
+            let candidate = try generate(pairGen.gen, iteration: iteration)
+            guard let pair = candidate.value, pair != (0, 0) else {
+                continue
+            }
+            fixture = candidate
+            break
         }
+        let generated = try #require(fixture, "No iteration below 200 drew a pair other than nil or (0, 0)")
 
         let result = try Interpreters.choiceGraphReduceCollectingStats(
             gen: pairGen.gen,

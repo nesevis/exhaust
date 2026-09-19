@@ -2,10 +2,6 @@
 //  CharacterSetRangeExtractionTests.swift
 //  ExhaustTests
 //
-//  NOTE: .character(from:), .string(from:), and #exhaust are Exhaust-only.
-//  Character/string generators are inlined using ExhaustCore primitives.
-//  #exhaust replaced with exhaustCheck helper.
-//
 
 import ExhaustCore
 import ExhaustTestSupport

@@ -270,7 +270,7 @@ struct ChoiceGraphTests {
 
     @Test("Deletion antichain excludes individual leaf nodes")
     func deletionAntichainExcludesLeaves() {
-        // A zip of three leaves — the zip is in the antichain, not the individual leaves.
+        // `#gen(.int(), .int(), .int())`. The lanes are tuple slots, not sequence elements, so none of them is deletable and the antichain is empty.
         let tree = ChoiceTree.group([
             .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
             .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
@@ -278,13 +278,34 @@ struct ChoiceGraphTests {
         ])
 
         let graph = ChoiceGraph.build(from: tree)
+
+        #expect(graph.deletionAntichain.isEmpty)
+    }
+
+    /// The positive control for `deletionAntichainExcludesLeaves`. Without it an empty antichain reads as a pass whatever the reason, which is how the exclusion test came to assert nothing.
+    @Test("Deletion antichain holds the elements of a sequence, leaves included")
+    func deletionAntichainHoldsSequenceElements() {
+        // `.int().array()`. The elements are what array reduction removes, so they are candidates even though each is a bare leaf.
+        let tree = ChoiceTree.sequence(
+            elements: [
+                .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+                .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
+            ],
+            metadata: .init(validRange: nil, isRangeExplicit: false)
+        )
+
+        let graph = ChoiceGraph.build(from: tree)
         let antichain = graph.deletionAntichain
 
-        // The zip node has children, so it's a candidate. Individual leaves have no children.
-        // The antichain should contain at most the zip node.
+        #expect(antichain.count == 3)
         for nodeID in antichain {
-            #expect(graph.nodes[nodeID].children.isEmpty == false,
-                    "Antichain member \(nodeID) should have children (structural boundary)")
+            guard let parentID = graph.nodes[nodeID].parent,
+                  case .sequence = graph.nodes[parentID].kind
+            else {
+                Issue.record("Antichain member \(nodeID) should hang off the sequence")
+                return
+            }
         }
     }
 

@@ -2,8 +2,6 @@
 //  ReproducibilityTests.swift
 //  Exhaust
 //
-//  NOTE: #gen and #exhaust converted to ExhaustCore Gen.* API.
-//
 
 import ExhaustCore
 import ExhaustTestSupport

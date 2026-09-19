@@ -2,10 +2,6 @@
 //  ReducerReorderTests.swift
 //  ExhaustTests
 //
-//  Tests for Pass 6 of Interpreters.reduce: sibling value reordering.
-//  Pass 6 reorders sibling elements within sequences so that shrunk outputs
-//  are normalized (e.g. [3, 1, 2] → [1, 2, 3]).
-//
 
 import ExhaustCore
 import ExhaustTestSupport

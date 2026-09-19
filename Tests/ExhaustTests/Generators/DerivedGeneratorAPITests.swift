@@ -1,5 +1,6 @@
 import Exhaust
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Derived generator public API")
@@ -32,11 +33,13 @@ struct DerivedGeneratorAPITests {
     @Test("Omitted and explicit default arguments preserve the existing policy and random stream", arguments: [UInt64(0), 1, 42])
     func defaultFactoryParity(seed: UInt64) throws {
         let reference = ReflectiveGenerator<ConfiguredTree>.derived()
-        try expectMatchingRandomStream(ConfiguredTree.gen(), reference: reference, seed: seed)
+        try expectMatchingRandomStream(ConfiguredTree.gen().gen, reference: reference.gen, seed: seed, size: 1, draws: 50)
         try expectMatchingRandomStream(
-            ConfiguredTree.gen(maximumDepth: nil, maximumNodes: nil, stateSpace: nil, scaling: .linear),
-            reference: reference,
-            seed: seed
+            ConfiguredTree.gen(maximumDepth: nil, maximumNodes: nil, stateSpace: nil, scaling: .linear).gen,
+            reference: reference.gen,
+            seed: seed,
+            size: 1,
+            draws: 50
         )
     }
 
@@ -44,7 +47,7 @@ struct DerivedGeneratorAPITests {
     func configurableFactoryParity(seed: UInt64) throws {
         let generator = ConfiguredTree.gen(maximumDepth: 3, scaling: .constant)
         let reference = ReflectiveGenerator<ConfiguredTree>.derived(maximumDepth: 3, scaling: .constant)
-        try expectMatchingRandomStream(generator, reference: reference, seed: seed)
+        try expectMatchingRandomStream(generator.gen, reference: reference.gen, seed: seed, size: 1, draws: 50)
         // This exceeds the root annotation's default ceiling but fits the explicit root ceiling and all nested ceilings.
         let target: ConfiguredTree = .node(.node(.node(.leaf)))
         let tree = try #require(try Interpreters.reflect(generator.gen, with: target))
@@ -55,7 +58,7 @@ struct DerivedGeneratorAPITests {
     func pinnedFactoryParity(depth: Int) throws {
         let generator = ConfiguredTree.gen(depth: depth)
         let reference = ReflectiveGenerator<ConfiguredTree>.derived(depth: depth)
-        try expectMatchingRandomStream(generator, reference: reference, seed: 42)
+        try expectMatchingRandomStream(generator.gen, reference: reference.gen, seed: 42, size: 1, draws: 50)
         var target: ConfiguredTree = .leaf
         for _ in 0 ..< depth {
             target = .node(target)
@@ -74,7 +77,6 @@ struct DerivedGeneratorAPITests {
         }
         let generator = #gen(configured, DefaultThird.gen())
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.0 == ConfiguredProduct(number: 7, enabled: true) })
         let target = (ConfiguredProduct(number: 7, enabled: true), DefaultThird(letter: "a"))
         let tree = try #require(try Interpreters.reflect(generator.gen, with: target))
@@ -86,7 +88,6 @@ struct DerivedGeneratorAPITests {
     func inlineConfiguredComposition() throws {
         let generator = #gen(DefaultFirst.gen(overriding: .uint8(in: 7 ... 7)), .int(in: 0 ... 9))
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.0 == DefaultFirst(number: 7) && (0 ... 9).contains($0.1) })
         let target = (DefaultFirst(number: 7), 4)
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: target))
@@ -150,7 +151,6 @@ struct DerivedGeneratorAPITests {
             DefaultComposition(first: $0, second: $1, count: $2)
         }
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { (0 ... 9).contains($0.count) })
         let target = DefaultComposition(first: DefaultFirst(number: 42), second: DefaultSecond(enabled: true), count: 7)
         let tree = try #require(try Interpreters.reflect(generator.gen, with: target))
@@ -192,40 +192,4 @@ private indirect enum ConfiguredTree: Equatable {
 private struct ConfiguredProduct: Equatable {
     let number: UInt8
     let enabled: Bool
-}
-
-// MARK: - Helpers
-
-/// Requires the entire requested run to pass reflection and replay checks, without accepting skipped validation or partial generation.
-private func expectSuccessfulExamination(_ report: ExamineReport, samples: Int) {
-    #expect(report.passed, "\(report.failures)")
-    #expect(report.reflectionSkipped == false)
-    #expect(report.sampleCount == samples)
-    #expect(report.valuesGenerated == samples)
-    #expect(report.reflectionRoundTripSuccesses == samples)
-    #expect(report.replayDeterminismSuccesses == samples)
-}
-
-/// Compares both generated values and the next random draw so forwarding cannot silently change random consumption. A small size makes ignored scaling arguments observable.
-private func expectMatchingRandomStream<Value: Equatable>(
-    _ generator: ReflectiveGenerator<Value>,
-    reference: ReflectiveGenerator<Value>,
-    seed: UInt64
-) throws {
-    var actualInterpreter = ValueAndChoiceTreeInterpreter(
-        Gen.zip(generator.gen, Gen.choose(in: UInt64.min ... UInt64.max)),
-        seed: seed,
-        sizeOverride: 1
-    )
-    var referenceInterpreter = ValueAndChoiceTreeInterpreter(
-        Gen.zip(reference.gen, Gen.choose(in: UInt64.min ... UInt64.max)),
-        seed: seed,
-        sizeOverride: 1
-    )
-    for _ in 0 ..< 50 {
-        let actual = try #require(try actualInterpreter.next())
-        let expected = try #require(try referenceInterpreter.next())
-        #expect(actual.0.0 == expected.0.0)
-        #expect(actual.0.1 == expected.0.1)
-    }
 }

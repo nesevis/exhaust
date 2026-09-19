@@ -429,6 +429,43 @@ struct FuzzCorpusTests {
             #expect(pick.index != 2)
         }
     }
+
+    @Test("Quarantined hashes leave parent selection and stay out on re-admission")
+    func corpusQuarantine() {
+        let corpus = FuzzCorpus(edgeCount: 8)
+        var sequences: [ChoiceSequence] = []
+        for value in 0 ..< 4 {
+            let sequence: ChoiceSequence = [
+                .value(ChoiceSequenceValue.Value(
+                    choice: ChoiceValue(UInt64(value), tag: .int64),
+                    validRange: nil
+                )),
+            ]
+            sequences.append(sequence)
+            let admission = corpus.offer(
+                sequence: sequence,
+                tree: .just,
+                hits: [(edge: value, hitCount: 1)],
+                convergence: 1.0,
+                generation: 0,
+                phase: .sampling
+            )
+            guard case .admitted = admission else {
+                Issue.record("Expected admission for entry \(value)")
+                return
+            }
+        }
+        #expect(corpus.parentIndices.count == 4)
+
+        let quarantinedHash = ZobristHash.hash(of: sequences[1])
+        corpus.quarantine(sequenceHash: quarantinedHash)
+        #expect(corpus.parentIndices.count == 3)
+        for draw in stride(from: 0.0, to: 1.0, by: 0.05) {
+            if let (_, entry) = corpus.pickParent(random: draw) {
+                #expect(entry.hash != quarantinedHash)
+            }
+        }
+    }
 }
 
 // MARK: - Helpers

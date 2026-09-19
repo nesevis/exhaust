@@ -1,5 +1,6 @@
 import Exhaust
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustGenerators
 
@@ -16,9 +17,9 @@ struct GeneratorDerivationPlanTests {
         let samples = try #example(generator, count: 30)
         #expect(samples.allSatisfy { (0 ... 9).contains($0.payload.number) })
         let target = PlanEnvelope(payload: PlanLeaf(number: 7))
-        try expectRoundTrip(generator, value: target)
-        try expectRoundTrip(PlanEnvelope.gen(), value: target)
-        try expectRoundTrip(ReflectiveGenerator<PlanEnvelope>.derived(maximumDepth: 1), value: target)
+        try expectReflectionRoundTrip(generator.gen, value: target)
+        try expectReflectionRoundTrip(PlanEnvelope.gen().gen, value: target)
+        try expectReflectionRoundTrip(ReflectiveGenerator<PlanEnvelope>.derived(maximumDepth: 1).gen, value: target)
     }
 
     @Test("Root construction preserves depth diagnostics with and without a node ceiling", arguments: [Int?.none, 4], [false, true])
@@ -53,8 +54,8 @@ struct GeneratorDerivationPlanTests {
         let generator = ReflectiveGenerator<PlanUnevenSum>.derived(depth: 1, overriding: .int(in: 7 ... 7))
         let samples = try #example(generator, count: 20)
         #expect(samples.allSatisfy { $0 == .shallow(PlanLeaf(number: 7)) })
-        try expectRoundTrip(
-            ReflectiveGenerator<PlanUnevenSum>.derived(depth: 2),
+        try expectReflectionRoundTrip(
+            ReflectiveGenerator<PlanUnevenSum>.derived(depth: 2).gen,
             value: .deep(PlanEnvelope(payload: PlanLeaf(number: 7)))
         )
     }
@@ -92,7 +93,7 @@ struct GeneratorDerivationPlanTests {
         let samples = try #example(base, count: 10)
         #expect(samples.allSatisfy { $0 == .second(.leaf) })
         let generator = ReflectiveGenerator<PlanFirst>.derived(maximumDepth: 4)
-        try expectRoundTrip(generator, value: .second(.first(.second(.leaf))))
+        try expectReflectionRoundTrip(generator.gen, value: .second(.first(.second(.leaf))))
     }
 
     @Test("An empty container supplies the exit from a mutual recursion cycle")
@@ -104,8 +105,8 @@ struct GeneratorDerivationPlanTests {
         let base = ReflectiveGenerator<PlanContainerFirst>.derived(depth: 1)
         let samples = try #example(base, count: 10)
         #expect(samples.allSatisfy { $0.children.isEmpty })
-        try expectRoundTrip(
-            ReflectiveGenerator<PlanContainerFirst>.derived(maximumDepth: 2),
+        try expectReflectionRoundTrip(
+            ReflectiveGenerator<PlanContainerFirst>.derived(maximumDepth: 2).gen,
             value: PlanContainerFirst(children: [.first(PlanContainerFirst(children: []))])
         )
     }
@@ -149,7 +150,7 @@ struct GeneratorDerivationPlanTests {
         let generator = ReflectiveGenerator<PlanEnvelope>.derived(depth: 0, overriding: supplied)
         let samples = try #example(generator, count: 10)
         #expect(samples.allSatisfy { $0.payload.number == 42 })
-        try expectRoundTrip(generator, value: PlanEnvelope(payload: PlanLeaf(number: 42)))
+        try expectReflectionRoundTrip(generator.gen, value: PlanEnvelope(payload: PlanLeaf(number: 42)))
     }
 
     @Test("Array recursion terminates at an empty container without negative layers")
@@ -162,13 +163,13 @@ struct GeneratorDerivationPlanTests {
         #expect(derivation.built.keys.allSatisfy { $0.depth >= 0 })
         let samples = try #example(base, count: 10)
         #expect(samples.allSatisfy { $0 == .children([]) })
-        try expectRoundTrip(base, value: .children([]))
+        try expectReflectionRoundTrip(base.gen, value: .children([]))
         let children: [PlanArrayTree] = [.children([])]
         #expect(throws: ReflectionError.couldNotReflectOnZipElement(String(describing: children))) {
             try Interpreters.reflect(base.gen, with: .children(children))
         }
-        try expectRoundTrip(
-            ReflectiveGenerator<PlanArrayTree>.derived(maximumDepth: 2),
+        try expectReflectionRoundTrip(
+            ReflectiveGenerator<PlanArrayTree>.derived(maximumDepth: 2).gen,
             value: .children([.children([.children([])])])
         )
     }
@@ -202,9 +203,9 @@ struct GeneratorDerivationPlanTests {
         #expect(try #example(optional, count: 10).allSatisfy { $0 == .child(nil) })
         #expect(try #example(set, count: 10).allSatisfy { $0 == .children([]) })
         #expect(try #example(dictionary, count: 10).allSatisfy { $0 == .children([:]) })
-        try expectRoundTrip(optional, value: .child(nil))
-        try expectRoundTrip(set, value: .children([]))
-        try expectRoundTrip(dictionary, value: .children([:]))
+        try expectReflectionRoundTrip(optional.gen, value: .child(nil))
+        try expectReflectionRoundTrip(set.gen, value: .children([]))
+        try expectReflectionRoundTrip(dictionary.gen, value: .children([:]))
         let optionalChild: PlanOptionalTree? = .child(nil)
         let setChildren: Set<PlanSetTree> = [.children([])]
         let dictionaryChildren: [PlanDictionaryTree: PlanDictionaryTree] = [.children([:]): .children([:])]
@@ -217,16 +218,16 @@ struct GeneratorDerivationPlanTests {
         #expect(throws: ReflectionError.couldNotReflectOnZipElement(String(describing: dictionaryChildren))) {
             try Interpreters.reflect(dictionary.gen, with: .children(dictionaryChildren))
         }
-        try expectRoundTrip(
-            ReflectiveGenerator<PlanOptionalTree>.derived(depth: 1),
+        try expectReflectionRoundTrip(
+            ReflectiveGenerator<PlanOptionalTree>.derived(depth: 1).gen,
             value: .child(.child(nil))
         )
-        try expectRoundTrip(
-            ReflectiveGenerator<PlanSetTree>.derived(depth: 1),
+        try expectReflectionRoundTrip(
+            ReflectiveGenerator<PlanSetTree>.derived(depth: 1).gen,
             value: .children([.children([])])
         )
-        try expectRoundTrip(
-            ReflectiveGenerator<PlanDictionaryTree>.derived(depth: 1),
+        try expectReflectionRoundTrip(
+            ReflectiveGenerator<PlanDictionaryTree>.derived(depth: 1).gen,
             value: .children([.children([:]): .children([:])])
         )
     }
@@ -234,12 +235,12 @@ struct GeneratorDerivationPlanTests {
     @Test("Nested containers pass through depth without consuming another derived-type level")
     func nestedContainers() throws {
         let base = ReflectiveGenerator<PlanNestedContainers>.derived(depth: 0)
-        try expectRoundTrip(base, value: PlanNestedContainers(values: [[], []]))
+        try expectReflectionRoundTrip(base.gen, value: PlanNestedContainers(values: [[], []]))
         let target = PlanNestedContainers(values: [[.children([])]])
         #expect(throws: ReflectionError.couldNotReflectOnSequenceElement(String(describing: target.values[0]))) {
             try Interpreters.reflect(base.gen, with: target)
         }
-        try expectRoundTrip(ReflectiveGenerator<PlanNestedContainers>.derived(depth: 1), value: target)
+        try expectReflectionRoundTrip(ReflectiveGenerator<PlanNestedContainers>.derived(depth: 1).gen, value: target)
     }
 
     @Test("Empty fallback rejects nonempty reflection targets without Equatable")
@@ -272,7 +273,7 @@ struct GeneratorDerivationPlanTests {
         ).wrapped(isReflective: true)
         let generator = ReflectiveGenerator<PlanIntegerContainers>.derived(depth: 0, overriding: supplied)
         let target = PlanIntegerContainers(direct: 7, array: [7], optional: 7, set: [7], dictionary: [7: 7], nested: [[7]])
-        try expectRoundTrip(generator, value: target)
+        try expectReflectionRoundTrip(generator.gen, value: target)
         let samples = try #example(generator.resize(1), count: 20)
         for sample in samples {
             #expect(sample.direct == 7)
@@ -311,20 +312,7 @@ struct GeneratorDerivationPlanTests {
     func preservesRandomStream(seed: UInt64) throws {
         let derived = ReflectiveGenerator<PlanBinaryTree>.derived(depth: 4)
         let reference = referenceBinaryTree(depth: 4)
-        var derivedInterpreter = ValueAndChoiceTreeInterpreter(
-            Gen.zip(derived.gen, Gen.choose(in: UInt64.min ... UInt64.max)),
-            seed: seed
-        )
-        var referenceInterpreter = ValueAndChoiceTreeInterpreter(
-            Gen.zip(reference.gen, Gen.choose(in: UInt64.min ... UInt64.max)),
-            seed: seed
-        )
-        for _ in 0 ..< 100 {
-            let actual = try #require(try derivedInterpreter.next())
-            let expected = try #require(try referenceInterpreter.next())
-            #expect(actual.0.0 == expected.0.0)
-            #expect(actual.0.1 == expected.0.1)
-        }
+        try expectMatchingRandomStream(derived.gen, reference: reference.gen, seed: seed, size: nil, draws: 100)
     }
 
     @Test("Every type-depth layer is shared across sibling occurrences and root requests")
@@ -500,10 +488,4 @@ private func referenceBinaryTree(depth: Int) -> ReflectiveGenerator<PlanBinaryTr
         .map { PlanBinaryTree.branch($0.0, $0.1) }
         .wrapped(isReflective: false)
     return .oneOf([.just(.leaf), .lazy { branch }])
-}
-
-private func expectRoundTrip<Value: Equatable>(_ generator: ReflectiveGenerator<Value>, value: Value) throws {
-    let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
-    let replayed = try #require(try Interpreters.replay(generator.gen, using: tree))
-    #expect(replayed == value)
 }

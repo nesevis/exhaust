@@ -20,6 +20,7 @@ struct DonorSpanBoundsTests {
         let admission = corpus.offer(sequence: shortSequence, tree: shortTree, hits: [(edge: 1, hitCount: 1)], convergence: 1.0, generation: 0, phase: .sampling)
         #expect(admission == .admitted(index: 0, tier: .mutable))
         corpus.upgradeToFullTree(at: 0, fullTree: longTree)
+        #expect(corpus.donorSpansByFingerprint.isEmpty == false, "The upgrade registered no donor spans")
         for (_, spans) in corpus.donorSpansByFingerprint {
             for span in spans {
                 #expect(span.range.upperBound < shortSequence.count, "donor span \(span.range) lies past the stored sequence of \(shortSequence.count) entries")

@@ -1,4 +1,5 @@
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Depth-control choices")
@@ -69,22 +70,7 @@ struct DepthControlTests {
         for scaling in scalings {
             let generator = Gen.chooseDepth(in: 3 ... 20, scaling: scaling)
             let reference = Gen.choose(in: UInt64(3) ... 20, scaling: scaling)
-            var actualInterpreter = ValueAndChoiceTreeInterpreter(
-                Gen.zip(generator, Gen.choose(in: UInt64.min ... UInt64.max)),
-                seed: 42,
-                sizeOverride: size
-            )
-            var referenceInterpreter = ValueAndChoiceTreeInterpreter(
-                Gen.zip(reference, Gen.choose(in: UInt64.min ... UInt64.max)),
-                seed: 42,
-                sizeOverride: size
-            )
-            for _ in 0 ..< 30 {
-                let actual = try #require(try actualInterpreter.next())
-                let expected = try #require(try referenceInterpreter.next())
-                #expect(actual.0.0 == expected.0.0)
-                #expect(actual.0.1 == expected.0.1)
-            }
+            try expectMatchingRandomStream(generator, reference: reference, seed: 42, size: size, draws: 30)
         }
     }
 

@@ -13,13 +13,29 @@ struct GeneratorNodeBudgetTests {
         ]
         for generator in generators {
             var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
+            var counts: [Int] = []
             for _ in 0 ..< 30 {
                 let (value, _) = try #require(try interpreter.next())
+                counts.append(value.nodes)
                 #expect(value.nodes <= maximumNodes)
                 #expect(value.depth <= 5)
                 let reflected = try #require(try Interpreters.reflect(generator.gen, with: value))
                 #expect(try Interpreters.replay(generator.gen, using: reflected) == value)
             }
+            switch maximumNodes {
+                case BudgetRose.minimumNodes:
+                    // The allowance equals the smallest rose the derivation can build, so no draw can exceed it.
+                    break
+                default:
+                    #expect(counts.contains { $0 > BudgetRose.minimumNodes }, "every draw stayed at the minimum, so the allowance was never used")
+            }
+        }
+    }
+
+    @Test("A budgeted rose tree never exceeds its node or depth ceiling", arguments: [2, 6, 16, 32])
+    func recursiveArraysStayWithinBudget(maximumNodes: Int) {
+        #exhaust(BudgetRose.gen(maximumDepth: 5, maximumNodes: maximumNodes)) { tree in
+            tree.nodes <= maximumNodes && tree.depth <= 5
         }
     }
 
@@ -28,9 +44,18 @@ struct GeneratorNodeBudgetTests {
         let generator = BudgetRose.gen(depth: 5, maximumNodes: 32)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: size)
         let allowance = 2 + Int(30 * size / 100)
+        var counts: [Int] = []
         for _ in 0 ..< 30 {
             let (value, _) = try #require(try interpreter.next())
+            counts.append(value.nodes)
             #expect(value.nodes <= allowance)
+        }
+        switch allowance {
+            case BudgetRose.minimumNodes:
+                // At size 1 the ramped allowance is the minimum itself, so no draw can exceed it.
+                break
+            default:
+                #expect(counts.contains { $0 > BudgetRose.minimumNodes }, "every draw stayed at the minimum, so the ramped allowance was never used")
         }
     }
 
@@ -43,9 +68,7 @@ struct GeneratorNodeBudgetTests {
         }
         let generator = BudgetPair.gen(maximumDepth: 2, maximumNodes: 5, overriding: .int(in: 7 ... 7))
         let report = #examine(generator, .samples(20), .replay(42), .suppress(.logs)) { first, second in first == second }
-        #expect(report.passed)
-        #expect(report.reflectionRoundTripSuccesses == 20)
-        #expect(report.replayDeterminismSuccesses == 20)
+        expectSuccessfulExamination(report, samples: 20)
         let samples = try #example(generator, count: 20)
         #expect(samples.allSatisfy { $0.first.number == 7 && $0.second.number == 7 })
     }
@@ -73,8 +96,9 @@ struct GeneratorNodeBudgetTests {
         let expanded = BudgetCapped.gen(maximumNodes: 15)
         let tree = try #require(try Interpreters.reflect(expanded.gen, with: target))
         #expect(try Interpreters.replay(expanded.gen, using: tree) == target)
-        let outsideBudget = try? Interpreters.reflect(BudgetCapped.gen().gen, with: target)
-        #expect(outsideBudget == nil, "\(String(describing: outsideBudget))")
+        #expect(throws: ReflectionError.couldNotMapInputToGenerator) {
+            try Interpreters.reflect(BudgetCapped.gen().gen, with: target)
+        }
         let holder = BudgetCappedHolder.gen(maximumNodes: 31)
         let held = try #example(holder, count: 30)
         #expect(held.allSatisfy { $0.first.nodes <= 7 && $0.second.nodes <= 7 })
@@ -129,10 +153,10 @@ struct GeneratorNodeBudgetTests {
         let optional = BudgetOptional.gen(maximumDepth: 4, maximumNodes: 10)
         let set = BudgetSet.gen(depth: 3, maximumNodes: 18)
         let dictionary = BudgetDictionary.gen(depth: 3, maximumNodes: 18)
-        try checkBudget(mutual, maximumNodes: 6, nodes: { $0.nodes })
-        try checkBudget(optional, maximumNodes: 10, nodes: { $0.nodes })
-        try checkBudget(set, maximumNodes: 18, nodes: { $0.nodes })
-        try checkBudget(dictionary, maximumNodes: 18, nodes: { $0.nodes })
+        try checkBudget(mutual, maximumNodes: 6, minimumNodes: 2, nodes: { $0.nodes })
+        try checkBudget(optional, maximumNodes: 10, minimumNodes: 2, nodes: { $0.nodes })
+        try checkBudget(set, maximumNodes: 18, minimumNodes: 2, nodes: { $0.nodes })
+        try checkBudget(dictionary, maximumNodes: 18, minimumNodes: 2, nodes: { $0.nodes })
     }
 
     @Test("Exact overrides remain opaque one-node leaves")
@@ -190,12 +214,14 @@ struct GeneratorNodeBudgetTests {
         #expect(cached.isReflective)
         let empty = BudgetEmptyPair(first: [], second: [])
         let samples = try #example(generator, count: 20, seed: 42)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0 == empty })
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: empty))
         #expect(try Interpreters.replay(generator.gen, using: reflected) == empty)
         let nonempty = BudgetEmptyPair(first: [.children([])], second: [])
-        #expect((try? Interpreters.reflect(generator.gen, with: nonempty)) == nil)
+        // The rejection reason depends on the configuration: a pinned depth of zero rejects the nonempty length, a deeper one rejects the element.
+        #expect(throws: ReflectionError.self) {
+            try Interpreters.reflect(generator.gen, with: nonempty)
+        }
     }
 
     @Test("Budgeted binary trees and recursive arrays pass examine")
@@ -206,27 +232,21 @@ struct GeneratorNodeBudgetTests {
             .replay(42),
             .suppress(.logs)
         ) { first, second in first == second }
-        #expect(binary.passed)
-        #expect(binary.reflectionRoundTripSuccesses == 30)
-        #expect(binary.replayDeterminismSuccesses == 30)
+        expectSuccessfulExamination(binary, samples: 30)
         let arrays = #examine(
             BudgetRose.gen(depth: 2, maximumNodes: 12),
             .samples(30),
             .replay(42),
             .suppress(.logs)
         ) { first, second in first == second }
-        #expect(arrays.passed)
-        #expect(arrays.reflectionRoundTripSuccesses == 30)
-        #expect(arrays.replayDeterminismSuccesses == 30)
+        expectSuccessfulExamination(arrays, samples: 30)
         let ramped = #examine(
             BudgetRose.gen(maximumDepth: 3, maximumNodes: 12),
             .samples(30),
             .replay(42),
             .suppress(.logs)
         ) { first, second in first == second }
-        #expect(ramped.passed)
-        #expect(ramped.reflectionRoundTripSuccesses == 30)
-        #expect(ramped.replayDeterminismSuccesses == 30)
+        expectSuccessfulExamination(ramped, samples: 30)
     }
 
     @Test("Reduction can decrease collection cardinality under a conserved budget")
@@ -256,6 +276,9 @@ struct GeneratorNodeBudgetTests {
 @Exhaustable
 private indirect enum BudgetRose: Equatable {
     case children([BudgetRose])
+
+    /// The node cost of `.children([])`, the smallest rose a derivation can build.
+    static let minimumNodes = 2
 
     var nodes: Int {
         switch self {
@@ -437,13 +460,17 @@ private indirect enum BudgetDictionary: Hashable {
 private func checkBudget<Value: Equatable>(
     _ generator: ReflectiveGenerator<Value>,
     maximumNodes: Int,
+    minimumNodes: Int,
     nodes: (Value) -> Int
 ) throws {
     var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
+    var counts: [Int] = []
     for _ in 0 ..< 30 {
         let (value, _) = try #require(try interpreter.next())
+        counts.append(nodes(value))
         #expect(nodes(value) <= maximumNodes)
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
         #expect(try Interpreters.replay(generator.gen, using: tree) == value)
     }
+    #expect(counts.contains { $0 > minimumNodes }, "every draw stayed at the minimum \(minimumNodes), so the allowance of \(maximumNodes) was never used")
 }
