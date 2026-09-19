@@ -63,6 +63,37 @@ struct ExampleSeedParityTests {
     }
 }
 
+// MARK: - #example sizing
+
+//
+// A seed asks for the sampling run reproduced, ramp included. Without one there is nothing to reproduce,
+// so #example generates at a fixed mid-scale size rather than handing back the ramp's degenerate opening.
+
+@Suite("#example sizing")
+struct ExampleSizingTests {
+    /// Produces the size it was generated at, so a batch of examples reports its own size sequence.
+    private static let sizeProbe = ReflectiveGenerator<Int>.getSize { .just(Int($0)) }
+
+    @Test("Without a seed every value generates at the fixed unseeded size")
+    func unseededSizeIsFixed() throws {
+        let sizes = try #example(Self.sizeProbe, count: 8)
+        #expect(sizes == Array(repeating: 50, count: 8))
+    }
+
+    @Test("A seed walks the sampling ramp from its opening size")
+    func seededSizeFollowsRamp() throws {
+        let sizes = try #example(Self.sizeProbe, count: 8, seed: .numeric(1337))
+        #expect(sizes == Array(1 ... 8))
+    }
+
+    @Test("An iteration suffix starts the ramp at that iteration")
+    func iterationSeedStartsMidRamp() throws {
+        let encoded = ReplaySeed.Resolved.sampling(seed: 1337, iteration: 50).encoded
+        let sizes = try #example(Self.sizeProbe, count: 8, seed: .encoded(encoded))
+        #expect(sizes == Array(50 ... 57))
+    }
+}
+
 // MARK: - Helpers
 
 /// Collects values from a `@Sendable` property closure. Safe without a lock because `#exhaust` runs single-threaded here (no `.parallelize`).

@@ -24,7 +24,9 @@ public macro example<GeneratedValue>(
 
 /// Generates an array of values from a generator without running a property test.
 ///
-/// Values come from the same interpreter as the `#exhaust` sampling phase, so with the same seed the array matches that phase's values one for one: sizes ramp across the 1–100 scale, and element `k` equals the value `#exhaust` tested at iteration `k`. A seed with an iteration suffix starts at that iteration instead of the first.
+/// Without a seed, every value is generated at a fixed size of 50, the same size the single-value form uses. Pass a seed instead when you want the sampling run itself: values then come from the same interpreter as the `#exhaust` sampling phase and match it one for one, sizes ramping across the 1–100 scale, with element `k` equal to the value `#exhaust` tested at iteration `k`. A seed with an iteration suffix starts at that iteration instead of the first.
+///
+/// The ramp opens at size 1, where size-dependent generators produce empty collections and nil payloads, so a seeded call is the wrong tool for eyeballing representative values and an unseeded one is the wrong tool for reproducing a failure.
 ///
 /// ```swift
 /// let people = try #example(personGen, count: 10)

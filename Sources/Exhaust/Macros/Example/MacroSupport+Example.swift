@@ -9,6 +9,13 @@ import ExhaustCore
 import IssueReporting
 
 public extension __ExhaustRuntime {
+    /// The size `#example` generates at when no seed asks it to reproduce a sampling run.
+    ///
+    /// Midway on the 1 through 100 scale. The sampling ramp starts at size 1, where size-dependent generators produce empty collections and nil payloads, so an unseeded `#example` that followed the ramp would hand back several degenerate values before any fleshed-out one.
+    private static var unseededExampleSize: UInt64 {
+        50
+    }
+
     /// Generates a single value from a generator. Runtime target of `#example` expansion.
     ///
     /// Runs the same interpreter the `#exhaust` sampling phase uses, so a seed with an iteration suffix (for example `"5QF8M2-3"`) reproduces exactly the value that run generated. A plain numeric seed or no seed generates one value at size 50.
@@ -39,7 +46,7 @@ public extension __ExhaustRuntime {
                 materializePicks: false,
                 seed: resolved.seed,
                 maxRuns: 1,
-                sizeOverride: 50
+                sizeOverride: unseededExampleSize
             )
         }
         guard let value = try interpreter.nextValueOnly() else {
@@ -73,7 +80,9 @@ public extension __ExhaustRuntime {
             materializePicks: false,
             seed: resolved.seed,
             maxRuns: startIndex + UInt64(count),
-            initialRunIndex: startIndex
+            initialRunIndex: startIndex,
+            // A seed asks for the sampling run reproduced, ramp included. Without one there is nothing to reproduce, so every value generates at the same fleshed-out size the single-value form uses.
+            sizeOverride: seed == nil ? unseededExampleSize : nil
         )
         var results: [Output] = []
         while let value = try interpreter.nextValueOnly() {
