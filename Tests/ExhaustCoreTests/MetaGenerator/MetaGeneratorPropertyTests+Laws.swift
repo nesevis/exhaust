@@ -57,7 +57,9 @@ extension MetaGeneratorPropertyTests {
                         return false
                     }
                 }
-            } catch { return true }
+            } catch {
+                Issue.record(error, "Generation threw for x=\(x)")
+            }
             return true
         }
         #expect(badValue == nil, "Monad left identity failed for x=\(badValue!)")
@@ -134,7 +136,9 @@ extension MetaGeneratorPropertyTests {
                         return false
                     }
                 }
-            } catch { return true }
+            } catch {
+                Issue.record(error, "Generation threw for range \(range)")
+            }
             return true
         }
         #expect(badRecipe == nil, "Value outside range for minimal recipe: \(badRecipe!)")

@@ -88,7 +88,7 @@ struct EncoderIsolationTests {
     // MARK: - GraphStructuralEncoder (Removal)
 
     @Test("Removal encoder produces strictly shorter candidates")
-    func removalProducesShortherCandidates() {
+    func removalProducesShorterCandidates() {
         let tree = ChoiceTree.sequence(
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
@@ -109,9 +109,12 @@ struct EncoderIsolationTests {
         encoder.start(scope: scope)
 
         var candidateBuffer = sequence
+        var probes = 0
         while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {
+            probes += 1
             #expect(candidateBuffer.count < sequence.count)
         }
+        #expect(probes > 0, "The removal encoder proposed no candidate")
     }
 
     @Test("Removal encoder tries progressively smaller batches on rejection")

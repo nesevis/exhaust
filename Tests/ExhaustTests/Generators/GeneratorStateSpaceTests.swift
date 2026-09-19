@@ -26,7 +26,6 @@ struct GeneratorStateSpaceTests {
         let (policy, magnitude) = preset
         let generator = StateSpaceNumbers.gen(depth: 0, stateSpace: policy).resize(size)
         let samples = try #example(generator, count: 50, seed: 1337)
-        #expect(samples.count == 50)
         for value in samples {
             expectIntegerBound(value.integer, magnitude: magnitude, size: size)
             expectIntegerBound(value.signed8, magnitude: magnitude, size: size)
@@ -40,7 +39,7 @@ struct GeneratorStateSpaceTests {
             expectIntegerBound(value.unsigned64, magnitude: magnitude, size: size)
             #expect(abs(value.float) <= Float(magnitude) * Float(size) / 100)
             #expect(abs(value.double) <= Double(magnitude) * Double(size) / 100)
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
     }
 
@@ -48,11 +47,16 @@ struct GeneratorStateSpaceTests {
     func tinySizeRamp(size: Int) throws {
         let generator = StateSpaceLeaf.gen(depth: 0, stateSpace: .tiny).resize(size)
         let magnitude = Int((Double(size) / 10).rounded())
-        for value in [-magnitude, 0, magnitude] {
-            try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
+        let samples = try #example(generator, count: 50, seed: 1337)
+        #expect(samples.allSatisfy { (-magnitude ... magnitude).contains($0.value) })
+        if size >= 50 {
+            #expect(samples.contains { $0.value != 0 })
         }
-        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: magnitude + 1))
-        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: -magnitude - 1))
+        for value in [-magnitude, 0, magnitude] {
+            try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: value))
+        }
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: magnitude + 1))
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
     @Test("The full preset preserves primitive outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
@@ -62,8 +66,6 @@ struct GeneratorStateSpaceTests {
             let actual = try #example(#gen(derived, .uint64()), count: 100, seed: .numeric(seed))
             // The pre-preset builder retains a pick even for a product's single constructor.
             let reference = try #example(#gen(.oneOf(.int()), .uint64()), count: 100, seed: .numeric(seed))
-            #expect(actual.count == 100)
-            #expect(reference.count == 100)
             for (value, expected) in zip(actual, reference) {
                 #expect(value.0.value == expected.0)
                 #expect(value.1 == expected.1)
@@ -76,16 +78,15 @@ struct GeneratorStateSpaceTests {
     func annotationAndFactoryPrecedence() throws {
         #expect(StateSpaceSmall.__generatorDescriptor.stateSpace == .small)
         let target = StateSpaceSmall(value: 500)
-        try expectStateSpaceReplay(StateSpaceSmall.gen(), value: target)
-        try expectStateSpaceReplay(StateSpaceSmall.gen(stateSpace: .medium), value: target)
-        try expectStateSpaceReplay(StateSpaceSmall.gen(depth: 0, stateSpace: .full), value: target)
+        try expectReflectionRoundTrip(StateSpaceSmall.gen().gen, value: target)
+        try expectReflectionRoundTrip(StateSpaceSmall.gen(stateSpace: .medium).gen, value: target)
+        try expectReflectionRoundTrip(StateSpaceSmall.gen(depth: 0, stateSpace: .full).gen, value: target)
         for generator in [
             StateSpaceSmall.gen(),
             StateSpaceSmall.gen(depth: 0),
             ReflectiveGenerator<StateSpaceSmall>.derived(depth: 0),
         ] {
             let samples = try #example(generator.resize(100), count: 100, seed: 1337)
-            #expect(samples.count == 100)
             #expect(samples.allSatisfy { (-100 ... 100).contains($0.value) })
             #expect(samples.contains { abs($0.value) > 10 })
         }
@@ -99,9 +100,8 @@ struct GeneratorStateSpaceTests {
             wider: StateSpaceWider(leaf: StateSpaceLeaf(value: 80), values: [StateSpaceLeaf(value: -80)]),
             direct: StateSpaceLeaf(value: 90)
         )
-        try expectStateSpaceReplay(generator, value: target)
+        try expectReflectionRoundTrip(generator.gen, value: target)
         let samples = try #example(generator, count: 100, seed: 1337)
-        #expect(samples.count == 100)
         #expect(samples.contains { abs($0.wider.leaf.value) > 10 })
         for value in samples {
             #expect(abs(value.narrow.leaf.value) <= 10)
@@ -111,7 +111,7 @@ struct GeneratorStateSpaceTests {
             #expect(value.wider.values.count <= 10)
             #expect(value.wider.values.allSatisfy { abs($0.value) <= 100 })
             #expect(abs(value.direct.value) <= 100)
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
     }
 
@@ -124,14 +124,13 @@ struct GeneratorStateSpaceTests {
             overriding: ReflectiveGenerator<Int>.just(777)
         ).resize(100)
         let samples = try #example(generator, count: 50, seed: 1337)
-        #expect(samples.count == 50)
         for value in samples {
             #expect(value.direct.value == 777)
             #expect(value.narrow.leaf.value == 777)
             #expect(value.wider.leaf.value == 777)
             #expect(value.narrow.values.allSatisfy { $0.value == 777 })
             #expect(value.wider.values.allSatisfy { $0.value == 777 })
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
     }
 
@@ -139,7 +138,6 @@ struct GeneratorStateSpaceTests {
     func standardContainers(maximumNodes: Int?) throws {
         let generator = StateSpaceContainers.gen(maximumNodes: maximumNodes, stateSpace: .tiny).resize(100)
         let samples = try #example(generator, count: 50, seed: 1337)
-        #expect(samples.count == 50)
         #expect(samples.contains { $0.optional != nil })
         #expect(samples.contains { $0.dictionary.isEmpty == false })
         #expect(samples.contains { $0.values.isEmpty == false })
@@ -149,7 +147,7 @@ struct GeneratorStateSpaceTests {
             #expect(value.values.allSatisfy { abs($0) <= 10 })
             #expect(value.dictionary.count <= 5)
             #expect(value.dictionary.allSatisfy { abs($0.key) <= 10 && abs($0.value.value) <= 10 })
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
     }
 
@@ -161,12 +159,11 @@ struct GeneratorStateSpaceTests {
         let scaledMaximum = sizeScaledMaximum(maximumLength, size: size)
         let generator = StateSpaceSequences.gen(depth: 0, stateSpace: policy).resize(size)
         let samples = try #example(generator, count: 100, seed: 1337)
-        #expect(samples.count == 100)
         for value in samples {
             #expect(value.names.count <= scaledMaximum)
             #expect(value.names.allSatisfy { $0.count <= scaledMaximum })
             #expect(value.bytes.count <= scaledMaximum)
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
 
         let boundary = StateSpaceSequences(
@@ -176,23 +173,23 @@ struct GeneratorStateSpaceTests {
             ),
             bytes: Data(repeating: 0, count: scaledMaximum)
         )
-        try expectStateSpaceReplay(generator, value: boundary)
-        try expectStateSpaceReplay(
-            generator,
+        try expectReflectionRoundTrip(generator.gen, value: boundary)
+        try expectReflectionRoundTrip(
+            generator.gen,
             value: StateSpaceSequences(
                 names: Array(repeating: "", count: scaledMaximum + 1),
                 bytes: Data()
             )
         )
-        try expectStateSpaceReplay(
-            generator,
+        try expectReflectionRoundTrip(
+            generator.gen,
             value: StateSpaceSequences(
                 names: [String(repeating: "a", count: scaledMaximum + 1)],
                 bytes: Data()
             )
         )
-        try expectStateSpaceReplay(
-            generator,
+        try expectReflectionRoundTrip(
+            generator.gen,
             value: StateSpaceSequences(
                 names: [],
                 bytes: Data(repeating: 0, count: scaledMaximum + 1)
@@ -207,7 +204,7 @@ struct GeneratorStateSpaceTests {
             stateSpace: .tiny
         )
         let target = StateSpaceIntegerArray(values: Array(repeating: 500, count: 6))
-        try expectStateSpaceReplay(generator, value: target)
+        try expectReflectionRoundTrip(generator.gen, value: target)
         let reduced = try reduceFromReflection(
             generator.gen,
             startingAt: target,
@@ -216,7 +213,6 @@ struct GeneratorStateSpaceTests {
         #expect(reduced.values.count == 1)
 
         let samples = try #example(generator.resize(100), count: 100, seed: 1337)
-        #expect(samples.count == 100)
         #expect(samples.allSatisfy { $0.values.count <= 5 })
     }
 
@@ -229,13 +225,12 @@ struct GeneratorStateSpaceTests {
             overriding: ReflectiveGenerator<String>.just(name)
         ).resize(100)
         let samples = try #example(generator, count: 50, seed: 1337)
-        #expect(samples.count == 50)
         #expect(samples.contains { $0.names.isEmpty == false })
         for value in samples {
             #expect(value.names.count <= 5)
             #expect(value.names.allSatisfy { $0 == name })
             #expect(value.bytes.count <= 5)
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
     }
 
@@ -246,11 +241,15 @@ struct GeneratorStateSpaceTests {
             stateSpace: .tiny,
             overriding: values
         )
-        expectStateSpaceRejection(generator, value: StateSpaceIntegerArray(values: []))
-        expectStateSpaceRejection(
-            generator,
-            value: StateSpaceIntegerArray(values: Array(repeating: 0, count: 11))
-        )
+        expectReflectionOutOfRange {
+            _ = try Interpreters.reflect(generator.gen, with: StateSpaceIntegerArray(values: []))
+        }
+        expectReflectionOutOfRange {
+            _ = try Interpreters.reflect(
+                generator.gen,
+                with: StateSpaceIntegerArray(values: Array(repeating: 0, count: 11))
+            )
+        }
     }
 
     @Test("Date collision presets use a fixed January 1, 2026 midpoint", arguments: [
@@ -263,16 +262,15 @@ struct GeneratorStateSpaceTests {
         let upperBound = midpoint.addingTimeInterval(TimeInterval(dayRadius * 86400))
         let generator = StateSpaceDate.gen(depth: 0, stateSpace: policy)
         let samples = try #example(generator, count: 200, seed: 1337)
-        #expect(samples.count == 200)
         #expect(Set(samples.map(\.value)).count <= dayRadius * 2 + 1)
         #expect(Set(samples.map(\.value)).count < samples.count)
         for value in samples {
             #expect((lowerBound ... upperBound).contains(value.value))
             #expect(value.value.timeIntervalSince(midpoint).truncatingRemainder(dividingBy: 86400) == 0)
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
-        try expectStateSpaceReplay(generator, value: StateSpaceDate(value: lowerBound))
-        try expectStateSpaceReplay(generator, value: StateSpaceDate(value: upperBound))
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceDate(value: lowerBound))
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceDate(value: upperBound))
 
         let outsideDate = upperBound.addingTimeInterval(86400)
         let dateGenerator = Date.defaultGenerator(stateSpace: policy)
@@ -309,9 +307,8 @@ struct GeneratorStateSpaceTests {
             overriding: ReflectiveGenerator<Date>.just(expected)
         )
         let samples = try #example(generator, count: 20, seed: 1337)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.value == expected })
-        try expectStateSpaceReplay(generator, value: StateSpaceDate(value: expected))
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceDate(value: expected))
     }
 
     @Test("The full preset preserves default sequence outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
@@ -367,26 +364,20 @@ struct GeneratorStateSpaceTests {
         let (policy, magnitude) = preset
         let generator = StateSpaceLeaf.gen(stateSpace: policy)
         for value in [-magnitude, 0, magnitude] {
-            try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: value))
+            try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: value))
         }
-        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: magnitude + 1))
-        try expectStateSpaceReplay(generator, value: StateSpaceLeaf(value: -magnitude - 1))
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: magnitude + 1))
+        try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
     @Test("Examine and actual reflected output equality hold for recursive presets", arguments: GeneratorStateSpace.allCases, [Int?.none, 64])
     func recursiveRoundTrips(policy: GeneratorStateSpace, maximumNodes: Int?) throws {
         let generator = StateSpaceTree.gen(maximumDepth: 4, maximumNodes: maximumNodes, stateSpace: policy)
         let report = #examine(generator, .samples(50), .replay(1337), .suppress(.all)) { $0 == $1 }
-        #expect(report.passed, "\(report.failures)")
-        #expect(report.reflectionSkipped == false)
-        #expect(report.sampleCount == 50)
-        #expect(report.valuesGenerated == 50)
-        #expect(report.reflectionRoundTripSuccesses == 50)
-        #expect(report.replayDeterminismSuccesses == 50)
+        expectSuccessfulExamination(report, samples: 50)
         let samples = try #example(generator, count: 100, seed: 1337)
-        #expect(samples.count == 100)
         for value in samples {
-            try expectStateSpaceReplay(generator, value: value)
+            try expectReflectionRoundTrip(generator.gen, value: value)
         }
     }
 
@@ -414,17 +405,15 @@ struct GeneratorStateSpaceTests {
             let unsigned = UInt128.defaultGenerator(stateSpace: .small).resize(100)
             let signedSamples = try #example(signed, count: 100, seed: 1337)
             let unsignedSamples = try #example(unsigned, count: 100, seed: 1337)
-            #expect(signedSamples.count == 100)
-            #expect(unsignedSamples.count == 100)
             #expect(signedSamples.allSatisfy { (-100 ... 100).contains($0) })
             #expect(unsignedSamples.allSatisfy { $0 <= 100 })
-            try expectStateSpaceReplay(signed, value: -100)
-            try expectStateSpaceReplay(signed, value: Int128(Int.max))
-            try expectStateSpaceReplay(signed, value: Int128.min)
-            try expectStateSpaceReplay(signed, value: Int128.max)
-            try expectStateSpaceReplay(unsigned, value: 100)
-            try expectStateSpaceReplay(unsigned, value: UInt128(Int.max))
-            try expectStateSpaceReplay(unsigned, value: UInt128.max)
+            try expectReflectionRoundTrip(signed.gen, value: -100)
+            try expectReflectionRoundTrip(signed.gen, value: Int128(Int.max))
+            try expectReflectionRoundTrip(signed.gen, value: Int128.min)
+            try expectReflectionRoundTrip(signed.gen, value: Int128.max)
+            try expectReflectionRoundTrip(unsigned.gen, value: 100)
+            try expectReflectionRoundTrip(unsigned.gen, value: UInt128(Int.max))
+            try expectReflectionRoundTrip(unsigned.gen, value: UInt128.max)
         }
     }
 }
@@ -515,23 +504,4 @@ private func expectIntegerBound<Value: FixedWidthInteger>(_ value: Value, magnit
     let lower = Int((Double(Int(Value(clamping: -magnitude))) * Double(size) / 100).rounded())
     let upper = Int((Double(Int(Value(clamping: magnitude))) * Double(size) / 100).rounded())
     #expect((Value(clamping: lower) ... Value(clamping: upper)).contains(value))
-}
-
-private func expectStateSpaceReplay<Value: Equatable>(_ generator: ReflectiveGenerator<Value>, value: Value) throws {
-    let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
-    #expect(try Interpreters.replay(generator.gen, using: tree) == value)
-}
-
-private func expectStateSpaceRejection<Value>(_ generator: ReflectiveGenerator<Value>, value: Value) {
-    do {
-        _ = try Interpreters.reflect(generator.gen, with: value)
-        Issue.record("Expected reflection to reject the value as out of range")
-    } catch let error as ReflectionError {
-        guard case .inputWasOutOfGeneratorRange = error else {
-            Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
-            return
-        }
-    } catch {
-        Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
-    }
 }

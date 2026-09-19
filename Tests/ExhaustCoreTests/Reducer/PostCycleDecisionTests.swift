@@ -202,6 +202,4 @@ struct PostCycleDecisionTests {
             deferBindInner: deferBindInner
         )
     }
-
-    // MARK: - Convergence Confirmation
 }

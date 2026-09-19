@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -121,50 +122,38 @@ struct HopcroftKarpTests {
 
 @Suite("BipartiteMatching: Minimum Vertex Cover")
 struct MinimumVertexCoverTests {
-    @Test("Cover size equals matching size (Konig's theorem)")
-    func coverSizeEqualsMatchingSize() {
-        // L0 — R0, R1
-        // L1 — R0
-        // L2 — R2
-        let adjacency = [[0, 1], [0], [2]]
-        let matching = BipartiteMatching.hopcroftKarp(
-            leftCount: 3,
-            rightCount: 3,
-            adjacency: adjacency
-        )
-        let matchingSize = matching.count(where: { $0 != nil })
-
-        let (leftCover, rightCover) = BipartiteMatching.minimumVertexCover(
-            leftCount: 3,
-            rightCount: 3,
-            adjacency: adjacency,
-            matching: matching
-        )
-        let coverSize = leftCover.count + rightCover.count
-        #expect(coverSize == matchingSize)
-    }
-
-    @Test("Cover covers all edges")
-    func coverCoversAllEdges() {
-        let adjacency = [[0, 1], [1, 2], [2]]
-        let matching = BipartiteMatching.hopcroftKarp(
-            leftCount: 3,
-            rightCount: 3,
-            adjacency: adjacency
-        )
-        let (leftCover, rightCover) = BipartiteMatching.minimumVertexCover(
-            leftCount: 3,
-            rightCount: 3,
-            adjacency: adjacency,
-            matching: matching
-        )
-
-        // Every edge must have at least one endpoint in the cover.
-        for (left, rights) in adjacency.enumerated() {
-            for right in rights {
-                let covered = leftCover.contains(left) || rightCover.contains(right)
-                #expect(covered, "Edge (\(left), \(right)) not covered")
+    @Test("The cover covers every edge and matches the matching size, over generated bipartite graphs")
+    func konigHoldsOverGeneratedGraphs() throws {
+        let graphs = Gen.zip(Gen.choose(in: 1 ... 8), Gen.choose(in: 1 ... 8)).bind { counts in
+            let (leftCount, rightCount) = counts
+            return Gen.arrayOf(
+                Gen.arrayOf(Gen.choose(in: 0 ... rightCount - 1) as Generator<Int>, within: 0 ... UInt64(rightCount)),
+                exactly: UInt64(leftCount)
+            ).map { lists in
+                (leftCount, rightCount, lists.map { Array(Set($0)).sorted() })
             }
+        }
+        try exhaustCheck(graphs, maxIterations: 300) { leftCount, rightCount, adjacency in
+            let matching = BipartiteMatching.hopcroftKarp(
+                leftCount: leftCount,
+                rightCount: rightCount,
+                adjacency: adjacency
+            )
+            let matchingSize = BipartiteMatching.maximumMatchingSize(
+                leftCount: leftCount,
+                rightCount: rightCount,
+                adjacency: adjacency
+            )
+            let cover = BipartiteMatching.minimumVertexCover(
+                leftCount: leftCount,
+                rightCount: rightCount,
+                adjacency: adjacency,
+                matching: matching
+            )
+            let coversEveryEdge = adjacency.enumerated().allSatisfy { left, rights in
+                rights.allSatisfy { cover.leftCover.contains(left) || cover.rightCover.contains($0) }
+            }
+            return coversEveryEdge && cover.leftCover.count + cover.rightCover.count == matchingSize
         }
     }
 

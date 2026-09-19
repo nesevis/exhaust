@@ -42,7 +42,6 @@ struct ChampionArchiveTests {
         for step in 0 ..< 8 {
             _ = offer(corpus, sequence: sequence(length: 3 + step), edges: [step])
         }
-        #expect(corpus.parentIndices.count <= 8)
         #expect(corpus.parentIndices.count == 8)
     }
 

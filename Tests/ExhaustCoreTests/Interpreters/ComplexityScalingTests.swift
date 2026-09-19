@@ -154,7 +154,13 @@ private func assertMagnitudeGrows(
     sourceLocation: SourceLocation = #_sourceLocation
 ) {
     let quarterCount = magnitudes.count / 4
-    guard quarterCount >= 5 else { return }
+    guard quarterCount >= 5 else {
+        Issue.record(
+            "\(name): only \(magnitudes.count) magnitudes were drawn, which is too few to compare quarters",
+            sourceLocation: sourceLocation
+        )
+        return
+    }
 
     let earlyMagnitude = averageMagnitude(Array(magnitudes.prefix(quarterCount)))
     let lateMagnitude = averageMagnitude(Array(magnitudes.suffix(quarterCount)))

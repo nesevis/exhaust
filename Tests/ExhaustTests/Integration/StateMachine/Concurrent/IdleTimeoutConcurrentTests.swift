@@ -197,7 +197,7 @@ struct IdleTimeoutConcurrentTests {
         #expect(report.randomSamplingInvocations == 11)
     }
 
-    @Test("Async preemptive group.wait bound prevents hang on synchronous SUT deadlock")
+    @Test("Async preemptive group.wait bound prevents hang on synchronous SUT deadlock", .timeLimit(.minutes(1)))
     func asyncPreemptiveGroupWaitBoundPreventsHangOnSynchronousSUTDeadlock() async {
         _ = await #execute(
             DeadlockingAsyncSpec.self,

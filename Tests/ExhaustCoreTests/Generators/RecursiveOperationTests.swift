@@ -18,7 +18,7 @@ struct RecursiveOperationTests {
 
         var generated = 0
         while let tree = try iterator.next() {
-            #expect(tree.nodeCount >= 0)
+            _ = tree
             generated += 1
         }
         #expect(generated > 0)

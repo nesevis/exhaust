@@ -1,5 +1,6 @@
 import Exhaust
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustGenerators
 
@@ -9,17 +10,15 @@ struct GenericDerivationTests {
     func products() throws {
         let generator = GenericBox<Int>.gen(overriding: .int(in: 7 ... 7))
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.value == 7 })
-        try expectGenericRoundTrip(generator, value: GenericBox(value: 7))
-        try expectGenericRoundTrip(GenericAssociated<[Int]>.gen(), value: GenericAssociated(value: 4))
+        try expectReflectionRoundTrip(generator.gen, value: GenericBox(value: 7))
+        try expectReflectionRoundTrip(GenericAssociated<[Int]>.gen().gen, value: GenericAssociated(value: 4))
     }
 
     @Test("Generic final classes receive a memberwise initializer and reversible metadata")
     func finalClasses() throws {
         let generator = GenericReference<Int>.gen(overriding: .int(in: 7 ... 7))
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.value == 7 })
         let target = GenericReference(value: 7)
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: target))
@@ -29,8 +28,8 @@ struct GenericDerivationTests {
 
     @Test("Nested declarations resolve parameters from their enclosing generic scope")
     func nestedDeclarations() throws {
-        try expectGenericRoundTrip(GenericScope<Int>.Nested.gen(), value: .init(value: 7))
-        try expectGenericRoundTrip(GenericScope<Int>.Pair<Bool>.gen(), value: .init(first: 7, second: true))
+        try expectReflectionRoundTrip(GenericScope<Int>.Nested.gen().gen, value: .init(value: 7))
+        try expectReflectionRoundTrip(GenericScope<Int>.Pair<Bool>.gen().gen, value: .init(first: 7, second: true))
     }
 
     @Test("Recursive generic enums terminate, reflect, and replay with either budget policy", arguments: [Int?.none, 31])
@@ -39,11 +38,9 @@ struct GenericDerivationTests {
         #expect(plan.types.count == 1)
         let generator = GenericTree<Int>.gen(maximumDepth: 4, maximumNodes: maximumNodes, stateSpace: .tiny)
         let target = GenericTree<Int>.branch(.value(3), .branch(.empty, .value(5)))
-        try expectGenericRoundTrip(generator, value: target)
+        try expectReflectionRoundTrip(generator.gen, value: target)
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.all)) { $0 == $1 }
-        #expect(report.passed)
-        #expect(report.reflectionRoundTripSuccesses == 50)
-        #expect(report.replayDeterminismSuccesses == 50)
+        expectSuccessfulExamination(report, samples: 50)
     }
 
     @Test("Arrays of the same generic specialization close the dependency graph")
@@ -51,11 +48,9 @@ struct GenericDerivationTests {
         let plan = try GeneratorDerivationPlan(for: GenericArrayTree<Int>.self, overrides: [:])
         #expect(plan.types.count == 1)
         let generator = GenericArrayTree<Int>.gen(depth: 1, stateSpace: .tiny)
-        try expectGenericRoundTrip(generator, value: .children([.value(7), .children([])]))
+        try expectReflectionRoundTrip(generator.gen, value: .children([.value(7), .children([])]))
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.all)) { $0 == $1 }
-        #expect(report.passed)
-        #expect(report.reflectionRoundTripSuccesses == 50)
-        #expect(report.replayDeterminismSuccesses == 50)
+        expectSuccessfulExamination(report, samples: 50)
     }
 
     @Test("Generic payload values need not be Sendable")
@@ -63,7 +58,6 @@ struct GenericDerivationTests {
         let payload = GenericMutablePayload()
         let generator = GenericBox<GenericMutablePayload>.gen(overriding: .just(payload))
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.value === payload })
     }
 
@@ -76,9 +70,8 @@ struct GenericDerivationTests {
         let generator = GenericProducts.gen(overriding: .int(in: 7 ... 7), .just(true))
         let target = GenericProducts(integer: GenericBox(value: 7), flag: GenericBox(value: true))
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0 == target })
-        try expectGenericRoundTrip(generator, value: target)
+        try expectReflectionRoundTrip(generator.gen, value: target)
     }
 
     @Test("Generic container payloads retain element overrides and recorded replay")
@@ -86,6 +79,9 @@ struct GenericDerivationTests {
         let generator = GenericContainers<Int>.gen(maximumNodes: 32, overriding: .int(in: 7 ... 7))
         #expect(generator.isReflective == false)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
+        var sawArray = false
+        var sawSet = false
+        var sawDictionary = false
         for _ in 0 ..< 50 {
             let (value, choices) = try #require(try interpreter.next())
             #expect(value.array.allSatisfy { $0 == 7 })
@@ -93,7 +89,13 @@ struct GenericDerivationTests {
             #expect(value.set.allSatisfy { $0 == 7 })
             #expect(value.dictionary.allSatisfy { $0.key == 7 && $0.value.value == 7 })
             #expect(try Interpreters.replay(generator.gen, using: choices) == value)
+            sawArray = sawArray || value.array.isEmpty == false
+            sawSet = sawSet || value.set.isEmpty == false
+            sawDictionary = sawDictionary || value.dictionary.isEmpty == false
         }
+        #expect(sawArray, "every draw had an empty array, so the element override was never applied there")
+        #expect(sawSet, "every draw had an empty set, so the element override was never applied there")
+        #expect(sawDictionary, "every draw had an empty dictionary, so the element override was never applied there")
     }
 
     @Test("Unsupported generic arguments require an override, not a generic conformance constraint")
@@ -104,9 +106,8 @@ struct GenericDerivationTests {
         let value = GenericOpaque(number: 7)
         let generator = GenericBox<GenericOpaque>.gen(overriding: .just(value))
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         #expect(samples.allSatisfy { $0.value == value })
-        try expectGenericRoundTrip(generator, value: GenericBox(value: value))
+        try expectReflectionRoundTrip(generator.gen, value: GenericBox(value: value))
     }
 
     @Test("Changing generic arguments may close a finite cycle or settle on a fixed specialization")
@@ -114,10 +115,10 @@ struct GenericDerivationTests {
         let swapping = try GeneratorDerivationPlan(for: GenericSwap<Int, Bool>.self, overrides: [:])
         #expect(swapping.types.count == 2)
         let target = GenericSwap<Int, Bool>.next(.next(.value(7, true)))
-        try expectGenericRoundTrip(GenericSwap<Int, Bool>.gen(maximumDepth: 3), value: target)
+        try expectReflectionRoundTrip(GenericSwap<Int, Bool>.gen(maximumDepth: 3).gen, value: target)
         let settling = try GeneratorDerivationPlan(for: GenericSettles<Bool>.self, overrides: [:])
         #expect(settling.types.count == 2)
-        try expectGenericRoundTrip(GenericSettles<Bool>.gen(maximumDepth: 3), value: .next(.value(7)))
+        try expectReflectionRoundTrip(GenericSettles<Bool>.gen(maximumDepth: 3).gen, value: .next(.value(7)))
     }
 
     @Test("Unbounded generic specialization fails with a bounded discovery diagnostic")
@@ -163,7 +164,6 @@ struct GenericDerivationTests {
         #expect(plan.types.count == 1)
         let generator = GenericExpansion<Int>.gen(depth: 1, overriding: supplied)
         let samples = try #example(generator, count: 20)
-        #expect(samples.count == 20)
         for sample in samples {
             switch sample {
                 case .end, .next(.end):
@@ -284,8 +284,3 @@ private indirect enum GenericExpandingSecond<Element> {
 }
 
 // MARK: - Helpers
-
-private func expectGenericRoundTrip<Value: Equatable>(_ generator: ReflectiveGenerator<Value>, value: Value) throws {
-    let reflected = try #require(try Interpreters.reflect(generator.gen, with: value))
-    #expect(try Interpreters.replay(generator.gen, using: reflected) == value)
-}

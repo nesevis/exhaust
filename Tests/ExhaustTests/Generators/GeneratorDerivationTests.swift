@@ -192,7 +192,6 @@ struct GeneratorDerivationTests {
         #expect(samples.contains { $0.inner.depth > 0 })
         let direct = Term.gen()
         let directSamples = try #example(direct, count: 20, seed: 1337)
-        #expect(directSamples.count == 20)
         #expect(directSamples.contains { $0.depth > 0 })
         #expect(directSamples.allSatisfy { $0.depth <= ReflectiveGenerator<Term>.defaultMaximumDepth })
     }

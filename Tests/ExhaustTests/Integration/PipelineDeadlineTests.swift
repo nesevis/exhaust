@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Cooperative pipeline deadlines")
 struct PipelineDeadlineTests {
-    @Test("The deadline setting works through the public macro")
+    @Test("The deadline setting works through the public macro", .timeLimit(.minutes(1)))
     func macroDeadline() throws {
         var report: ExhaustReport?
         let value = #exhaust(
@@ -18,7 +18,7 @@ struct PipelineDeadlineTests {
         #expect(try #require(report).hasExceededDeadline)
     }
 
-    @Test("Large deadlines saturate and the last setting wins")
+    @Test("Large deadlines saturate and the last setting wins", .timeLimit(.minutes(1)))
     func saturatedDeadline() throws {
         var report: ExhaustReport?
         let value = #exhaust(
@@ -35,17 +35,17 @@ struct PipelineDeadlineTests {
         #expect(completed.hasExceededDeadline == false)
     }
 
-    @Test("Reflected failures still render when the deadline prevents reduction")
+    @Test("Reflected failures still render when the deadline prevents reduction", .timeLimit(.minutes(1)))
     func reflectedFailureDeadline() throws {
-        var report: ExhaustReport?
-        let value = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            reflecting: 37,
-            .deadline(.milliseconds(100)),
-            .suppress(.all),
-            .onReport { report = $0 }
+        let deadline = monotonicNanoseconds() + 1_000_000_000
+        let (value, report) = run(
+            deadline: deadline,
+            screening: 0,
+            collectStats: false,
+            generator: #gen(.int(in: 0 ... 100)),
+            reflecting: 37
         ) { _ in
-            Thread.sleep(forTimeInterval: 0.15)
+            waitUntilDeadline(deadline)
             return false
         }
         #expect(value == 37)
@@ -56,19 +56,14 @@ struct PipelineDeadlineTests {
         #expect(completed.propertyInvocations == 1)
     }
 
-    @Test("Parallel sampling drains its in-flight calls before returning")
+    @Test("Parallel sampling drains its in-flight calls before returning", .timeLimit(.minutes(1)))
     func parallelDeadline() throws {
-        var report: ExhaustReport?
+        let deadline = monotonicNanoseconds() + 1_000_000_000
         let completedCalls = SendableBox(0)
-        let value = #exhaust(
-            #gen(.int(in: 0 ... 3)),
-            .budget(.custom(screening: 0, sampling: 1000)),
-            .deadline(.milliseconds(100)),
-            .parallelize(lanes: .two),
-            .suppress(.all),
-            .onReport { report = $0 }
+        let (value, report) = run(
+            deadline: deadline, screening: 0, collectStats: false, lanes: .two
         ) { _ in
-            Thread.sleep(forTimeInterval: 0.15)
+            waitUntilDeadline(deadline)
             completedCalls.withValue { $0 += 1 }
             return true
         }
@@ -80,7 +75,7 @@ struct PipelineDeadlineTests {
         #expect(completed.propertyInvocations == completedCalls.value)
     }
 
-    @Test("A run completing before its deadline keeps its full sampling budget")
+    @Test("A run completing before its deadline keeps its full sampling budget", .timeLimit(.minutes(1)))
     func completesBeforeDeadline() throws {
         let (value, report) = run(
             deadline: monotonicNanoseconds() + 60_000_000_000, screening: 0, collectStats: false
@@ -90,7 +85,7 @@ struct PipelineDeadlineTests {
         #expect(try #require(report).hasExceededDeadline == false)
     }
 
-    @Test("Expired runs invoke no property", arguments: [0, 50], [false, true])
+    @Test("Expired runs invoke no property", .timeLimit(.minutes(1)), arguments: [0, 50], [false, true])
     func expiredRun(screening: Int, collectStats: Bool) throws {
         let (value, report) = run(deadline: 0, screening: screening, collectStats: collectStats) { _ in
             Issue.record("An expired run must not invoke the property")
@@ -103,7 +98,7 @@ struct PipelineDeadlineTests {
         #expect(completed.reductionInvocations == 0)
     }
 
-    @Test("A passing in-flight call finishes before the run stops", arguments: [0, 50], [false, true])
+    @Test("A passing in-flight call finishes before the run stops", .timeLimit(.minutes(1)), arguments: [0, 50], [false, true])
     func deadlineDuringProperty(screening: Int, collectStats: Bool) throws {
         let deadline = monotonicNanoseconds() + 1_000_000_000
         let calls = SendableBox(0)
@@ -122,7 +117,7 @@ struct PipelineDeadlineTests {
         #expect(completed.randomSamplingInvocations == (screening == 0 ? 1 : 0))
     }
 
-    @Test("A genuine failure survives a deadline without starting reduction")
+    @Test("A genuine failure survives a deadline without starting reduction", .timeLimit(.minutes(1)))
     func deadlineDuringFailure() throws {
         let deadline = monotonicNanoseconds() + 1_000_000_000
         let (value, report) = run(deadline: deadline, screening: 0, collectStats: false) { _ in
@@ -139,7 +134,7 @@ struct PipelineDeadlineTests {
         #expect(completed.replaySeed != nil)
     }
 
-    @Test("Reduction uses only the time remaining in the trial")
+    @Test("Reduction uses only the time remaining in the trial", .timeLimit(.minutes(1)))
     func deadlineDuringReduction() throws {
         let deadline = monotonicNanoseconds() + 1_000_000_000
         let calls = SendableBox(0)
@@ -169,6 +164,8 @@ struct PipelineDeadlineTests {
         screening: Int,
         collectStats: Bool,
         generator: ReflectiveGenerator<Int>? = nil,
+        reflecting: Int? = nil,
+        lanes: ConcurrencyLevel? = nil,
         property: @escaping @Sendable (Int) -> Bool
     ) -> (Int?, ExhaustReport?) {
         var report: ExhaustReport?
@@ -184,14 +181,24 @@ struct PipelineDeadlineTests {
         if collectStats {
             settings.append(.collectOpenPBTStats)
         }
-        let value = __ExhaustRuntime.__exhaust(generator, settings: settings, property: property)
+        if let lanes {
+            settings.append(.parallelize(lanes: lanes))
+        }
+        let value = __ExhaustRuntime.__exhaust(
+            generator, settings: settings, reflecting: reflecting, property: property
+        )
         return (value, report)
     }
 }
 
+/// Blocks until the stamped deadline has passed, with a margin.
+///
+/// The run stamps its own deadline later than the test does, when it parses its settings, so returning at the stamped instant can return before the run's real deadline. The margin is 100 ms because under load that gap has been seen to exceed 10 ms.
+///
+/// This is the file's only sleep. A deadline is compared inline against `monotonicNanoseconds()` and nothing signals a test when it passes, so real time has to elapse. A new deadline test calls this helper rather than adding another `Thread.sleep`.
 private func waitUntilDeadline(_ deadline: UInt64) {
     let now = monotonicNanoseconds()
     if now < deadline {
-        Thread.sleep(forTimeInterval: Double(deadline - now) / 1_000_000_000 + 0.01)
+        Thread.sleep(forTimeInterval: Double(deadline - now) / 1_000_000_000 + 0.1)
     }
 }

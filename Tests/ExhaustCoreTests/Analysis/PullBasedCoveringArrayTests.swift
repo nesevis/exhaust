@@ -4,30 +4,11 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Pull-Based Covering Array")
 struct PullBasedCoveringArrayTests {
-    @Test("5 booleans at t=2 covers all pairs")
-    func fiveBoolsPairwise() {
-        let domains: [UInt64] = [2, 2, 2, 2, 2]
-        let rows = generateAll(domainSizes: domains, strength: 2)
-
-        let lowerBound = largestProductOfSubset(domains, size: 2)
-        #expect(rows.count >= lowerBound)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
-    }
-
-    @Test("Mixed domains at t=2 covers all pairs")
-    func mixedDomainsPairwise() {
-        let domains: [UInt64] = [2, 3, 4, 2]
-        let rows = generateAll(domainSizes: domains, strength: 2)
-
-        let lowerBound = largestProductOfSubset(domains, size: 2)
-        #expect(rows.count >= lowerBound)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
-    }
-
     @Test("6 ternary parameters at t=3 covers all triples")
     func sixTernaryStrength3() {
         let domains: [UInt64] = [3, 3, 3, 3, 3, 3]
@@ -52,16 +33,6 @@ struct PullBasedCoveringArrayTests {
     @Test("Large seed pair with booleans at t=2")
     func largeSeedPairWithBooleans() {
         let domains: [UInt64] = [8, 8, 2, 2, 2, 2, 2, 2]
-        let rows = generateAll(domainSizes: domains, strength: 2)
-
-        let lowerBound = largestProductOfSubset(domains, size: 2)
-        #expect(rows.count >= lowerBound)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
-    }
-
-    @Test("Symmetric ternary domains at t=2")
-    func symmetricTernaryPairwise() {
-        let domains: [UInt64] = [3, 3, 3, 3, 3, 3]
         let rows = generateAll(domainSizes: domains, strength: 2)
 
         let lowerBound = largestProductOfSubset(domains, size: 2)
@@ -168,6 +139,23 @@ struct PullBasedCoveringArrayTests {
         #expect(rows.count == fullSpace)
         verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
     }
+
+    // MARK: - Generated Domains
+
+    @Test("Rows stay in bounds, cover every pair, and repeat for repeated domains, over generated domains")
+    func generatedDomainsCoverAllPairs() throws {
+        let domains = Gen.arrayOf(Gen.choose(in: UInt64(2) ... 8), within: 2 ... 6)
+        try exhaustCheck(domains, maxIterations: 100) { domainSizes in
+            let rows = generateAll(domainSizes: domainSizes, strength: 2)
+            let repeated = generateAll(domainSizes: domainSizes, strength: 2)
+            let inBounds = rows.allSatisfy { row in
+                row.values.count == domainSizes.count
+                    && zip(row.values, domainSizes).allSatisfy { $0 < $1 }
+            }
+            let sameStream = rows.map(\.values) == repeated.map(\.values)
+            return inBounds && sameStream && coversAllPairs(rows: rows, domainSizes: domainSizes)
+        }
+    }
 }
 
 // MARK: - Helpers
@@ -249,4 +237,20 @@ private func allCombinations(of n: Int, choose k: Int) -> [[Int]] {
 
     build(start: 0)
     return result
+}
+
+/// Whether every unordered pair of parameters sees every combination of their two domains.
+private func coversAllPairs(rows: [CoveringArrayRow], domainSizes: [UInt64]) -> Bool {
+    for paramA in 0 ..< domainSizes.count {
+        for paramB in (paramA + 1) ..< domainSizes.count {
+            var seen = Set<[UInt64]>()
+            for row in rows {
+                seen.insert([row.values[paramA], row.values[paramB]])
+            }
+            guard UInt64(seen.count) == domainSizes[paramA] * domainSizes[paramB] else {
+                return false
+            }
+        }
+    }
+    return true
 }

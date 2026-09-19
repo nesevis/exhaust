@@ -1,5 +1,6 @@
 import Exhaust
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("Derived depth controls")
@@ -41,22 +42,7 @@ struct DerivedDepthControlTests {
                 forward: { depth in layers[depth - 1].gen.erase() },
                 backward: { (_: DepthControlEnvelope) in 20 }
             )
-            var actualInterpreter = ValueAndChoiceTreeInterpreter(
-                Gen.zip(generator.gen, Gen.choose(in: UInt64.min ... UInt64.max)),
-                seed: 42,
-                sizeOverride: size
-            )
-            var referenceInterpreter = ValueAndChoiceTreeInterpreter(
-                Gen.zip(reference, Gen.choose(in: UInt64.min ... UInt64.max)),
-                seed: 42,
-                sizeOverride: size
-            )
-            for _ in 0 ..< 30 {
-                let actual = try #require(try actualInterpreter.next())
-                let expected = try #require(try referenceInterpreter.next())
-                #expect(actual.0.0 == expected.0.0)
-                #expect(actual.0.1 == expected.0.1)
-            }
+            try expectMatchingRandomStream(generator.gen, reference: reference, seed: 42, size: size, draws: 30)
         }
     }
 
@@ -73,10 +59,7 @@ struct DerivedDepthControlTests {
         let report = #examine(recursive, .samples(50), .replay(42), .suppress(.logs)) { first, second in
             first == second
         }
-        #expect(report.passed)
-        #expect(report.valuesGenerated == 50)
-        #expect(report.reflectionRoundTripSuccesses == 50)
-        #expect(report.replayDeterminismSuccesses == 50)
+        expectSuccessfulExamination(report, samples: 50)
     }
 
     @Test("Examine still rejects incorrect payload reflection beneath a depth control")

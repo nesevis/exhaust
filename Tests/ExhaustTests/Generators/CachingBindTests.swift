@@ -44,7 +44,7 @@ struct CachingBindTests {
     @Test("Draws the same values as a plain bind under the same seed")
     func drawsTheSameValuesAsAPlainBindUnderTheSameSeed() {
         func collect(caching: Bool) -> [Int] {
-            let recorder = ValueRecorder()
+            let recorder = DrawnValueRecorder()
             let widths = #gen(.int(in: 1 ... 5))
             let generator: ReflectiveGenerator<Int> = switch caching {
                 case true: widths.bind(caching: { width in .int(in: 0 ... width * 1000) })
@@ -98,7 +98,7 @@ struct CachingBindTests {
     @Test("Key path variant draws the same values as a plain bind under the same seed")
     func keyPathVariantDrawsTheSameValuesAsAPlainBindUnderTheSameSeed() {
         func collect(caching: Bool) -> [Int] {
-            let recorder = ValueRecorder()
+            let recorder = DrawnValueRecorder()
             let rows = #gen(.int(in: 1 ... 5), .int(in: 0 ... 100)) { (width: $0, noise: $1) }
             let generator: ReflectiveGenerator<Int> = switch caching {
                 case true: rows.bind(cachingBy: \.width) { row in .int(in: 0 ... row.width * 1000) }
@@ -120,40 +120,5 @@ struct CachingBindTests {
 
         #expect(cached.isEmpty == false)
         #expect(cached == plain)
-    }
-}
-
-// MARK: - Helpers
-
-private final class ConstructionCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage = 0
-    private var seen: Set<Int> = []
-
-    var count: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
-    }
-
-    func increment(_ value: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-        storage += 1
-        seen.insert(value)
-    }
-
-    var distinctValues: [Int] {
-        lock.lock()
-        defer { lock.unlock() }
-        return seen.sorted()
-    }
-}
-
-private final class ValueRecorder: @unchecked Sendable {
-    private(set) var values: [Int] = []
-
-    func append(_ value: Int) {
-        values.append(value)
     }
 }

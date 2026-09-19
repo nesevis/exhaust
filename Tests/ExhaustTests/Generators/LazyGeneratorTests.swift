@@ -66,7 +66,7 @@ struct LazyGeneratorTests {
     @Test("Replaying the same seed produces the same values")
     func replayingTheSameSeedProducesTheSameValues() {
         func collect(seed: UInt64) -> [Int] {
-            let recorder = ValueRecorder()
+            let recorder = DrawnValueRecorder()
             let generator: ReflectiveGenerator<Int> = .lazy { .int(in: 0 ... 1_000_000) }
             #exhaust(
                 #gen(generator),
@@ -142,36 +142,5 @@ struct LazyGeneratorTests {
         #exhaust(#gen(generator), .budget(.quick)) { value in
             value == -1 || (0 ... 9).contains(value)
         }
-    }
-}
-
-// MARK: - Helpers
-
-private final class ConstructionCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage = 0
-
-    var count: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
-    }
-
-    func increment() {
-        lock.lock()
-        defer { lock.unlock() }
-        storage += 1
-    }
-
-    var isEmpty: Bool {
-        count < 1
-    }
-}
-
-private final class ValueRecorder: @unchecked Sendable {
-    private(set) var values: [Int] = []
-
-    func append(_ value: Int) {
-        values.append(value)
     }
 }

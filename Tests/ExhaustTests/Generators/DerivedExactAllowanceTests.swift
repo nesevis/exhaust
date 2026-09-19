@@ -40,7 +40,6 @@ struct DerivedExactAllowanceTests {
             let share = availableNodes / elementCount
             let allowances = try #require(budget.split(share, minima: minima))
             #expect(allowances == [share])
-            #expect(allowances.reduce(0, +) * elementCount <= availableNodes)
         }
     }
 
@@ -56,7 +55,8 @@ struct DerivedExactAllowanceTests {
             } else {
                 let generator = try builder.root(for: WideProduct.self, depth: depth, maximumNodes: maximumNodes)
                 var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, maxRuns: 1, sizeOverride: 100)
-                _ = try #require(try interpreter.next())
+                let (value, _) = try #require(try interpreter.next())
+                #expect(value.nodes == 33)
             }
         }
     }
@@ -72,7 +72,8 @@ struct DerivedExactAllowanceTests {
         } else {
             let generator = try builder.root(for: NestedWide.self, depth: .pinned(1), maximumNodes: maximumNodes)
             var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, maxRuns: 1, sizeOverride: 100)
-            _ = try #require(try interpreter.next())
+            let (value, _) = try #require(try interpreter.next())
+            #expect(value.nodes == 34)
         }
     }
 
@@ -135,6 +136,10 @@ private struct WideProduct: Equatable {
 @Exhaustable
 private struct NestedWide: Equatable {
     let wide: WideProduct
+
+    var nodes: Int {
+        1 + wide.nodes
+    }
 }
 
 @Exhaustable

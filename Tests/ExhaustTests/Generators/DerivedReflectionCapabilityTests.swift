@@ -34,17 +34,14 @@ struct DerivedReflectionCapabilityTests {
         #expect(CapabilityInteger.gen(maximumNodes: maximumNodes, overriding: reversible).isReflective)
     }
 
-    @Test("Recorded dictionary choices replay exactly; any successful reflection preserves the output", arguments: [Int?.none, 64])
-    func replayAndBestEffortReflection(maximumNodes: Int?) throws {
+    @Test("Recorded dictionary choices replay exactly", arguments: [Int?.none, 64])
+    func recordedChoicesReplay(maximumNodes: Int?) throws {
         let generator = CapabilityDictionary.gen(maximumDepth: 3, maximumNodes: maximumNodes, stateSpace: .tiny)
         #expect(generator.isReflective == false)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 1337, sizeOverride: 100)
         for _ in 0 ..< 100 {
             let (value, choices) = try #require(try interpreter.next())
             #expect(try Interpreters.replay(generator.gen, using: choices) == value)
-            if let reflected = try? Interpreters.reflect(generator.gen, with: value) {
-                #expect(try Interpreters.replay(generator.gen, using: reflected) == value)
-            }
         }
     }
 

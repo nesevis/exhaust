@@ -2,10 +2,6 @@
 //  ReducerSimplifyValuesTests.swift
 //  ExhaustTests
 //
-//  Tests for Pass 3 of Interpreters.reduce: simplify values to semantic simplest.
-//  Pass 3 tries replacing each .value entry with its semantically simplest form
-//  (0 for numbers, "a" for characters) using find_integer for batching.
-//
 
 import ExhaustCore
 import ExhaustTestSupport

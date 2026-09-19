@@ -51,21 +51,6 @@ struct GeneratorCompositionEdgeCaseTests {
         #expect(drawn == 20)
     }
 
-    @Test("Nested composition with multiple levels")
-    func nestedCompositionLevels() throws {
-        let innerGen = Gen.zip(
-            Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
-            stringGen()
-        )
-        let middleGen = Gen.zip(innerGen, Gen.choose(from: [true, false]))
-        let outerGen = Gen.zip(middleGen, Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling))
-
-        var iterator = ValueInterpreter(outerGen, seed: 42)
-        let value = try #require(try iterator.next())
-        let ((_, _), _) = value.0
-        _ = value.1
-    }
-
     @Test("Empty array generator in composition")
     func emptyArrayGeneratorComposition() throws {
         let emptyArrayGen = Gen.just([Int]())

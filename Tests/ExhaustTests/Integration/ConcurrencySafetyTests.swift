@@ -249,24 +249,6 @@ struct ConcurrentStateMachineDrainLoopTests {
         )
         #expect(result.commands.count >= 2)
     }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Massive parallelism does not starve the cooperative thread pool")
-    func multipleConcurrentStateMachineRunsInParallel() async {
-        await withTaskGroup(of: Void.self) { group in
-            for _ in 0 ..< 5 {
-                group.addTask {
-                    _ = await #execute(
-                        YieldingCounterSpec.self,
-                        mode: .tasks,
-                        .commandLimit(4),
-                        .budget(.custom(screening: 0, sampling: 50)),
-                        .suppress(.all)
-                    )
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Specs

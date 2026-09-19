@@ -5,10 +5,6 @@
 //  Property-based tests covering core invariants of Exhaust's bidirectional
 //  architecture, shrink ordering, and size-scaling math.
 //
-//  NOTE: #exhaust, .bool(), .asciiString(), .character(from:), .optional(), .oneOf, .filter
-//  are Exhaust-only. Converted to ExhaustCore Gen.* API equivalents.
-//  .filter and .optional() tests noted where they use Exhaust-only features.
-//
 
 import ExhaustCore
 import ExhaustTestSupport
@@ -196,7 +192,7 @@ private func assertReplayMaterializerEquivalence<Output>(
     isEqual: @escaping (Output, Output) -> Bool
 ) throws {
     try exhaustCheck(gen, maxIterations: UInt64(maxIterations)) { value in
-        guard let tree = try? Interpreters.reflect(gen, with: value) else { return true }
+        guard let tree = try Interpreters.reflect(gen, with: value) else { return false }
         guard let replayed: Output = try? Interpreters.replay(gen, using: tree) else { return false }
 
         // Reproduction is `.exact` mode: it reads every choice — including branch selection — from the flattened prefix. `.guided` re-selects pick branches from its seed (it is for exploration, not reproduction), so it agrees with replay only for branch-free generators.
@@ -297,13 +293,16 @@ struct ShrinkingPropertyTests {
         let property: (Int) -> Bool = { $0 < 50 }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
+        var reductions = 0
         while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             guard case let .reduced(_, _, shrunk) = try Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
+            reductions += 1
             #expect(property(shrunk) == false, "Shrunk value \(shrunk) no longer fails the property")
         }
+        #expect(reductions > 0, "No draw reduced, so the property was never exercised")
     }
 }
 

@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Execute deadlines", .serialized, .tags(.stateMachine))
 struct ExecuteDeadlineTests {
-    @Test("Settings resolve the last deadline and saturate large durations")
+    @Test("Settings resolve the last deadline and saturate large durations", .timeLimit(.minutes(1)))
     func deadlineResolution() {
         let expired = ResolvedConcurrentConfig.parse([.deadline(.seconds(60)), .deadline(.zero)]).config
         #expect(expired.hasExceededDeadline)
@@ -14,7 +14,7 @@ struct ExecuteDeadlineTests {
         #expect(unlimited.hasExceededDeadline == false)
     }
 
-    @Test("Postponing the deadline returns the span a run spent waiting to be admitted")
+    @Test("Postponing the deadline returns the span a run spent waiting to be admitted", .timeLimit(.minutes(1)))
     func deadlinePostponement() throws {
         var timed = ResolvedConcurrentConfig.parse([.deadline(.seconds(60))]).config
         let stamped = try #require(timed.deadlineNanoseconds)
@@ -36,7 +36,7 @@ struct ExecuteDeadlineTests {
         #expect(untimed.deadlineNanoseconds == nil)
     }
 
-    @Test("A zero deadline executes no synchronous sequences")
+    @Test("A zero deadline executes no synchronous sequences", .timeLimit(.minutes(1)))
     func zeroDeadline() async throws {
         var report: ExhaustReport?
         let result = await #execute(
@@ -50,7 +50,7 @@ struct ExecuteDeadlineTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("All async execution modes honor zero deadlines", arguments: [ExecutionModel.sequential, .tasks, .threads])
+    @Test("All async execution modes honor zero deadlines", .timeLimit(.minutes(1)), arguments: [ExecutionModel.sequential, .tasks, .threads])
     func asyncZeroDeadline(mode: ExecutionModel) async throws {
         var report: ExhaustReport?
         let result = await __ExhaustRuntime.__runStateMachineDispatchAsync(
@@ -63,7 +63,7 @@ struct ExecuteDeadlineTests {
         #expect(completed.hasExceededDeadline)
     }
 
-    @Test("Screening and sampling stop after an in-flight sequence", arguments: [0, 50])
+    @Test("Screening and sampling stop after an in-flight sequence", .timeLimit(.minutes(1)), arguments: [0, 50])
     func stopsBetweenSequences(screening: Int) async throws {
         var report: ExhaustReport?
         let result = await #execute(
@@ -74,17 +74,19 @@ struct ExecuteDeadlineTests {
         #expect(result == nil)
         let completed = try #require(report)
         #expect(completed.hasExceededDeadline)
-        #expect(completed.propertyInvocations > 0)
-        #expect(completed.propertyInvocations < 1000)
+        #expect(completed.propertyInvocations == 1)
         #expect(completed.reductionInvocations == 0)
         if screening > 0 {
             #expect(completed.screeningInvocations == 1)
             #expect(completed.randomSamplingInvocations == 0)
+        } else {
+            #expect(completed.randomSamplingInvocations == 1)
+            #expect(completed.screeningInvocations == 0)
         }
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent modes finish the current probe before stopping", arguments: [ExecutionModel.tasks, .threads])
+    @Test("Concurrent modes finish the current probe before stopping", .timeLimit(.minutes(1)), arguments: [ExecutionModel.tasks, .threads])
     func concurrentDeadline(mode: ExecutionModel) async throws {
         var report: ExhaustReport?
         let result = await __ExhaustRuntime.__runStateMachineDispatchAsync(
@@ -101,7 +103,7 @@ struct ExecuteDeadlineTests {
         #expect(completed.reductionInvocations == 0)
     }
 
-    @Test("A failure discovered at the deadline is returned without reduction")
+    @Test("A failure discovered at the deadline is returned without reduction", .timeLimit(.minutes(1)))
     func preservesFailure() async throws {
         var report: ExhaustReport?
         let result = await #execute(

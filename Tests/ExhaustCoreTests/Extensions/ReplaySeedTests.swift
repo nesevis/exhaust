@@ -96,8 +96,6 @@ struct ReplaySeedTests {
         #expect(ReplaySeed.decode(tooLong) == nil)
     }
 
-    // The valid-alphabet and maximum-length checks live as properties in CrockfordBase32PropertyTests.
-
     @Test func decodesSuffixlessSeedWithNilIteration() {
         let decoded = ReplaySeed.decodeWithIteration("1A")
         #expect(decoded?.seed == ReplaySeed.decode("1A"))

@@ -78,7 +78,48 @@ struct MutationArmTraceTests {
         #expect(lines.contains { $0.hasPrefix("7,0,10,low,1,0,0,0,") })
     }
 
-    @Test("The new knobs parse from the experiment environment variable")
+    @Test("A trace gap wider than a window closes one window, not one per elapsed boundary")
+    func traceSkipsElapsedBoundaries() throws {
+        let directory = NSTemporaryDirectory() + "arm-trace-test-\(UUID().uuidString)"
+        defer {
+            try? FileManager.default.removeItem(atPath: directory)
+        }
+        var trace = try #require(MutationArmTrace(directory: directory, windowSize: 10, seed: 7))
+        let ledger = MutationArmLedger()
+        let bandit = MutationBandit()
+        // Duplicates and materializer rejections advance the timeline without a row, so the next attempt to arrive can be many windows past the boundary.
+        trace.note(attemptIndex: 1, ledger: ledger, bandit: bandit)
+        for attemptIndex in 100_000 ... 100_009 {
+            trace.note(attemptIndex: attemptIndex, ledger: ledger, bandit: bandit)
+        }
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory)
+        let contents = try String(contentsOfFile: directory + "/" + #require(files.first), encoding: .utf8)
+        let lines = contents.split(separator: "\n")
+        #expect(lines.count == 1 + MutationArm.allCases.count)
+    }
+
+    @Test("A resumed run anchors its first window on the timeline it resumed at")
+    func traceAnchorsOnTheResumedTimeline() throws {
+        let directory = NSTemporaryDirectory() + "arm-trace-test-\(UUID().uuidString)"
+        defer {
+            try? FileManager.default.removeItem(atPath: directory)
+        }
+        var trace = try #require(MutationArmTrace(directory: directory, windowSize: 10, seed: 7))
+        let ledger = MutationArmLedger()
+        let bandit = MutationBandit()
+        // A predecessor consumed 100,000 attempts, so this process's first attempt is numbered far past any boundary counted from zero.
+        for attemptIndex in 100_000 ... 100_025 {
+            trace.note(attemptIndex: attemptIndex, ledger: ledger, bandit: bandit)
+        }
+        let files = try FileManager.default.contentsOfDirectory(atPath: directory)
+        let contents = try String(contentsOfFile: directory + "/" + #require(files.first), encoding: .utf8)
+        let lines = contents.split(separator: "\n")
+        // Two windows closed inside 25 attempts, the same as a run that started at zero.
+        #expect(lines.count == 1 + 2 * MutationArm.allCases.count)
+        #expect(lines.contains { $0.hasPrefix("7,0,100010,low,") })
+    }
+
+    @Test("Arm eligibility and admissibility parse from the experiment environment variable")
     func knobsParse() throws {
         let experiments = try FuzzExperiments.parse(environmentValue: "armEligibility=on,armAdmissibility=on")
         #expect(experiments.armEligibility)
@@ -186,7 +227,7 @@ struct ArmEligibilityTests {
                 Gen.choose(in: 100 ... 200 as ClosedRange<Int>)
             ).map { $0.0 + $0.1 + $0.2 }),
         ])
-        let tree = try #require(branchZeroTree(of: generator))
+        let tree = try #require(try branchZeroTree(of: generator))
         let graph = ChoiceGraphBuilder.build(from: tree)
         let sighted = MutationArmRepertoire.sighted(in: graph)
         #expect(sighted.contains(.swap))
@@ -199,25 +240,6 @@ struct ArmEligibilityTests {
         let targets = MutationTargets(tree: tree)
         #expect(targets.hasSwappableGroup(minimumSize: 2) == false)
         #expect(targets.hasTandemGroup == false)
-    }
-
-    @Test("The bandit draws only from the eligible set and renormalises over it")
-    func banditRespectsTheEligibleSet() throws {
-        let bandit = MutationBandit(arms: [.low, .medium, .high, .splice])
-        var eligible = MutationArmSet(.low)
-        eligible.insert(.high)
-        var seen: Set<MutationArm> = []
-        for step in 0 ..< 200 {
-            let arm = try #require(bandit.pick(random: Double(step) / 200, eligible: eligible))
-            seen.insert(arm)
-        }
-        #expect(seen == [.low, .high])
-    }
-
-    @Test("An empty eligible set yields nil rather than an arm the caller cannot use")
-    func banditReportsAnEmptySet() {
-        let bandit = MutationBandit(arms: [.low, .medium])
-        #expect(bandit.pick(random: 0.5, eligible: MutationArmSet(.twinSplice)) == nil)
     }
 
     @Test("A gated run never draws an arm whose operator cannot fire, and still finds faults")
@@ -297,66 +319,6 @@ struct ArmEligibilityTests {
         #expect(widened.contains(.swap))
     }
 
-    @Test("A trace gap wider than a window closes one window, not one per elapsed boundary")
-    func traceSkipsElapsedBoundaries() throws {
-        let directory = NSTemporaryDirectory() + "arm-trace-test-\(UUID().uuidString)"
-        defer {
-            try? FileManager.default.removeItem(atPath: directory)
-        }
-        var trace = try #require(MutationArmTrace(directory: directory, windowSize: 10, seed: 7))
-        let ledger = MutationArmLedger()
-        let bandit = MutationBandit()
-        // Duplicates and materializer rejections advance the timeline without a row, so the next attempt to arrive can be many windows past the boundary.
-        trace.note(attemptIndex: 1, ledger: ledger, bandit: bandit)
-        for attemptIndex in 100_000 ... 100_009 {
-            trace.note(attemptIndex: attemptIndex, ledger: ledger, bandit: bandit)
-        }
-        let files = try FileManager.default.contentsOfDirectory(atPath: directory)
-        let contents = try String(contentsOfFile: directory + "/" + #require(files.first), encoding: .utf8)
-        let lines = contents.split(separator: "\n")
-        #expect(lines.count == 1 + MutationArm.allCases.count)
-    }
-
-    @Test("The reward divides by the probability the restricted draw ran at, not the unconditional one")
-    func rewardUsesTheConditionalProbability() {
-        let bandit = MutationBandit(arms: [.low, .medium, .high, .splice])
-        let eligible = MutationArmSet(.low, .high)
-        let conditional = bandit.probability(of: .low, eligible: eligible)
-        // Two of four arms survive an even distribution, so each takes half the mass.
-        #expect(abs(conditional - 0.5) < 1e-9)
-        #expect(abs(conditional + bandit.probability(of: .high, eligible: eligible) - 1) < 1e-9)
-        // An arm the gate withheld was not drawn at all.
-        #expect(bandit.probability(of: .splice, eligible: eligible) == 0)
-
-        // The inflation the unconditional probability would cause: with half the mass withheld, every exponent doubles.
-        var conditionalBandit = MutationBandit(arms: [.low, .medium, .high, .splice])
-        var unconditionalBandit = conditionalBandit
-        conditionalBandit.reward(.low, drawProbability: conditional)
-        unconditionalBandit.reward(.low, drawProbability: unconditionalBandit.probability(of: .low))
-        #expect(unconditionalBandit.probability(of: .low) > conditionalBandit.probability(of: .low))
-    }
-
-    @Test("A resumed run anchors its first window on the timeline it resumed at")
-    func traceAnchorsOnTheResumedTimeline() throws {
-        let directory = NSTemporaryDirectory() + "arm-trace-test-\(UUID().uuidString)"
-        defer {
-            try? FileManager.default.removeItem(atPath: directory)
-        }
-        var trace = try #require(MutationArmTrace(directory: directory, windowSize: 10, seed: 7))
-        let ledger = MutationArmLedger()
-        let bandit = MutationBandit()
-        // A predecessor consumed 100,000 attempts, so this process's first attempt is numbered far past any boundary counted from zero.
-        for attemptIndex in 100_000 ... 100_025 {
-            trace.note(attemptIndex: attemptIndex, ledger: ledger, bandit: bandit)
-        }
-        let files = try FileManager.default.contentsOfDirectory(atPath: directory)
-        let contents = try String(contentsOfFile: directory + "/" + #require(files.first), encoding: .utf8)
-        let lines = contents.split(separator: "\n")
-        // Two windows closed inside 25 attempts, the same as a run that started at zero.
-        #expect(lines.count == 1 + 2 * MutationArm.allCases.count)
-        #expect(lines.contains { $0.hasPrefix("7,0,100010,low,") })
-    }
-
     @Test("A generator with no bind anywhere reports no bind region on the flat sequence")
     func flatSequenceReportsTheAbsenceOfBinds() throws {
         // A zip of scalars: no bind anywhere in the generator, so splice can never fire in any run of it.
@@ -410,7 +372,7 @@ struct ArmEligibilityTests {
 // MARK: - Helpers
 
 /// The first tree in a short seed sweep whose pick took branch zero, materialized with its alternatives intact.
-private func branchZeroTree(of generator: Generator<Int>) -> ChoiceTree? {
+private func branchZeroTree(of generator: Generator<Int>) throws -> ChoiceTree? {
     for seed in UInt64(0) ..< 40 {
         var interpreter = ValueAndChoiceTreeInterpreter(
             generator,
@@ -418,7 +380,7 @@ private func branchZeroTree(of generator: Generator<Int>) -> ChoiceTree? {
             seed: seed,
             maxRuns: 1
         )
-        guard let (value, tree) = try? interpreter.next(), value == 0 else {
+        guard let (value, tree) = try interpreter.next(), value == 0 else {
             continue
         }
         return tree

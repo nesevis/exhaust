@@ -139,7 +139,7 @@ struct GraphColoringChallenge {
     }
 
     @Test("Graph coloring shrinks to a canonical CE class")
-    func graphColoringRandomSeed() {
+    func graphColoringRandomSeed() throws {
         let result = #exhaust(
             Self.gen,
             .suppress(.issueReporting),
@@ -147,9 +147,7 @@ struct GraphColoringChallenge {
             property: Self.property
         )
 
-        guard let value = result else {
-            return
-        }
+        let value = try #require(result, "The run found no counterexample")
 //        print("[CE] \(value)")
 
         // Sanity-check the result is a counterexample.

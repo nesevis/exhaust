@@ -1,3 +1,4 @@
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -20,6 +21,28 @@ struct ElementRunOperatorTests {
             shortened += 1
         }
         #expect(shortened > 0)
+    }
+
+    @Test("Deletion yields a shorter subsequence with balanced markers, over generated parent and mutator seeds")
+    func runDeletionIsASubsequenceOverSeeds() throws {
+        let seeds = Gen.zip(Gen.choose(in: UInt64(1) ... 10000), Gen.choose(in: UInt64(1) ... 10000))
+        let deletions = DeletionCounter()
+        try exhaustCheck(seeds, maxIterations: 300) { (pair: (UInt64, UInt64)) throws -> Bool in
+            let (parentSeed, mutatorSeed) = pair
+            let (sequence, tree) = try materializedParent(arrayThenLeafGenerator(), seed: parentSeed)
+            var prng = Xoshiro256(seed: mutatorSeed)
+            let parentValues = values(of: sequence)
+            guard let child = FuzzMutator.deleteElementRun(sequence, targets: MutationTargets(tree: tree), prng: &prng) else {
+                // The array's minimum length is one, so a parent holding a single element plus the trailing leaf has no run the operator may remove.
+                return parentValues.count <= 2
+            }
+            deletions.increment()
+            let childValues = values(of: child)
+            return childValues.count < parentValues.count
+                && isSubsequence(childValues, of: parentValues)
+                && markersBalanced(child)
+        }
+        #expect(deletions.total > 0, "no seed pair produced a deletion")
     }
 
     @Test("Run duplication repeats a run immediately after itself")
@@ -193,4 +216,20 @@ private func markersBalanced(_ sequence: ChoiceSequence) -> Bool {
         }
     }
     return depth == 0
+}
+
+/// Draws a parent at exactly the given seed, for properties that quantify over the seed rather than scanning for a fixture.
+private func materializedParent(_ gen: Generator<some Any>, seed: UInt64) throws -> (ChoiceSequence, ChoiceTree) {
+    var interpreter = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 1)
+    let (_, tree) = try #require(try interpreter.next())
+    return (ChoiceSequence.flatten(tree), tree)
+}
+
+/// Counts how many seed pairs reached a deletion, so a property that never mutated cannot read as a pass.
+private final class DeletionCounter {
+    private(set) var total = 0
+
+    func increment() {
+        total += 1
+    }
 }

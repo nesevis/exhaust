@@ -24,6 +24,9 @@ struct BindPivotEncoderTests {
         let reduced = try #require(result.outcome.counterexample)
         #expect(reduced.1 == (3, 2))
         #expect(result.stats.encoderCounts[.bindPivot]?.accepted == 1)
+        // Every leaf of the starting input is at its target, so the structural cycle stalls with nothing converged-but-movable. Without the release cycle the run would end there and the bind pivot scope, deferred until the release, would never be dispatched.
+        #expect(result.stats.cycles >= 2)
+        #expect((result.stats.encoderCounts[.bindPivot]?.emitted ?? 0) > 0)
     }
 
     @Test("The full encoder set reaches the smaller inner")
@@ -79,24 +82,6 @@ struct BindPivotEncoderTests {
         let reduced = try #require(result.outcome.counterexample)
         #expect(reduced.1 == (1, [0]))
         #expect(result.stats.encoderCounts[.bindPivot]?.accepted == 1)
-    }
-
-    /// Every leaf of the starting input is at its target, so the structural cycle stalls with nothing converged-but-movable. Without the release cycle the run would end there and the bind pivot scope, deferred until the release, would never be dispatched.
-    @Test("Releasing the bind-inner deferral is followed by a cycle that dispatches the deferred scopes")
-    func deferralReleaseGetsACycle() throws {
-        let generated = try generate(pairGen.gen, seed: pairSeed)
-        try #require(generated.value == (1, 0))
-
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
-            gen: pairGen.gen,
-            tree: generated.tree,
-            output: generated.value,
-            config: Interpreters.ReducerConfiguration(maxStalls: 2, enabledEncoders: [.bindPivot]),
-            property: pairProperty
-        )
-
-        #expect(result.stats.cycles >= 2)
-        #expect((result.stats.encoderCounts[.bindPivot]?.emitted ?? 0) > 0)
     }
 
     // MARK: - Probe Loop

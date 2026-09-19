@@ -95,12 +95,14 @@ struct SCADomainBuildTreeTests {
 
         let lengthRange = UInt64(0) ... UInt64(3)
         var treeCount = 0
+        var rowCount = 0
         while let row = generator.next() {
+            rowCount += 1
             if domain.buildTree(row: row, sequenceLengthRange: lengthRange) != nil {
                 treeCount += 1
             }
         }
-        #expect(treeCount > 0)
+        #expect(treeCount == rowCount)
     }
 
     @Test("buildTree returns nil for row with wrong value count")

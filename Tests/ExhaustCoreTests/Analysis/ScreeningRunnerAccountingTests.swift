@@ -79,26 +79,4 @@ struct ScreeningRunnerAccountingTests {
         #expect(summary.rowAttempts == 8)
         #expect(observedPoints.count == 8)
     }
-
-    @Test("Covering array applies its documented per-parameter domain cap")
-    func coveringArrayAppliesPerParameterDomainCap() {
-        let declaredDomainSize: UInt64 = 20000
-        let parameterCount = 2
-        let effectiveDomainSize = BalancedCoveringArrayGenerator.maxDomainSize / parameterCount
-        let generator = BalancedCoveringArrayGenerator(
-            domainSizes: [declaredDomainSize, 2]
-        )
-        var observedFirstParameterValues = Set<UInt64>()
-
-        for _ in 0 ..< effectiveDomainSize {
-            guard let row = generator.next() else {
-                Issue.record("Expected the spread generator to keep producing rows")
-                return
-            }
-            observedFirstParameterValues.insert(row.values[0])
-        }
-
-        #expect(observedFirstParameterValues.count == effectiveDomainSize)
-        #expect(observedFirstParameterValues.max() == UInt64(effectiveDomainSize - 1))
-    }
 }

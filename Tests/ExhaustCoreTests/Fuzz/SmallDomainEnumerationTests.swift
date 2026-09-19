@@ -29,6 +29,7 @@ struct SmallDomainEnumerationTests {
             }
             #expect(positions.count == 1, "one enumeration touched \(positions.count) sites")
             #expect(patterns.count == 3, "alternatives repeated a value")
+            #expect(patterns.allSatisfy { (0 ... 3).contains($0) }, "an alternative left the leaf's range: \(patterns)")
         }
     }
 

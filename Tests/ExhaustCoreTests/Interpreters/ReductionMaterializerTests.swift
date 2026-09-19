@@ -250,7 +250,7 @@ struct ReductionMaterializerTests {
         }
 
         // Bound value 8 should be clamped to max(0...5) = 5.
-        #expect(value <= 5)
+        #expect(value == 5)
     }
 
     // MARK: - Guided mode: clamping
@@ -452,6 +452,8 @@ struct ReductionMaterializerTests {
         if case let .value(v) = freshSequence[0] {
             #expect(v.validRange == 5 ... 15,
                     "Expected fresh range 5...15, got \(String(describing: v.validRange))")
+        } else {
+            Issue.record("Expected the first flattened entry to be a value, got \(freshSequence[0])")
         }
     }
 
@@ -490,12 +492,16 @@ struct ReductionMaterializerTests {
         }
 
         // The bound subtree's validRange should reflect 0...10, not the original 0...50.
-        if case let .bind(_, _, bound) = tree {
-            if case let .choice(_, meta) = bound {
-                #expect(meta.validRange?.upperBound == 10,
-                        "Bound range upper bound should be 10 (from inner), got \(String(describing: meta.validRange))")
-            }
+        guard case let .bind(_, _, bound) = tree else {
+            Issue.record("Expected the materialized tree to be a bind, got \(tree)")
+            return
         }
+        guard case let .choice(_, meta) = bound else {
+            Issue.record("Expected the bound subtree to be a choice, got \(bound)")
+            return
+        }
+        #expect(meta.validRange?.upperBound == 10,
+                "Bound range upper bound should be 10 (from inner), got \(String(describing: meta.validRange))")
     }
 
     // MARK: - Guided mode: fallback tree

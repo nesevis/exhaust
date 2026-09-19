@@ -95,43 +95,31 @@ struct LargeDomainCoveringArrayReplayUnitTests {
     @Suite("buildPickTree")
     struct BuildPickTreeTests {
         @Test("Pick parameter produces branch with selected wrapper")
-        func pickProducesBranch() {
+        func pickProducesBranch() throws {
             let gen: Generator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
             ])
-            guard case let .large(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-                guard case .enumerable = ChoiceTreeAnalysis.analyze(gen) else {
-                    Issue.record("Expected analyzable generator")
-                    return
-                }
-                // Small pick might be enumerable — that's fine, skip this test
-                return
-            }
+            let profile = try #require(screeningProfile(of: gen))
 
-            for i in 0 ..< UInt64(profile.parameters[0].values.count) {
-                let row = CoveringArrayRow(values: [i])
-                let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
-                #expect(tree != nil, "Pick index \(i) should produce a tree")
+            for valueIndex in 0 ..< profile.domainSizes[0] {
+                let row = CoveringArrayRow(values: [valueIndex])
+                let tree = try #require(profile.buildTree(from: row), "Pick index \(valueIndex) should produce a tree")
+                #expect(firstBranch(in: tree) != nil, "Pick index \(valueIndex) should produce a branch")
             }
         }
 
         @Test("Out-of-bounds pick value returns nil")
-        func outOfBoundsPick() {
+        func outOfBoundsPick() throws {
             let gen: Generator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
             ])
+            let profile = try #require(screeningProfile(of: gen))
 
-            // This might be enumerable-domain, in which case we can't test large-domain replay
-            guard case let .large(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-                return
-            }
-
-            let badIndex = UInt64(profile.parameters[0].values.count)
+            let badIndex = profile.domainSizes[0]
             let row = CoveringArrayRow(values: [badIndex])
-            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
-            #expect(tree == nil)
+            #expect(profile.buildTree(from: row) == nil)
         }
 
         @Test("Pick with large-domain peer reaches buildPickTree via template path")
@@ -226,7 +214,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
 
             // Find the value index for length 0
             guard let zeroIndex = profile.parameters[0].values.firstIndex(of: 0) else {
-                // Length 0 might not be a problematic value if range starts > 0
+                Issue.record("Expected the first parameter's problematic values to include a sequence length of zero")
                 return
             }
 
@@ -248,20 +236,21 @@ struct LargeDomainCoveringArrayReplayUnitTests {
     @Suite("buildSubTree")
     struct BuildSubTreeTests {
         @Test("Pure generator produces .just")
-        func pureProducesJust() {
+        func pureProducesJust() throws {
             // Verified via pick which calls buildSubTree internally
             let gen: Generator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
             ])
-            guard case let .large(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-                // Might be enumerable, skip
-                return
-            }
+            let profile = try #require(screeningProfile(of: gen))
 
             let row = CoveringArrayRow(values: [0])
-            let tree = CoveringArrayReplay.buildTree(row: row, profile: profile)
-            #expect(tree != nil)
+            let tree = try #require(profile.buildTree(from: row))
+            let branch = try #require(firstBranch(in: tree))
+            guard case .just = branch.choice else {
+                Issue.record("Expected the selected arm of a pure pick to be .just, got \(branch.choice)")
+                return
+            }
         }
     }
 
@@ -424,5 +413,39 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             }
             #expect(replayedCount > 0)
         }
+    }
+}
+
+// MARK: - Helpers
+
+/// Returns the analysis profile for a generator regardless of which domain kind the analysis picks.
+///
+/// A standalone small pick analyzes as `.enumerable` rather than `.large`, so tests that only unwrap `.large` skip themselves. Both profile kinds conform to ``ScreeningProfile``, which is enough to build a tree from a covering array row.
+private func screeningProfile(of generator: Generator<some Any>) -> (any ScreeningProfile)? {
+    switch ChoiceTreeAnalysis.analyze(generator) {
+        case .none:
+            nil
+        case let .some(.enumerable(profile)):
+            profile
+        case let .some(.large(profile)):
+            profile
+    }
+}
+
+/// Returns the first branch reachable from the tree in depth-first order, or `nil` when the tree holds none.
+private func firstBranch(in tree: ChoiceTree) -> BranchData? {
+    switch tree {
+        case let .branch(data):
+            return data
+        case let .group(children, _, _):
+            return children.lazy.compactMap { firstBranch(in: $0) }.first
+        case let .sequence(elements, _):
+            return elements.lazy.compactMap { firstBranch(in: $0) }.first
+        case let .resize(_, choices):
+            return choices.lazy.compactMap { firstBranch(in: $0) }.first
+        case let .bind(_, inner, bound):
+            return firstBranch(in: inner) ?? firstBranch(in: bound)
+        case .choice, .just, .getSize:
+            return nil
     }
 }

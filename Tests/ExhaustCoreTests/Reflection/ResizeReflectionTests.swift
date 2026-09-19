@@ -12,7 +12,7 @@ struct ResizeReflectionTests {
 
         let tree = try #require(try Interpreters.reflect(generator, with: 10))
         #expect(try Interpreters.replay(generator, using: tree) == 10)
-        expectOutOfRangeReflection {
+        expectReflectionOutOfRange {
             _ = try Interpreters.reflect(generator, with: 11)
         }
     }
@@ -26,7 +26,7 @@ struct ResizeReflectionTests {
 
         let tree = try #require(try Interpreters.reflect(generator, with: 10))
         #expect(try Interpreters.replay(generator, using: tree) == 10)
-        expectOutOfRangeReflection {
+        expectReflectionOutOfRange {
             _ = try Interpreters.reflect(generator, with: 11)
         }
     }
@@ -47,19 +47,5 @@ struct ResizeReflectionTests {
 
         #expect(replayed.0 == target.0)
         #expect(replayed.1 == target.1)
-    }
-}
-
-private func expectOutOfRangeReflection(_ operation: () throws -> Void) {
-    do {
-        try operation()
-        Issue.record("Expected reflection to reject the value as out of range")
-    } catch let error as ReflectionError {
-        guard case .inputWasOutOfGeneratorRange = error else {
-            Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
-            return
-        }
-    } catch {
-        Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
     }
 }

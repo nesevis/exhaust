@@ -2,10 +2,6 @@
 //  ReducerReduceValuesTests.swift
 //  ExhaustTests
 //
-//  Tests for Pass 5 of Interpreters.reduce: reduce individual values via binary search.
-//  Pass 5 binary searches between the current value and its reduction target to find
-//  the minimum failing value when Pass 3's all-or-nothing simplification fails.
-//
 
 import ExhaustCore
 import ExhaustTestSupport

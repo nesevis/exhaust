@@ -10,6 +10,7 @@ extension MetaGeneratorPropertyTests {
         let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
         let property = failingProperty(for: type)
+        let tally = Tally()
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
@@ -26,8 +27,10 @@ extension MetaGeneratorPropertyTests {
                 guard case let .reduced(_, _, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
+                    tally.vacuous += 1
                     continue
                 }
+                tally.evaluated += 1
                 #expect(
                     property(shrunk) == false,
                     "Shrunk value passes property but shouldn't, recipe: \(recipe)"
@@ -35,6 +38,7 @@ extension MetaGeneratorPropertyTests {
             }
         }
         #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
+        #expect(tally.evaluated > 0, "Reduction sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
     // MARK: 8b. Reduction Reduces Complexity
@@ -44,6 +48,7 @@ extension MetaGeneratorPropertyTests {
         let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
         let property = failingProperty(for: type)
+        let tally = Tally()
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
@@ -61,8 +66,10 @@ extension MetaGeneratorPropertyTests {
                 guard case let .reduced(shrunkSequence, _, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
+                    tally.vacuous += 1
                     continue
                 }
+                tally.evaluated += 1
                 #expect(
                     shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
                     "Shrunk sequence is not simpler than the original, recipe: \(recipe)"
@@ -70,6 +77,7 @@ extension MetaGeneratorPropertyTests {
             }
         }
         #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
+        #expect(tally.evaluated > 0, "Reduction sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
     // MARK: 21. Closed-loop reduction
@@ -80,6 +88,7 @@ extension MetaGeneratorPropertyTests {
         let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
         let property = failingProperty(for: type)
+        let tally = Tally()
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
@@ -95,8 +104,10 @@ extension MetaGeneratorPropertyTests {
                 guard case let .reduced(sequence, reducedTree, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
+                    tally.vacuous += 1
                     continue
                 }
+                tally.evaluated += 1
                 guard case let .success(materialized, _, _) = Materializer.materialize(
                     gen, context: .init(
                         prefix: sequence, mode: .exact, fallbackTree: reducedTree
@@ -112,16 +123,20 @@ extension MetaGeneratorPropertyTests {
             }
         }
         #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
+        #expect(tally.evaluated > 0, "Reduction sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
     // MARK: 22. Reduction monotonicity
 
-    /// Re-reducing an already-reduced tree must never produce a shortlex-larger sequence — reduction only ever shrinks. A budgeted reducer (`maxStalls: 2`) need not fully converge in one pass, so a smaller second result is legal; a larger one is a defect (an encoder that grew a reduced input).
+    /// Re-reducing an already-reduced tree must never produce a shortlex-larger sequence, since reduction only ever shrinks. A budgeted reducer (`maxStalls: 2`) need not fully converge in one pass, so a smaller second result is legal; a larger one is a defect, an encoder that grew a reduced input.
+    ///
+    /// The second pass reads its sequence from `.unreduced` as well as `.reduced`. Both carry one, and measured over every recipe here the second pass is a fixed point: it returns the first pass's sequence unchanged, so matching `.reduced` alone skipped the comparison every time.
     @Test("Re-reducing never enlarges the sequence", arguments: metaRecipeTypes)
     func reductionMonotonicity(type: RecipeType) throws {
         let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
         let property = failingProperty(for: type)
+        let tally = Tally()
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
@@ -137,13 +152,17 @@ extension MetaGeneratorPropertyTests {
                 guard case let .reduced(firstSequence, firstTree, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
+                    tally.vacuous += 1
                     continue
                 }
-                guard case let .reduced(secondSequence, _, _) = try? Interpreters.choiceGraphReduce(
+                let secondOutcome = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: firstTree, config: .init(maxStalls: 2), property: property
-                ) else {
+                )
+                guard let (secondSequence, _) = secondOutcome?.counterexample else {
+                    tally.vacuous += 1
                     continue
                 }
+                tally.evaluated += 1
                 #expect(
                     firstSequence.shortLexPrecedes(secondSequence) == false,
                     "Re-reduction enlarged the sequence (reduction is not monotone) for recipe: \(recipe)"
@@ -151,5 +170,6 @@ extension MetaGeneratorPropertyTests {
             }
         }
         #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
+        #expect(tally.evaluated > 0, "Re-reduction sweep for \(type) reached no verdict: \(tally.summary)")
     }
 }

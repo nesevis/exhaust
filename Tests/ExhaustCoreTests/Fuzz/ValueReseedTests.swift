@@ -93,10 +93,12 @@ struct ValueReseedTests {
         }
 
         var prng = Xoshiro256(seed: 5)
+        var drawn = 0
         for _ in 0 ..< 60 {
             guard let ranges = FuzzMutator.valueReseed(parentSequence, targets: targets, prng: &prng) else {
                 continue
             }
+            drawn += 1
             for (first, second) in zip(ranges, ranges.dropFirst()) {
                 #expect(first.upperBound < second.lowerBound, "spans overlap or are unsorted: \(ranges)")
             }
@@ -104,6 +106,7 @@ struct ValueReseedTests {
                 #expect(range.upperBound < parentSequence.count)
             }
         }
+        #expect(drawn > 0, "sixty attempts produced no reseed span")
     }
 
     @Test("Reseeding the first leaf of a zip redraws that leaf alone")
@@ -113,13 +116,18 @@ struct ValueReseedTests {
         let targets = MutationTargets(tree: parentTree)
         let site = try #require(targets.reseedSites.first)
         // The zip dispatches at the position just before its first leaf, and a start check that skips the zip marker matches there; the reseed must wait for the leaf itself or the whole zip is redrawn.
+        var changed = 0
         for seed in UInt64(1) ... 20 {
             let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
             #expect(child.count == parentSequence.count)
             for index in child.indices where site.range.contains(index) == false {
                 #expect(child[index] == parentSequence[index], "entry \(index) outside the first leaf moved, seed \(seed)")
             }
+            if child[site.range.lowerBound] != parentSequence[site.range.lowerBound] {
+                changed += 1
+            }
         }
+        #expect(changed > 0, "twenty reseeds of the first zip leaf never produced a different value")
     }
 
     @Test("Reseeding an element of an array redraws it, through the sequence handler's own element loop")
@@ -153,6 +161,7 @@ struct ValueReseedTests {
         )
         let (_, parentTree) = try materializedParent(gen)
         let targets = MutationTargets(tree: parentTree)
+        #expect(targets.reseedSites.count == 3, "The bound array's three elements are the only reseed sites")
         for site in targets.reseedSites {
             #expect(targets.graph.nodes[site.nodeID].scopeAnnotation.isBindInner == false)
         }

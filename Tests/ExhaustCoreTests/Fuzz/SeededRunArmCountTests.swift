@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import ExhaustCore
 
-@Suite("Trace parity with picks")
-struct TraceParityPickTest {
+@Suite("Seeded runs repeat their arm counts")
+struct SeededRunArmCountTests {
     @Test("Seeded run with a pick generator produces identical arm counts across two runs")
     func pickGeneratorDeterminism() {
         func run() -> FuzzRunCounts {
