@@ -30,6 +30,10 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
+        name: "BinaryHeap (derived)", gen: binaryHeapGenDerived().gen, property: binaryHeapProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
         name: "Calculator", gen: calculatorExpressionGen(depth: 5).gen, property: calculatorProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
