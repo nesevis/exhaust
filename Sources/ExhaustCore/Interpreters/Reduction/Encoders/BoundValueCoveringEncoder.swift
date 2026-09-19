@@ -125,7 +125,9 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
             guard offset < row.values.count else { break }
             let position = valuePositions[offset]
             let valueIndex = row.values[offset]
-            let bitPattern = position.domainLower + valueIndex
+            // A full-width leaf's highest index overflows a nonzero lower bound. Clamp to the domain's top.
+            let (sum, overflowed) = position.domainLower.addingReportingOverflow(valueIndex)
+            let bitPattern = overflowed ? UInt64.max : sum
 
             candidate[position.index] = .value(.init(
                 choice: ChoiceValue(

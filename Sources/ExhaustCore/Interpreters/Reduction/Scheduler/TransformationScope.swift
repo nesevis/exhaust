@@ -108,6 +108,9 @@ enum MinimizationScope {
 
     /// Drive lane-control chooseBits values to zero (move commands into the sequential prefix). Leaves are ordered by sequence position so the prefix grows from the front. Each leaf is a binary decision — zero (prefix) or unchanged (concurrent lane). Dispatched under ``EncoderName/laneCollapse`` so the ``ReducerConfiguration/enabledEncoders`` filter can stage it as an isolated pass before structural or value reduction.
     case laneCollapse(ValueMinimizationScope)
+
+    /// Binary search one depth-control chooseBits value toward its range floor. Each scope carries a single leaf, because an accepted step reshapes the subtree the layer governs and every other depth leaf's node identity with it. Dispatched under ``EncoderName/depthCollapse`` so the ``ReducerConfiguration/enabledEncoders`` filter can isolate it and so its probes are separable in ``ReductionStats``.
+    case depthCollapse(ValueMinimizationScope)
 }
 
 /// Per-leaf annotation in a value-only scope.
