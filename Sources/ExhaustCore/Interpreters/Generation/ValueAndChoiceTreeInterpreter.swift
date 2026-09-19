@@ -57,6 +57,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         context.purpose = .screeningAnalysis
     }
 
+    /// Whether this run skipped a pick arm whose shape depends on a drawn value, leaving the template partial.
+    package var hasElidedDataDependentArm: Bool {
+        context.hasElidedDataDependentArm
+    }
+
     /// The PRNG seed used for this interpreter's generation runs.
     public var baseSeed: UInt64 {
         context.baseSeed

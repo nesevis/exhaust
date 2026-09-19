@@ -24,7 +24,7 @@
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
 /// - `.compositeSequence`: a single parameter encoding all valid `(length, [element problematic values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
 /// - `.sequenceLength`, `.sequenceElement`: legacy cases used by the ``SequenceCoveringArray`` pipeline. Not produced by ``walkSequence``.
-/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer and all branches are structurally valid. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
+/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch. Screening analysis records only the selected arm, so the arms it skips are reported through ``AnalysisTemplate/isTotalWitness`` rather than being visible here.
 ///
 /// ## Analyzability
 ///
@@ -65,6 +65,7 @@ package enum ChoiceTreeAnalysis {
         let effectiveCompositeThreshold = compositeThreshold ?? enumerableDomainThreshold
         var bestParameters: [ScreeningParameter]?
         var bestTree: ChoiceTree?
+        var bestElidedDataDependentArm = false
 
         for seed in seeds {
             // `sizeOverride: 100` ensures size-scaled sequences produce non-empty element subtrees during VACTI so that ``walkSequence`` can extract element parameters. The declared range itself is already stored directly on each `chooseBits` (with scaling attached as metadata), so the analyzer doesn't need a specific size for range visibility — just a size at which sequences produce enough elements to walk.
@@ -89,6 +90,7 @@ package enum ChoiceTreeAnalysis {
             if bestParameters == nil || parameters.count > (bestParameters?.count ?? 0) {
                 bestParameters = parameters
                 bestTree = tree
+                bestElidedDataDependentArm = interpreter.hasElidedDataDependentArm
             }
 
             let hasIncompleteSequence = parameters.contains { param in
@@ -141,10 +143,17 @@ package enum ChoiceTreeAnalysis {
                 }
                 totalSpace = product
             }
+            // A bind in the recorded tree and a skipped data-dependent arm are the same failure from two directions: a choice the parameter model does not account for.
+            let template = bestTree.map { tree in
+                AnalysisTemplate(
+                    substitutionTemplate: tree,
+                    isTotalWitness: tree.containsBind == false && bestElidedDataDependentArm == false
+                )
+            }
             let profile = EnumerableDomainProfile(
                 parameters: enumerableParams,
                 totalSpace: totalSpace,
-                originalTree: bestTree
+                template: template
             )
             return .enumerable(profile)
         } else {
@@ -207,7 +216,8 @@ package enum ChoiceTreeAnalysis {
                     scope: scope,
                     parameters: &parameters
                 ) else { return false }
-                guard visitsBound else { return walkTreeValidateOnly(bound) }
+                // A bound subtree screening does not visit contributes no parameters. Its contents are the materializer's to fill, so there is nothing here to accept or reject.
+                guard visitsBound else { return true }
                 return walkTree(
                     bound,
                     expandSequencePairs: expandSequencePairs,
@@ -231,23 +241,6 @@ package enum ChoiceTreeAnalysis {
 
     //
     // Walks a subtree without extracting parameters. Used for bound subtrees in bind nodes where the structure must be valid but parameters are opaque. Always returns true — no node type is rejected in validation-only mode.
-
-    private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
-        switch tree {
-            case .choice, .just, .getSize, .resize:
-                true
-            case .group(_, isOpaque: true, _):
-                true
-            case let .group(children, _, _):
-                children.allSatisfy { walkTreeValidateOnly($0) }
-            case let .bind(_, inner, bound):
-                walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
-            case let .sequence(elements, _):
-                elements.allSatisfy { walkTreeValidateOnly($0) }
-            case let .branch(b):
-                walkTreeValidateOnly(b.choice)
-        }
-    }
 
     // MARK: - Choice
 
@@ -300,7 +293,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Pick Domains
 
     //
-    // Pick analysis requires ≤ 256 branches and structurally valid subtrees. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
+    // Pick analysis requires ≤ 256 branches. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch, so a branch subtree has no shape this walk needs to accept or reject.
     //
     // Synthetic PickTuples are created with .pure(()) generators because the original branch generators are not available from the ChoiceTree.
     // The fingerprint, weight, id, and branchCount metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
@@ -311,11 +304,6 @@ package enum ChoiceTreeAnalysis {
     ) -> Bool {
         let domainSize = UInt64(children.count)
         guard domainSize <= enumerableDomainThreshold else { return false }
-
-        for child in children {
-            guard case let .branch(b) = child else { return false }
-            guard walkTreeValidateOnly(b.choice) else { return false }
-        }
 
         // Create synthetic PickTuples from branch metadata for replay compatibility
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()

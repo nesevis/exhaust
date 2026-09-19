@@ -3,7 +3,7 @@ package enum CoveringArrayReplay {
     /// Preserves the analysis template's wrappers and rejects rows that do not consume exactly the modeled parameters.
     public static func buildTree(row: CoveringArrayRow, profile: EnumerableDomainProfile) -> ChoiceTree? {
         let parameters = Parameters.enumerable(profile.parameters)
-        if let tree = profile.originalTree {
+        if let tree = profile.template?.substitutionTemplate {
             return rebuild(tree, row: row, parameters: parameters)
         }
         guard parameters.accepts(row) else { return nil }

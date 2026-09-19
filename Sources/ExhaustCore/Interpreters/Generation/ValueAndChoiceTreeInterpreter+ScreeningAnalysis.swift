@@ -1,5 +1,7 @@
 extension ValueAndChoiceTreeInterpreter {
     /// Records every constructor identity in the analysis template without recursively generating unselected alternatives whose payload parameters the pick model does not inspect.
+    ///
+    /// Skipping an arm costs the template every choice that arm would have contributed, which is only sound while the caller knows the enumeration was partial. Each skipped arm is asked, from its generator rather than from the tree it never produced, whether its shape depends on a drawn value, and an arm that says yes is recorded on the context.
     static func handleAnalysisPick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         selectedChoice: ReflectiveOperation.PickTuple,
@@ -19,6 +21,13 @@ extension ValueAndChoiceTreeInterpreter {
               )
         else {
             throw GeneratorError.choiceTreeConstructionFailed
+        }
+        for choice in choices where choice.id != selectedChoice.id {
+            guard choice.generator.hasDataDependentShape else {
+                continue
+            }
+            context.hasElidedDataDependentArm = true
+            break
         }
         let branches = choices.map { choice in
             ChoiceTree.branch(

@@ -124,7 +124,12 @@ private func wrappedTree(first: UInt64, second: UInt64) -> ChoiceTree {
 private func reconstructBoth(_ tree: ChoiceTree, parameters: [EnumerableParameter], values: [UInt64]) -> [ChoiceTree?] {
     let row = CoveringArrayRow(values: values)
     let totalSpace = parameters.reduce(UInt64(1)) { $0 * $1.domainSize }
-    let enumerable = EnumerableDomainProfile(parameters: parameters, totalSpace: totalSpace, originalTree: tree)
+    // This helper exercises substitution only. The template binds, so it witnesses less than the whole domain.
+    let enumerable = EnumerableDomainProfile(
+        parameters: parameters,
+        totalSpace: totalSpace,
+        template: AnalysisTemplate(substitutionTemplate: tree, isTotalWitness: false)
+    )
     let large = LargeDomainProfile(parameters: largeFactors(parameters), originalTree: tree)
     return [CoveringArrayReplay.buildTree(row: row, profile: enumerable), CoveringArrayReplay.buildTree(row: row, profile: large)]
 }

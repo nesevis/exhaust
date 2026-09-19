@@ -101,7 +101,7 @@ package enum ScreeningRunner {
                 profile = enumerableProfile
                 kind = "enumerable"
                 isExhaustiveCandidate = enumerableProfile.totalSpace <= screeningBudget
-                    && enumerableProfile.originalTree?.containsBind == false
+                    && enumerableProfile.template?.isTotalWitness == true
 
             case let .large(largeProfile):
                 profile = largeProfile
