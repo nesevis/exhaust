@@ -1,16 +1,16 @@
-/// Controls the breadth of default payloads in an `@Exhaustable`-derived generator.
+/// Controls the sampled domains of default payloads in an `@Exhaustable`-derived generator.
 ///
 /// Use `.tiny` or `.small` for collisions, `.medium` to cap generated value size, and `.full` for built-in defaults. Limits apply at size 100 and grow with Exhaust's size parameter. Numeric and sequence limits shape generated samples without restricting reflection, so existing values outside them can still be reduced. Date presets retain the domains shown below.
 ///
-/// | State space | Numeric magnitude | Sequence maximum | Dates |
+/// | Domain | Numeric magnitude | Sequence maximum | Dates |
 /// | --- | ---: | ---: | --- |
-/// | `.tiny` | 10 | 5 | 21 days centered on January 1, 2026 UTC |
+/// | `.tiny` | 10 | 10 | 21 days centered on January 1, 2026 UTC |
 /// | `.small` | 100 | 10 | 201 days centered on January 1, 2026 UTC |
 /// | `.medium` | 10,000 | 20 | Unchanged |
 /// | `.full` | Unchanged | Unchanged | Unchanged |
 ///
-/// Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. Nested annotations can narrow an inherited state space; explicit payload overrides keep their own domains. Presets compare in declaration order, from narrowest to widest, independently of any individual domain limit.
-public enum GeneratorStateSpace: CaseIterable, Comparable, Sendable {
+/// Sequence limits apply to arrays, sets, dictionaries, strings, and `Data`. Nested annotations can narrow an inherited domain; explicit payload overrides keep their own domains. Presets compare in declaration order, from narrowest to widest, independently of any individual domain limit.
+public enum ExhaustableDomain: CaseIterable, Comparable, Sendable {
     /// Favors frequent collisions with the smallest default domains.
     case tiny
     /// Favors collisions while retaining more variation than `.tiny`.
@@ -38,7 +38,7 @@ public enum GeneratorStateSpace: CaseIterable, Comparable, Sendable {
     package var defaultSequenceLengthMaximum: Int? {
         switch self {
             case .tiny:
-                5
+                10
             case .small:
                 10
             case .medium:

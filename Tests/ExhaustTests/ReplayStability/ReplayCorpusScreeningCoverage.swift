@@ -41,37 +41,33 @@ extension ReplayCorpusEntry {
             ) { String($0) }
             + screeningCoverageEntries(
                 "derived-product",
-                generator: CorpusMaterializerRecord.gen(maximumDepth: 5, overriding: .int(in: 0 ... 9))
+                generator: CorpusMaterializerRecord.gen(.budget(.custom(recursion: 5, nodes: 100)), overriding: .int(in: 0 ... 9))
             ) { "\($0.first),\($0.flag)" }
             + screeningCoverageEntries(
                 "budgeted-product",
                 generator: CorpusMaterializerRecord.gen(
-                    maximumDepth: 5,
-                    maximumNodes: 32,
+                    .budget(.custom(recursion: 5, nodes: 32)),
                     overriding: .int(in: 0 ... 9)
                 )
             ) { "\($0.first),\($0.flag)" }
             + screeningCoverageEntries(
                 "nested-product",
                 generator: CorpusMaterializerNested.gen(
-                    maximumDepth: 5,
-                    maximumNodes: 32,
+                    .budget(.custom(recursion: 5, nodes: 32)),
                     overriding: .int(in: 0 ... 9)
                 )
             ) { "\($0.inner.first),\($0.inner.flag),\($0.outer)" }
             + screeningCoverageEntries(
                 "budgeted-array",
                 generator: CorpusMaterializerArray.gen(
-                    maximumDepth: 4,
-                    maximumNodes: 16,
+                    .budget(.custom(recursion: 4, nodes: 16)),
                     overriding: .int(in: 0 ... 3)
                 )
             ) { "\($0.values),\($0.label)" }
             + screeningCoverageEntries(
                 "recursive",
                 generator: CorpusMaterializerTree.gen(
-                    maximumDepth: 3,
-                    maximumNodes: 16,
+                    .budget(.custom(recursion: 3, nodes: 16)),
                     overriding: .int(in: 0 ... 3)
                 )
             ) { $0.rendering }

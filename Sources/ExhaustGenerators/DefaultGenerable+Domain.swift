@@ -5,14 +5,14 @@ import Exhaustable
 import ExhaustCore
 
 extension DefaultGenerable {
-    static func defaultGenerator(stateSpace _: GeneratorStateSpace) -> ReflectiveGenerator<Self> {
+    static func defaultGenerator(domain _: ExhaustableDomain) -> ReflectiveGenerator<Self> {
         defaultGenerator
     }
 }
 
 extension DefaultGenerable where Self: FixedWidthInteger & BitPatternConvertible {
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self> {
-        guard let magnitude = stateSpace.numericMagnitude else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Self> {
+        guard let magnitude = domain.numericMagnitude else {
             return defaultGenerator
         }
         let range = Self(clamping: -magnitude) ... Self(clamping: magnitude)
@@ -21,8 +21,8 @@ extension DefaultGenerable where Self: FixedWidthInteger & BitPatternConvertible
 }
 
 extension DefaultGenerable where Self: BinaryFloatingPoint & BitPatternConvertible {
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self> {
-        guard let magnitude = stateSpace.numericMagnitude else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Self> {
+        guard let magnitude = domain.numericMagnitude else {
             return defaultGenerator
         }
         let bound = Self(magnitude)
@@ -32,8 +32,8 @@ extension DefaultGenerable where Self: BinaryFloatingPoint & BitPatternConvertib
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension Int128 {
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self> {
-        guard let magnitude = stateSpace.numericMagnitude else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Self> {
+        guard let magnitude = domain.numericMagnitude else {
             return defaultGenerator
         }
         let bits = boundedWideBits(maximumGeneratedValue: UInt64(magnitude * 2))
@@ -51,8 +51,8 @@ extension Int128 {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension UInt128 {
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self> {
-        guard let magnitude = stateSpace.numericMagnitude else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Self> {
+        guard let magnitude = domain.numericMagnitude else {
             return defaultGenerator
         }
         return boundedWideBits(maximumGeneratedValue: UInt64(magnitude))
@@ -61,8 +61,8 @@ extension UInt128 {
 
 #if canImport(CoreGraphics)
     extension CGFloat {
-        static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self> {
-            guard let magnitude = stateSpace.numericMagnitude else {
+        static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Self> {
+            guard let magnitude = domain.numericMagnitude else {
                 return defaultGenerator
             }
             let bound = Double(magnitude)
@@ -77,7 +77,7 @@ extension UInt128 {
 
 // MARK: - Helpers
 
-/// Prebuilds exact size-bounded integer ranges rather than using the general linear scaler's extra endpoint allowance. Equal ranges share a completed leaf, and the full state space never enters this path.
+/// Prebuilds exact size-bounded integer ranges rather than using the general linear scaler's extra endpoint allowance. Equal ranges share a completed leaf, and the full domain never enters this path.
 private func boundedInteger<Value: FixedWidthInteger & BitPatternConvertible>(
     in range: ClosedRange<Value>
 ) -> ReflectiveGenerator<Value> {

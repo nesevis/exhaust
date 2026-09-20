@@ -5,17 +5,17 @@ import Exhaustable
 import ExhaustCore
 import Foundation
 
-private let defaultStateSpaceDateMidpoint = Date(timeIntervalSince1970: 1_767_225_600) // January 1, 2026 at 00:00:00 UTC.
+private let defaultDomainDateMidpoint = Date(timeIntervalSince1970: 1_767_225_600) // January 1, 2026 at 00:00:00 UTC.
 
 /// Supplies Exhaust's internal catalogue of standard-library and Foundation generators to the derivation resolver.
 ///
-/// This is not a user customization point. Annotated types expose their derived generator through ``__Exhaustable/Conformance/gen(maximumDepth:maximumNodes:stateSpace:scaling:overriding:)``; other payload generators are supplied explicitly through `overriding:`. Witness properties stay internal as well, so the catalogue does not add public factory members to standard-library types.
+/// This is not a user customization point. Annotated types expose their derived generator through ``__Exhaustable/Conformance/gen(_:scaling:overriding:)``; other payload generators are supplied explicitly through `overriding:`. Witness properties stay internal as well, so the catalogue does not add public factory members to standard-library types.
 protocol DefaultGenerable {
     /// The generator used for this type when no other is named.
     static var defaultGenerator: ReflectiveGenerator<Self> { get }
 
-    /// Applies the state space's standard payload domains.
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Self>
+    /// Applies the domain's standard payload domains.
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Self>
 }
 
 // MARK: - Standard Library
@@ -126,8 +126,8 @@ extension String: DefaultGenerable {
         .string()
     }
 
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<String> {
-        guard let maximumLength = stateSpace.defaultSequenceLengthMaximum else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<String> {
+        guard let maximumLength = domain.defaultSequenceLengthMaximum else {
             return defaultGenerator
         }
         return Gen.string(lengths: derivedLengths(upTo: maximumLength))
@@ -148,13 +148,13 @@ extension Date: DefaultGenerable {
         .date(between: Date.distantPast ... Date.distantFuture, interval: .seconds(60))
     }
 
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Date> {
-        guard let dayRadius = stateSpace.defaultDateDayRadius else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Date> {
+        guard let dayRadius = domain.defaultDateDayRadius else {
             return defaultGenerator
         }
         return .date(
             within: .days(-dayRadius) ... .days(dayRadius),
-            of: defaultStateSpaceDateMidpoint,
+            of: defaultDomainDateMidpoint,
             interval: .days(1)
         )
     }
@@ -177,8 +177,8 @@ extension Data: DefaultGenerable {
         .data()
     }
 
-    static func defaultGenerator(stateSpace: GeneratorStateSpace) -> ReflectiveGenerator<Data> {
-        guard let maximumLength = stateSpace.defaultSequenceLengthMaximum else {
+    static func defaultGenerator(domain: ExhaustableDomain) -> ReflectiveGenerator<Data> {
+        guard let maximumLength = domain.defaultSequenceLengthMaximum else {
             return defaultGenerator
         }
         return Gen.data(lengths: derivedLengths(upTo: maximumLength))

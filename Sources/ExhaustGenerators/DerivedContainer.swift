@@ -2,20 +2,20 @@ import ExhaustCore
 
 /// Describes a standard container without resolving or constructing its contents.
 ///
-/// The derivation plan resolves every child through its own override and default rules. At a depth where any child is unavailable, the empty generator supplies a terminating value without requesting a generator at a negative depth.
+/// The derivation plan resolves every child through its own override and default rules. When the available recursive fuel cannot construct a child, the empty generator supplies a terminating value without requesting a negative fuel allowance.
 package protocol DerivedContainer {
     static var derivationRecipe: DerivedContainerRecipe { get }
 }
 
 /// How many elements one built container layer may hold.
 package enum ContainerCardinality {
-    /// The container factory's own size-scaled count, used when neither a node allowance nor a bounded state space applies.
+    /// The container factory's own size-scaled count, used when neither a node allowance nor a bounded domain applies.
     case sizeScaled
 
     /// Sampled within `0 ... maximum`, leaving larger counts reflectable so a value that arrives through `reflecting:` still decomposes.
     case within(Int)
 
-    /// Keeps the node-feasible reflection ceiling distinct from the potentially tighter state-space sampling ceiling.
+    /// Keeps the node-feasible reflection ceiling distinct from the potentially tighter domain sampling ceiling.
     case bounded(sampling: Int, reflecting: Int)
 
     /// Exactly this many elements, rejecting every other count.
@@ -222,7 +222,7 @@ extension [AnyGenerator] {
 
 /// Samples a cardinality in `0 ... maximum` while leaving larger cardinalities reflectable.
 ///
-/// A state space or node ceiling narrows what the derivation generates, not what a test can reduce from, so a value that arrives through `reflecting:` with more elements than this ceiling still decomposes.
+/// A domain or node ceiling narrows what the derivation generates, not what a test can reduce from, so a value that arrives through `reflecting:` with more elements than this ceiling still decomposes.
 func derivedLengths(upTo maximum: Int) -> Generator<UInt64> {
     Gen.chooseDerived(in: UInt64(0) ... UInt64(maximum), scaling: .linear)
 }

@@ -3,7 +3,7 @@
 //
 // ExhaustGenerators re-exports this module whole, because a macro cannot be named in a scoped `@_exported import`. A new `public` declaration here joins the ExhaustGenerators and Exhaust surfaces with no line to add anywhere else, so treat one as public API and prefer `package` for anything the macro expansion and the annotation's arguments do not name.
 
-/// Namespaces the metadata and conformance emitted by ``Exhaustable(maximumDepth:maximumNodes:stateSpace:)``.
+/// Namespaces the metadata and conformance emitted by ``Exhaustable(_:)``.
 ///
 /// These declarations are public only because macro expansions in application modules must name them. They are implementation infrastructure, not user conformance or customization points. The namespace has no dependency on ExhaustCore, so an annotated application type does not link generator or interpreter code.
 public enum __Exhaustable { // swiftlint:disable:this type_name
@@ -22,14 +22,11 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
         /// Lists constructors in declaration order.
         public let constructors: [ConstructorDescriptor<Value>]
 
-        /// Bounds nesting through annotated payloads when the declaration specifies a ceiling; `nil` leaves the choice to the derivation.
-        public let maximumDepth: Int?
+        /// Controls recursive fuel and the complete structural node ceiling.
+        public let budget: ExhaustableBudget
 
-        /// Caps structural nodes when specified. Each annotated value, standard container, and opaque payload costs one node; descendants consume the remainder.
-        public let maximumNodes: Int?
-
-        /// Narrows inherited default-payload sampling; `.full` leaves the parent's state space unchanged.
-        public let stateSpace: GeneratorStateSpace
+        /// Narrows inherited default-payload sampling; `.full` leaves the parent's domain unchanged.
+        public let domain: ExhaustableDomain
 
         /// Identifies the declaration's source file without an absolute checkout path.
         public let fileID: StaticString
@@ -46,25 +43,21 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
         ///
         /// - Parameters:
         ///   - constructors: The type's constructors in declaration order.
-        ///   - maximumDepth: The declared nesting ceiling for this type inside itself, or `nil` to leave the choice to the derivation.
-        ///   - maximumNodes: The declared structural node ceiling, or `nil` for no node ceiling.
-        ///   - stateSpace: The default-payload sampling policy this type applies to its occurrences.
+        ///   - settings: The derivation settings from the annotation, resolved in declaration order.
         ///   - fileID: The module-qualified source file identifier, not an absolute path.
         ///   - line: The one-based source line of the declaration's annotation.
         ///   - column: The one-based source column of the declaration's annotation.
         public init(
             constructors: [ConstructorDescriptor<Value>],
-            maximumDepth: Int? = nil,
-            maximumNodes: Int? = nil,
-            stateSpace: GeneratorStateSpace = .full,
+            settings: [ExhaustableSettings] = [],
             fileID: StaticString = #fileID,
             line: UInt = #line,
             column: UInt = #column
         ) {
+            let resolved = ResolvedExhaustableSettings(settings)
             self.constructors = constructors
-            self.maximumDepth = maximumDepth
-            self.maximumNodes = maximumNodes
-            self.stateSpace = stateSpace
+            budget = resolved.budget
+            domain = resolved.domain
             self.fileID = fileID
             self.line = line
             self.column = column
@@ -115,20 +108,17 @@ public enum __Exhaustable { // swiftlint:disable:this type_name
 /// let orders = Order.gen()
 /// ```
 ///
-/// Start without arguments. Set limits here only when every derived use of the type should inherit them; an individual test can override the root settings through `Type.gen(...)`.
+/// Start without arguments. Add settings here only when every derived use of the type should inherit them; an individual test can override the root through `Type.gen(...)`.
 ///
 /// The macro supports enums, structs, final classes, and generic forms of those declarations. It diagnoses unsupported storage and initialization patterns at the declaration.
 ///
 /// - Important: `@Exhaustable` is experimental. Its arguments, supported declarations, generated members, diagnostics, and source compatibility may change in any release.
 ///
-/// - Parameters:
-///   - maximumDepth: The default recursive nesting ceiling. Defaults to 10.
-///   - maximumNodes: An optional default structural node ceiling. Defaults to no node ceiling.
-///   - stateSpace: The default breadth of numeric, sequence, and date payloads. Defaults to `.full`; see ``GeneratorStateSpace``.
+/// Settings are variadic ``ExhaustableSettings`` values controlling the structural budget and sampled payload domain. The last occurrence of each setting wins.
+///
+/// - Parameter settings: Settings inherited by every derived occurrence of this type.
 @attached(extension, conformances: __Exhaustable.Conformance, names: named(__generatorDescriptor))
 @attached(member, names: named(init))
 public macro Exhaustable(
-    maximumDepth: Int? = nil,
-    maximumNodes: Int? = nil,
-    stateSpace: GeneratorStateSpace = .full
+    _ settings: ExhaustableSettings...
 ) = #externalMacro(module: "ExhaustMacros", type: "ExhaustableMacro")

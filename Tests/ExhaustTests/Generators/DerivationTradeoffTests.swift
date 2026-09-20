@@ -38,7 +38,7 @@ private func makeTradeoffGenerator() throws -> ReflectiveGenerator<TradeoffTree>
     let plan = try GeneratorDerivationPlan(for: TradeoffTree.self, overrides: [:])
     return try BudgetedGeneratorDerivation(plan: plan).root(
         for: TradeoffTree.self,
-        depth: .drawn(ceiling: 5, scaling: .linear),
+        recursion: .drawn(ceiling: 5, scaling: .linear),
         maximumNodes: 200
     )
 }

@@ -1,8 +1,6 @@
 // MARK: - CGS Online Throughput Experiment
 
 //
-// Manual benchmark harness behind the CGS tuning postmortem (ExhaustDocs/cgs-tuning-postmortem-2026-06-11.md).
-//
 // Measures time-to-milestone for unique valid values under three strategies: plain rejection, OnlineCGSInterpreter run directly as a generator (the paper's fully online mode), and the production pipeline (ChoiceGradientTuner warmup → baked weights → cheap nextValueOnly walk).
 //
 // Reference points from Goldstein, "Property-Based Testing for the People" (Table 3.2, 60s on an M1): BST rejection 7,354 unique, BST online CGS 22,107 unique, AVL rejection 129, AVL online CGS 219.

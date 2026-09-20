@@ -2,7 +2,7 @@ import Exhaust
 
 // MARK: - Type
 
-@Exhaustable(stateSpace: .small)
+@Exhaustable(.budget(.thorough), .domain(.small))
 indirect enum Heap<Element: Comparable>: Equatable {
     case empty
     case node(Element, Heap, Heap)
@@ -73,9 +73,8 @@ func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<In
 /// Derived variant — the generator comes from `@Exhaustable` on ``Heap`` rather than being written by hand.
 ///
 /// Matches ``binaryHeapGenRecursive(maxValue:)`` in the two respects that decide what the reducer sees: the tree is built without regard for the heap ordering, and validity is enforced afterwards by the same filter. What differs is where the shape comes from, so a run of this beside the recursive arm reads as the cost of derivation rather than a change of workload.
-func binaryHeapGenDerived(maximumDepth: Int = 5) -> ReflectiveGenerator<Heap<Int>> {
-    Heap<Int>.gen(maximumDepth: maximumDepth)
-        .filter { heapInvariant($0) }
+func binaryHeapGenDerived() -> ReflectiveGenerator<Heap<Int>> {
+    Heap<Int>.gen().filter { heapInvariant($0) }
 }
 
 // MARK: - Buggy Heap Operations

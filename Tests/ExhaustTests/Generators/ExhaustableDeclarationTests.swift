@@ -20,7 +20,7 @@ struct ExhaustableDeclarationTests {
         let custom = DeclarationProduct(9)
         #expect(custom.identifier == 9)
         #expect(custom.label == "initial")
-        let generator = ReflectiveGenerator<DeclarationProduct>.derived(depth: 0)
+        let generator = ReflectiveGenerator<DeclarationProduct>.derived(recursion: 0)
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
         #expect(try Interpreters.replay(generator.gen, using: tree) == value)
     }
@@ -37,7 +37,7 @@ struct ExhaustableDeclarationTests {
         #expect(payloads.count == 2)
         #expect(payloads[0] as? Int == 7)
         #expect(payloads[1] as? String == "generated")
-        let generator = ReflectiveGenerator<DeclarationClass>.derived(depth: 0)
+        let generator = ReflectiveGenerator<DeclarationClass>.derived(recursion: 0)
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
         let replayed = try #require(try Interpreters.replay(generator.gen, using: tree))
         #expect(replayed == value)
@@ -116,7 +116,7 @@ struct ExhaustableDeclarationTests {
 
     @Test("A payload-free constructor embeds a new value on every draw")
     func payloadFreeDrawsAreDistinct() throws {
-        let generator = ReflectiveGenerator<DeclarationEmptyClass>.derived(depth: 0)
+        let generator = ReflectiveGenerator<DeclarationEmptyClass>.derived(recursion: 0)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 1337, sizeOverride: 100)
         let (first, _) = try #require(try interpreter.next())
         let (second, _) = try #require(try interpreter.next())
@@ -125,22 +125,22 @@ struct ExhaustableDeclarationTests {
 
     @Test("Payload-free reflection follows whether a rebuilt value can be recognized")
     func payloadFreeReflectionCapability() throws {
-        #expect(ReflectiveGenerator<DeclarationEmptyStruct>.derived(depth: 0).isReflective)
-        #expect(ReflectiveGenerator<DeclarationEmptyEnum>.derived(depth: 0).isReflective)
+        #expect(ReflectiveGenerator<DeclarationEmptyStruct>.derived(recursion: 0).isReflective)
+        #expect(ReflectiveGenerator<DeclarationEmptyEnum>.derived(recursion: 0).isReflective)
         // A payload-free class carries nothing to compare a rebuilt instance against, and an Equatable conformance does not say whether its == ignores identity, so neither form claims reflection.
-        #expect(ReflectiveGenerator<DeclarationEmptyEquatableClass>.derived(depth: 0).isReflective == false)
-        #expect(ReflectiveGenerator<DeclarationEmptyClass>.derived(depth: 0).isReflective == false)
+        #expect(ReflectiveGenerator<DeclarationEmptyEquatableClass>.derived(recursion: 0).isReflective == false)
+        #expect(ReflectiveGenerator<DeclarationEmptyClass>.derived(recursion: 0).isReflective == false)
 
-        let structure = ReflectiveGenerator<DeclarationEmptyStruct>.derived(depth: 0)
+        let structure = ReflectiveGenerator<DeclarationEmptyStruct>.derived(recursion: 0)
         #expect(try Interpreters.reflect(structure.gen, with: DeclarationEmptyStruct()) != nil)
-        let enumeration = ReflectiveGenerator<DeclarationEmptyEnum>.derived(depth: 0)
+        let enumeration = ReflectiveGenerator<DeclarationEmptyEnum>.derived(recursion: 0)
         #expect(try Interpreters.reflect(enumeration.gen, with: DeclarationEmptyEnum.only) != nil)
     }
 
     @Test("A main actor isolated payload derives off the main actor")
     func isolatedPayloadDerivation() async {
         let generator = await Task.detached {
-            ReflectiveGenerator<DeclarationIsolatedOwner>.derived(depth: 1)
+            ReflectiveGenerator<DeclarationIsolatedOwner>.derived(recursion: 1)
         }.value
         #expect(generator.isReflective)
     }
@@ -157,7 +157,7 @@ struct ExhaustableDeclarationTests {
     @Test("Building a payload-free generator constructs no value")
     func payloadFreeBuildingConstructsNothing() {
         DeclarationDeinitCounter.count.withValue { $0 = 0 }
-        _ = ReflectiveGenerator<DeclarationObservedEmptyClass>.derived(depth: 0)
+        _ = ReflectiveGenerator<DeclarationObservedEmptyClass>.derived(recursion: 0)
         // Probing the constructor to decide reflection support would build and discard an instance here.
         #expect(DeclarationDeinitCounter.count.withValue { $0 } == 0)
     }

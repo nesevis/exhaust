@@ -1,33 +1,41 @@
 import ExhaustCore
 
-/// Computes minimum structural costs at each depth before splitting a node allowance. Depth decreases across derived-type edges, so even mutually recursive types have a finite analysis. Empty containers cost one node independently of their children.
+/// Computes minimum structural costs before splitting a node allowance. Recursive fuel decreases only across edges inside a recursive type component, so mutually recursive types still have a finite analysis. Empty containers cost one node independently of their children.
 final class GeneratorNodeBudget {
     let plan: GeneratorDerivationPlan
     private var costs: [CostKey: Int?] = [:]
 
-    /// Structural minima depend only on type and depth, not the state space or the requested allowance.
+    /// Structural minima depend only on type and recursive fuel, not the domain or requested node allowance.
     private struct CostKey: Hashable {
         let type: ObjectIdentifier
-        let depth: Int
+        let recursion: Int
     }
 
     init(plan: GeneratorDerivationPlan) {
         self.plan = plan
     }
 
-    /// Ignores this type's own annotation at the root so an explicit root argument can override it. Payload edges enforce the nested annotation before accepting a cost.
-    func minimumNodes(for reference: ObjectIdentifier, depth: Int) -> Int? {
-        guard depth >= 0 else {
+    /// Ignores this type's own annotation at the root so explicit root settings can override it. Payload edges enforce nested budgets before accepting a cost.
+    func minimumNodes(for reference: ObjectIdentifier, recursion: Int) -> Int? {
+        guard recursion >= 0 else {
             return nil
         }
-        let key = CostKey(type: reference, depth: depth)
+        let key = CostKey(type: reference, recursion: recursion)
         if let cost = costs[key] {
             return cost
         }
         let type = plan.plan(for: reference)
         let minimum = type.constructors.compactMap { entry -> Int? in
-            guard let children = minimumNodes(for: entry.payloads, depth: depth),
-                  let subtotal = sumNodes(children)
+            guard let recursionAllowances = plan.recursionAllowances(
+                for: entry.payloads,
+                from: reference,
+                budget: recursion
+            ),
+                let children = minimumNodes(
+                    for: entry.payloads,
+                    recursionAllowances: recursionAllowances
+                ),
+                let subtotal = sumNodes(children)
             else {
                 return nil
             }
@@ -37,11 +45,14 @@ final class GeneratorNodeBudget {
         return minimum
     }
 
-    /// Returns one minimum per payload in declaration order, or `nil` when any payload is unconstructible at this depth. The caller needs the individual minima, not their sum, because splitting reserves each child's share separately.
-    func minimumNodes(for payloads: [PayloadPlan], depth: Int) -> [Int]? {
+    /// Returns one minimum per payload in declaration order, or `nil` when any payload is unconstructible under its recursive allowance.
+    func minimumNodes(
+        for payloads: [PayloadPlan],
+        recursionAllowances: [PayloadRecursionAllowance]
+    ) -> [Int]? {
         var result: [Int] = []
-        for payload in payloads {
-            guard let nodes = minimumNodes(for: payload, depth: depth) else {
+        for (payload, recursionAllowance) in zip(payloads, recursionAllowances) {
+            guard let nodes = minimumNodes(for: payload, recursionAllowance: recursionAllowance) else {
                 return nil
             }
             result.append(nodes)
@@ -49,16 +60,29 @@ final class GeneratorNodeBudget {
         return result
     }
 
-    /// Charges one node for anything that is not another annotated type: a supplied generator, a built-in leaf, and a container all cost one regardless of their contents. A derived-type edge costs whatever that type costs at the remaining depth, and the child's own annotated ceiling rejects the cost rather than capping it.
-    func minimumNodes(for payload: PayloadPlan, depth: Int) -> Int? {
+    /// Charges one node for anything that is not another annotated type. A derived edge costs its target's minimum under the selected recursive share and nested budget.
+    func minimumNodes(
+        for payload: PayloadPlan,
+        recursionAllowance: PayloadRecursionAllowance
+    ) -> Int? {
         switch payload {
             case .supplied, .standard, .container:
                 return 1
             case let .derivedType(reference):
                 let child = plan.plan(for: reference)
-                let remaining = child.maximumDepth.map { min($0, depth - 1) } ?? (depth - 1)
-                guard let minimum = minimumNodes(for: reference, depth: remaining),
-                      child.maximumNodes.map({ minimum <= $0 }) ?? true
+                let isRecursive = plan.isRecursiveEdge(
+                    from: recursionAllowance.source,
+                    to: reference
+                )
+                guard isRecursive == false || recursionAllowance.inherited > 0 else {
+                    return nil
+                }
+                let selected = isRecursive
+                    ? recursionAllowance.recursive
+                    : recursionAllowance.inherited
+                let recursion = min(selected, child.budget.recursion)
+                guard let minimum = minimumNodes(for: reference, recursion: recursion),
+                      minimum <= child.budget.nodes
                 else {
                     return nil
                 }

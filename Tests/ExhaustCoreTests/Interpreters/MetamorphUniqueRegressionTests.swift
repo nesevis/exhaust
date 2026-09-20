@@ -2,7 +2,7 @@
 //  MetamorphUniqueRegressionTests.swift
 //  Exhaust
 //
-//  Pins the metamorphic-copy dedup exemption. Metamorphic copies re-generate the inner from a reset PRNG; with a unique inside, the original's accepted sequence was already in the shared seen-set, so dedup forced every copy to a fresh draw — a pair whose halves differed under the identity transform, and a tree that no longer determined the value. Copies now replay against a snapshot of the dedup state the original saw, and their insertions are discarded. Found by the self-fuzzing harness (ExhaustDocs/coverage-guided-self-fuzzing.md).
+//  Pins the metamorphic-copy dedup exemption. Metamorphic copies re-generate the inner from a reset PRNG; with a unique inside, the original's accepted sequence was already in the shared seen-set, so dedup forced every copy to a fresh draw — a pair whose halves differed under the identity transform, and a tree that no longer determined the value. Copies now replay against a snapshot of the dedup state the original saw, and their insertions are discarded. Found by the self-fuzzing harness.
 //
 
 import ExhaustCore

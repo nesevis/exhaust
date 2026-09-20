@@ -45,15 +45,15 @@ struct DerivedExactAllowanceTests {
 
     @Test("A root rejects an insufficient allowance and constructs at its exact minimum", arguments: [32, 33, 35, 63])
     func rootMinimum(maximumNodes: Int) throws {
-        for depth in [RootDepth.pinned(0), .drawn(ceiling: 0, scaling: .linear)] {
+        for recursion in [RootRecursionBudget.pinned(0), .drawn(ceiling: 0, scaling: .linear)] {
             let plan = try GeneratorDerivationPlan(for: WideProduct.self, overrides: [:])
             let builder = BudgetedGeneratorDerivation(plan: plan)
             if maximumNodes < 33 {
-                #expect(throws: GeneratorDerivationError.insufficientNodes(type: "WideProduct", minimum: 33, requested: maximumNodes)) {
-                    try builder.root(for: WideProduct.self, depth: depth, maximumNodes: maximumNodes)
+                #expect(throws: GeneratorDerivationError.insufficientNodeBudget(type: "WideProduct", minimum: 33, requested: maximumNodes)) {
+                    try builder.root(for: WideProduct.self, recursion: recursion, maximumNodes: maximumNodes)
                 }
             } else {
-                let generator = try builder.root(for: WideProduct.self, depth: depth, maximumNodes: maximumNodes)
+                let generator = try builder.root(for: WideProduct.self, recursion: recursion, maximumNodes: maximumNodes)
                 var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, maxRuns: 1, sizeOverride: 100)
                 let (value, _) = try #require(try interpreter.next())
                 #expect(value.nodes == 33)
@@ -66,11 +66,11 @@ struct DerivedExactAllowanceTests {
         let plan = try GeneratorDerivationPlan(for: NestedWide.self, overrides: [:])
         let builder = BudgetedGeneratorDerivation(plan: plan)
         if maximumNodes < 34 {
-            #expect(throws: GeneratorDerivationError.insufficientNodes(type: "NestedWide", minimum: 34, requested: maximumNodes)) {
-                try builder.root(for: NestedWide.self, depth: .pinned(1), maximumNodes: maximumNodes)
+            #expect(throws: GeneratorDerivationError.insufficientNodeBudget(type: "NestedWide", minimum: 34, requested: maximumNodes)) {
+                try builder.root(for: NestedWide.self, recursion: .pinned(1), maximumNodes: maximumNodes)
             }
         } else {
-            let generator = try builder.root(for: NestedWide.self, depth: .pinned(1), maximumNodes: maximumNodes)
+            let generator = try builder.root(for: NestedWide.self, recursion: .pinned(1), maximumNodes: maximumNodes)
             var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, maxRuns: 1, sizeOverride: 100)
             let (value, _) = try #require(try interpreter.next())
             #expect(value.nodes == 34)
@@ -79,10 +79,10 @@ struct DerivedExactAllowanceTests {
 
     @Test("A container constructs when an entry's exact minimum fits")
     func containerEntryMinimum() throws {
-        let generator = WideArray.gen(maximumDepth: 1, maximumNodes: 35)
+        let generator = WideArray.gen(.budget(.custom(recursion: 1, nodes: 35)))
         let samples = try #example(generator, count: 10)
         #expect(samples.allSatisfy { $0.nodes <= 35 })
-        let entry = try #example(WideProduct.gen(depth: 0), seed: 42)
+        let entry = try #example(WideProduct.gen(recursion: 0), seed: 42)
         let target = WideArray(entries: [entry])
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: target))
         let replayed = try #require(try Interpreters.replay(generator.gen, using: reflected))

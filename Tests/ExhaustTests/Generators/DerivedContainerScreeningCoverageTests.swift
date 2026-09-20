@@ -7,20 +7,24 @@ struct DerivedContainerScreeningCoverageTests {
     @Test("Product arrays cover modeled cardinalities and transparent element fields", arguments: [Int?.none, 8, 16])
     func productArrays(maximumNodes: Int?) throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
-        let maximumCount = maximumNodes.map { ($0 - 2) / 3 } ?? 100
-        let budgetLabel = maximumNodes.map(String.init) ?? "none"
+        let effectiveMaximumNodes = maximumNodes ?? 100
+        let maximumCount = (effectiveMaximumNodes - 2) / 3
+        let budgetLabel = String(effectiveMaximumNodes)
         let handwritten = #gen(ReflectiveGenerator<[ContainerScreeningElement]>.array(
             element,
             length: 0 ... maximumCount,
             scaling: .linear
         )) { ContainerScreeningProducts(values: $0) }
-        let derived = ContainerScreeningProducts.gen(depth: 2, maximumNodes: maximumNodes)
+        let derived = ContainerScreeningProducts.gen(
+            recursion: 2,
+            .budget(.custom(recursion: 2, nodes: effectiveMaximumNodes))
+        )
         for (name, generator) in [("derived", derived), ("handwritten", handwritten)] {
             let values = try containerScreeningValues(generator, label: "products-\(budgetLabel)-\(name)")
-            #expect(values.allSatisfy { 2 + 3 * $0.values.count <= (maximumNodes ?? Int.max) })
+            #expect(values.allSatisfy { 2 + 3 * $0.values.count <= effectiveMaximumNodes })
             let lengths = Set(values.map { $0.values.count }).sorted()
             let elements = Set(values.flatMap { $0.values }.map { ($0.first ? 2 : 0) + ($0.second ? 1 : 0) }).sorted()
-            if name == "derived", maximumNodes != nil {
+            if name == "derived" {
                 // The dependent count layer models every feasible count, but its payloads remain opaque.
                 #expect(lengths == Array(0 ... maximumCount))
             } else {
@@ -34,16 +38,28 @@ struct DerivedContainerScreeningCoverageTests {
     func transparentElementParity() throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
         let handwritten = ReflectiveGenerator<[ContainerScreeningElement]>.array(element, length: 0 ... 2)
-        let derivedRoot = ContainerScreeningProducts.gen(depth: 2).mapped(
+        let derivedRoot = ContainerScreeningProducts.gen(
+            recursion: 2,
+            .budget(.custom(recursion: 2, nodes: 100)),
+            overriding: element
+        ).mapped(
             forward: { $0.values },
             backward: { ContainerScreeningProducts(values: $0) }
         )
         let variants: [(String, ReflectiveGenerator<[ContainerScreeningElement]>)] = [
             ("derived-root", derivedRoot),
-            ("pinned-element", .array(ContainerScreeningElement.gen(depth: 0), length: 0 ... 2)),
-            ("drawn-element", .array(ContainerScreeningElement.gen(maximumDepth: 2), length: 0 ... 2)),
+            ("pinned-element", .array(ContainerScreeningElement.gen(
+                recursion: 0,
+                .budget(.custom(recursion: 0, nodes: 3))
+            ), length: 0 ... 2)),
+            ("drawn-element", .array(ContainerScreeningElement.gen(
+                .budget(.custom(recursion: 2, nodes: 3))
+            ), length: 0 ... 2)),
             ("lazy-element", .array(.lazy { element }, length: 0 ... 2)),
-            ("sized-element", .array(ContainerScreeningElement.gen(depth: 0, maximumNodes: 3), length: 0 ... 2)),
+            ("sized-element", .array(ContainerScreeningElement.gen(
+                recursion: 0,
+                .budget(.custom(recursion: 0, nodes: 3))
+            ), length: 0 ... 2)),
         ]
         for (name, source) in variants {
             let generator = source.resize(100)
@@ -116,7 +132,7 @@ struct DerivedContainerScreeningCoverageTests {
     @Test("A public element override exposes the product fields in an unbudgeted array")
     func suppliedProductElements() throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
-        let generator = ContainerScreeningProducts.gen(depth: 2, overriding: element)
+        let generator = ContainerScreeningProducts.gen(recursion: 2, overriding: element)
         let values = try containerScreeningValues(generator, label: "supplied-products", expectedRows: 21)
         let elements = Set(values.flatMap { $0.values }.map { ($0.first ? 2 : 0) + ($0.second ? 1 : 0) }).sorted()
         #expect(elements == [0, 1, 2, 3])
@@ -149,7 +165,10 @@ struct DerivedContainerScreeningCoverageTests {
             backward: { $0.count }
         )
         let handwritten = #gen(arrays) { ContainerScreeningNested(values: $0) }
-        let derived = ContainerScreeningNested.gen(depth: 2, maximumNodes: maximumNodes)
+        let derived = ContainerScreeningNested.gen(
+            recursion: 2,
+            .budget(.custom(recursion: 2, nodes: maximumNodes))
+        )
         for (name, generator) in [("derived", derived), ("handwritten", handwritten)] {
             let values = try containerScreeningValues(generator, label: "nested-\(maximumNodes)-\(name)")
             #expect(values.allSatisfy { 2 + $0.values.reduce(0) { $0 + 1 + $1.count } <= maximumNodes })

@@ -1,6 +1,7 @@
 import Exhaust
 import ExhaustCore
 import Testing
+@testable import ExhaustGenerators
 
 @Suite("Generator derivation")
 struct GeneratorDerivationTests {
@@ -26,37 +27,48 @@ struct GeneratorDerivationTests {
         #expect(abstraction.extract(.variable(0)) == nil)
     }
 
-    @Test("A derived generator produces every case and respects the depth bound")
-    func derivedGeneratorCoversCasesWithinDepth() throws {
-        let generator = ReflectiveGenerator<Term>.derived(depth: 4, overriding: .int(in: 0 ... 3))
+    @Test("A derived generator produces every case and respects the recursive-fuel bound")
+    func derivedGeneratorCoversCasesWithinFuel() throws {
+        let generator = ReflectiveGenerator<Term>.derived(recursion: 4, overriding: .int(in: 0 ... 3))
         let samples = try #example(generator, count: 500)
         var seen: Set<String> = []
         for sample in samples {
-            #expect(sample.depth <= 4, "\(sample)")
+            #expect(sample.recursionDepth <= 4, "\(sample)")
+            #expect(sample.maximumTypeDepth <= 4, "\(sample)")
             #expect(sample.indicesWithin(0 ... 3), "\(sample)")
             seen.formUnion(sample.caseNames)
         }
         #expect(seen == Set(Term.__generatorDescriptor.constructors.map(\.name)))
     }
 
-    @Test("Depth zero keeps only the cases without a derived-type payload")
-    func depthZeroIsBaseCasesOnly() throws {
-        let generator = ReflectiveGenerator<Term>.derived(depth: 0, overriding: .int(in: 0 ... 3))
+    @Test("Zero fuel keeps only constructors without recursive edges")
+    func zeroFuelIsBaseCasesOnly() throws {
+        let generator = ReflectiveGenerator<Term>.derived(recursion: 0, overriding: .int(in: 0 ... 3))
         let samples = try #example(generator, count: 50)
         for sample in samples {
             guard case .variable = sample else {
-                Issue.record("Expected a variable at depth zero, got \(sample)")
+                Issue.record("Expected a variable at zero fuel, got \(sample)")
                 return
             }
         }
     }
 
-    @Test("Depth zero prefers cases without associated values when the enum has any")
-    func depthZeroPrefersPayloadFreeCases() throws {
-        let generator = ReflectiveGenerator<TermType>.derived(depth: 0, overriding: .int(in: 0 ... 3))
+    @Test("Zero fuel retains every constructor without a recursive edge")
+    func zeroFuelRetainsAcyclicPayloads() throws {
+        let generator = ReflectiveGenerator<TermType>.derived(
+            recursion: 0,
+            overriding: .int(in: 0 ... 3)
+        )
         let samples = try #example(generator, count: 50)
-        #expect(samples.allSatisfy { $0 == .top })
-        let nested = ReflectiveGenerator<Term>.derived(depth: 1, overriding: .int(in: 0 ... 3))
+        #expect(samples.contains { $0 == .top })
+        #expect(samples.contains { value in
+            if case .variable = value {
+                return true
+            }
+            return false
+        })
+        #expect(samples.allSatisfy { $0.depth == 0 })
+        let nested = ReflectiveGenerator<Term>.derived(recursion: 1, overriding: .int(in: 0 ... 3))
         let nestedSamples = try #example(nested, count: 300)
         let types = nestedSamples.compactMap { sample -> TermType? in
             switch sample {
@@ -67,12 +79,25 @@ struct GeneratorDerivationTests {
             }
         }
         #expect(types.isEmpty == false)
-        #expect(types.allSatisfy { $0 == .top })
+        #expect(types.allSatisfy { $0.depth <= 1 })
+        #expect(types.contains { $0.depth == 1 })
     }
 
     @Test("A derived generator reduces a counterexample to the smallest failing term")
     func derivedGeneratorReduces() throws {
-        let generator = ReflectiveGenerator<Term>.derived(depth: 4, overriding: .int(in: 0 ... 3))
+        let plan = try GeneratorDerivationPlan(
+            for: Term.self,
+            overrides: [
+                ObjectIdentifier(Int.self): ReflectiveGenerator<Int>
+                    .int(in: 0 ... 3)
+                    .erasedForDerivation(),
+            ]
+        )
+        let generator = try BudgetedGeneratorDerivation(plan: plan).root(
+            for: Term.self,
+            recursion: .pinned(4),
+            maximumNodes: nil
+        )
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, materializePicks: true, seed: 11)
         let property: (Term) -> Bool = { $0.caseNames.contains("typeApplication") == false }
         var found: (value: Term, tree: ChoiceTree)?
@@ -101,10 +126,14 @@ struct GeneratorDerivationTests {
 
     @Test("A struct derives through its stored properties and reflects")
     func structDerives() throws {
-        let generator = ReflectiveGenerator<Binding>.derived(depth: 2, overriding: .int(in: 0 ... 3))
+        let generator = ReflectiveGenerator<Binding>.derived(recursion: 2, overriding: .int(in: 0 ... 3))
         let samples = try #example(generator, count: 200)
-        #expect(samples.contains { $0.term.depth > 0 })
-        #expect(samples.allSatisfy { $0.term.indicesWithin(0 ... 3) && $0.term.depth <= 2 })
+        #expect(samples.contains { $0.term.recursionDepth > 0 })
+        #expect(samples.allSatisfy {
+            $0.term.indicesWithin(0 ... 3)
+                && $0.term.recursionDepth <= 2
+                && $0.term.maximumTypeDepth <= 2
+        })
         let target = Binding(name: "f", term: .abstraction(.top, .variable(1)), pinned: true)
         let tree = try #require(try Interpreters.reflect(generator.gen, with: target))
         let replayed = try #require(try Interpreters.replay(generator.gen, using: tree))
@@ -113,7 +142,7 @@ struct GeneratorDerivationTests {
 
     @Test("A custom payload generator is supplied explicitly and reflects")
     func customPayloadOverrideReflects() throws {
-        let generator = ReflectiveGenerator<Account>.derived(depth: 1, overriding: Money.defaultGenerator)
+        let generator = ReflectiveGenerator<Account>.derived(recursion: 1, overriding: Money.defaultGenerator)
         let samples = try #example(generator, count: 100)
         #expect(samples.allSatisfy { (0 ... 9).contains($0.balance.cents) })
         let target = Account(balance: Money(cents: 7), open: true)
@@ -140,7 +169,7 @@ struct GeneratorDerivationTests {
         #expect(atSmall <= 1)
         #expect(atMiddle > atSmall)
         #expect(atFull > atMiddle)
-        #expect(atFull <= ReflectiveGenerator<Term>.defaultMaximumDepth)
+        #expect(atFull <= Term.__generatorDescriptor.budget.recursion)
 
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, materializePicks: true, seed: 11, maxRuns: 10000, sizeOverride: 100)
         let property: (Term) -> Bool = { $0.caseNames.contains("typeApplication") == false }
@@ -164,9 +193,9 @@ struct GeneratorDerivationTests {
         #expect(reduced.1 == .typeApplication(.variable(0), .top), "\(reduced.1)")
     }
 
-    @Test("A type's own maximumDepth bounds it wherever it nests")
-    func macroMaximumDepthBoundsNesting() throws {
-        #expect(Shallow.__generatorDescriptor.maximumDepth == 2)
+    @Test("A type's own recursion budget bounds it wherever it nests")
+    func macroRecursionBudgetBoundsNesting() throws {
+        #expect(Shallow.__generatorDescriptor.budget.recursion == 2)
         let generator = ReflectiveGenerator<Shallow>.derived()
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 5, maxRuns: 10000, sizeOverride: 100)
         var deepest = 0
@@ -175,7 +204,7 @@ struct GeneratorDerivationTests {
             deepest = max(deepest, value.depth)
         }
         #expect(deepest == 2)
-        let nested = ReflectiveGenerator<Holder>.derived(depth: 6)
+        let nested = ReflectiveGenerator<Holder>.derived(recursion: 6)
         var holderInterpreter = ValueAndChoiceTreeInterpreter(nested.gen, seed: 5, maxRuns: 10000, sizeOverride: 100)
         var deepestHeld = 0
         for _ in 0 ..< 300 {
@@ -187,18 +216,18 @@ struct GeneratorDerivationTests {
 
     @Test("An @Exhaustable type exposes its derived generator")
     func annotatedTypeExposesDefaultGenerator() throws {
-        let generator = ReflectiveGenerator<Wrapper>.derived(depth: 2, overriding: .int(in: 0 ... 3))
+        let generator = ReflectiveGenerator<Wrapper>.derived(recursion: 2, overriding: .int(in: 0 ... 3))
         let samples = try #example(generator, count: 100)
         #expect(samples.contains { $0.inner.depth > 0 })
         let direct = Term.gen()
         let directSamples = try #example(direct, count: 20, seed: 1337)
         #expect(directSamples.contains { $0.depth > 0 })
-        #expect(directSamples.allSatisfy { $0.depth <= ReflectiveGenerator<Term>.defaultMaximumDepth })
+        #expect(directSamples.allSatisfy { $0.depth <= Term.__generatorDescriptor.budget.recursion })
     }
 
     @Test("A final class derives through its stored properties and reflects")
     func finalClassDerives() throws {
-        let generator = ReflectiveGenerator<Node>.derived(depth: 2, overriding: .int(in: 0 ... 3))
+        let generator = ReflectiveGenerator<Node>.derived(recursion: 2, overriding: .int(in: 0 ... 3))
         let samples = try #example(generator, count: 100)
         #expect(samples.contains { $0.term.depth > 0 })
         let target = Node(term: .abstraction(.top, .variable(2)), weight: 3)
@@ -211,7 +240,7 @@ struct GeneratorDerivationTests {
 
     @Test("Containers of an annotated type need no conformance from the user")
     func containersOfAnnotatedTypesResolve() throws {
-        let generator = ReflectiveGenerator<Forest>.derived(maximumDepth: 3)
+        let generator = ReflectiveGenerator<Forest>.derived(.budget(.custom(recursion: 3, nodes: 100)))
         let samples = try #example(generator, count: 200)
         #expect(samples.contains { $0.trees.isEmpty == false })
         #expect(samples.contains { $0.best != nil })
@@ -226,7 +255,7 @@ struct GeneratorDerivationTests {
 
     @Test("A derived generator reflects a value and replays it")
     func derivedGeneratorReflects() throws {
-        let generator = ReflectiveGenerator<Term>.derived(depth: 4, overriding: .int(in: 0 ... 3))
+        let generator = ReflectiveGenerator<Term>.derived(recursion: 4, overriding: .int(in: 0 ... 3))
         let target: Term = .application(.abstraction(.arrow(.top, .top), .variable(0)), .typeApplication(.variable(1), .top))
         let tree = try #require(try Interpreters.reflect(generator.gen, with: target))
         let replayed = try #require(try Interpreters.replay(generator.gen, using: tree))
@@ -263,7 +292,7 @@ private struct Binding: Equatable {
     }
 }
 
-@Exhaustable(maximumDepth: 2)
+@Exhaustable(.budget(.custom(recursion: 2, nodes: 100)))
 private indirect enum Shallow {
     case leaf
     case node(Shallow)
@@ -355,6 +384,32 @@ private extension TermType {
 }
 
 private extension Term {
+    var recursionDepth: Int {
+        switch self {
+            case .variable:
+                0
+            case let .abstraction(_, body), let .typeAbstraction(_, body):
+                1 + body.recursionDepth
+            case let .application(function, argument):
+                1 + max(function.recursionDepth, argument.recursionDepth)
+            case let .typeApplication(function, _):
+                1 + function.recursionDepth
+        }
+    }
+
+    var maximumTypeDepth: Int {
+        switch self {
+            case .variable:
+                0
+            case let .abstraction(type, body), let .typeAbstraction(type, body):
+                max(type.depth, body.maximumTypeDepth)
+            case let .application(function, argument):
+                max(function.maximumTypeDepth, argument.maximumTypeDepth)
+            case let .typeApplication(function, type):
+                max(function.maximumTypeDepth, type.depth)
+        }
+    }
+
     var depth: Int {
         switch self {
             case .variable:

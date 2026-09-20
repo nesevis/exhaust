@@ -834,7 +834,7 @@ package final class FuzzCorpus {
 
     /// Picks a mutation parent by weighted random draw over the mutable tier, or nil when the tier is empty.
     ///
-    /// The draw lands on the first tier position whose running score sum exceeds `random` times the total, found by binary search over ``tierPrefixSums``. Walking the tier twice per pick (once to sum, once to locate) was 2.4% of a mutation-phase run at a tier of 230 entries, almost all of it the per-entry dynamic exclusivity check on the score cache. Score-weighted selection is the only policy: a uniform epsilon floor and AFLFast-style age decay were both measured worse on every workload tried (see the basin-escape survey in ExhaustDocs).
+    /// The draw lands on the first tier position whose running score sum exceeds `random` times the total, found by binary search over ``tierPrefixSums``. Walking the tier twice per pick (once to sum, once to locate) was 2.4% of a mutation-phase run at a tier of 230 entries, almost all of it the per-entry dynamic exclusivity check on the score cache. Score-weighted selection is the only policy: a uniform epsilon floor and AFLFast-style age decay were both measured worse on every workload tried.
     ///
     /// - Parameter random: A uniform draw in [0, 1), supplied by the caller so runs stay deterministic under a pinned seed.
     package func pickParent(random: Double) -> (index: Int, entry: CorpusEntry)? {
