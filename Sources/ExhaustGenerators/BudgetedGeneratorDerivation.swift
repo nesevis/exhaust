@@ -1,7 +1,7 @@
 import Exhaustable
 import ExhaustCore
 
-/// Builds recursion-limited derivations with an optional node allowance. A nil allowance retains ordinary container cardinalities while nested annotations can still impose a ceiling. Construction caches include the allocated allowance; sharing generators never replenishes the allowance of a value occurrence. Runtime closures retain completed layers, not this mutable builder.
+/// Builds recursion-limited derivations under a structural-node ceiling. Construction caches include the allocated allowance; sharing generators never replenishes the allowance of a value occurrence. Runtime closures retain completed layers, not this mutable builder.
 final class BudgetedGeneratorDerivation {
     let plan: GeneratorDerivationPlan
     let budget: GeneratorNodeBudget
@@ -14,27 +14,19 @@ final class BudgetedGeneratorDerivation {
         budget = GeneratorNodeBudget(plan: plan)
     }
 
-    /// Validates recursion before node limits so an insufficient recursion retains the plan's specific diagnostic. With a node ceiling, the 100 size slots reference shared completed generators; repeated allowances do not rebuild the graph.
+    /// Validates recursion before node limits so an insufficient recursion retains the plan's specific diagnostic. The 100 size slots reference shared completed generators; repeated allowances do not rebuild the graph.
     func root<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         recursion: RootRecursionBudget,
-        maximumNodes: Int?,
+        maximumNodes: Int,
         domain: ExhaustableDomain = .full
     ) throws -> ReflectiveGenerator<Value> {
         _ = try plan.minimumRecursionBudget(for: type, at: recursion.ceiling)
-        if let maximumNodes, maximumNodes <= 0 {
+        guard maximumNodes > 0 else {
             throw GeneratorDerivationError.invalidNodeBudget(type: String(describing: type), nodes: maximumNodes)
         }
         guard let minimum = budget.minimumNodes(for: ObjectIdentifier(type), recursion: recursion.ceiling) else {
             throw GeneratorDerivationError.noFiniteConstructionWithinNodeBudget(type: String(describing: type), recursion: recursion.ceiling)
-        }
-        guard let maximumNodes else {
-            return rootLayer(
-                for: type,
-                recursion: recursion,
-                nodes: nil,
-                domain: domain
-            )
         }
         guard minimum <= maximumNodes else {
             throw GeneratorDerivationError.insufficientNodeBudget(
@@ -61,7 +53,7 @@ final class BudgetedGeneratorDerivation {
     private func rootLayer<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         recursion: RootRecursionBudget,
-        nodes: Int?,
+        nodes: Int,
         domain: ExhaustableDomain
     ) -> ReflectiveGenerator<Value> {
         switch recursion {
@@ -72,7 +64,7 @@ final class BudgetedGeneratorDerivation {
                     guard let cost = budget.minimumNodes(for: ObjectIdentifier(type), recursion: candidate) else {
                         return false
                     }
-                    return nodes.map { cost <= $0 } ?? true
+                    return cost <= nodes
                 }) else {
                     preconditionFailure("A validated root allowance must admit a recursion at or below its ceiling")
                 }
@@ -90,10 +82,15 @@ final class BudgetedGeneratorDerivation {
     func generator<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         recursion: Int,
-        nodes: Int?,
+        nodes: Int,
         domain: ExhaustableDomain = .full
     ) -> ReflectiveGenerator<Value> {
-        let key = NodeBudgetKey(type: ObjectIdentifier(type), recursion: recursion, nodes: nodes, domain: domain)
+        let key = NodeBudgetKey(
+            type: ObjectIdentifier(type),
+            recursion: recursion,
+            nodes: nodes,
+            domain: domain
+        )
         if let existing = built[key] as? ReflectiveGenerator<Value> {
             return existing
         }
@@ -112,13 +109,7 @@ final class BudgetedGeneratorDerivation {
             else {
                 return nil
             }
-            let nodeAllowances: [Int?]? = switch nodes {
-                case let .some(limit):
-                    budget.split(limit - 1, minima: minima)?.map(Optional.some)
-                case .none:
-                    Array(repeating: nil, count: minima.count)
-            }
-            guard let nodeAllowances else {
+            guard let nodeAllowances = budget.split(nodes - 1, minima: minima) else {
                 return nil
             }
             let children = entry.payloads.indices.map { payloadIndex in
@@ -176,7 +167,7 @@ final class BudgetedGeneratorDerivation {
     private func payloadGenerator(
         for payload: PayloadPlan,
         recursionAllowance: PayloadRecursionAllowance,
-        nodes: Int?,
+        nodes: Int,
         domain: ExhaustableDomain
     ) -> ReflectiveGenerator<Any> {
         switch payload {
@@ -192,7 +183,7 @@ final class BudgetedGeneratorDerivation {
                 return erasedGenerator(
                     for: child.type,
                     recursion: min(selected, child.budget.recursion),
-                    nodes: capped(nodes, at: child.budget.nodes),
+                    nodes: min(nodes, child.budget.nodes),
                     domain: domain.limited(by: child.domain)
                 )
             case let .container(recipe, children):
@@ -211,7 +202,7 @@ final class BudgetedGeneratorDerivation {
         _ recipe: DerivedContainerRecipe,
         children: [PayloadPlan],
         recursionAllowance: PayloadRecursionAllowance,
-        nodes: Int?,
+        nodes: Int,
         domain: ExhaustableDomain
     ) -> ReflectiveGenerator<Any> {
         let key = ContainerBudgetKey(
@@ -239,17 +230,9 @@ final class BudgetedGeneratorDerivation {
         _ recipe: DerivedContainerRecipe,
         children: [PayloadPlan],
         recursionAllowance: PayloadRecursionAllowance,
-        nodes: Int?,
+        nodes: Int,
         domain: ExhaustableDomain
     ) -> ReflectiveGenerator<Any> {
-        guard let nodes else {
-            return buildUnbudgetedContainer(
-                recipe,
-                children: children,
-                recursionAllowance: recursionAllowance,
-                domain: domain
-            )
-        }
         let maximumCountFromNodes = max(0, (nodes - 1) / max(1, children.count))
         let maximumReflectableCount = min(recipe.maximumCount ?? maximumCountFromNodes, maximumCountFromNodes)
         let hasRecursiveRoutes = children.contains {
@@ -282,31 +265,6 @@ final class BudgetedGeneratorDerivation {
             domain: domain,
             maximumGeneratedCount: maximumGeneratedCount,
             maximumBuiltCount: maximumBuiltCount
-        )
-    }
-
-    /// Keeps the built-in cardinality only for containers whose children cannot return to the enclosing recursive component.
-    private func buildUnbudgetedContainer(
-        _ recipe: DerivedContainerRecipe,
-        children: [PayloadPlan],
-        recursionAllowance: PayloadRecursionAllowance,
-        domain: ExhaustableDomain
-    ) -> ReflectiveGenerator<Any> {
-        guard children.allSatisfy({ plan.recursiveWidth(of: $0, from: recursionAllowance.source) == 0 }) else {
-            return recipe.empty.wrapped(isReflective: true)
-        }
-        let generators = children.map {
-            payloadGenerator(
-                for: $0,
-                recursionAllowance: recursionAllowance,
-                nodes: nil,
-                domain: domain
-            )
-        }
-        let cardinality: ContainerCardinality = domain.defaultSequenceLengthMaximum
-            .map { .within(min($0, recipe.maximumCount ?? $0)) } ?? .sizeScaled
-        return recipe.build(cardinality, generators.map { $0.gen }).wrapped(
-            isReflective: recipe.isReflective && generators.allSatisfy { $0.isReflective }
         )
     }
 
@@ -409,7 +367,7 @@ final class BudgetedGeneratorDerivation {
     private func erasedGenerator(
         for type: (some __Exhaustable.Conformance).Type,
         recursion: Int,
-        nodes: Int?,
+        nodes: Int,
         domain: ExhaustableDomain
     ) -> ReflectiveGenerator<Any> {
         generator(for: type, recursion: recursion, nodes: nodes, domain: domain).erasedForDerivation()
@@ -439,7 +397,7 @@ enum RootRecursionBudget {
 struct NodeBudgetKey: Hashable {
     let type: ObjectIdentifier
     let recursion: Int
-    let nodes: Int?
+    let nodes: Int
     let domain: ExhaustableDomain
 }
 
@@ -447,7 +405,7 @@ struct NodeBudgetKey: Hashable {
 struct ContainerBudgetKey: Hashable {
     let type: ObjectIdentifier
     let recursionAllowance: PayloadRecursionAllowance
-    let nodes: Int?
+    let nodes: Int
     let domain: ExhaustableDomain
 }
 
@@ -461,10 +419,6 @@ private struct CountedContainerKey: Hashable {
 }
 
 // MARK: - Helpers
-
-private func capped(_ allowance: Int?, at ceiling: Int?) -> Int? {
-    [allowance, ceiling].compactMap { $0 }.min()
-}
 
 /// Reports whether reflection can recognize a value a payload-free constructor rebuilds.
 ///

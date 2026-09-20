@@ -4,50 +4,54 @@ import Testing
 
 @Suite("Derived screening parity")
 struct DerivedScreeningParityTests {
-    @Test("Flat products expose the same domains and materialized rows as handwritten zips", arguments: [Int?.none, 200], [false, true])
-    func flatProducts(maximumNodes: Int?, drawn: Bool) throws {
+    @Test("Flat products expose the same domains and materialized rows as handwritten zips", arguments: [100, 200], [false, true])
+    func flatProducts(maximumNodes: Int, drawn: Bool) throws {
         let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool()) { first, second, enabled in
             ScreeningRecord(first: first, second: second, enabled: enabled)
         }
         let derived: ReflectiveGenerator<ScreeningRecord> = switch drawn {
             case true:
-                ScreeningRecord.gen(.budget(.custom(recursion: 5, nodes: maximumNodes ?? 100)), overriding: .int(in: 0 ... 31))
+                ScreeningRecord.gen(.budget(.custom(recursion: 5, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
             case false:
-                ScreeningRecord.gen(recursion: 0, .budget(.custom(recursion: 0, nodes: maximumNodes ?? 100)), overriding: .int(in: 0 ... 31))
+                ScreeningRecord.gen(recursion: 0, .budget(.custom(recursion: 0, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
         }
         try expectScreeningParity(derived, handwritten)
     }
 
-    @Test("Default drawn-depth nested products match handwritten rows", arguments: [Int?.none, 200])
-    func drawnNestedProducts(maximumNodes: Int?) throws {
+    @Test("Default drawn-depth nested products match handwritten rows", arguments: [100, 200])
+    func drawnNestedProducts(maximumNodes: Int) throws {
         let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool(), .int(in: 0 ... 31)) { first, second, enabled, outer in
             ScreeningNested(inner: ScreeningRecord(first: first, second: second, enabled: enabled), outer: outer)
         }
-        let derived = ScreeningNested.gen(.budget(.custom(recursion: 10, nodes: maximumNodes ?? 100)), overriding: .int(in: 0 ... 31))
+        let derived = ScreeningNested.gen(.budget(.custom(recursion: 10, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
         try expectScreeningParity(derived, handwritten)
     }
 
-    @Test("Array products expose lengths and element boundaries like handwritten sequences", arguments: [Int?.none, 200])
-    func arrayProducts(maximumNodes: Int?) throws {
-        let elements: ReflectiveGenerator<[Int]> = switch maximumNodes {
-            case .none:
+    @Test(
+        "Array products expose lengths and element boundaries like handwritten sequences",
+        arguments: [(maximumNodes: 100, usesDefaultLength: true), (200, false)]
+    )
+    func arrayProducts(configuration: (maximumNodes: Int, usesDefaultLength: Bool)) throws {
+        let elements: ReflectiveGenerator<[Int]> = switch configuration.usesDefaultLength {
+            case true:
                 .array(.int(in: 0 ... 31))
-            case .some:
+            case false:
                 .array(.int(in: 0 ... 31), length: 0 ... 99, scaling: .linear)
         }
+        let maximumNodes = configuration.maximumNodes
         let handwritten = #gen(elements, .int(in: 0 ... 31)) { values, label in
             ScreeningArrayRecord(values: values, label: label)
         }
-        let derived = ScreeningArrayRecord.gen(recursion: 0, .budget(.custom(recursion: 0, nodes: maximumNodes ?? 100)), overriding: .int(in: 0 ... 31))
+        let derived = ScreeningArrayRecord.gen(recursion: 0, .budget(.custom(recursion: 0, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
         try expectScreeningParity(derived, handwritten)
     }
 
-    @Test("Full integer domains retain the handwritten problematic-value rows", arguments: [Int?.none, 200])
-    func largeDomainProducts(maximumNodes: Int?) throws {
+    @Test("Full integer domains retain the handwritten problematic-value rows", arguments: [100, 200])
+    func largeDomainProducts(maximumNodes: Int) throws {
         let handwritten = #gen(.int(), .int(), .bool()) { first, second, enabled in
             ScreeningRecord(first: first, second: second, enabled: enabled)
         }
-        let derived = ScreeningRecord.gen(.budget(.custom(recursion: 10, nodes: maximumNodes ?? 100)))
+        let derived = ScreeningRecord.gen(.budget(.custom(recursion: 10, nodes: maximumNodes)))
         let values = try matchingScreeningRows(derived, handwritten, expectedParameters: 3)
         #expect(values.contains { $0.first == Int.min })
         #expect(values.contains { $0.first == Int.max })
@@ -55,14 +59,14 @@ struct DerivedScreeningParityTests {
         #expect(values.contains { $0.second == Int.max })
     }
 
-    @Test("Pinned enums retain handwritten constructor selection and row values", arguments: [Int?.none, 200])
-    func enumProducts(maximumNodes: Int?) throws {
+    @Test("Pinned enums retain handwritten constructor selection and row values", arguments: [100, 200])
+    func enumProducts(maximumNodes: Int) throws {
         let integer = #gen(.int(in: 0 ... 31)) { ScreeningVariant.integer($0) }
         let flag = #gen(.bool()) { ScreeningVariant.flag($0) }
         let handwritten = #gen(.oneOf(integer, flag), .int(in: 0 ... 31)) { variant, label in
             ScreeningVariantRecord(variant: variant, label: label)
         }
-        let variants = ScreeningVariant.gen(recursion: 0, .budget(.custom(recursion: 0, nodes: maximumNodes ?? 100)), overriding: .int(in: 0 ... 31))
+        let variants = ScreeningVariant.gen(recursion: 0, .budget(.custom(recursion: 0, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
         let derived = #gen(variants, .int(in: 0 ... 31)) { variant, label in
             ScreeningVariantRecord(variant: variant, label: label)
         }
@@ -86,16 +90,16 @@ struct DerivedScreeningParityTests {
     @Test(
         "Drawn recursive roots screen the full feasible layer without forcing deep values",
         arguments: [1, 3, 5],
-        [Int?.none, 2, 32, 200]
+        [2, 32, 100, 200]
     )
-    func fullDepthScreening(ceiling: Int, maximumNodes: Int?) throws {
+    func fullDepthScreening(ceiling: Int, maximumNodes: Int) throws {
         let pinnedTree = ScreeningRecursive.gen(
             recursion: ceiling,
-            .budget(.custom(recursion: ceiling, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: ceiling, nodes: maximumNodes)),
             overriding: .int(in: 0 ... 31)
         )
         let drawnTree = ScreeningRecursive.gen(
-            .budget(.custom(recursion: ceiling, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: ceiling, nodes: maximumNodes)),
             overriding: .int(in: 0 ... 31)
         )
         let pinned = #gen(pinnedTree, .int(in: 0 ... 31)) { tree, label in
@@ -107,7 +111,7 @@ struct DerivedScreeningParityTests {
         let values = try matchingScreeningRows(drawn, pinned, expectedParameters: 2)
         #expect(values.contains { $0.tree.depth == 0 })
         #expect(values.allSatisfy { $0.tree.depth <= ceiling })
-        #expect(values.allSatisfy { $0.tree.nodes <= (maximumNodes ?? Int.max) })
+        #expect(values.allSatisfy { $0.tree.nodes <= maximumNodes })
         let result = ScreeningRunner.run(
             drawn.gen,
             screeningBudget: 200,
@@ -160,15 +164,15 @@ struct DerivedScreeningParityTests {
         #expect(Set(controls) == Set([[], [UInt64(size * 5 / 100)]]))
     }
 
-    @Test("Full-depth screening respects nested annotation ceilings", arguments: [Int?.none, 32])
-    func nestedDepthCeilings(maximumNodes: Int?) throws {
+    @Test("Full-depth screening respects nested annotation ceilings", arguments: [32, 100])
+    func nestedDepthCeilings(maximumNodes: Int) throws {
         let drawn = ScreeningAnnotatedRoot.gen(
-            .budget(.custom(recursion: 5, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 5, nodes: maximumNodes)),
             overriding: .int(in: 0 ... 31)
         )
         let pinned = ScreeningAnnotatedRoot.gen(
             recursion: 5,
-            .budget(.custom(recursion: 5, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 5, nodes: maximumNodes)),
             overriding: .int(in: 0 ... 31)
         )
         let values = try matchingScreeningRows(drawn, pinned, expectedParameters: 2)
@@ -191,12 +195,12 @@ struct DerivedScreeningParityTests {
         }
     }
 
-    @Test("Nested products expose fields through nonrecursive derived edges", arguments: [Int?.none, 200])
-    func nestedProducts(maximumNodes: Int?) throws {
+    @Test("Nested products expose fields through nonrecursive derived edges", arguments: [100, 200])
+    func nestedProducts(maximumNodes: Int) throws {
         let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool(), .int(in: 0 ... 31)) { first, second, enabled, outer in
             ScreeningNested(inner: ScreeningRecord(first: first, second: second, enabled: enabled), outer: outer)
         }
-        let derived = ScreeningNested.gen(recursion: 2, .budget(.custom(recursion: 2, nodes: maximumNodes ?? 100)), overriding: .int(in: 0 ... 31))
+        let derived = ScreeningNested.gen(recursion: 2, .budget(.custom(recursion: 2, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
         try expectScreeningParity(derived, handwritten)
     }
 }

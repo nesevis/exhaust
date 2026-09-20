@@ -207,20 +207,13 @@ struct GeneratorNodeBudgetTests {
         _ = builder.generator(for: BudgetBinary.self, recursion: 4, nodes: 7)
         #expect(builder.built.keys.contains(NodeBudgetKey(type: ObjectIdentifier(BudgetBinary.self), recursion: 4, nodes: 15, domain: .full)))
         #expect(builder.built.keys.contains(NodeBudgetKey(type: ObjectIdentifier(BudgetBinary.self), recursion: 4, nodes: 7, domain: .full)))
-        _ = builder.generator(for: BudgetBinary.self, recursion: 4, nodes: nil)
-        #expect(builder.built.keys.contains(NodeBudgetKey(type: ObjectIdentifier(BudgetBinary.self), recursion: 4, nodes: nil, domain: .full)))
-        #expect(builder.built.keys.count(where: { $0.nodes == nil }) == 1)
-        let unboundedCount = builder.built.count
-        _ = builder.generator(for: BudgetBinary.self, recursion: 4, nodes: nil)
-        #expect(builder.built.count == unboundedCount)
     }
 
-    @Test("Acyclic and budget-forced containers are cached across sibling fields", arguments: [
-        (depth: 0, maximumNodes: Int?.none),
+    @Test("Budget-forced containers are cached across sibling fields", arguments: [
         (depth: 0, maximumNodes: 3),
         (depth: 1, maximumNodes: 3),
     ])
-    func sharesEmptyContainers(configuration: (depth: Int, maximumNodes: Int?)) throws {
+    func sharesEmptyContainers(configuration: (depth: Int, maximumNodes: Int)) throws {
         let plan = try GeneratorDerivationPlan(for: BudgetEmptyPair.self, overrides: [:])
         let builder = BudgetedGeneratorDerivation(plan: plan)
         let generator = try builder.root(
@@ -235,7 +228,7 @@ struct GeneratorNodeBudgetTests {
                 inherited: configuration.depth,
                 recursive: configuration.depth
             ),
-            nodes: configuration.maximumNodes.map { ($0 - 1) / 2 },
+            nodes: (configuration.maximumNodes - 1) / 2,
             domain: .full
         )
         let cached = try #require(builder.containers[key])
@@ -243,20 +236,11 @@ struct GeneratorNodeBudgetTests {
         let empty = BudgetEmptyPair(first: [], second: [])
         let nonempty = BudgetEmptyPair(first: [.children([])], second: [])
         let samples = try #example(generator, count: 20, seed: 42)
-        switch configuration.maximumNodes {
-            case .none:
-                #expect(builder.containers.count == 2)
-                #expect(builder.built.count == 2)
-                #expect(samples.contains { $0 != empty })
-                let reflected = try #require(try Interpreters.reflect(generator.gen, with: nonempty))
-                #expect(try Interpreters.replay(generator.gen, using: reflected) == nonempty)
-            case .some:
-                #expect(builder.containers.count == 1)
-                #expect(builder.built.count == 1)
-                #expect(samples.allSatisfy { $0 == empty })
-                #expect(throws: ReflectionError.inputWasOutOfGeneratorRange("1", range: "0...0")) {
-                    try Interpreters.reflect(generator.gen, with: nonempty)
-                }
+        #expect(builder.containers.count == 1)
+        #expect(builder.built.count == 1)
+        #expect(samples.allSatisfy { $0 == empty })
+        #expect(throws: ReflectionError.inputWasOutOfGeneratorRange("1", range: "0...0")) {
+            try Interpreters.reflect(generator.gen, with: nonempty)
         }
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: empty))
         #expect(try Interpreters.replay(generator.gen, using: reflected) == empty)

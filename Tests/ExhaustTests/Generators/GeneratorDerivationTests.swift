@@ -93,10 +93,10 @@ struct GeneratorDerivationTests {
                     .erasedForDerivation(),
             ]
         )
-        let generator = try BudgetedGeneratorDerivation(plan: plan).root(
+        let generator = BudgetedGeneratorDerivation(plan: plan).generator(
             for: Term.self,
-            recursion: .pinned(4),
-            maximumNodes: nil
+            recursion: 4,
+            nodes: 100
         )
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, materializePicks: true, seed: 11)
         let property: (Term) -> Bool = { $0.caseNames.contains("typeApplication") == false }

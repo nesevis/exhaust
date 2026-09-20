@@ -69,10 +69,10 @@ struct ExhaustableDomainTests {
 
     @Test("The full preset preserves primitive outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
     func fullParity(seed: UInt64) throws {
-        for maximumNodes in [Int?.none, 32] {
+        for maximumNodes in [32, 100] {
             let derived = StateSpaceLeaf.gen(
                 recursion: 0,
-                .budget(.custom(recursion: 0, nodes: maximumNodes ?? 100)),
+                .budget(.custom(recursion: 0, nodes: maximumNodes)),
                 .domain(.full)
             )
             let actual = try #example(#gen(derived, .uint64()), count: 100, seed: .numeric(seed))
@@ -104,11 +104,11 @@ struct ExhaustableDomainTests {
         }
     }
 
-    @Test("Shared types and container recipes retain their path's preset", arguments: [Int?.none, 256])
-    func inheritedDomains(maximumNodes: Int?) throws {
+    @Test("Shared types and container recipes retain their path's preset", arguments: [100, 256])
+    func inheritedDomains(maximumNodes: Int) throws {
         let generator = StateSpaceDiamond.gen(
             recursion: 4,
-            .budget(.custom(recursion: 4, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 4, nodes: maximumNodes)),
             .domain(.small)
         ).resize(100)
         let target = StateSpaceDiamond(
@@ -131,11 +131,11 @@ struct ExhaustableDomainTests {
         }
     }
 
-    @Test("Numeric overrides remain opaque to inherited and declared presets", arguments: [Int?.none, 128])
-    func overridesWin(maximumNodes: Int?) throws {
+    @Test("Numeric overrides remain opaque to inherited and declared presets", arguments: [100, 128])
+    func overridesWin(maximumNodes: Int) throws {
         let generator = StateSpaceDiamond.gen(
             recursion: 4,
-            .budget(.custom(recursion: 4, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 4, nodes: maximumNodes)),
             .domain(.tiny),
             overriding: ReflectiveGenerator<Int>.just(777)
         ).resize(100)
@@ -150,9 +150,9 @@ struct ExhaustableDomainTests {
         }
     }
 
-    @Test("Optional, set, and dictionary payloads inherit the domain policy", arguments: [Int?.none, 128])
-    func standardContainers(maximumNodes: Int?) throws {
-        let generator = StateSpaceContainers.gen(.budget(.custom(recursion: 10, nodes: maximumNodes ?? 100)), .domain(.tiny)).resize(100)
+    @Test("Optional, set, and dictionary payloads inherit the domain policy", arguments: [100, 128])
+    func standardContainers(maximumNodes: Int) throws {
+        let generator = StateSpaceContainers.gen(.budget(.custom(recursion: 10, nodes: maximumNodes)), .domain(.tiny)).resize(100)
         let samples = try #example(generator, count: 50, seed: 1337)
         #expect(samples.contains { $0.optional != nil })
         #expect(samples.contains { $0.dictionary.isEmpty == false })
@@ -401,9 +401,9 @@ struct ExhaustableDomainTests {
         try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
-    @Test("Examine and actual reflected output equality hold for recursive presets", arguments: ExhaustableDomain.allCases, [Int?.none, 64])
-    func recursiveRoundTrips(policy: ExhaustableDomain, maximumNodes: Int?) throws {
-        let generator = StateSpaceTree.gen(.budget(.custom(recursion: 4, nodes: maximumNodes ?? 100)), .domain(policy))
+    @Test("Examine and actual reflected output equality hold for recursive presets", arguments: ExhaustableDomain.allCases, [64, 100])
+    func recursiveRoundTrips(policy: ExhaustableDomain, maximumNodes: Int) throws {
+        let generator = StateSpaceTree.gen(.budget(.custom(recursion: 4, nodes: maximumNodes)), .domain(policy))
         let report = #examine(generator, .samples(50), .replay(1337), .suppress(.all)) { $0 == $1 }
         expectSuccessfulExamination(report, samples: 50)
         let samples = try #example(generator, count: 100, seed: 1337)
@@ -412,21 +412,15 @@ struct ExhaustableDomainTests {
         }
     }
 
-    @Test("Unbounded and bounded layers cache numeric policies separately without rebuilding repeated layers")
+    @Test("Layers cache numeric policies separately without rebuilding repeated layers")
     func policySharing() throws {
         let plan = try GeneratorDerivationPlan(for: StateSpaceLeaf.self, overrides: [:])
-        let plain = BudgetedGeneratorDerivation(plan: plan)
-        _ = plain.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: nil, domain: .tiny)
-        _ = plain.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: nil, domain: .small)
-        #expect(plain.built.count == 2)
-        _ = plain.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: nil, domain: .tiny)
-        #expect(plain.built.count == 2)
-        let budgeted = BudgetedGeneratorDerivation(plan: plain.plan)
-        _ = budgeted.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: 2, domain: .tiny)
-        _ = budgeted.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: 2, domain: .small)
-        #expect(budgeted.built.count == 2)
-        _ = budgeted.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: 2, domain: .tiny)
-        #expect(budgeted.built.count == 2)
+        let builder = BudgetedGeneratorDerivation(plan: plan)
+        _ = builder.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: 2, domain: .tiny)
+        _ = builder.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: 2, domain: .small)
+        #expect(builder.built.count == 2)
+        _ = builder.generator(for: StateSpaceLeaf.self, recursion: 0, nodes: 2, domain: .tiny)
+        #expect(builder.built.count == 2)
     }
 
     @Test("128-bit numeric presets wire exponential scaling into their low bits")

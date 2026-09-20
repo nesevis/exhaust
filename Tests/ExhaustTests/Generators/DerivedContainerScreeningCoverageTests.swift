@@ -4,12 +4,11 @@ import Testing
 
 @Suite("Derived container screening coverage")
 struct DerivedContainerScreeningCoverageTests {
-    @Test("Product arrays cover modeled cardinalities and transparent element fields", arguments: [Int?.none, 8, 16])
-    func productArrays(maximumNodes: Int?) throws {
+    @Test("Product arrays cover modeled cardinalities and transparent element fields", arguments: [8, 16, 100])
+    func productArrays(maximumNodes: Int) throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
-        let effectiveMaximumNodes = maximumNodes ?? 100
-        let maximumCount = (effectiveMaximumNodes - 2) / 3
-        let budgetLabel = String(effectiveMaximumNodes)
+        let maximumCount = (maximumNodes - 2) / 3
+        let budgetLabel = String(maximumNodes)
         let handwritten = #gen(ReflectiveGenerator<[ContainerScreeningElement]>.array(
             element,
             length: 0 ... maximumCount,
@@ -17,11 +16,11 @@ struct DerivedContainerScreeningCoverageTests {
         )) { ContainerScreeningProducts(values: $0) }
         let derived = ContainerScreeningProducts.gen(
             recursion: 2,
-            .budget(.custom(recursion: 2, nodes: effectiveMaximumNodes))
+            .budget(.custom(recursion: 2, nodes: maximumNodes))
         )
         for (name, generator) in [("derived", derived), ("handwritten", handwritten)] {
             let values = try containerScreeningValues(generator, label: "products-\(budgetLabel)-\(name)")
-            #expect(values.allSatisfy { 2 + 3 * $0.values.count <= effectiveMaximumNodes })
+            #expect(values.allSatisfy { 2 + 3 * $0.values.count <= maximumNodes })
             let lengths = Set(values.map { $0.values.count }).sorted()
             let elements = Set(values.flatMap { $0.values }.map { ($0.first ? 2 : 0) + ($0.second ? 1 : 0) }).sorted()
             if name == "derived" {
@@ -129,7 +128,7 @@ struct DerivedContainerScreeningCoverageTests {
         #expect(Set(pairs) == Set([0, 1, 2, 3]))
     }
 
-    @Test("A public element override exposes the product fields in an unbudgeted array")
+    @Test("A public element override exposes the product fields in a derived array")
     func suppliedProductElements() throws {
         let element = #gen(.bool(), .bool()) { ContainerScreeningElement(first: $0, second: $1) }
         let generator = ContainerScreeningProducts.gen(recursion: 2, overriding: element)

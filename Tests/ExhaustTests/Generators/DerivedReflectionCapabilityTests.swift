@@ -4,8 +4,8 @@ import Testing
 
 @Suite("Derived reflection capabilities")
 struct DerivedReflectionCapabilityTests {
-    @Test("Containers and nested products preserve their reflection capability", arguments: [Int?.none, 64], [false, true])
-    func containers(maximumNodes: Int?, pinned: Bool) {
+    @Test("Containers and nested products preserve their reflection capability", arguments: [64, 100], [false, true])
+    func containers(maximumNodes: Int, pinned: Bool) {
         #expect(derive(CapabilityArray.self, maximumNodes: maximumNodes, pinned: pinned).isReflective)
         #expect(derive(CapabilityDictionary.self, maximumNodes: maximumNodes, pinned: pinned).isReflective == false)
         #expect(derive(CapabilitySet.self, maximumNodes: maximumNodes, pinned: pinned).isReflective == false)
@@ -31,36 +31,36 @@ struct DerivedReflectionCapabilityTests {
         ).isReflective == false)
     }
 
-    @Test("Forward-only overrides remain forward-only inside derived products and arrays", arguments: [Int?.none, 64])
-    func overrides(maximumNodes: Int?) {
+    @Test("Forward-only overrides remain forward-only inside derived products and arrays", arguments: [64, 100])
+    func overrides(maximumNodes: Int) {
         let forwardOnly = ReflectiveGenerator<Int>.int(in: 0 ... 10).map { $0 + 1 }
         let reversible = ReflectiveGenerator<Int>.int(in: 0 ... 10).mapped(forward: { $0 + 1 }, backward: { $0 - 1 })
         let products = [
             CapabilityInteger.gen(
                 recursion: 0,
-                .budget(.custom(recursion: 0, nodes: maximumNodes ?? 100)),
+                .budget(.custom(recursion: 0, nodes: maximumNodes)),
                 overriding: forwardOnly
             ),
             CapabilityInteger.gen(
-                .budget(.custom(recursion: 3, nodes: maximumNodes ?? 100)),
+                .budget(.custom(recursion: 3, nodes: maximumNodes)),
                 overriding: forwardOnly
             ),
         ]
         #expect(products.allSatisfy { $0.isReflective == false })
         #expect(CapabilityArray.gen(
-            .budget(.custom(recursion: 10, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 10, nodes: maximumNodes)),
             overriding: forwardOnly
         ).isReflective == false)
         #expect(CapabilityInteger.gen(
-            .budget(.custom(recursion: 10, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 10, nodes: maximumNodes)),
             overriding: reversible
         ).isReflective)
     }
 
-    @Test("Recorded dictionary choices replay exactly", arguments: [Int?.none, 64])
-    func recordedChoicesReplay(maximumNodes: Int?) throws {
+    @Test("Recorded dictionary choices replay exactly", arguments: [64, 100])
+    func recordedChoicesReplay(maximumNodes: Int) throws {
         let generator = CapabilityDictionary.gen(
-            .budget(.custom(recursion: 3, nodes: maximumNodes ?? 100)),
+            .budget(.custom(recursion: 3, nodes: maximumNodes)),
             .domain(.tiny)
         )
         #expect(generator.isReflective == false)
@@ -130,16 +130,16 @@ private struct CapabilityInteger {
 
 private func derive<Value: __Exhaustable.Conformance>(
     _ type: Value.Type,
-    maximumNodes: Int?,
+    maximumNodes: Int,
     pinned: Bool
 ) -> ReflectiveGenerator<Value> {
     switch pinned {
         case true:
             type.gen(
                 recursion: 3,
-                .budget(.custom(recursion: 3, nodes: maximumNodes ?? 100))
+                .budget(.custom(recursion: 3, nodes: maximumNodes))
             )
         case false:
-            type.gen(.budget(.custom(recursion: 3, nodes: maximumNodes ?? 100)))
+            type.gen(.budget(.custom(recursion: 3, nodes: maximumNodes)))
     }
 }

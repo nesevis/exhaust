@@ -156,7 +156,7 @@ private func resolvedDerived<Value: __Exhaustable.Conformance, each Override>(
 private func preparedGenerator<Value: __Exhaustable.Conformance>(
     for type: Value.Type,
     recursion: RootRecursionBudget,
-    maximumNodes: Int?,
+    maximumNodes: Int,
     domain: ExhaustableDomain,
     overrides: [ObjectIdentifier: ReflectiveGenerator<Any>]
 ) -> ReflectiveGenerator<Value> {
@@ -230,7 +230,7 @@ private func rootGenerator<Value: __Exhaustable.Conformance>(
     from builder: BudgetedGeneratorDerivation,
     for type: Value.Type,
     recursion: RootRecursionBudget,
-    maximumNodes: Int?,
+    maximumNodes: Int,
     domain: ExhaustableDomain
 ) -> ReflectiveGenerator<Value> {
     requiring { try builder.root(for: type, recursion: recursion, maximumNodes: maximumNodes, domain: domain) }
@@ -240,7 +240,7 @@ private func rootGenerator<Value: __Exhaustable.Conformance>(
 private func builtGenerator<Value: __Exhaustable.Conformance>(
     for type: Value.Type,
     recursion: RootRecursionBudget,
-    maximumNodes: Int?,
+    maximumNodes: Int,
     domain: ExhaustableDomain,
     overrides: [ObjectIdentifier: ReflectiveGenerator<Any>]
 ) -> ReflectiveGenerator<Value> {
@@ -276,7 +276,7 @@ private let derivedGenerators = SendableBox<[DerivedGeneratorKey: Any]>([:])
 private struct DerivedGeneratorKey: Hashable, Sendable {
     let type: ObjectIdentifier
     let recursion: RecursionKey
-    let maximumNodes: Int?
+    let maximumNodes: Int
     let domain: ExhaustableDomain
 }
 

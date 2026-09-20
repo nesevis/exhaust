@@ -32,11 +32,11 @@ struct GenericDerivationTests {
         try expectReflectionRoundTrip(GenericScope<Int>.Pair<Bool>.gen().gen, value: .init(first: 7, second: true))
     }
 
-    @Test("Recursive generic enums terminate, reflect, and replay with either budget policy", arguments: [Int?.none, 31])
-    func recursiveEnums(maximumNodes: Int?) throws {
+    @Test("Recursive generic enums terminate, reflect, and replay across node ceilings", arguments: [31, 100])
+    func recursiveEnums(maximumNodes: Int) throws {
         let plan = try GeneratorDerivationPlan(for: GenericTree<Int>.self, overrides: [:])
         #expect(plan.types.count == 1)
-        let generator = GenericTree<Int>.gen(.budget(.custom(recursion: 4, nodes: maximumNodes ?? 100)), .domain(.tiny))
+        let generator = GenericTree<Int>.gen(.budget(.custom(recursion: 4, nodes: maximumNodes)), .domain(.tiny))
         let target = GenericTree<Int>.branch(.value(3), .branch(.empty, .value(5)))
         try expectReflectionRoundTrip(generator.gen, value: target)
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.all)) { $0 == $1 }

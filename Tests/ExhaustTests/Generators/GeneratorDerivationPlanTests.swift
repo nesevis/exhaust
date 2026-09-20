@@ -20,8 +20,8 @@ struct GeneratorDerivationPlanTests {
         try expectReflectionRoundTrip(ReflectiveGenerator<PlanEnvelope>.derived(.budget(.custom(recursion: 1, nodes: 100))).gen, value: target)
     }
 
-    @Test("Root construction preserves recursion diagnostics with and without a node ceiling", arguments: [Int?.none, 4], [false, true])
-    func rootRecursionDiagnostics(maximumNodes: Int?, pinned: Bool) throws {
+    @Test("Root construction preserves recursion diagnostics across node ceilings", arguments: [4, 100], [false, true])
+    func rootRecursionDiagnostics(maximumNodes: Int, pinned: Bool) throws {
         let plan = try GeneratorDerivationPlan(for: PlanEnvelope.self, overrides: [:])
         let builder = BudgetedGeneratorDerivation(plan: plan)
         #expect(throws: GeneratorDerivationError.insufficientRecursionBudget(type: "PlanEnvelope", minimum: 0, requested: -1)) {
@@ -159,7 +159,7 @@ struct GeneratorDerivationPlanTests {
     func recursiveArray() throws {
         let plan = try GeneratorDerivationPlan(for: PlanArrayTree.self, overrides: [:])
         let derivation = BudgetedGeneratorDerivation(plan: plan)
-        let base = derivation.generator(for: PlanArrayTree.self, recursion: 0, nodes: nil)
+        let base = derivation.generator(for: PlanArrayTree.self, recursion: 0, nodes: 2)
         #expect(try plan.minimumRecursionBudget(for: PlanArrayTree.self, at: 0) == 0)
         #expect(derivation.built.count == 1)
         #expect(derivation.built.keys.allSatisfy { $0.recursion >= 0 })
@@ -167,7 +167,7 @@ struct GeneratorDerivationPlanTests {
         #expect(samples.allSatisfy { $0 == .children([]) })
         try expectReflectionRoundTrip(base.gen, value: .children([]))
         let children: [PlanArrayTree] = [.children([])]
-        #expect(throws: ReflectionError.couldNotReflectOnZipElement(String(describing: children))) {
+        #expect(throws: ReflectionError.inputWasOutOfGeneratorRange("1", range: "0...0")) {
             try Interpreters.reflect(base.gen, with: .children(children))
         }
         try expectReflectionRoundTrip(
@@ -315,14 +315,14 @@ struct GeneratorDerivationPlanTests {
         #expect(samples.allSatisfy { $0.values == [99] })
     }
 
-    @Test("Ordinary recursion preserves values and the following random draw", arguments: [UInt64(0), 1, 42])
+    @Test("A sufficient node ceiling preserves recursive values and the following random draw", arguments: [UInt64(0), 1, 42])
     func preservesRandomStream(seed: UInt64) throws {
         let plan = try GeneratorDerivationPlan(for: PlanBinaryTree.self, overrides: [:])
         let builder = BudgetedGeneratorDerivation(plan: plan)
-        let derived = try builder.root(
+        let derived = builder.generator(
             for: PlanBinaryTree.self,
-            recursion: .pinned(4),
-            maximumNodes: nil
+            recursion: 4,
+            nodes: 31
         )
         let reference = referenceBinaryTree(recursion: 4)
         try expectMatchingRandomStream(
@@ -338,14 +338,14 @@ struct GeneratorDerivationPlanTests {
     func sharesLayers() throws {
         let plan = try GeneratorDerivationPlan(for: PlanBinaryTree.self, overrides: [:])
         let derivation = BudgetedGeneratorDerivation(plan: plan)
-        _ = derivation.generator(for: PlanBinaryTree.self, recursion: 6, nodes: nil)
+        _ = derivation.generator(for: PlanBinaryTree.self, recursion: 6, nodes: 127)
         #expect(derivation.plan.types.count == 1)
-        #expect(derivation.built.count == 4)
+        #expect(derivation.built.count == 3)
         #expect(Set(derivation.built.keys.map(\.recursion)) == [0, 2, 6])
         for recursion in 0 ... 6 {
-            _ = derivation.generator(for: PlanBinaryTree.self, recursion: recursion, nodes: nil)
+            _ = derivation.generator(for: PlanBinaryTree.self, recursion: recursion, nodes: 127)
         }
-        #expect(derivation.built.count == 12)
+        #expect(derivation.built.count == 11)
     }
 }
 
