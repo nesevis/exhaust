@@ -11,7 +11,7 @@ package extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
         resolvedDerived(
             for: Output.self,
             settings: settings,
-            scaling: scaling,
+            rootRecursion: drawnRootRecursion(scaling: scaling),
             overriding: repeat each overrides
         )
     }
@@ -24,8 +24,8 @@ package extension ReflectiveGenerator where Output: __Exhaustable.Conformance {
     ) -> ReflectiveGenerator<Output> {
         resolvedDerived(
             for: Output.self,
-            recursion: recursion,
             settings: settings,
+            rootRecursion: pinnedRootRecursion(recursion),
             overriding: repeat each overrides
         )
     }
@@ -64,7 +64,7 @@ public extension __Exhaustable.Conformance {
         resolvedDerived(
             for: Self.self,
             settings: settings,
-            scaling: scaling,
+            rootRecursion: drawnRootRecursion(scaling: scaling),
             overriding: repeat each overrides
         )
     }
@@ -93,8 +93,8 @@ public extension __Exhaustable.Conformance {
     ) -> ReflectiveGenerator<Self> {
         resolvedDerived(
             for: Self.self,
-            recursion: recursion,
             settings: settings,
+            rootRecursion: pinnedRootRecursion(recursion),
             overriding: repeat each overrides
         )
     }
@@ -105,7 +105,7 @@ public extension __Exhaustable.Conformance {
 private func resolvedDerived<Value: __Exhaustable.Conformance, each Override>(
     for type: Value.Type,
     settings: [ExhaustableSettings],
-    scaling: SizeScaling<Int>,
+    rootRecursion: (ExhaustableBudget) -> RootRecursionBudget,
     overriding overrides: repeat ReflectiveGenerator<each Override>
 ) -> ReflectiveGenerator<Value> {
     let descriptor = type.__generatorDescriptor
@@ -116,36 +116,29 @@ private func resolvedDerived<Value: __Exhaustable.Conformance, each Override>(
     )
     return preparedGenerator(
         for: type,
-        recursion: .drawn(
-            ceiling: resolved.budget.recursion,
-            scaling: recursionScaling(scaling)
-        ),
+        recursion: rootRecursion(resolved.budget),
         maximumNodes: resolved.budget.nodes,
         domain: resolved.domain,
         overrides: overrideTable(repeat each overrides)
     )
 }
 
-private func resolvedDerived<Value: __Exhaustable.Conformance, each Override>(
-    for type: Value.Type,
-    recursion: Int,
-    settings: [ExhaustableSettings],
-    overriding overrides: repeat ReflectiveGenerator<each Override>
-) -> ReflectiveGenerator<Value> {
+/// Builds the root policy that draws recursive fuel from the resolved budget.
+private func drawnRootRecursion(
+    scaling: SizeScaling<Int>
+) -> (ExhaustableBudget) -> RootRecursionBudget {
+    let erasedScaling = recursionScaling(scaling)
+    return { budget in
+        .drawn(ceiling: budget.recursion, scaling: erasedScaling)
+    }
+}
+
+/// Builds the root policy that ignores the resolved recursive-fuel ceiling.
+private func pinnedRootRecursion(
+    _ recursion: Int
+) -> (ExhaustableBudget) -> RootRecursionBudget {
     precondition(recursion >= 0, "Recursive fuel must be nonnegative")
-    let descriptor = type.__generatorDescriptor
-    let resolved = ResolvedExhaustableSettings(
-        settings,
-        budget: descriptor.budget,
-        domain: descriptor.domain
-    )
-    return preparedGenerator(
-        for: type,
-        recursion: .pinned(recursion),
-        maximumNodes: resolved.budget.nodes,
-        domain: resolved.domain,
-        overrides: overrideTable(repeat each overrides)
-    )
+    return { _ in .pinned(recursion) }
 }
 
 /// Returns the completed derivation for these arguments, building it on first request.

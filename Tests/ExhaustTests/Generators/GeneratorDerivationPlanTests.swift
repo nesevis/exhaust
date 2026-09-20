@@ -9,6 +9,8 @@ struct GeneratorDerivationPlanTests {
     @Test("Acyclic products do not consume recursive fuel")
     func finiteProducts() throws {
         let plan = try GeneratorDerivationPlan(for: PlanEnvelope.self, overrides: [:])
+        #expect(plan.canReachRecursiveComponent(PlanEnvelope.self) == false)
+        #expect(plan.canReachRecursiveComponent(PlanLeaf.self) == false)
         #expect(try plan.minimumRecursionBudget(for: PlanEnvelope.self, at: 3) == 0)
         #expect(try plan.minimumRecursionBudget(for: PlanEnvelope.self, at: 0) == 0)
         let generator = ReflectiveGenerator<PlanEnvelope>.derived(.budget(.custom(recursion: 3, nodes: 100)), overriding: .int(in: 0 ... 9))
@@ -89,6 +91,8 @@ struct GeneratorDerivationPlanTests {
     func mutualRecursion() throws {
         let plan = try GeneratorDerivationPlan(for: PlanFirst.self, overrides: [:])
         #expect(plan.types.count == 2)
+        #expect(plan.canReachRecursiveComponent(PlanFirst.self))
+        #expect(plan.canReachRecursiveComponent(PlanSecond.self))
         #expect(try plan.minimumRecursionBudget(for: PlanFirst.self, at: 4) == 1)
         #expect(try plan.minimumRecursionBudget(for: PlanSecond.self, at: 4) == 0)
         let base = ReflectiveGenerator<PlanFirst>.derived(recursion: 1)
@@ -122,6 +126,22 @@ struct GeneratorDerivationPlanTests {
             dependencyPath: ["PlanCycleFirst", "PlanCycleSecond", "PlanCycleFirst"]
         )) {
             try plan.minimumRecursionBudget(for: PlanCycleFirst.self, at: 10)
+        }
+    }
+
+    @Test("An empty container does not replace the direct dependency in an impossible-construction diagnostic")
+    func containerDoesNotBlockConstruction() throws {
+        let plan = try GeneratorDerivationPlan(for: PlanDiagnosticRoot.self, overrides: [:])
+        #expect(throws: GeneratorDerivationError.noFiniteConstruction(
+            type: "PlanDiagnosticRoot",
+            dependencyPath: [
+                "PlanDiagnosticRoot",
+                "PlanRequiredCycleFirst",
+                "PlanRequiredCycleSecond",
+                "PlanRequiredCycleFirst",
+            ]
+        )) {
+            try plan.minimumRecursionBudget(for: PlanDiagnosticRoot.self, at: 10)
         }
     }
 
@@ -422,6 +442,22 @@ private indirect enum PlanCycleFirst {
 @Exhaustable
 private indirect enum PlanCycleSecond {
     case first(PlanCycleFirst)
+}
+
+@Exhaustable
+private struct PlanDiagnosticRoot {
+    let emptyCapableBlocker: [PlanCycleFirst]
+    let requiredBlocker: PlanRequiredCycleFirst
+}
+
+@Exhaustable
+private indirect enum PlanRequiredCycleFirst {
+    case second(PlanRequiredCycleSecond)
+}
+
+@Exhaustable
+private indirect enum PlanRequiredCycleSecond {
+    case first(PlanRequiredCycleFirst)
 }
 
 @Exhaustable(.budget(.custom(recursion: 0, nodes: 100)))

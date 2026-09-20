@@ -89,6 +89,8 @@ final class GeneratorDerivationPlan {
     private var minimumRecursionBudgets: [ObjectIdentifier: Int] = [:]
     private var componentByType: [ObjectIdentifier: Int] = [:]
     private var recursiveComponents: Set<Int> = []
+    private var componentsReachingRecursiveComponent: Set<Int> = []
+
     private var defaults: [DefaultGeneratorKey: ReflectiveGenerator<Any>] = [:]
     private var activeSpecializations: [DeclarationKey: [Any.Type]] = [:]
 
@@ -185,6 +187,14 @@ final class GeneratorDerivationPlan {
         }
     }
 
+    /// Reports whether the type can reach any recursive strongly connected component.
+    func canReachRecursiveComponent(_ type: Any.Type) -> Bool {
+        guard let component = componentByType[ObjectIdentifier(type)] else {
+            return false
+        }
+        return componentsReachingRecursiveComponent.contains(component)
+    }
+
     /// Reports whether the edge lies inside a recursive strongly connected component.
     func isRecursiveEdge(from source: ObjectIdentifier, to target: ObjectIdentifier) -> Bool {
         guard let sourceComponent = componentByType[source],
@@ -274,7 +284,7 @@ final class GeneratorDerivationPlan {
         return minimum <= min(selected, plan(for: target).budget.recursion)
     }
 
-    /// Finds recursive components once, so generator construction can classify an edge with two dictionary lookups.
+    /// Finds recursive components and records their reverse reachability as Tarjan closes them in successor-first order.
     private func analyzeRecursiveComponents() {
         let adjacency = Dictionary(uniqueKeysWithValues: discoveryOrder.map { reference in
             var targets: [ObjectIdentifier] = []
@@ -323,9 +333,21 @@ final class GeneratorDerivationPlan {
                     break
                 }
             }
+            let component = nextComponent
             let isRecursive = members.count > 1 || adjacency[reference, default: []].contains(reference)
             if isRecursive {
-                recursiveComponents.insert(nextComponent)
+                recursiveComponents.insert(component)
+            }
+            let reachesRecursiveComponent = isRecursive || members.contains { member in
+                adjacency[member, default: []].contains { target in
+                    guard let targetComponent = componentByType[target] else {
+                        preconditionFailure("Tarjan must close every successor component first")
+                    }
+                    return componentsReachingRecursiveComponent.contains(targetComponent)
+                }
+            }
+            if reachesRecursiveComponent {
+                componentsReachingRecursiveComponent.insert(component)
             }
             nextComponent += 1
         }
@@ -413,7 +435,7 @@ final class GeneratorDerivationPlan {
         throw GeneratorDerivationError.unsupportedPayload(type: String(describing: type))
     }
 
-    /// Follows one blocking dependency in declaration order until it reaches a cycle or an empty type descriptor.
+    /// Follows one required direct dependency in declaration order until it reaches a cycle or an empty type descriptor.
     private func blockingPath(from root: ObjectIdentifier) -> [String] {
         var path: [String] = []
         var visited: Set<ObjectIdentifier> = []
@@ -442,8 +464,8 @@ final class GeneratorDerivationPlan {
                 nil
             case let .derivedType(reference):
                 minimumRecursionBudgets[reference] == nil ? reference : nil
-            case let .container(_, children):
-                children.lazy.compactMap(blockingReference).first
+            case .container:
+                nil
         }
     }
 }

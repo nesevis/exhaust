@@ -7,7 +7,7 @@ import Testing
 struct DerivedDepthControlTests {
     @Test("Derived generation and reflection record tagged depth controls")
     func taggedDepth() throws {
-        let generator = DepthControlEnvelope.gen(.budget(.custom(recursion: 20, nodes: 3)))
+        let generator = DepthControlTree.gen(.budget(.custom(recursion: 20, nodes: 3)))
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
         let (value, generated) = try #require(try interpreter.next())
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: value))
@@ -35,22 +35,30 @@ struct DerivedDepthControlTests {
             .exponentialFrom(origin: Int.min), .exponentialFrom(origin: 7), .exponentialFrom(origin: Int.max),
         ]
         let layers = (0 ... 20).map {
-            DepthControlEnvelope.gen(
+            DepthControlTree.gen(
                 recursion: $0,
                 .budget(.custom(recursion: $0, nodes: 3))
             )
         }
         for scaling in scalings {
-            let generator = DepthControlEnvelope.gen(
+            let generator = DepthControlTree.gen(
                 .budget(.custom(recursion: 20, nodes: 3)),
                 scaling: scaling
             )
             let reference = ReflectiveGenerator<Int>.int(in: 0 ... 20, scaling: scaling).gen._bound(
                 forward: { recursion in layers[recursion].gen.erase() },
-                backward: { (_: DepthControlEnvelope) in 20 }
+                backward: { (_: DepthControlTree) in 20 }
             )
             try expectMatchingRandomStream(generator.gen, reference: reference, seed: 42, size: size, draws: 30)
         }
+    }
+
+    @Test("Acyclic derivation omits recursive fuel choices")
+    func acyclicFuel() throws {
+        let generator = DepthControlEnvelope.gen(.budget(.custom(recursion: 20, nodes: 3)))
+        var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
+        let (_, generated) = try #require(try interpreter.next())
+        #expect(depthControls(in: generated).isEmpty)
     }
 
     @Test("Examine accepts different depth allowances in Gen.recursive")
@@ -124,6 +132,7 @@ private struct DepthControlEnvelope: Equatable {
     let payload: DepthControlLeaf
 }
 
+@Exhaustable
 private indirect enum DepthControlTree: Equatable {
     case leaf
     case node(DepthControlTree)

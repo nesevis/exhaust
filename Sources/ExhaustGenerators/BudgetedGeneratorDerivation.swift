@@ -22,6 +22,12 @@ final class BudgetedGeneratorDerivation {
         domain: ExhaustableDomain = .full
     ) throws -> ReflectiveGenerator<Value> {
         _ = try plan.minimumRecursionBudget(for: type, at: recursion.ceiling)
+        let effectiveRecursion = switch (recursion, plan.canReachRecursiveComponent(type)) {
+            case (.drawn, false):
+                RootRecursionBudget.pinned(0)
+            case _:
+                recursion
+        }
         guard maximumNodes > 0 else {
             throw GeneratorDerivationError.invalidNodeBudget(type: String(describing: type), nodes: maximumNodes)
         }
@@ -42,7 +48,7 @@ final class BudgetedGeneratorDerivation {
             build: { allowance in
                 rootLayer(
                     for: type,
-                    recursion: recursion,
+                    recursion: effectiveRecursion,
                     nodes: allowance,
                     domain: domain
                 )
@@ -85,9 +91,15 @@ final class BudgetedGeneratorDerivation {
         nodes: Int,
         domain: ExhaustableDomain = .full
     ) -> ReflectiveGenerator<Value> {
+        let effectiveRecursion = switch plan.canReachRecursiveComponent(type) {
+            case true:
+                recursion
+            case false:
+                0
+        }
         let key = NodeBudgetKey(
             type: ObjectIdentifier(type),
-            recursion: recursion,
+            recursion: effectiveRecursion,
             nodes: nodes,
             domain: domain
         )
@@ -100,7 +112,7 @@ final class BudgetedGeneratorDerivation {
             guard let recursionAllowances = plan.recursionAllowances(
                 for: entry.payloads,
                 from: key.type,
-                budget: recursion
+                budget: effectiveRecursion
             ),
                 let minima = budget.minimumNodes(
                     for: entry.payloads,
