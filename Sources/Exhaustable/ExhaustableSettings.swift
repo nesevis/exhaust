@@ -91,7 +91,7 @@ public enum ExhaustableSettings: Sendable {
     /// Selects recursive fuel and the complete structural node ceiling. Defaults to ``ExhaustableBudget/standard``.
     case budget(ExhaustableBudget)
 
-    /// Selects the sampled domains of automatically generated payloads. Defaults to ``ExhaustableDomain/full``.
+    /// Selects the sampled domains of automatically generated payloads. Defaults to ``ExhaustableDomain/full``; use ``ExhaustableDomain/custom(numericMagnitude:scaling:)`` for a numeric policy outside the named presets.
     case domain(ExhaustableDomain)
 }
 

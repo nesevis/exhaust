@@ -7,64 +7,147 @@ import Testing
 
 @Suite("Derived domains")
 struct ExhaustableDomainTests {
-    @Test("Nested presets retain an operand no wider than either input")
-    func presetLimit() {
-        let preset = #gen(.element(from: ExhaustableDomain.allCases))
-        let inputs = #gen(preset, preset)
-        #exhaust(inputs) { policy, ceiling in
+    @Test("Nested domains retain bounds no wider than either input")
+    func nestedLimit() {
+        let scaling = #gen(.element(from: [ExhaustableSizeScaling.constant, .linear, .exponential]))
+        // Magnitudes stay small so custom domains tie with `.tiny` and `.small`.
+        let domain = #gen(.bool(), .element(from: presets), .int(in: 0 ... 200), scaling) { isPreset, preset, magnitude, scaling in
+            switch isPreset {
+                case true:
+                    preset
+                case false:
+                    ExhaustableDomain.custom(numericMagnitude: magnitude, scaling: scaling)
+            }
+        }
+        let inputs = #gen(domain, domain)
+        #exhaust(inputs, .budget(.extensive)) { policy, ceiling in
             let result = policy.limited(by: ceiling)
-            #expect(result == policy || result == ceiling)
-            #expect(result <= policy)
-            #expect(result <= ceiling)
+            for operand in [policy, ceiling] {
+                #expect(isWithin(result.numeric?.magnitude, operand.numeric?.magnitude))
+                #expect(isWithin(result.defaultSequenceLengthMaximum, operand.defaultSequenceLengthMaximum))
+                #expect(isWithin(result.defaultDateDayRadius, operand.defaultDateDayRadius))
+            }
+            #expect(result.numeric == policy.numeric || result.numeric == ceiling.numeric)
+            if policy.numeric?.magnitude == ceiling.numeric?.magnitude {
+                #expect(result.numeric == ceiling.numeric)
+            }
         }
     }
 
-    @Test("Numeric presets wire exponential scaling into derived generators")
+    @Test("Numeric presets wire their scaling policies into derived generators")
     func numericBounds() {
         let preset = #gen(.element(from: [ExhaustableDomain.tiny, .small, .medium]))
         let inputs = #gen(preset, .int(in: 1 ... 100), .uint64())
         #exhaust(inputs, .budget(.extensive)) { policy, size, seed in
-            let magnitude = try #require(policy.numericMagnitude)
+            let numeric = try #require(policy.numeric)
+            let magnitude = numeric.magnitude
             let generator = StateSpaceNumbers.gen(recursion: 0, .domain(policy)).resize(size)
             var interpreter = ValueInterpreter(generator.gen, seed: seed, maxRuns: 1)
             let sample = try #require(try interpreter.next())
-            #expect(exponentialSamplingContains(
+            #expect(samplingContains(
                 sample.signed,
                 lowerBound: Int8(clamping: -magnitude),
                 upperBound: Int8(clamping: magnitude),
+                scaling: numeric.scaling,
                 size: size
             ))
-            #expect(exponentialSamplingContains(
+            #expect(samplingContains(
                 sample.unsigned,
                 lowerBound: UInt8.zero,
                 upperBound: UInt8(clamping: magnitude),
+                scaling: numeric.scaling,
                 size: size
             ))
             let floatingBound = Double(magnitude)
-            #expect(exponentialSamplingContains(
+            #expect(samplingContains(
                 sample.floatingPoint,
                 lowerBound: -floatingBound,
                 upperBound: floatingBound,
+                scaling: numeric.scaling,
                 size: size
             ))
             try expectReflectionRoundTrip(generator.gen, value: sample)
         }
     }
 
-    @Test("Tiny integers sample the rounded size-scaled range while reflecting beyond it", arguments: 1 ... 100)
-    func tinySizeRamp(size: Int) throws {
+    @Test("Tiny integers sample their complete range at every size while reflecting beyond it", arguments: 1 ... 100)
+    func tinySizeRange(size: Int) throws {
         let generator = StateSpaceLeaf.gen(recursion: 0, .domain(.tiny)).resize(size)
-        let magnitude = Int((Double(size) / 10).rounded())
+        let magnitude = 10
         let samples = try #example(generator, count: 50, seed: 1337)
         #expect(samples.allSatisfy { (-magnitude ... magnitude).contains($0.value) })
-        if size >= 50 {
-            #expect(samples.contains { $0.value != 0 })
-        }
+        #expect(samples.contains { abs($0.value) > magnitude / 2 })
         for value in [-magnitude, 0, magnitude] {
             try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: value))
         }
         try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: magnitude + 1))
         try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: -magnitude - 1))
+    }
+
+    @Test("Custom domains select numeric magnitude and scaling without bounding other payloads")
+    func customNumericPolicy() throws {
+        let constant = ExhaustableDomain.custom(numericMagnitude: 7, scaling: .constant)
+        let linear = ExhaustableDomain.custom(numericMagnitude: 70, scaling: .linear)
+        let exponential = ExhaustableDomain.custom(numericMagnitude: 700, scaling: .exponential)
+        #expect(constant.numeric?.magnitude == 7)
+        #expect(constant.numeric?.scaling == .constant)
+        #expect(constant.defaultSequenceLengthMaximum == nil)
+        #expect(constant.defaultDateDayRadius == nil)
+
+        for (policy, size) in [(constant, 1), (linear, 25), (exponential, 50)] {
+            let numeric = try #require(policy.numeric)
+            let magnitude = numeric.magnitude
+            let generator = StateSpaceLeaf.gen(recursion: 0, .domain(policy)).resize(size)
+            let samples = try #example(generator, count: 100, seed: 1337)
+            #expect(samples.allSatisfy {
+                samplingContains(
+                    $0.value,
+                    lowerBound: -magnitude,
+                    upperBound: magnitude,
+                    scaling: numeric.scaling,
+                    size: size
+                )
+            })
+            try expectReflectionRoundTrip(
+                generator.gen,
+                value: StateSpaceLeaf(value: magnitude + 1)
+            )
+        }
+        let constantSamples = try #example(
+            StateSpaceLeaf.gen(recursion: 0, .domain(constant)).resize(1),
+            count: 100,
+            seed: 1337
+        )
+        #expect(constantSamples.contains { abs($0.value) > 3 })
+    }
+
+    @Test("Nested custom numeric policies retain inherited sequence and date ceilings")
+    func customPolicyInheritance() {
+        let custom = ExhaustableDomain.custom(numericMagnitude: 5, scaling: .linear)
+        let inherited = ExhaustableDomain.tiny.limited(by: custom)
+        #expect(inherited.numeric?.magnitude == 5)
+        #expect(inherited.numeric?.scaling == .linear)
+        #expect(inherited.defaultSequenceLengthMaximum == 10)
+        #expect(inherited.defaultDateDayRadius == 10)
+    }
+
+    @Test("Small is constant while medium grows linearly")
+    func presetNumericScaling() throws {
+        let small = try #example(
+            StateSpaceLeaf.gen(recursion: 0, .domain(.small)).resize(1),
+            count: 100,
+            seed: 1337
+        )
+        #expect(small.allSatisfy { (-100 ... 100).contains($0.value) })
+        #expect(small.contains { abs($0.value) > 50 })
+
+        let medium = try #example(
+            StateSpaceLeaf.gen(recursion: 0, .domain(.medium)).resize(1),
+            count: 100,
+            seed: 1337
+        )
+        #expect(medium.allSatisfy { abs($0.value) <= 100 })
+        #expect(medium.contains { abs($0.value) > 10 })
     }
 
     @Test("The full preset preserves primitive outputs and subsequent random draws", arguments: [UInt64(0), 42, 1337])
@@ -89,6 +172,10 @@ struct ExhaustableDomainTests {
     @Test("Annotations select defaults and both factory forms can override the root")
     func annotationAndFactoryPrecedence() throws {
         #expect(StateSpaceSmall.__generatorDescriptor.domain == .small)
+        #expect(
+            StateSpaceCustom.__generatorDescriptor.domain
+                == .custom(numericMagnitude: 7, scaling: .linear)
+        )
         let target = StateSpaceSmall(value: 500)
         try expectReflectionRoundTrip(StateSpaceSmall.gen().gen, value: target)
         try expectReflectionRoundTrip(StateSpaceSmall.gen(.domain(.medium)).gen, value: target)
@@ -401,7 +488,7 @@ struct ExhaustableDomainTests {
         try expectReflectionRoundTrip(generator.gen, value: StateSpaceLeaf(value: -magnitude - 1))
     }
 
-    @Test("Examine and actual reflected output equality hold for recursive presets", arguments: ExhaustableDomain.allCases, [64, 100])
+    @Test("Examine and actual reflected output equality hold for recursive presets", arguments: presets, [64, 100])
     func recursiveRoundTrips(policy: ExhaustableDomain, maximumNodes: Int) throws {
         let generator = StateSpaceTree.gen(.budget(.custom(recursion: 4, nodes: maximumNodes)), .domain(policy))
         let report = #examine(generator, .samples(50), .replay(1337), .suppress(.all)) { $0 == $1 }
@@ -423,13 +510,14 @@ struct ExhaustableDomainTests {
         #expect(builder.built.count == 2)
     }
 
-    @Test("128-bit numeric presets wire exponential scaling into their low bits")
+    @Test("128-bit numeric presets wire their scaling policies into their low bits")
     func wideIntegerScaling() {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
             let preset = #gen(.element(from: [ExhaustableDomain.tiny, .small, .medium]))
             let inputs = #gen(preset, .int(in: 1 ... 100), .uint64())
             #exhaust(inputs, .budget(.extensive)) { policy, size, seed in
-                let magnitude = try #require(policy.numericMagnitude)
+                let numeric = try #require(policy.numeric)
+                let magnitude = numeric.magnitude
                 let signedGenerator = Int128.defaultGenerator(domain: policy).resize(size)
                 let unsignedGenerator = UInt128.defaultGenerator(domain: policy).resize(size)
                 var signedInterpreter = ValueInterpreter(signedGenerator.gen, seed: seed, maxRuns: 1)
@@ -439,17 +527,19 @@ struct ExhaustableDomainTests {
                 let signedBits = UInt128(bitPattern: signed)
                 let encodedSigned = (signedBits << 1) ^ UInt128(bitPattern: signed >> 127)
                 #expect(encodedSigned >> 64 == 0)
-                #expect(exponentialSamplingContains(
+                #expect(samplingContains(
                     UInt64(truncatingIfNeeded: encodedSigned),
                     lowerBound: 0,
-                    upperBound: UInt64(magnitude * 2),
+                    upperBound: UInt64(magnitude) * 2,
+                    scaling: numeric.scaling,
                     size: size
                 ))
                 #expect(unsigned >> 64 == 0)
-                #expect(exponentialSamplingContains(
+                #expect(samplingContains(
                     UInt64(truncatingIfNeeded: unsigned),
                     lowerBound: 0,
                     upperBound: UInt64(magnitude),
+                    scaling: numeric.scaling,
                     size: size
                 ))
             }
@@ -492,6 +582,11 @@ private struct StateSpaceLeaf: Equatable {
 
 @Exhaustable(.domain(.small))
 private struct StateSpaceSmall: Equatable {
+    let value: Int
+}
+
+@Exhaustable(.domain(.custom(numericMagnitude: 7, scaling: .linear)))
+private struct StateSpaceCustom: Equatable {
     let value: Int
 }
 
@@ -545,21 +640,43 @@ private indirect enum StateSpaceTree: Equatable {
 
 // MARK: - Helpers
 
+private let presets: [ExhaustableDomain] = [.tiny, .small, .medium, .full]
+
+/// Treats `nil` as unbounded.
+private func isWithin(_ limit: Int?, _ bound: Int?) -> Bool {
+    guard let bound else {
+        return true
+    }
+    guard let limit else {
+        return false
+    }
+    return limit <= bound
+}
+
 private func sizeScaledMaximum(_ maximum: Int, size: Int) -> Int {
     min(maximum, Int((Double(maximum + 1) * Double(size) / 100).rounded()))
 }
 
-private func exponentialSamplingContains<Value: BitPatternConvertible>(
+private func samplingContains<Value: BitPatternConvertible>(
     _ value: Value,
     lowerBound: Value,
     upperBound: Value,
+    scaling: ExhaustableSizeScaling,
     size: Int
 ) -> Bool {
-    Gen.applyScaling(
+    let resolvedScaling: ChooseBitsScaling = switch scaling {
+        case .constant:
+            .constant()
+        case .linear:
+            .linear(originBits: nil)
+        case .exponential:
+            .exponential(originBits: nil)
+    }
+    return Gen.applyScaling(
         min: lowerBound.bitPattern64,
         max: upperBound.bitPattern64,
         tag: Value.tag,
-        scaling: .exponential(originBits: nil),
+        scaling: resolvedScaling,
         size: UInt64(size)
     ).contains(value.bitPattern64)
 }
