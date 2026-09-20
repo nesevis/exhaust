@@ -202,10 +202,11 @@ extension ContainerCardinality {
                     case true:
                         Gen.chooseDerived(
                             in: UInt64(0) ... UInt64(reflecting),
-                            samplingWithin: UInt64(0) ... UInt64(sampling)
+                            samplingWithin: UInt64(0) ... UInt64(sampling),
+                            scaling: .exponential
                         )
                     case false:
-                        Gen.choose(in: UInt64(0) ... UInt64(reflecting), scaling: .linear)
+                        Gen.choose(in: UInt64(0) ... UInt64(reflecting), scaling: .exponential)
                 }
         }
     }
@@ -224,7 +225,7 @@ extension [AnyGenerator] {
 ///
 /// A domain or node ceiling narrows what the derivation generates, not what a test can reduce from, so a value that arrives through `reflecting:` with more elements than this ceiling still decomposes.
 func derivedLengths(upTo maximum: Int) -> Generator<UInt64> {
-    Gen.chooseDerived(in: UInt64(0) ... UInt64(maximum), scaling: .linear)
+    Gen.chooseDerived(in: UInt64(0) ... UInt64(maximum), scaling: .exponential)
 }
 
 extension ReflectiveGenerator {
@@ -246,10 +247,11 @@ private func boundedContainer<Value>(
         case true:
             Gen.chooseDerived(
                 in: reflectableRange,
-                samplingWithin: UInt64(0) ... UInt64(maximumGeneratedCount)
+                samplingWithin: UInt64(0) ... UInt64(maximumGeneratedCount),
+                scaling: .exponential
             )
         case false:
-            Gen.choose(in: reflectableRange, scaling: .linear)
+            Gen.choose(in: reflectableRange, scaling: .exponential)
     }
     let generator: Generator<Value> = countGenerator._bound(
         forward: { selectedCount in layers[Int(selectedCount)] },

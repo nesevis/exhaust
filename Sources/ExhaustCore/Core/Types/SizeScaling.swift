@@ -31,8 +31,22 @@ public enum SizeScaling<Bound: Sendable>: Sendable {
 package extension SizeScaling where Bound: BitPatternConvertible {
     /// Erases this typed scaling into the type-erased ``ChooseBitsScaling`` stored on ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)``.
     var erased: ChooseBitsScaling? {
+        let kind = erasedKind
+        guard case .constant = kind else {
+            return ChooseBitsScaling(kind: kind, samplingBounds: nil)
+        }
+        return nil
+    }
+
+    /// Retains separate sampling bounds for an operation whose wider declared range remains available to reflection and reduction.
+    func erased(samplingWithin samplingBounds: ClosedRange<UInt64>) -> ChooseBitsScaling {
+        ChooseBitsScaling(kind: erasedKind, samplingBounds: samplingBounds)
+    }
+
+    /// Converts the typed strategy without deciding whether constant scaling needs an explicit representation.
+    private var erasedKind: ChooseBitsScaling.Kind {
         switch self {
-            case .constant: nil
+            case .constant: .constant
             case .linear: .linear(originBits: nil)
             case let .linearFrom(origin): .linear(originBits: origin.bitPattern64)
             case .exponential: .exponential(originBits: nil)

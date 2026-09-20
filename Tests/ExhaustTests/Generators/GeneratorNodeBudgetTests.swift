@@ -66,23 +66,22 @@ struct GeneratorNodeBudgetTests {
         }
     }
 
-    @Test("The root allowance ramps with size", arguments: [UInt64(1), 25, 50, 100])
+    @Test("The root allowance ramps container-driven nodes with size", arguments: [UInt64(1), 25, 50, 100])
     func sizeRamping(size: UInt64) throws {
         let generator = BudgetRose.gen(recursion: 5, .budget(.custom(recursion: 5, nodes: 32)))
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: size)
-        let allowance = 2 + Int(30 * size / 100)
+        let allowance = BudgetRose.minimumNodes + Int(30 * size / 100)
+        let maximumChildCount = UInt64(max(0, (allowance - BudgetRose.minimumNodes) / BudgetRose.minimumNodes))
         var counts: [Int] = []
         for _ in 0 ..< 30 {
-            let (value, _) = try #require(try interpreter.next())
+            let (value, tree) = try #require(try interpreter.next())
             counts.append(value.nodes)
             #expect(value.nodes <= allowance)
+            #expect(unsignedChoiceRanges(in: tree).contains(0 ... maximumChildCount))
         }
-        switch allowance {
-            case BudgetRose.minimumNodes:
-                // At size 1 the ramped allowance is the minimum itself, so no draw can exceed it.
-                break
-            default:
-                #expect(counts.contains { $0 > BudgetRose.minimumNodes }, "every draw stayed at the minimum, so the ramped allowance was never used")
+        // Exponential cardinality scaling keeps the size-25 samples empty even though their declared container layer already admits children. At larger sizes, deterministic sampling also exercises that support.
+        if size >= 50 {
+            #expect(counts.contains { $0 > BudgetRose.minimumNodes }, "every draw stayed at the minimum, so the ramped allowance was never used")
         }
     }
 
@@ -500,6 +499,29 @@ private indirect enum BudgetDictionary: Hashable {
 }
 
 // MARK: - Helpers
+
+/// Collects declared unsigned choice ranges so container support can be checked independently from size-scaled sampling.
+private func unsignedChoiceRanges(in tree: ChoiceTree) -> [ClosedRange<UInt64>] {
+    switch tree {
+        case let .choice(value, metadata):
+            guard value.tag == .uint64, let validRange = metadata.validRange else {
+                return []
+            }
+            return [validRange]
+        case let .branch(branch):
+            return unsignedChoiceRanges(in: branch.choice)
+        case let .group(children, _, _):
+            return children.flatMap { unsignedChoiceRanges(in: $0) }
+        case let .sequence(elements, _):
+            return elements.flatMap { unsignedChoiceRanges(in: $0) }
+        case let .bind(_, inner, bound):
+            return unsignedChoiceRanges(in: inner) + unsignedChoiceRanges(in: bound)
+        case let .resize(_, choices):
+            return choices.flatMap { unsignedChoiceRanges(in: $0) }
+        case .just, .getSize:
+            return []
+    }
+}
 
 /// Checks the hard ceiling against the value, then checks reflected replay rather than requiring identical choices after set or dictionary deduplication.
 private func checkBudget<Value: Equatable>(

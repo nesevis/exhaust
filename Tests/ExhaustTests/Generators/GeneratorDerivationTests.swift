@@ -241,10 +241,13 @@ struct GeneratorDerivationTests {
     @Test("Containers of an annotated type need no conformance from the user")
     func containersOfAnnotatedTypesResolve() throws {
         let generator = ReflectiveGenerator<Forest>.derived(.budget(.custom(recursion: 3, nodes: 100)))
-        let samples = try #example(generator, count: 200)
-        #expect(samples.contains { $0.trees.isEmpty == false })
-        #expect(samples.contains { $0.best != nil })
-        #expect(samples.contains { $0.nested.isEmpty == false })
+        let samples = try #example(generator, count: 1000, seed: 1337)
+        let nonemptyTreeArrays = samples.count(where: { $0.trees.isEmpty == false })
+        let presentBestTrees = samples.count(where: { $0.best != nil })
+        let nonemptyNestedArrays = samples.count(where: { $0.nested.isEmpty == false })
+        #expect((600 ... 660).contains(nonemptyTreeArrays), "\(nonemptyTreeArrays) of \(samples.count) tree arrays were nonempty")
+        #expect((180 ... 220).contains(presentBestTrees), "\(presentBestTrees) of \(samples.count) optional trees were present")
+        #expect((600 ... 660).contains(nonemptyNestedArrays), "\(nonemptyNestedArrays) of \(samples.count) nested arrays were nonempty")
         #expect(samples.allSatisfy { $0.trees.allSatisfy { $0.depth <= 3 } })
 
         let target = Forest(trees: [.leaf, .node(.leaf, .leaf)], best: .leaf, nested: [[.leaf]])

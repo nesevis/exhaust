@@ -60,6 +60,8 @@ extension Generator where Operation == ReflectiveOperation {
                 var suffix = isRangeExplicit ? "" : " [derived]"
                 switch scaling?.kind {
                     case .none: break
+                    case .some(.constant):
+                        suffix += scaling?.samplingBounds == nil ? " [constant]" : " [constant within sampling range]"
                     case .some(.linear):
                         suffix += scaling?.samplingBounds == nil ? " [linear]" : " [linear within sampling range]"
                     case .some(.exponential): suffix += " [exponential]"

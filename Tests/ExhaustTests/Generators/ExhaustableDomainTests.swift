@@ -19,27 +19,35 @@ struct ExhaustableDomainTests {
         }
     }
 
-    @Test("Numeric presets scale linearly and clip narrow integer types", arguments: [
-        (ExhaustableDomain.tiny, 10), (.small, 100), (.medium, 10000),
-    ], [1, 25, 50, 100])
-    func numericBounds(preset: (ExhaustableDomain, Int), size: Int) throws {
-        let (policy, magnitude) = preset
-        let generator = StateSpaceNumbers.gen(recursion: 0, .domain(policy)).resize(size)
-        let samples = try #example(generator, count: 50, seed: 1337)
-        for value in samples {
-            expectIntegerBound(value.integer, magnitude: magnitude, size: size)
-            expectIntegerBound(value.signed8, magnitude: magnitude, size: size)
-            expectIntegerBound(value.signed16, magnitude: magnitude, size: size)
-            expectIntegerBound(value.signed32, magnitude: magnitude, size: size)
-            expectIntegerBound(value.signed64, magnitude: magnitude, size: size)
-            expectIntegerBound(value.unsigned, magnitude: magnitude, size: size)
-            expectIntegerBound(value.unsigned8, magnitude: magnitude, size: size)
-            expectIntegerBound(value.unsigned16, magnitude: magnitude, size: size)
-            expectIntegerBound(value.unsigned32, magnitude: magnitude, size: size)
-            expectIntegerBound(value.unsigned64, magnitude: magnitude, size: size)
-            #expect(abs(value.float) <= Float(magnitude) * Float(size) / 100)
-            #expect(abs(value.double) <= Double(magnitude) * Double(size) / 100)
-            try expectReflectionRoundTrip(generator.gen, value: value)
+    @Test("Numeric presets wire exponential scaling into derived generators")
+    func numericBounds() {
+        let preset = #gen(.element(from: [ExhaustableDomain.tiny, .small, .medium]))
+        let inputs = #gen(preset, .int(in: 1 ... 100), .uint64())
+        #exhaust(inputs, .budget(.extensive)) { policy, size, seed in
+            let magnitude = try #require(policy.numericMagnitude)
+            let generator = StateSpaceNumbers.gen(recursion: 0, .domain(policy)).resize(size)
+            var interpreter = ValueInterpreter(generator.gen, seed: seed, maxRuns: 1)
+            let sample = try #require(try interpreter.next())
+            #expect(exponentialSamplingContains(
+                sample.signed,
+                lowerBound: Int8(clamping: -magnitude),
+                upperBound: Int8(clamping: magnitude),
+                size: size
+            ))
+            #expect(exponentialSamplingContains(
+                sample.unsigned,
+                lowerBound: UInt8.zero,
+                upperBound: UInt8(clamping: magnitude),
+                size: size
+            ))
+            let floatingBound = Double(magnitude)
+            #expect(exponentialSamplingContains(
+                sample.floatingPoint,
+                lowerBound: -floatingBound,
+                upperBound: floatingBound,
+                size: size
+            ))
+            try expectReflectionRoundTrip(generator.gen, value: sample)
         }
     }
 
@@ -167,7 +175,7 @@ struct ExhaustableDomainTests {
         let scaledMaximum = sizeScaledMaximum(maximumLength, size: size)
         let generator = StateSpaceSequences.gen(
             recursion: 0,
-            .budget(.custom(recursion: 0, nodes: 1_000)),
+            .budget(.custom(recursion: 0, nodes: 1000)),
             .domain(policy)
         ).resize(size)
         let samples = try #example(generator, count: 100, seed: 1337)
@@ -213,7 +221,7 @@ struct ExhaustableDomainTests {
     func expandedTinySequences() throws {
         let generator = StateSpaceSequences.gen(
             recursion: 0,
-            .budget(.custom(recursion: 0, nodes: 1_000)),
+            .budget(.custom(recursion: 0, nodes: 1000)),
             .domain(.tiny)
         ).resize(100)
         let samples = try #example(generator, count: 100, seed: 1337)
@@ -421,6 +429,39 @@ struct ExhaustableDomainTests {
         #expect(budgeted.built.count == 2)
     }
 
+    @Test("128-bit numeric presets wire exponential scaling into their low bits")
+    func wideIntegerScaling() {
+        if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
+            let preset = #gen(.element(from: [ExhaustableDomain.tiny, .small, .medium]))
+            let inputs = #gen(preset, .int(in: 1 ... 100), .uint64())
+            #exhaust(inputs, .budget(.extensive)) { policy, size, seed in
+                let magnitude = try #require(policy.numericMagnitude)
+                let signedGenerator = Int128.defaultGenerator(domain: policy).resize(size)
+                let unsignedGenerator = UInt128.defaultGenerator(domain: policy).resize(size)
+                var signedInterpreter = ValueInterpreter(signedGenerator.gen, seed: seed, maxRuns: 1)
+                var unsignedInterpreter = ValueInterpreter(unsignedGenerator.gen, seed: seed, maxRuns: 1)
+                let signed = try #require(try signedInterpreter.next())
+                let unsigned = try #require(try unsignedInterpreter.next())
+                let signedBits = UInt128(bitPattern: signed)
+                let encodedSigned = (signedBits << 1) ^ UInt128(bitPattern: signed >> 127)
+                #expect(encodedSigned >> 64 == 0)
+                #expect(exponentialSamplingContains(
+                    UInt64(truncatingIfNeeded: encodedSigned),
+                    lowerBound: 0,
+                    upperBound: UInt64(magnitude * 2),
+                    size: size
+                ))
+                #expect(unsigned >> 64 == 0)
+                #expect(exponentialSamplingContains(
+                    UInt64(truncatingIfNeeded: unsigned),
+                    lowerBound: 0,
+                    upperBound: UInt64(magnitude),
+                    size: size
+                ))
+            }
+        }
+    }
+
     @Test("128-bit numeric presets sample narrowly and reflect their full domains")
     func wideIntegers() throws {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
@@ -445,18 +486,9 @@ struct ExhaustableDomainTests {
 
 @Exhaustable
 private struct StateSpaceNumbers: Equatable {
-    let integer: Int
-    let signed8: Int8
-    let signed16: Int16
-    let signed32: Int32
-    let signed64: Int64
-    let unsigned: UInt
-    let unsigned8: UInt8
-    let unsigned16: UInt16
-    let unsigned32: UInt32
-    let unsigned64: UInt64
-    let float: Float
-    let double: Double
+    let signed: Int8
+    let unsigned: UInt8
+    let floatingPoint: Double
 }
 
 @Exhaustable
@@ -523,8 +555,17 @@ private func sizeScaledMaximum(_ maximum: Int, size: Int) -> Int {
     min(maximum, Int((Double(maximum + 1) * Double(size) / 100).rounded()))
 }
 
-private func expectIntegerBound<Value: FixedWidthInteger>(_ value: Value, magnitude: Int, size: Int) {
-    let lower = Int((Double(Int(Value(clamping: -magnitude))) * Double(size) / 100).rounded())
-    let upper = Int((Double(Int(Value(clamping: magnitude))) * Double(size) / 100).rounded())
-    #expect((Value(clamping: lower) ... Value(clamping: upper)).contains(value))
+private func exponentialSamplingContains<Value: BitPatternConvertible>(
+    _ value: Value,
+    lowerBound: Value,
+    upperBound: Value,
+    size: Int
+) -> Bool {
+    Gen.applyScaling(
+        min: lowerBound.bitPattern64,
+        max: upperBound.bitPattern64,
+        tag: Value.tag,
+        scaling: .exponential(originBits: nil),
+        size: UInt64(size)
+    ).contains(value.bitPattern64)
 }

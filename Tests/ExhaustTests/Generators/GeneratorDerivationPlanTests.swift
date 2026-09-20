@@ -135,8 +135,9 @@ struct GeneratorDerivationPlanTests {
         let optional = ReflectiveGenerator<PlanOptionalCeilingHolder>.derived(
             .budget(.custom(recursion: 3, nodes: 100))
         )
-        let optionalSamples = try #example(optional, count: 30)
-        #expect(optionalSamples.contains { $0.value != nil })
+        let optionalSamples = try #example(optional, count: 1000, seed: 1337)
+        let presentValues = optionalSamples.count(where: { $0.value != nil })
+        #expect((180 ... 220).contains(presentValues), "\(presentValues) of \(optionalSamples.count) optional values were present")
     }
 
     @Test("An override is an opaque leaf even when its output is annotated")
