@@ -11,6 +11,13 @@ struct ImprovingPivotRelaxTests {
         #expect(machine.stats.relaxImprovingAcceptances == 1)
     }
 
+    @Test("An improving pivot accepted on the last stall is still minimized", arguments: [UInt64(3), 11, 42])
+    func acceptedPivotIsMinimizedOnTheLastStall(seed: UInt64) throws {
+        var machine = try makeMachine(threshold: 150, seed: seed, improvingProbeBudget: 2, maxStalls: 1)
+        while try machine.next() != nil {}
+        #expect(machine.output as? UInt64 == 150)
+    }
+
     @Test("Without an improving probe budget the counterexample stays in the arm it was found in", arguments: [UInt64(3), 11, 42])
     func budgetZeroStaysInArm(seed: UInt64) throws {
         var machine = try makeMachine(threshold: 1, seed: seed, improvingProbeBudget: 0)
@@ -68,7 +75,12 @@ private func laterArmCounterexample(
     throw GeneratorError.choiceTreeConstructionFailed
 }
 
-private func makeMachine(threshold: UInt64, seed: UInt64, improvingProbeBudget: Int) throws -> ReductionMachine {
+private func makeMachine(
+    threshold: UInt64,
+    seed: UInt64,
+    improvingProbeBudget: Int,
+    maxStalls: Int = 4
+) throws -> ReductionMachine {
     let (value, tree) = try laterArmCounterexample(threshold: threshold, seed: seed, materializePicks: false)
     var tuning = SchedulerTuning()
     tuning.relaxImprovingProbeBudget = improvingProbeBudget
@@ -76,7 +88,7 @@ private func makeMachine(threshold: UInt64, seed: UInt64, improvingProbeBudget: 
         gen: twoArms,
         initialTree: tree,
         initialOutput: value,
-        config: Interpreters.ReducerConfiguration(maxStalls: 4, tuning: tuning),
+        config: Interpreters.ReducerConfiguration(maxStalls: maxStalls, tuning: tuning),
         collectStats: true,
         property: { $0 < threshold }
     )

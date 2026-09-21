@@ -243,6 +243,8 @@ extension ReductionMachine {
                 stats.relaxImprovingAcceptances += 1
             }
             _ = rebuildAndUpdateGraph()
+            // The stalled cycle that led here already spent a stall. The accepted arm holds non-minimal content, so the run must not end before a cycle has minimized it.
+            convergence.stallBudget = convergence.maxStalls
             ChoiceGraphScheduler.logReducer("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "probes": "\(probesUsed)",
             ])
