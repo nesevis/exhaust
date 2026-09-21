@@ -57,4 +57,129 @@ struct ScreeningElidedArmTests {
         #expect(Gen.shuffled(source).hasDataDependentShape)
         #expect(Gen.slice(of: source).hasDataDependentShape)
     }
+
+    @Test("A generator with a choice outside the parameter model is never an exhaustive candidate", arguments: UnmodeledChoiceShape.allCases)
+    func unmodeledChoicePreventsExhaustiveCandidacy(shape: UnmodeledChoiceShape) throws {
+        let plan = try #require(ScreeningRunner.plan(shape.generator, screeningBudget: 2000))
+        #expect(plan.isExhaustiveCandidate == false)
+    }
+
+    @Test("A generator whose every choice is a modeled parameter remains an exhaustive candidate", arguments: FullyModeledShape.allCases)
+    func fullyModeledShapeRemainsExhaustive(shape: FullyModeledShape) throws {
+        let plan = try #require(ScreeningRunner.plan(shape.generator, screeningBudget: 2000))
+        #expect(plan.isExhaustiveCandidate)
+    }
+
+    @Test("Rows the materializer does not honor withhold the exhaustive verdict")
+    func repeatedRowsWithholdTheVerdict() {
+        // A filter over a continuation-built choice loses the row's value, so the rows repeat points of the domain instead of sweeping it.
+        let dependent = Gen.just(UInt64(21)).bind { low in Gen.choose(in: low ... low + 50) }
+        let filtered: Generator<UInt64> = .impure(
+            operation: .filter(
+                gen: dependent.erase(),
+                fingerprint: 1,
+                filterType: .rejectionSampling,
+                predicate: { _ in true },
+                sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+            ),
+            continuation: { .pure($0 as! UInt64) }
+        )
+        var distinctRows = Set<UInt64>()
+        let result = ScreeningRunner.run(filtered, screeningBudget: 512, coveringSeed: 0, property: { value in
+            distinctRows.insert(value)
+            return true
+        })
+        guard case .partial = result else {
+            Issue.record("Expected a partial result, got \(result)")
+            return
+        }
+        #expect(distinctRows.count < 51)
+    }
+
+    @Test("The graph walk reports every draw it can see")
+    func graphWalkReportsDraws() {
+        #expect(Gen.just(UInt64(0)).drawsChoice == false)
+        #expect(Gen.choose(in: UInt64(4) ... 4).drawsChoice == false)
+        #expect(Gen.zip(Gen.just(UInt64(0)), Gen.just(UInt64(1))).drawsChoice == false)
+        #expect(Gen.pick(choices: [(1, Gen.just(UInt64(0)))]).drawsChoice == false)
+
+        #expect(Gen.choose(in: UInt64(0) ... 3).drawsChoice)
+        #expect(Gen.pick(choices: [(1, Gen.just(UInt64(0))), (1, Gen.just(UInt64(1)))]).drawsChoice)
+        #expect(Gen.zip(Gen.just(UInt64(0)), Gen.choose(in: UInt64(0) ... 3)).drawsChoice)
+        #expect(Gen.arrayOf(Gen.just(UInt64(0)), exactly: 2).drawsChoice)
+        #expect(Gen.getSize { Gen.just($0) }.drawsChoice)
+    }
+}
+
+// MARK: - Supporting Types
+
+/// Shapes that draw somewhere screening does not count: inside a pick arm, inside an opaque zip, or behind a size read.
+enum UnmodeledChoiceShape: CaseIterable, CustomTestStringConvertible {
+    case drawingArms
+    case drawingArmFavored
+    case constantArmFavored
+    case nestedPickArm
+    case sequenceArm
+    case sizeReadingArm
+    case continuationBuiltArm
+    case backtrackArms
+    case opaqueZip
+
+    var testDescription: String {
+        "\(self)"
+    }
+
+    var generator: Generator<UInt64> {
+        let large = Gen.choose(in: UInt64(0) ... 20000)
+        let constant = Gen.just(UInt64(0))
+        switch self {
+            case .drawingArms:
+                return Gen.pick(choices: [(1, large), (1, Gen.choose(in: UInt64(30000) ... 50000))])
+            case .drawingArmFavored:
+                return Gen.pick(choices: [(1, constant), (1000, large)])
+            case .constantArmFavored:
+                return Gen.pick(choices: [(1000, constant), (1, large)])
+            case .nestedPickArm:
+                return Gen.pick(choices: [(1, constant), (1, Gen.pick(choices: [(1, constant), (1, Gen.just(UInt64(1)))]))])
+            case .sequenceArm:
+                return Gen.pick(choices: [(1, constant), (1, Gen.arrayOf(large, exactly: 2).map { $0[0] })])
+            case .sizeReadingArm:
+                return Gen.pick(choices: [(1, constant), (1, Gen.getSize { Gen.just($0) })])
+            case .continuationBuiltArm:
+                return Gen.pick(choices: [(1000, constant), (1, constant.bind { _ in large })])
+            case .backtrackArms:
+                return Gen.backtrack(always: [(1, large.map { Optional($0) }), (1, constant.map { Optional($0) })])
+            case .opaqueZip:
+                return Gen.zip(Gen.choose(in: UInt64(0) ... 1), Gen.zip(constant, large, isOpaque: true).map { $0 + $1 }).map { $0 + $1 }
+        }
+    }
+}
+
+/// Shapes whose rows are the whole domain, so the verdict has to survive.
+enum FullyModeledShape: CaseIterable, CustomTestStringConvertible {
+    case constantArms
+    case singleValueRangeArm
+    case constantBacktrackArms
+    case smallChoices
+    case constantOpaqueZip
+
+    var testDescription: String {
+        "\(self)"
+    }
+
+    var generator: Generator<UInt64> {
+        let constant = Gen.just(UInt64(0))
+        switch self {
+            case .constantArms:
+                return Gen.pick(choices: [(1, constant), (1, Gen.just(UInt64(1))), (1, Gen.just(UInt64(2)))])
+            case .singleValueRangeArm:
+                return Gen.pick(choices: [(1, constant), (1, Gen.choose(in: UInt64(7) ... 7))])
+            case .constantBacktrackArms:
+                return Gen.backtrack(always: [(1, constant.map { Optional($0) }), (1, Gen.just(UInt64(1)).map { Optional($0) })])
+            case .smallChoices:
+                return Gen.zip(Gen.choose(in: UInt64(0) ... 3), Gen.choose(in: UInt64(0) ... 9)).map { $0 + $1 }
+            case .constantOpaqueZip:
+                return Gen.zip(Gen.choose(in: UInt64(0) ... 3), Gen.zip(constant, constant, isOpaque: true).map { $0 + $1 }).map { $0 + $1 }
+        }
+    }
 }

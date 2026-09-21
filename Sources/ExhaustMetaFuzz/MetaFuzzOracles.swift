@@ -528,7 +528,7 @@ extension MetaFuzz {
 }
 
 /// Rebuilds recipes from one synthetic source location so source-fingerprinted operations denote the same generator in every oracle.
-private func buildOracleGenerator(from recipe: GenRecipe) -> AnyGenerator {
+func buildOracleGenerator(from recipe: GenRecipe) -> AnyGenerator {
     buildGenerator(
         from: recipe,
         fileID: "ExhaustMetaFuzz/OracleGenerator",

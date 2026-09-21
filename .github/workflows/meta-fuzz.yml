@@ -60,6 +60,7 @@ jobs:
         env:
           METAFUZZ_FUZZ: "1"
           METAFUZZ_BUDGET: "60"
+          METAFUZZ_SCREENING_BUDGET: "60"
           METAFUZZ_SEED: "1"
           METAFUZZ_FINDINGS: ${{ runner.temp }}/metafuzz-findings
           EXHAUST_RESUME: "0"
@@ -80,6 +81,25 @@ jobs:
             bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
               "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
               --budget-seconds "${{ github.event.inputs.budget || '2700' }}" \
+              --depth 3 \
+              --node-budget 160 \
+              --findings-directory "${{ runner.temp }}/metafuzz-findings"
+
+      # The second campaign: the same case generator against the screening roster, which checks that
+      # an exhaustive verdict is sound and that enumerability matches the recipe grammar. A separate
+      # process with its own state directory, because coverage counters and the resume log are both
+      # per-search. Runs even when the pipeline campaign found something, since the rosters are
+      # independent.
+      - name: Nightly screening campaign
+        if: ${{ !cancelled() && github.event_name != 'push' }}
+        env:
+          EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-screening-state
+        run: |
+          bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-screening-probe" -- \
+            bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
+              "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
+              --campaign screening \
+              --budget-seconds 900 \
               --depth 3 \
               --node-budget 160 \
               --findings-directory "${{ runner.temp }}/metafuzz-findings"
@@ -143,6 +163,9 @@ jobs:
             ${{ runner.temp }}/metafuzz-probe.log
             ${{ runner.temp }}/metafuzz-probe.time.txt
             ${{ runner.temp }}/metafuzz-probe.metrics.env
+            ${{ runner.temp }}/metafuzz-screening-probe.log
+            ${{ runner.temp }}/metafuzz-screening-probe.time.txt
+            ${{ runner.temp }}/metafuzz-screening-probe.metrics.env
           if-no-files-found: warn
           retention-days: 30
 
@@ -154,6 +177,7 @@ jobs:
           path: |
             ${{ runner.temp }}/metafuzz-findings
             ${{ runner.temp }}/metafuzz-state
+            ${{ runner.temp }}/metafuzz-screening-state
           if-no-files-found: ignore
 
       - name: Collect crash reports

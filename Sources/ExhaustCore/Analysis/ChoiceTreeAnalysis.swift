@@ -24,7 +24,7 @@
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
 /// - `.compositeSequence`: a single parameter encoding all valid `(length, [element problematic values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
 /// - `.sequenceLength`, `.sequenceElement`: legacy cases used by the ``SequenceCoveringArray`` pipeline. Not produced by ``walkSequence``.
-/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch. Screening analysis records only the selected arm, so the arms it skips are reported through ``AnalysisTemplate/isTotalWitness`` rather than being visible here.
+/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch. Those values are outside the parameter model, so a pick with any arm that draws a choice clears ``AnalysisTemplate/isTotalWitness`` and the run cannot report an exhaustive pass.
 ///
 /// ## Analyzability
 ///
@@ -65,7 +65,7 @@ package enum ChoiceTreeAnalysis {
         let effectiveCompositeThreshold = compositeThreshold ?? enumerableDomainThreshold
         var bestParameters: [ScreeningParameter]?
         var bestTree: ChoiceTree?
-        var bestElidedDataDependentArm = false
+        var bestElidedDrawingArm = false
 
         for seed in seeds {
             // `sizeOverride: 100` ensures size-scaled sequences produce non-empty element subtrees during VACTI so that ``walkSequence`` can extract element parameters. The declared range itself is already stored directly on each `chooseBits` (with scaling attached as metadata), so the analyzer doesn't need a specific size for range visibility — just a size at which sequences produce enough elements to walk.
@@ -90,7 +90,7 @@ package enum ChoiceTreeAnalysis {
             if bestParameters == nil || parameters.count > (bestParameters?.count ?? 0) {
                 bestParameters = parameters
                 bestTree = tree
-                bestElidedDataDependentArm = interpreter.hasElidedDataDependentArm
+                bestElidedDrawingArm = interpreter.hasElidedDrawingArm
             }
 
             let hasIncompleteSequence = parameters.contains { param in
@@ -143,11 +143,13 @@ package enum ChoiceTreeAnalysis {
                 }
                 totalSpace = product
             }
-            // A bind in the recorded tree and a skipped data-dependent arm are the same failure from two directions: a choice the parameter model does not account for.
+            // A bind in the recorded tree, a skipped arm that draws, and a choice inside a pick arm or preserved node are the same failure from three directions: a choice the parameter model does not account for.
             let template = bestTree.map { tree in
                 AnalysisTemplate(
                     substitutionTemplate: tree,
-                    isTotalWitness: tree.containsBind == false && bestElidedDataDependentArm == false
+                    isTotalWitness: tree.containsBind == false
+                        && bestElidedDrawingArm == false
+                        && tree.hidesChoiceFromScreening == false
                 )
             }
             let profile = EnumerableDomainProfile(

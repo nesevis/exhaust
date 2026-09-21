@@ -51,7 +51,7 @@ package struct AnalysisTemplate: @unchecked Sendable {
     /// Positional template for ``CoveringArrayReplay``, which substitutes parameter values at matching positions and preserves structural nodes.
     public let substitutionTemplate: ChoiceTree
 
-    /// Whether every choice the generator can make is accounted for by the extracted parameters. False when a pick arm was skipped whose shape depends on a drawn value, or when the tree itself binds.
+    /// Whether every choice the generator can make is accounted for by the extracted parameters. False when a pick arm or a preserved node holds a choice, when analysis skipped an arm that draws, or when the tree itself binds.
     public let isTotalWitness: Bool
 
     /// Creates a template and records whether it witnessed the whole domain.

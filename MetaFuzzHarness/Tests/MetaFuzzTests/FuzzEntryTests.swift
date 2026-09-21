@@ -4,7 +4,7 @@ import Foundation
 import Testing
 
 /// The instrumented fuzz entry for the CI PR lane. Gated on `METAFUZZ_FUZZ=1` because `#explore(time:)` hard-fails without coverage instrumentation, and this package's default `swift test` run is uninstrumented — the CI lane builds with `-Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table` and sets the variable.
-@Suite("Fuzz entry", .enabled(if: ProcessInfo.processInfo.environment["METAFUZZ_FUZZ"] == "1"))
+@Suite("Fuzz entry", .serialized, .enabled(if: ProcessInfo.processInfo.environment["METAFUZZ_FUZZ"] == "1"))
 struct FuzzEntryTests {
     @Test("The pipeline holds under a short pinned fuzz run")
     func pipelineHoldsUnderFuzzing() {
@@ -30,6 +30,36 @@ struct FuzzEntryTests {
         #expect(
             report.clusters.isEmpty,
             "Engine defects found — freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
+        )
+    }
+
+    /// The second campaign: the same case generator against the screening roster. It runs after the pipeline campaign rather than beside it, because coverage counters are process-global and two live searches would corrupt each other's attempt signatures; the suite is `.serialized` for that reason.
+    @Test("Screening verdicts hold under a short pinned fuzz run")
+    func screeningVerdictsHoldUnderFuzzing() {
+        let budgetSeconds = ProcessInfo.processInfo.environment["METAFUZZ_SCREENING_BUDGET"].flatMap(Int.init)
+            ?? ProcessInfo.processInfo.environment["METAFUZZ_BUDGET"].flatMap(Int.init)
+            ?? 60
+        let seed = ProcessInfo.processInfo.environment["METAFUZZ_SEED"].flatMap(UInt64.init) ?? 1
+        let findings = findingsDirectory()
+
+        let report = #explore(
+            MetaFuzz.caseGenerator(),
+            time: .seconds(budgetSeconds),
+            .replay(.numeric(seed))
+        ) { fuzzCase in
+            do {
+                try MetaFuzz.checkScreening(fuzzCase)
+            } catch {
+                MetaFuzz.recordFinding(fuzzCase, kind: .screeningCase, violation: error, in: findings)
+                throw error
+            }
+        }
+
+        printProbeMetrics(report)
+
+        #expect(
+            report.clusters.isEmpty,
+            "Screening defects found — freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
         )
     }
 }

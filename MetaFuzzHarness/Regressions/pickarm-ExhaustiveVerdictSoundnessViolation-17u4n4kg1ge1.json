@@ -1,0 +1,31 @@
+{
+  "kind": "screeningCase",
+  "note": "Screening granted the exhaustive verdict to a generator with a draw inside a pick arm, so #exhaust skipped random sampling. Fixed 2026-09-21 by reading pick arms and preserved nodes in the analysis template.",
+  "oracle": "ExhaustiveVerdictSoundnessViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "unique": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "optional": {
+                  "_0": {
+                    "leaf": {
+                      "_0": {
+                        "character": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}
