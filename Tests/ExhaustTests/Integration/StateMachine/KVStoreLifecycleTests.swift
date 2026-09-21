@@ -31,7 +31,7 @@ struct KVStoreLifecycleTests {
             await #execute(
                 KVStoreLifecycleSpec.self,
                 mode: .sequential,
-                .commandLimit(10),
+                .commandLimit(15),
                 .suppress(.issueReporting)
             )
         )
