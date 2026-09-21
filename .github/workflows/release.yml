@@ -12,8 +12,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: exhaust-release
@@ -409,11 +407,3 @@ jobs:
           else
             echo "Release $VTAG is already published with the expected asset."
           fi
-
-  docs:
-    needs: publish-release
-    uses: ./.github/workflows/docs.yml
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
