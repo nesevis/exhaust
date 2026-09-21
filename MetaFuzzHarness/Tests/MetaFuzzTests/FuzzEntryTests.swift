@@ -3,7 +3,7 @@ import ExhaustMetaFuzz
 import Foundation
 import Testing
 
-/// The instrumented fuzz entry for the CI PR lane. Gated on `METAFUZZ_FUZZ=1` because `#explore(time:)` hard-fails without coverage instrumentation, and this package's default `swift test` run is uninstrumented — the CI lane builds with `-Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table` and sets the variable.
+/// The instrumented fuzz entry for the CI PR lane. Gated on `METAFUZZ_FUZZ=1` because `#explore(time:)` hard-fails without coverage instrumentation, and this package's default `swift test` run is uninstrumented. The CI lane builds with `-Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table` and sets the variable.
 @Suite("Fuzz entry", .serialized, .enabled(if: ProcessInfo.processInfo.environment["METAFUZZ_FUZZ"] == "1"))
 struct FuzzEntryTests {
     @Test("The pipeline holds under a short pinned fuzz run")
@@ -29,7 +29,7 @@ struct FuzzEntryTests {
 
         #expect(
             report.clusters.isEmpty,
-            "Engine defects found — freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
+            "Engine defects found. Freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
         )
     }
 
@@ -59,7 +59,7 @@ struct FuzzEntryTests {
 
         #expect(
             report.clusters.isEmpty,
-            "Screening defects found — freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
+            "Screening defects found. Freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
         )
     }
 }

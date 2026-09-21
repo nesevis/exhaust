@@ -135,21 +135,21 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
-    var hadReplacementShortlexRejection: Bool {
+    var hadUnresolvedReplacement: Bool {
         switch self {
-            case let .structural(encoder): encoder.hadReplacementShortlexRejection
-            case let .value(encoder): encoder.hadReplacementShortlexRejection
-            case let .redistribution(encoder): encoder.hadReplacementShortlexRejection
-            case let .lockstep(encoder): encoder.hadReplacementShortlexRejection
-            case let .relation(encoder): encoder.hadReplacementShortlexRejection
-            case let .swap(encoder): encoder.hadReplacementShortlexRejection
-            case let .reorder(encoder): encoder.hadReplacementShortlexRejection
-            case let .laneCollapse(encoder): encoder.hadReplacementShortlexRejection
-            case let .depthCollapse(encoder): encoder.hadReplacementShortlexRejection
-            case let .binarySearch(encoder): encoder.hadReplacementShortlexRejection
-            case let .boundValueCovering(encoder): encoder.hadReplacementShortlexRejection
-            case let .composed(encoder): encoder.hadReplacementShortlexRejection
-            case let .bindPivot(encoder): encoder.hadReplacementShortlexRejection
+            case let .structural(encoder): encoder.hadUnresolvedReplacement
+            case let .value(encoder): encoder.hadUnresolvedReplacement
+            case let .redistribution(encoder): encoder.hadUnresolvedReplacement
+            case let .lockstep(encoder): encoder.hadUnresolvedReplacement
+            case let .relation(encoder): encoder.hadUnresolvedReplacement
+            case let .swap(encoder): encoder.hadUnresolvedReplacement
+            case let .reorder(encoder): encoder.hadUnresolvedReplacement
+            case let .laneCollapse(encoder): encoder.hadUnresolvedReplacement
+            case let .depthCollapse(encoder): encoder.hadUnresolvedReplacement
+            case let .binarySearch(encoder): encoder.hadUnresolvedReplacement
+            case let .boundValueCovering(encoder): encoder.hadUnresolvedReplacement
+            case let .composed(encoder): encoder.hadUnresolvedReplacement
+            case let .bindPivot(encoder): encoder.hadUnresolvedReplacement
         }
     }
 

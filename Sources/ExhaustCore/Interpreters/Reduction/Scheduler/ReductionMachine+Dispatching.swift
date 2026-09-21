@@ -85,21 +85,8 @@ extension ReductionMachine {
                 return .dispatched(decision: .skipped)
 
             case .rematerialize:
-                if case let .success(_, fullTree, _) = Materializer.materializeAny(
-                    gen,
-                    context: .init(
-                        prefix: sequence,
-                        mode: .exact,
-                        fallbackTree: tree,
-                        materializePicks: true
-                    )
-                ) {
-                    tree = fullTree
-                }
-                let graphBefore = graph
-                _ = rebuildAndUpdateGraph()
+                let graphBefore = rematerializeUnselectedBranches()
                 sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
-                graphIsStripped = false
                 return .dispatched(decision: .rematerialized)
 
             case let .readyToDispatch(boundValueFingerprint):
@@ -250,10 +237,10 @@ extension ReductionMachine {
             migrationConsecutiveRejects = report.anyAccepted ? 0 : migrationConsecutiveRejects + 1
         }
 
-        if hadReplacementShortlexRejection == false,
-           report.hadReplacementShortlexRejection
+        if hadUnresolvedReplacement == false,
+           report.hadUnresolvedReplacement
         {
-            hadReplacementShortlexRejection = true
+            hadUnresolvedReplacement = true
         }
 
         if collectStats {
@@ -400,5 +387,27 @@ extension ReductionMachine {
         pendingReport = nil
         dispatchPhase = .dispatch
         return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.canReuseStructuralSources == false)
+    }
+
+    /// Restores the unselected branches of a stripped tree and rebuilds the graph, so pick nodes carry every arm.
+    ///
+    /// - Returns: The graph before the rebuild.
+    @discardableResult
+    mutating func rematerializeUnselectedBranches() -> ChoiceGraph {
+        if case let .success(_, fullTree, _) = Materializer.materializeAny(
+            gen,
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: tree,
+                materializePicks: true
+            )
+        ) {
+            tree = fullTree
+        }
+        let graphBefore = graph
+        _ = rebuildAndUpdateGraph()
+        graphIsStripped = false
+        return graphBefore
     }
 }

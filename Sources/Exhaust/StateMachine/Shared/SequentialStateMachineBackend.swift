@@ -24,7 +24,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
             enabledEncoders: [.laneCollapse, .deletion, .valueSearch, .floatSearch],
-            tuning: SchedulerTuning(relaxMaterializationBudget: 0)
+            tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         let deadline = context.config.deadlineNanoseconds
         let commandProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { [property] commands in

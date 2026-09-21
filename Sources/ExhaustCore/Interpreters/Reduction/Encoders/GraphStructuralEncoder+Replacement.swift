@@ -59,7 +59,7 @@ extension GraphStructuralEncoder {
         var candidate = sequence
         candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: expanded)
         guard candidate.shortLexPrecedes(sequence) else {
-            hadReplacementShortlexRejection = true
+            hadUnresolvedReplacement = true
             return nil
         }
         return candidate
@@ -83,7 +83,7 @@ extension GraphStructuralEncoder {
         }
         candidate = pivoted
         guard candidate.shortLexPrecedes(sequence) else {
-            hadReplacementShortlexRejection = true
+            hadUnresolvedReplacement = true
             return nil
         }
         return .branchSelected(
@@ -92,10 +92,11 @@ extension GraphStructuralEncoder {
         )
     }
 
-    /// The sequence with the pick's span replaced by the target branch's content, every leaf of that content at its reduction target. Nil when the pick, its range, or the target branch cannot be resolved. No ordering gate: callers decide whether the candidate has to precede `sequence` on its own or after a lift.
+    /// The sequence with the pick's span replaced by the target branch's content, its leaves set by `fill`. The fill cannot change whether the candidate precedes `sequence`: length is unchanged and the first difference is the branch entry. Nil when the pick, its range, or the target branch cannot be resolved. No ordering gate: callers decide whether the candidate has to precede `sequence` on its own or after a lift.
     static func branchPivotCandidate(
         pickNodeID: Int,
         targetBranchID: UInt64,
+        fill: PivotLeafFill = .reductionTarget,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
@@ -118,8 +119,8 @@ extension GraphStructuralEncoder {
             }
         }) else { return nil }
 
-        let minimizedTarget = elements[targetElementIndex].minimizingLeaves
-        let targetContent = ChoiceSequence.flatten(minimizedTarget.selecting())
+        let filledTarget = fill.apply(to: elements[targetElementIndex])
+        let targetContent = ChoiceSequence.flatten(filledTarget.selecting())
 
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
@@ -161,7 +162,7 @@ extension GraphStructuralEncoder {
         var candidate = sequence
         candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: expanded)
         guard candidate.shortLexPrecedes(sequence) else {
-            hadReplacementShortlexRejection = true
+            hadUnresolvedReplacement = true
             return nil
         }
         return candidate
@@ -458,5 +459,30 @@ extension GraphStructuralEncoder {
             }
         }
         return nil
+    }
+}
+
+// MARK: - Pivot Leaf Fill
+
+/// Leaf content for the arm a branch pivot moves to.
+///
+/// Only ``reductionTarget`` is chosen to be small. The others are chosen to fail the property, because value search minimizes an accepted pivot afterwards.
+enum PivotLeafFill: CaseIterable {
+    /// Every leaf at its reduction target.
+    case reductionTarget
+    /// The arm as last materialized: a free sample of its domain.
+    case recorded
+    /// Every ranged leaf at the bound farthest from its reduction target, for a threshold a sample can miss.
+    case farthestFromTarget
+
+    func apply(to branch: ChoiceTree) -> ChoiceTree {
+        switch self {
+            case .reductionTarget:
+                branch.minimizingLeaves
+            case .recorded:
+                branch
+            case .farthestFromTarget:
+                branch.maximizingLeaves
+        }
     }
 }

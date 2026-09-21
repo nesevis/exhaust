@@ -155,7 +155,7 @@ package struct ReductionMachine: ProbeSessionState {
     var sources: [AnyCandidateSource] = []
     var scopeRejectionCache: CandidateRejectionCache = .init()
     var anyAccepted: Bool = false
-    var hadReplacementShortlexRejection: Bool = false
+    var hadUnresolvedReplacement: Bool = false
 
     /// True from the post-cycle action that releases the bind-inner deferral until the next cycle begins, when the release adds at least one scope. The termination check reads it so the cycle that releases the deferral is followed by one more, without consulting the stall budget or the convergence check: the deferred scopes were never built into any source, so the stall that released them says nothing about whether they would accept, and a run whose leaves are all at target would otherwise terminate as converged without ever dispatching them. The deferral is released once per run, so the bypass is bounded to one cycle.
     var deferralReleasedThisCycle: Bool = false
@@ -301,7 +301,7 @@ package struct ReductionMachine: ProbeSessionState {
         cycles += 1
         convergence.resetForNewCycle()
         scopeRejectionCache.clearCoarse()
-        hadReplacementShortlexRejection = false
+        hadUnresolvedReplacement = false
         anyAccepted = false
         deferralReleasedThisCycle = false
         sequenceBeforeCycle = sequence
@@ -326,10 +326,15 @@ package struct ReductionMachine: ProbeSessionState {
     // MARK: - End Cycle
 
     private mutating func stepEndCycle() -> Transition {
+        // A stripped graph has no pivot scopes.
+        if anyAccepted == false, graphIsStripped, tuning.relaxImprovingProbeBudget > 0 {
+            rematerializeUnselectedBranches()
+        }
         let evaluation = convergence.evaluatePostCycle(
             outcome: ChoiceGraphScheduler.CycleOutcome(
                 anyAccepted: anyAccepted,
-                hadReplacementShortlexRejection: hadReplacementShortlexRejection,
+                // The pivot's source is spent in the cycle that probed it, so no encoder sees it in the stalled cycle and the graph has to answer.
+                hadUnresolvedReplacement: hadUnresolvedReplacement || (anyAccepted == false && hasUnprobedImprovingPivot),
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
                 structurallyImproved: sequence.count < sequenceBeforeCycle.count

@@ -633,6 +633,12 @@ private func printTimingReport(name: String, results: [SeedResult]) {
     let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
     let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalRel + totalReord
     print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) rel=\(toMs(totalRel)) reord=\(toMs(totalReord))")
+    let allStats = results.compactMap(\.stats)
+    let improvingProbes = allStats.reduce(0) { $0 + $1.relaxImprovingProbes }
+    let improvingAcceptances = allStats.reduce(0) { $0 + $1.relaxImprovingAcceptances }
+    let seedsProbing = allStats.count(where: { $0.relaxImprovingProbes > 0 })
+    let seedsAccepting = allStats.count(where: { $0.relaxImprovingAcceptances > 0 })
+    print("[\(name) ECOOP] relax improving pivots (summed across \(allStats.count) seeds): probes=\(improvingProbes) accepted=\(improvingAcceptances) seeds_probing=\(seedsProbing) seeds_accepting=\(seedsAccepting)")
 }
 
 // MARK: - Dispatch Aggregation Types

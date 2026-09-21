@@ -148,7 +148,7 @@ private func passReport(encoderName: EncoderName, transformation: GraphTransform
         anyRequiresRebuild: false,
         latestTreeIsStripped: false,
         convergenceRecords: [:],
-        hadReplacementShortlexRejection: false,
+        hadUnresolvedReplacement: false,
         acceptedLeafNodeIDs: []
     )
 }

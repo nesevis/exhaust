@@ -220,7 +220,7 @@ enum ChoiceGraphScheduler {
     /// Snapshot of what happened during a single reduction cycle, consumed by ``evaluatePostCycle`` to determine the next actions.
     struct CycleOutcome: Sendable {
         let anyAccepted: Bool
-        let hadReplacementShortlexRejection: Bool
+        let hadUnresolvedReplacement: Bool
         let allConverged: Bool
         let improved: Bool
         let structurallyImproved: Bool
@@ -256,7 +256,7 @@ enum ChoiceGraphScheduler {
             actions.append(.relationPass)
         }
 
-        if outcome.anyAccepted == false, outcome.hadReplacementShortlexRejection {
+        if outcome.anyAccepted == false, outcome.hadUnresolvedReplacement {
             actions.append(.relaxRound)
         }
 

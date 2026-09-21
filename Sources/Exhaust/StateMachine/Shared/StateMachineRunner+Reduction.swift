@@ -142,7 +142,7 @@ extension __ExhaustRuntime {
             let remaining = deadline > now ? deadline - now : 1
             return deadlineNanoseconds == 0 ? remaining : min(deadlineNanoseconds, remaining)
         }
-        let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
+        let noRelax = SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         var currentOutput = output
         var currentTree = tree
         // The reducer canonicalizes its sequence at init, so the sequence each pass returns is the one that reproduces its value through `.exact` materialization — re-flattening the tree afterwards is not guaranteed to. Track it so callers on the `(sequence, tree, value)` path get the authoritative one.

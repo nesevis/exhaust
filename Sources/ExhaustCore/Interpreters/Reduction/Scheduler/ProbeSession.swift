@@ -251,7 +251,7 @@ struct ProbeSession {
             anyRequiresRebuild: anyRequiresRebuild,
             latestTreeIsStripped: latestTreeIsStripped,
             convergenceRecords: encoder.convergenceRecords,
-            hadReplacementShortlexRejection: encoder.hadReplacementShortlexRejection,
+            hadUnresolvedReplacement: encoder.hadUnresolvedReplacement,
             acceptedLeafNodeIDs: acceptedLeafNodeIDs
         )
     }
@@ -307,7 +307,7 @@ struct PassReport {
     let latestTreeIsStripped: Bool
 
     let convergenceRecords: [Int: ConvergedOrigin]
-    let hadReplacementShortlexRejection: Bool
+    let hadUnresolvedReplacement: Bool
 
     /// Leaf node IDs whose values changed in accepted probes during this pass.
     let acceptedLeafNodeIDs: Set<Int>

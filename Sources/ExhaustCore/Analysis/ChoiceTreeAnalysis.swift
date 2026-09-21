@@ -7,28 +7,28 @@
 ///
 /// ## What It Does
 ///
-/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as enumerable (all parameters have at most 256 values) or large-domain (some parameters have large ranges, requiring synthetic problematic value representatives). Returns a ``EnumerableDomainProfile`` or ``LargeDomainProfile`` that downstream code uses to build covering arrays.
+/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree``, a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as enumerable (all parameters have at most 256 values) or large-domain (some parameters have large ranges, requiring synthetic problematic value representatives). Returns a ``EnumerableDomainProfile`` or ``LargeDomainProfile`` that downstream code uses to build covering arrays.
 ///
 /// ## Why This Matters
 ///
-/// Standard random testing misses systematic parameter interactions. A generator with three booleans and a 4-way enum has 32 combinations — random sampling at 100 iterations will likely miss some. t-way combinatorial testing guarantees that every t-tuple of parameter values appears in at least one test case. Strength t=2 (pairwise) catches all two-parameter interactions; t=3 catches all three-parameter interactions. The covering array approach produces far fewer test cases than exhaustive enumeration. For example, pairwise coverage of five boolean parameters needs only four test cases instead of 32. ChoiceTreeAnalysis is what makes this possible: it decomposes an opaque generator into a parameter model suitable for combinatorial construction.
+/// Standard random testing misses systematic parameter interactions. A generator with three booleans and a 4-way enum has 32 combinations, and random sampling at 100 iterations will likely miss some. t-way combinatorial testing guarantees that every t-tuple of parameter values appears in at least one test case. Strength t=2 (pairwise) catches all two-parameter interactions; t=3 catches all three-parameter interactions. The covering array approach produces far fewer test cases than exhaustive enumeration. For example, pairwise coverage of five boolean parameters needs only four test cases instead of 32. ChoiceTreeAnalysis is what makes this possible: it decomposes an opaque generator into a parameter model suitable for combinatorial construction.
 ///
 /// ## How Exhaust Enables Deep Analysis
 ///
-/// Generators built by composing closures are resistant to analysis because each closure boundary is opaque — a static walker cannot inspect what a `bind` continuation will do until it runs. Exhaust's Freer Monad architecture sidesteps this: instead of embedding decisions in closures, every generator choice is reified as an inspectable ``ReflectiveOperation`` node. When VACTI interprets the generator with `materializePicks = true`, it executes the full generator pipeline once and produces a concrete ``ChoiceTree`` that records every decision — including those produced by bind continuations, nested picks, and recursive layers. The analysis then walks this execution trace rather than the generator structure, extracting a complete parameter model from a single run. Trade-off: the analysis reflects one execution path. Different PRNG seeds can produce different sequence lengths. The analysis tries three seeds and keeps the result with the most parameters.
+/// Generators built by composing closures are resistant to analysis because each closure boundary is opaque: a static walker cannot inspect what a `bind` continuation will do until it runs. Exhaust's Freer Monad architecture sidesteps this: instead of embedding decisions in closures, every generator choice is reified as an inspectable ``ReflectiveOperation`` node. When VACTI interprets the generator with `materializePicks = true`, it executes the full generator pipeline once and produces a concrete ``ChoiceTree`` that records every decision, including those produced by bind continuations, nested picks, and recursive layers. The analysis then walks this execution trace rather than the generator structure, extracting a complete parameter model from a single run. Trade-off: the analysis reflects one execution path. Different PRNG seeds can produce different sequence lengths. The analysis tries three seeds and keeps the result with the most parameters.
 ///
 /// ## Parameter Classification
 ///
 /// Six ``ScreeningParameterKind`` cases:
-/// - `.enumerableChooseBits`: domain size is 256 or smaller — enumerates all values.
-/// - `.chooseBits`: domain size exceeds 256 — synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
+/// - `.enumerableChooseBits`: domain size is 256 or smaller. Enumerates all values.
+/// - `.chooseBits`: domain size exceeds 256. Synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
 /// - `.compositeSequence`: a single parameter encoding all valid `(length, [element problematic values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
 /// - `.sequenceLength`, `.sequenceElement`: legacy cases used by the ``SequenceCoveringArray`` pipeline. Not produced by ``walkSequence``.
-/// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch. Those values are outside the parameter model, so a pick with any arm that draws a choice clears ``AnalysisTemplate/isTotalWitness`` and the run cannot report an exhaustive pass.
+/// - `.pick`: multi-way branch. Values are branch indices. Analyzable when the branch count is 256 or fewer. Nested parameters within branches are allowed but not extracted: the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch. Those values are outside the parameter model, so a pick with any arm that draws a choice clears ``AnalysisTemplate/isTotalWitness`` and the run cannot report an exhaustive pass.
 ///
 /// ## Analyzability
 ///
-/// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted — that is, the generator is purely deterministic (for example `Gen.just(value)`).
+/// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted, that is, when the generator is purely deterministic (for example `Gen.just(value)`).
 ///
 /// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``ScreeningRunner``, ``ProblematicValues``
 package enum ChoiceTreeAnalysis {
@@ -68,7 +68,7 @@ package enum ChoiceTreeAnalysis {
         var bestElidedDrawingArm = false
 
         for seed in seeds {
-            // `sizeOverride: 100` ensures size-scaled sequences produce non-empty element subtrees during VACTI so that ``walkSequence`` can extract element parameters. The declared range itself is already stored directly on each `chooseBits` (with scaling attached as metadata), so the analyzer doesn't need a specific size for range visibility — just a size at which sequences produce enough elements to walk.
+            // `sizeOverride: 100` ensures size-scaled sequences produce non-empty element subtrees during VACTI so that ``walkSequence`` can extract element parameters. The declared range itself is already stored directly on each `chooseBits` (with scaling attached as metadata), so the analyzer doesn't need a specific size for range visibility, just a size at which sequences produce enough elements to walk.
             var interpreter = ValueAndChoiceTreeInterpreter(
                 gen,
                 materializePicks: true,
@@ -239,11 +239,6 @@ package enum ChoiceTreeAnalysis {
         }
     }
 
-    // MARK: - Validation-Only Walk
-
-    //
-    // Walks a subtree without extracting parameters. Used for bound subtrees in bind nodes where the structure must be valid but parameters are opaque. Always returns true — no node type is rejected in validation-only mode.
-
     // MARK: - Choice
 
     //
@@ -295,10 +290,10 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Pick Domains
 
     //
-    // Pick analysis requires ≤ 256 branches. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch, so a branch subtree has no shape this walk needs to accept or reject.
+    // Pick analysis requires ≤ 256 branches. Nested parameters within branches are allowed but not extracted: the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch, so a branch subtree has no shape this walk needs to accept or reject.
     //
     // Synthetic PickTuples are created with .pure(()) generators because the original branch generators are not available from the ChoiceTree.
-    // The fingerprint, weight, id, and branchCount metadata is preserved for replay compatibility — CoveringArrayReplay uses these to reconstruct the branch selection.
+    // The fingerprint, weight, id, and branchCount metadata is preserved for replay compatibility. CoveringArrayReplay uses these to reconstruct the branch selection.
 
     private static func walkPick(
         _ children: [ChoiceTree],
