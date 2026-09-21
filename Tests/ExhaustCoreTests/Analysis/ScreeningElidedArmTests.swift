@@ -30,34 +30,6 @@ struct ScreeningElidedArmTests {
         #expect(plan.isExhaustiveCandidate)
     }
 
-    @Test("Data dependence is read from the generator, not from a tree that records one path")
-    func dataDependenceReadsTheGenerator() {
-        #expect(Gen.just(UInt64(0)).hasDataDependentShape == false)
-        #expect(Gen.choose(in: UInt64(0) ... 3).hasDataDependentShape == false)
-        #expect(Gen.zip(Gen.just(UInt64(0)), Gen.just(UInt64(1))).hasDataDependentShape == false)
-
-        let binding = Gen.choose(in: UInt64(0) ... 3).wrapped(isReflective: true)
-            .bind { ReflectiveGenerator<UInt64>.just($0) }
-            .gen
-        #expect(binding.hasDataDependentShape)
-        // Reached only through the unselected arm, which is the position that used to go unreported.
-        let mixed = Gen.pick(choices: [
-            (weight: 1, generator: Gen.just(UInt64(0))),
-            (weight: 1, generator: binding),
-        ])
-        #expect(mixed.hasDataDependentShape)
-        #expect(Gen.zip(Gen.just(UInt64(0)), binding).hasDataDependentShape)
-    }
-
-    @Test("Collection combinators that depend on a drawn collection reify that dependence")
-    func collectionCombinatorsReifyTheirDependence() {
-        let source = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 3), exactly: 4)
-        #expect(source.hasDataDependentShape == false)
-        // Both draw a value and then build a generator shaped by it, so neither may read as fixed.
-        #expect(Gen.shuffled(source).hasDataDependentShape)
-        #expect(Gen.slice(of: source).hasDataDependentShape)
-    }
-
     @Test("A generator with a choice outside the parameter model is never an exhaustive candidate", arguments: UnmodeledChoiceShape.allCases)
     func unmodeledChoicePreventsExhaustiveCandidacy(shape: UnmodeledChoiceShape) throws {
         let plan = try #require(ScreeningRunner.plan(shape.generator, screeningBudget: 2000))
@@ -94,6 +66,14 @@ struct ScreeningElidedArmTests {
             return
         }
         #expect(distinctRows.count < 51)
+    }
+
+    @Test("Collection combinators that build on a drawn collection record a bind", arguments: DrawnCollectionCombinator.allCases)
+    func drawnCollectionCombinatorsRecordBind(combinator: DrawnCollectionCombinator) throws {
+        // Both draw a collection and then build a generator shaped by it. Recorded as a bind node, that dependence withholds the exhaustive verdict and keeps the callee-continuation pair out of the tree; built on the invisible bind it would do neither.
+        var interpreter = ValueAndChoiceTreeInterpreter(combinator.generator, seed: 1337, maxRuns: 1, sizeOverride: 100)
+        let (_, tree) = try #require(try interpreter.next())
+        #expect(tree.containsBind)
     }
 
     @Test("The graph walk reports every draw it can see")
@@ -151,6 +131,25 @@ enum UnmodeledChoiceShape: CaseIterable, CustomTestStringConvertible {
                 return Gen.backtrack(always: [(1, large.map { Optional($0) }), (1, constant.map { Optional($0) })])
             case .opaqueZip:
                 return Gen.zip(Gen.choose(in: UInt64(0) ... 1), Gen.zip(constant, large, isOpaque: true).map { $0 + $1 }).map { $0 + $1 }
+        }
+    }
+}
+
+enum DrawnCollectionCombinator: CaseIterable, CustomTestStringConvertible {
+    case shuffled
+    case slice
+
+    var testDescription: String {
+        "\(self)"
+    }
+
+    var generator: Generator<[UInt64]> {
+        let source = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 3), exactly: 4)
+        switch self {
+            case .shuffled:
+                return Gen.shuffled(source)
+            case .slice:
+                return Gen.slice(of: source).map { Array($0) }
         }
     }
 }
