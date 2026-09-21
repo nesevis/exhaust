@@ -218,7 +218,7 @@ private enum GenericNestedRecursiveScope {
     @Exhaustable
     indirect enum Heap<Element: Comparable>: Equatable {
         case empty
-        case node(Element, Heap<Element>, Heap<Element>)
+        case node(Element, Heap, Heap)
     }
 }
 

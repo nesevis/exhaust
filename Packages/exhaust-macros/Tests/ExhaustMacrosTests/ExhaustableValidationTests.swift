@@ -276,7 +276,7 @@
             let declaration: DeclSyntax = """
             indirect enum Heap<Element: Comparable> {
                 case empty
-                case node(Element, Heap<Element>, [Heap<Element>])
+                case node(Element, Heap, [Heap])
             }
             """
             let enumeration = try #require(declaration.as(EnumDeclSyntax.self))

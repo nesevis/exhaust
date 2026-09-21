@@ -38,7 +38,8 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
                                     for: entry.element,
                                     valueType: valueType,
                                     declarationName: declarationName,
-                                    qualifiedTypeName: typeName
+                                    qualifiedTypeName: typeName,
+                                    specializedTypeName: valueType
                                 ),
                                 entry.availability
                             )
@@ -52,7 +53,8 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
                             typeName: typeName,
                             valueType: valueType,
                             declarationName: declarationName,
-                            qualifiedTypeName: typeName
+                            qualifiedTypeName: typeName,
+                            specializedTypeName: valueType
                         ),
                         .always
                     )]
@@ -128,7 +130,8 @@ private func productEntry(
     typeName: String,
     valueType: String,
     declarationName: String,
-    qualifiedTypeName: String
+    qualifiedTypeName: String,
+    specializedTypeName: String
 ) -> String {
     let qualifiedProperties = properties.map {
         (
@@ -136,7 +139,8 @@ private func productEntry(
             type: qualifySelfReferences(
                 in: $0.type,
                 declarationName: declarationName,
-                qualifiedTypeName: qualifiedTypeName
+                qualifiedTypeName: qualifiedTypeName,
+                specializedTypeName: specializedTypeName
             )
         )
     }
@@ -207,7 +211,8 @@ private func caseEntry(
     for element: EnumCaseElementSyntax,
     valueType: String,
     declarationName: String,
-    qualifiedTypeName: String
+    qualifiedTypeName: String,
+    specializedTypeName: String
 ) -> String {
     let caseName = element.name.trimmedDescription
     let parameters = element.parameterClause?.parameters.map { parameter in
@@ -216,7 +221,8 @@ private func caseEntry(
             type: qualifySelfReferences(
                 in: parameter.type,
                 declarationName: declarationName,
-                qualifiedTypeName: qualifiedTypeName
+                qualifiedTypeName: qualifiedTypeName,
+                specializedTypeName: specializedTypeName
             )
         )
     } ?? []
@@ -255,11 +261,13 @@ private func metatypeExpression(_ type: TypeSyntax) -> String {
 private func qualifySelfReferences(
     in type: TypeSyntax,
     declarationName: String,
-    qualifiedTypeName: String
+    qualifiedTypeName: String,
+    specializedTypeName: String
 ) -> TypeSyntax {
     SelfTypeQualifier(
         declarationName: declarationName,
-        qualifiedTypeName: qualifiedTypeName
+        qualifiedTypeName: qualifiedTypeName,
+        specializedTypeName: specializedTypeName
     ).visit(type)
 }
 
@@ -267,10 +275,16 @@ private func qualifySelfReferences(
 private final class SelfTypeQualifier: SyntaxRewriter {
     private let declarationName: String
     private let qualifiedTypeName: String
+    private let specializedTypeName: String
 
-    init(declarationName: String, qualifiedTypeName: String) {
+    init(
+        declarationName: String,
+        qualifiedTypeName: String,
+        specializedTypeName: String
+    ) {
         self.declarationName = declarationName
         self.qualifiedTypeName = qualifiedTypeName
+        self.specializedTypeName = specializedTypeName
         super.init(viewMode: .sourceAccurate)
     }
 
@@ -281,7 +295,9 @@ private final class SelfTypeQualifier: SyntaxRewriter {
         else {
             return rewritten
         }
-        let arguments = identifier.genericArgumentClause?.trimmedDescription ?? ""
+        guard let arguments = identifier.genericArgumentClause?.trimmedDescription else {
+            return TypeSyntax(stringLiteral: specializedTypeName)
+        }
         return TypeSyntax(stringLiteral: "\(qualifiedTypeName)\(arguments)")
     }
 }
