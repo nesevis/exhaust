@@ -87,6 +87,14 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``gen(_:from:)-3jh2y``
 - ``gen(from:)``
 
+### Generator Derivation
+
+- ``Exhaustable(_:)``
+- ``ExhaustableSettings``
+- ``ExhaustableDomain``
+- ``ExhaustableSizeScaling``
+- ``ExhaustableBudget``
+
 ### Property Settings
 
 - ``ExhaustBudget``

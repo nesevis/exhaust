@@ -6,6 +6,33 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-21
+
+### Added
+
+- The experimental `@Exhaustable` macro derives `Type.gen()` for enums, structs, final classes, and generic or recursive forms. Budget, domain, and payload-override settings control generated values, while the lightweight `Exhaustable` product keeps generator runtime code out of application targets.
+- `#exhaust` and `#execute` accept `.deadline(_:)`. `ExhaustReport.hasExceededDeadline` distinguishes an expired deadline from a completed budget.
+- `#examine` accepts `.skipReflection` for generators that discard information, while retaining generation, replay, coverage, and filter checks.
+
+### Changed
+
+- Counterexamples now reduce size-controlled collections and recursive generators more effectively, including generators built with `.unfold`.
+- `#exhaust` continues into random sampling unless screening covered every possible value. This prevents false passes for optionals, `oneOf`, recursive generators, and other generators whose shape varies with earlier choices.
+- Unseeded `#example` arrays generate every value at size 50. Seeded arrays retain the sampling size ramp.
+- Date generators expand from the range midpoint as size increases, and dictionary generators draw key-value pairs together.
+- Generation, replay, and reduction allocate less.
+- `#explore(…, time:)` no longer emits an experimental-use warning.
+
+### Fixed
+
+- Reflection now honours `resize` when validating values and rejects values from choices with no branches.
+- Multi-argument `#gen` counterexamples now replay to the reported value when one input generator chooses its range from an earlier generated value.
+- Reduction no longer overflows when integer ranges reach `UInt64.max`.
+
+### Replay
+
+- Seeds that use date or dictionary generators take a different path because those generators now use the distributions described above.
+
 ## [1.3.0] - 2026-09-15
 
 ### Added
@@ -124,7 +151,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/nesevis/exhaust/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/nesevis/exhaust/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/nesevis/exhaust/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/nesevis/exhaust/compare/v1.1.0...v1.2.0
