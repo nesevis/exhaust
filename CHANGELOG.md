@@ -6,6 +6,12 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-21
+
+### Fixed
+
+- `@Exhaustable` now derives generators for nested recursive types such as `Outer.Foo<Bar>`.
+
 ## [1.4.0] - 2026-09-21
 
 ### Added
@@ -151,7 +157,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/nesevis/exhaust/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/nesevis/exhaust/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/nesevis/exhaust/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/nesevis/exhaust/compare/v1.2.0...v1.2.1

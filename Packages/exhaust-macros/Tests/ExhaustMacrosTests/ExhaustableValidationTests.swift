@@ -271,6 +271,29 @@
             #expect(expansion.trimmedDescription.contains("Scope.Box<Element>(value: values[0] as! Element)"))
         }
 
+        @Test("Nested recursive generic expansions qualify shorthand self references")
+        func nestedRecursiveGenericExpansion() throws {
+            let declaration: DeclSyntax = """
+            indirect enum Heap<Element: Comparable> {
+                case empty
+                case node(Element, Heap<Element>, [Heap<Element>])
+            }
+            """
+            let enumeration = try #require(declaration.as(EnumDeclSyntax.self))
+            let extensions = try ExhaustableMacro.expansion(
+                of: AttributeSyntax("@Exhaustable"),
+                attachedTo: enumeration,
+                providingExtensionsOf: TypeSyntax(stringLiteral: "BinaryHeapChallenge.Heap"),
+                conformingTo: [],
+                in: GenerableValidationContext()
+            )
+            let expansion = try #require(extensions.first)
+            #expect(expansion.trimmedDescription.contains("BinaryHeapChallenge.Heap<Element>.self"))
+            #expect(expansion.trimmedDescription.contains("[BinaryHeapChallenge.Heap<Element>].self"))
+            #expect(expansion.trimmedDescription.contains("as! BinaryHeapChallenge.Heap<Element>"))
+            #expect(expansion.trimmedDescription.contains("as! [BinaryHeapChallenge.Heap<Element>]"))
+        }
+
         @Test("Nested declarations can refer to an enclosing generic parameter")
         func genericEnclosingScope() throws {
             let nested: DeclSyntax = "struct Value { let element: Element }"

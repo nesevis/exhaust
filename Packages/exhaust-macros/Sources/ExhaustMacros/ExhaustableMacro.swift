@@ -22,6 +22,7 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
             }
             let typeName = type.trimmedDescription
             let valueType = specializedName(for: declaration, fallback: typeName)
+            let declarationName = declarationName(for: declaration)
             let settings = node.arguments?.as(LabeledExprListSyntax.self)?.map { $0.expression.trimmedDescription } ?? []
             let renderedSettings = settings.isEmpty ? "" : ", settings: [\(settings.joined(separator: ", "))]"
             let trailing = renderedSettings
@@ -32,12 +33,29 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
                 case let .enumeration(cases):
                     cases.compactMap { entry in
                         guard case .never = entry.availability else {
-                            return (caseEntry(for: entry.element, valueType: valueType), entry.availability)
+                            return (
+                                caseEntry(
+                                    for: entry.element,
+                                    valueType: valueType,
+                                    declarationName: declarationName,
+                                    qualifiedTypeName: typeName
+                                ),
+                                entry.availability
+                            )
                         }
                         return nil
                     }
                 case let .memberwise(properties), let .synthesizedMemberwise(properties, _):
-                    [(productEntry(properties: properties, typeName: typeName, valueType: valueType), .always)]
+                    [(
+                        productEntry(
+                            properties: properties,
+                            typeName: typeName,
+                            valueType: valueType,
+                            declarationName: declarationName,
+                            qualifiedTypeName: typeName
+                        ),
+                        .always
+                    )]
             }
             let extensionDeclaration = conformanceExtension(
                 typeName: typeName,
@@ -96,10 +114,34 @@ private func specializedName(for declaration: some DeclGroupSyntax, fallback: St
     return "\(fallback)<\(arguments)>"
 }
 
+/// Returns the declaration's unqualified name after validation has restricted it to a supported nominal type.
+private func declarationName(for declaration: some DeclGroupSyntax) -> String {
+    declaration.as(EnumDeclSyntax.self)?.name.text
+        ?? declaration.as(StructDeclSyntax.self)?.name.text
+        ?? declaration.as(ClassDeclSyntax.self)?.name.text
+        ?? ""
+}
+
 /// Uses only validated fields: every payload has a concrete type and a corresponding memberwise argument and extraction position.
-private func productEntry(properties: [ExhaustableDeclaration.StoredProperty], typeName: String, valueType: String) -> String {
-    let payloadTypes = properties.map { metatypeExpression($0.type) }
-    let embedArguments = properties.enumerated().map { index, property in
+private func productEntry(
+    properties: [ExhaustableDeclaration.StoredProperty],
+    typeName: String,
+    valueType: String,
+    declarationName: String,
+    qualifiedTypeName: String
+) -> String {
+    let qualifiedProperties = properties.map {
+        (
+            name: $0.name,
+            type: qualifySelfReferences(
+                in: $0.type,
+                declarationName: declarationName,
+                qualifiedTypeName: qualifiedTypeName
+            )
+        )
+    }
+    let payloadTypes = qualifiedProperties.map { metatypeExpression($0.type) }
+    let embedArguments = qualifiedProperties.enumerated().map { index, property in
         "\(property.name): values[\(index)] as! \(property.type.trimmedDescription)"
     }
     let embedBody = properties.isEmpty
@@ -161,12 +203,26 @@ private func conformanceExtension(
 }
 
 /// Preserves enum argument labels while using positional bindings to recover associated values.
-private func caseEntry(for element: EnumCaseElementSyntax, valueType: String) -> String {
+private func caseEntry(
+    for element: EnumCaseElementSyntax,
+    valueType: String,
+    declarationName: String,
+    qualifiedTypeName: String
+) -> String {
     let caseName = element.name.trimmedDescription
-    let parameters = element.parameterClause?.parameters.map { $0 } ?? []
+    let parameters = element.parameterClause?.parameters.map { parameter in
+        (
+            label: parameter.firstName,
+            type: qualifySelfReferences(
+                in: parameter.type,
+                declarationName: declarationName,
+                qualifiedTypeName: qualifiedTypeName
+            )
+        )
+    } ?? []
     let payloadTypes = parameters.map { metatypeExpression($0.type) }
     let embedArguments = parameters.enumerated().map { index, parameter in
-        let label = parameter.firstName.flatMap { name in
+        let label = parameter.label.flatMap { name in
             name.text == "_" ? nil : "\(name.trimmedDescription): "
         } ?? ""
         return "\(label)values[\(index)] as! \(parameter.type.trimmedDescription)"
@@ -193,6 +249,41 @@ private func constructorEntry(name: String, payloadTypes: [String], embedBody: S
 private func metatypeExpression(_ type: TypeSyntax) -> String {
     let needsParentheses = isFunctionType(type) || type.is(SomeOrAnyTypeSyntax.self) || type.is(CompositionTypeSyntax.self)
     return needsParentheses ? "(\(type.trimmedDescription)).self" : "\(type.trimmedDescription).self"
+}
+
+/// Qualifies shorthand self references because a peer extension does not inherit the nested declaration's lexical scope.
+private func qualifySelfReferences(
+    in type: TypeSyntax,
+    declarationName: String,
+    qualifiedTypeName: String
+) -> TypeSyntax {
+    SelfTypeQualifier(
+        declarationName: declarationName,
+        qualifiedTypeName: qualifiedTypeName
+    ).visit(type)
+}
+
+/// Rewrites the annotated type's shorthand name wherever it appears inside a payload type, including standard containers and changed generic specializations.
+private final class SelfTypeQualifier: SyntaxRewriter {
+    private let declarationName: String
+    private let qualifiedTypeName: String
+
+    init(declarationName: String, qualifiedTypeName: String) {
+        self.declarationName = declarationName
+        self.qualifiedTypeName = qualifiedTypeName
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    override func visit(_ node: IdentifierTypeSyntax) -> TypeSyntax {
+        let rewritten = super.visit(node)
+        guard node.name.text == declarationName,
+              let identifier = rewritten.as(IdentifierTypeSyntax.self)
+        else {
+            return rewritten
+        }
+        let arguments = identifier.genericArgumentClause?.trimmedDescription ?? ""
+        return TypeSyntax(stringLiteral: "\(qualifiedTypeName)\(arguments)")
+    }
 }
 
 /// Stored function parameters must escape when a synthesized class initializer assigns them to a property. Optional functions already escape without an annotation.

@@ -32,6 +32,13 @@ struct GenericDerivationTests {
         try expectReflectionRoundTrip(GenericScope<Int>.Pair<Bool>.gen().gen, value: .init(first: 7, second: true))
     }
 
+    @Test("Nested recursive generic enums qualify their own payload type")
+    func nestedRecursiveEnums() throws {
+        let generator = GenericNestedRecursiveScope.Heap<Int>.gen(recursion: 2, .domain(.tiny))
+        let target = GenericNestedRecursiveScope.Heap<Int>.node(7, .empty, .empty)
+        try expectReflectionRoundTrip(generator.gen, value: target)
+    }
+
     @Test("Recursive generic enums terminate, reflect, and replay across node ceilings", arguments: [31, 100])
     func recursiveEnums(maximumNodes: Int) throws {
         let plan = try GeneratorDerivationPlan(for: GenericTree<Int>.self, overrides: [:])
@@ -204,6 +211,14 @@ private struct GenericScope<Element: Equatable> {
     struct Pair<Other: Equatable>: Equatable {
         let first: Element
         let second: Other
+    }
+}
+
+private enum GenericNestedRecursiveScope {
+    @Exhaustable
+    indirect enum Heap<Element: Comparable>: Equatable {
+        case empty
+        case node(Element, Heap<Element>, Heap<Element>)
     }
 }
 
