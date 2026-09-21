@@ -15,19 +15,16 @@ import Foundation
 // MARK: - Why This Exists
 
 //
-// Replay handles both VACTI-produced and Reflect-produced ChoiceTrees. The two formats differ at pick sites: VACTI wraps
-// callee and continuation in a two-element group (children[0] = callee, children[1] = continuation), while Reflect produces
-// a flat group of branch nodes with no separate continuation. Materializer's guided-mode fallback expects the VACTI layout
-// (decomposeNonGroupFallback splits on children.count == 2), so reflected trees lose their continuation fallback and fall
-// through to PRNG, producing wrong values. Replay's tree-walking approach handles both layouts because it consumes the tree
-// structurally rather than through a cursor-based callee/continuation decomposition.
+// Replay reproduces a value from a ChoiceTree by walking the tree alongside the generator, matching each node to the operation that produced it. It accepts trees from both producers: VACTI, which records a pick's callee and an impure continuation as a two-element group, and Reflect, which records a flat group of branch nodes and can hold a different number of children than the generator has operations.
+//
+// Materializer's guided mode reads the same trees as a fallback, but through a cursor and a callee-continuation split (decomposeNonGroupFallback treats an untagged two-child group as that pair). That split is a guess wherever another construct also records an untagged pair, which is why generator binds are reified as `.bind` nodes. Replay makes no such guess, so it stays the reference for "this tree produces this value" and the oracle other interpreters are checked against.
 
 extension Interpreters {
     // MARK: - Public-Facing Replay Function
 
     /// Deterministically reproduces a value by executing a generator with a structured ``ChoiceTree``.
     ///
-    /// Handles both VACTI-produced trees (from generation) and Reflect-produced trees (from backward-pass decomposition). The two formats differ at pick sites, which prevents consolidation with ``Materializer``'s guided-mode fallback path.
+    /// Handles both VACTI-produced trees (from generation) and Reflect-produced trees (from backward-pass decomposition). The two formats differ at pick sites, and this walk consumes either structurally rather than through ``Materializer``'s callee-continuation split.
     ///
     /// - Parameters:
     ///   - gen: The generator to execute.

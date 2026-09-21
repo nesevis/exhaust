@@ -234,7 +234,7 @@ extension MetaGeneratorPropertyTests {
 
     /// Pins the combinators the coverage sweep deliberately omits, so their exemption is an assertion rather than silence.
     ///
-    /// `unfolded` builds a `bindReified` chain with no backward, so reflection throws for every value. `boundRange` uses the invisible `FreerMonad.bind`, whose dependent `choose` reflects only occasionally. Both are excluded from ``reflectableCombinatorFixtures`` because a nil or thrown reflection is expected, not a defect. Asserting that here means that if backward support is ever added — making these reflect — this test fails and prompts promoting the kind into the reflectable set and the round-trip sweeps.
+    /// `unfolded` builds a `bindReified` chain with no backward, so reflection throws for every value. `boundRange` is a reified bind with no backward, because the lower bound cannot be recovered from a value drawn above it. Both are excluded from ``reflectableCombinatorFixtures`` because a nil or thrown reflection is expected, not a defect. Asserting that here means that if backward support is ever added — making these reflect — this test fails and prompts promoting the kind into the reflectable set and the round-trip sweeps.
     @Test("Forward-only combinators stay unreflectable")
     func forwardOnlyCombinatorsStayUnreflectable() throws {
         let unfolded: GenRecipe = .combinator(.unfolded(depthRange: 0 ... 3))

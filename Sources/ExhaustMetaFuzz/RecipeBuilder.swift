@@ -137,18 +137,51 @@ private func buildCombinator(
             ])
 
         case let .boundArray(element: element, maxLength: maxLength):
+            // Reified, like every public bind: the invisible `FreerMonad.bind` records an untagged callee-continuation pair that guided materialization cannot tell apart from a wrapper's own pair.
             let elementGen = buildNestedGenerator(from: element)
-            return Gen.choose(in: 0 ... maxLength).bind { length in
-                Gen.arrayOf(elementGen, exactly: length)
-            }.erase()
+            return AnyGenerator.impure(
+                operation: .transform(
+                    kind: .bind(
+                        fingerprint: recipeFingerprint(
+                            structure: "\(element).boundArray(\(maxLength))",
+                            fileID: fileID,
+                            line: line,
+                            column: column
+                        ),
+                        forward: { length in Gen.arrayOf(elementGen, exactly: length as! UInt64).erase() },
+                        backward: { array in UInt64((array as! [Any]).count) },
+                        inputType: UInt64.self,
+                        outputType: [Any].self
+                    ),
+                    inner: Gen.choose(in: 0 ... maxLength).erase()
+                ),
+                continuation: { .pure($0) }
+            )
 
         case let .boundRange(inner):
+            // Forward-only: the lower bound cannot be recovered from a value drawn above it.
             let innerGen = buildNestedGenerator(from: inner)
-            return innerGen.bind { loAny in
-                let lo = loAny as! Int
-                let hi = lo + 50
-                return Gen.choose(in: lo ... hi)
-            }.erase()
+            return AnyGenerator.impure(
+                operation: .transform(
+                    kind: .bind(
+                        fingerprint: recipeFingerprint(
+                            structure: "\(inner).boundRange",
+                            fileID: fileID,
+                            line: line,
+                            column: column
+                        ),
+                        forward: { loAny in
+                            let lo = loAny as! Int
+                            return Gen.choose(in: lo ... lo + 50).erase()
+                        },
+                        backward: nil,
+                        inputType: Int.self,
+                        outputType: Int.self
+                    ),
+                    inner: innerGen
+                ),
+                continuation: { .pure($0) }
+            )
 
         case let .reifiedBind(inner):
             let innerGenerator = buildNestedGenerator(from: inner)

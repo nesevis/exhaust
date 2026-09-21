@@ -108,7 +108,7 @@ enum ScreeningShape: CaseIterable, CustomTestStringConvertible {
     case boundArray
     case reifiedBind
     case sizeRead
-    case continuationBuiltRange
+    case boundRange
     case rejectingFilter
 
     var testDescription: String {
@@ -192,7 +192,7 @@ enum ScreeningShape: CaseIterable, CustomTestStringConvertible {
                 return .combinator(.reifiedBind(small))
             case .sizeRead:
                 return .combinator(.getSized)
-            case .continuationBuiltRange:
+            case .boundRange:
                 return .combinator(.boundRange(one))
             case .rejectingFilter:
                 return .combinator(.filtered(small, .isEven))
@@ -219,9 +219,9 @@ enum ScreeningShape: CaseIterable, CustomTestStringConvertible {
                 .enumerable(points: 1)
             case .constant:
                 .constant
-            case .narrowestLargeRange, .double, .string, .character, .zipWithLargeRange, .drawingArm, .optionalEnumerable, .optionalLargeRange, .nestedDrawingArm, .drawingBacktrackArm, .array, .fixedLengthArray, .boundArray, .reifiedBind, .sizeRead:
+            case .narrowestLargeRange, .double, .string, .character, .zipWithLargeRange, .drawingArm, .optionalEnumerable, .optionalLargeRange, .nestedDrawingArm, .drawingBacktrackArm, .array, .fixedLengthArray, .boundArray, .boundRange, .reifiedBind, .sizeRead:
                 .notEnumerable
-            case .continuationBuiltRange, .rejectingFilter, .adjacentDoubles, .signedZeroDoubles:
+            case .rejectingFilter, .adjacentDoubles, .signedZeroDoubles:
                 .unspecified
         }
     }
