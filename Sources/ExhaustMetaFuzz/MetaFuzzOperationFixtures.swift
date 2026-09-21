@@ -133,7 +133,7 @@ package let metaFuzzOperationFixtures: [MetaFuzzOperationFixture] = [
         )
     ),
     .init(
-        name: "pick with continuation-composed branch",
+        name: "pick with bound branch",
         recipe: .combinator(.oneOf([
             .combinator(.boundRange(.leaf(.justInt(1)))),
         ])),

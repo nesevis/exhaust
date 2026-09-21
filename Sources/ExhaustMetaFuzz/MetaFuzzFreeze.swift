@@ -16,6 +16,8 @@ public struct MetaFuzzFrozenCase: Codable, Sendable {
     public enum Kind: String, Codable, Sendable {
         /// A block-1 value-pipeline case: recipe plus seeds, replayed through ``MetaFuzz/check(_:)``.
         case pipelineCase
+        /// A screening case: recipe plus seeds, replayed through ``MetaFuzz/checkScreening(_:)``.
+        case screeningCase
     }
 
     /// The schema version this record was written with.
@@ -32,9 +34,9 @@ public struct MetaFuzzFrozenCase: Codable, Sendable {
 
     package static let currentVersion = 1
 
-    package init(fuzzCase: MetaFuzzCase, oracle: String, note: String?) {
+    package init(fuzzCase: MetaFuzzCase, kind: Kind, oracle: String, note: String?) {
         version = Self.currentVersion
-        kind = .pipelineCase
+        self.kind = kind
         self.oracle = oracle
         self.note = note
         recipe = fuzzCase.recipe
@@ -57,12 +59,19 @@ public extension MetaFuzz {
     ///
     /// - Parameters:
     ///   - fuzzCase: The case that violated an oracle, in its original rather than reduced form, so the record does not depend on the reducer that may itself be the defect.
+    ///   - kind: The roster the case violated, which is the roster replay re-runs. Defaults to the pipeline roster.
     ///   - violation: The oracle violation the case produced. Its type name becomes the record's provenance.
     ///   - note: Free-form provenance, for example the defect and the PR that fixed it.
     /// - Returns: Pretty-printed JSON with stable key ordering, so committed records diff cleanly.
-    static func freeze(_ fuzzCase: MetaFuzzCase, violation: some Error, note: String? = nil) throws -> Data {
+    static func freeze(
+        _ fuzzCase: MetaFuzzCase,
+        kind: MetaFuzzFrozenCase.Kind = .pipelineCase,
+        violation: some Error,
+        note: String? = nil
+    ) throws -> Data {
         let record = MetaFuzzFrozenCase(
             fuzzCase: fuzzCase,
+            kind: kind,
             oracle: String(describing: type(of: violation)),
             note: note
         )
@@ -90,7 +99,12 @@ public extension MetaFuzz {
     ///
     /// The harness's fuzz entries call this from the property closure so findings survive the run as machine-readable freeze candidates, ready to commit into `Regressions/` alongside the fix. The filename folds in the violated oracle and a stable hash of the case, so repeat findings are recorded once, and each oracle stops recording at ``findingsPerOracleCap`` files. Write failures are swallowed deliberately, because recording is a side channel and must never turn a real finding into an I/O error. A failed write stays claimed, so a permanently unwritable directory cannot re-run the encoder on every attempt. The case is lost for the process's life; the fault inventory still counts it.
     @discardableResult
-    static func recordFinding(_ fuzzCase: MetaFuzzCase, violation: some Error, in directory: URL) -> URL? {
+    static func recordFinding(
+        _ fuzzCase: MetaFuzzCase,
+        kind: MetaFuzzFrozenCase.Kind = .pipelineCase,
+        violation: some Error,
+        in directory: URL
+    ) -> URL? {
         let oracle = "\(type(of: violation))"
         let name = "\(oracle)-\(stableHash(of: fuzzCase.description)).json"
         let directoryKey = directory.standardizedFileURL.path
@@ -106,7 +120,7 @@ public extension MetaFuzz {
             namesByDirectory[directoryKey] = names
             return canRecord
         }
-        guard shouldWrite, let data = try? freeze(fuzzCase, violation: violation) else {
+        guard shouldWrite, let data = try? freeze(fuzzCase, kind: kind, violation: violation) else {
             return nil
         }
         let file = directory.appendingPathComponent(name)
@@ -129,14 +143,16 @@ public extension MetaFuzz {
                 "record version \(record.version) does not match current \(MetaFuzzFrozenCase.currentVersion); migrate or retire the record (oracle: \(record.oracle), note: \(record.note ?? "none"))"
             )
         }
+        let fuzzCase = MetaFuzzCase(
+            recipe: record.recipe,
+            valueSeed: record.valueSeed,
+            perturbationSeed: record.perturbationSeed
+        )
         switch record.kind {
             case .pipelineCase:
-                let fuzzCase = MetaFuzzCase(
-                    recipe: record.recipe,
-                    valueSeed: record.valueSeed,
-                    perturbationSeed: record.perturbationSeed
-                )
                 try check(fuzzCase)
+            case .screeningCase:
+                try checkScreening(fuzzCase)
         }
     }
 }

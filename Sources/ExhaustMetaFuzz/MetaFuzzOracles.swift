@@ -36,6 +36,15 @@ public struct GuidedDeterminismViolation: Error, CustomStringConvertible {
     }
 }
 
+/// Guided materialization was handed the complete tree of a generated value as its fallback and produced a different value, so part of the tree was dropped and that choice fell to the PRNG.
+public struct GuidedFallbackFidelityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
 /// A flattened sequence's structural markers do not balance.
 public struct FlattenBalanceViolation: Error, CustomStringConvertible {
     public let description: String
@@ -171,6 +180,7 @@ public extension MetaFuzz {
 
         try checkDeterminism(fuzzCase)
         try checkFunctorIdentity(fuzzCase)
+        try checkGuidedFallbackFidelity(gen, fuzzCase)
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: fuzzCase.valueSeed, maxRuns: valuesPerCase)
         var reductionChecked = false
@@ -430,6 +440,43 @@ extension MetaFuzz {
         }
     }
 
+    /// Guided fallback fidelity: with an empty prefix every choice resolves from the fallback tree, so handing guided materialization the complete tree of a generated value must reproduce that value whatever the seed. A different value means a handler passed the wrong subtree down, the choice found no fallback, and the PRNG answered instead, which is silent everywhere else: screening rows and reduction probes both lean on this path.
+    ///
+    /// Generates at size 100 because the materializer runs at size 100, and a size-dependent recipe differs between sizes by design. Seeds come from the case rather than the shared perturbation stream so that adding this oracle leaves every frozen record's mutation sequence unchanged.
+    package static func checkGuidedFallbackFidelity(_ gen: AnyGenerator, _ fuzzCase: MetaFuzzCase) throws {
+        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: fuzzCase.valueSeed, maxRuns: 3, sizeOverride: 100)
+        while true {
+            let element: (value: Any, tree: ChoiceTree)?
+            do {
+                element = try iterator.next()
+            } catch {
+                return
+            }
+            guard let (value, tree) = element else {
+                return
+            }
+            for offset in [UInt64(1), 2] {
+                let guidedSeed = fuzzCase.perturbationSeed &+ offset
+                switch Materializer.materialize(gen, context: .init(
+                    prefix: ChoiceSequence(),
+                    mode: .guided(seed: guidedSeed, fallbackTree: nil),
+                    fallbackTree: tree
+                )) {
+                    case let .success(materialized, _, _):
+                        guard anyEquals(materialized, value) else {
+                            throw GuidedFallbackFidelityViolation(
+                                "guided materialization from the complete tree produced \(materialized), not \(value), under seed \(guidedSeed) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+                            )
+                        }
+                    case .rejected, .failed:
+                        throw GuidedFallbackFidelityViolation(
+                            "guided materialization rejected the complete tree of a generated value under seed \(guidedSeed) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+                        )
+                }
+            }
+        }
+    }
+
     /// Flat-emission parity: the flat-emission walk must reach the same outcome as tree-building materialization of identical inputs, its sequence must equal the fresh tree's flattening entry for entry, and both paths must report the same convergence.
     private static func checkFlatEmissionParity(
         _ gen: AnyGenerator,
@@ -528,7 +575,7 @@ extension MetaFuzz {
 }
 
 /// Rebuilds recipes from one synthetic source location so source-fingerprinted operations denote the same generator in every oracle.
-private func buildOracleGenerator(from recipe: GenRecipe) -> AnyGenerator {
+func buildOracleGenerator(from recipe: GenRecipe) -> AnyGenerator {
     buildGenerator(
         from: recipe,
         fileID: "ExhaustMetaFuzz/OracleGenerator",

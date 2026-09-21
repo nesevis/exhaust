@@ -215,7 +215,7 @@ extension MetaGeneratorPropertyTests {
 
     /// Asserts every reflectable combinator actually reflects and round-trips at least one of its own generated values.
     ///
-    /// The round-trip sweeps skip any value whose generator fails to reflect (`catch { return true }` in `checkAllValues`, `else { continue }` in the fixture tests), so a combinator that silently stopped reflecting would leave those tests green. Zip did exactly this for months: a projecting `.map` made its output unreflectable and every zip assertion was skipped unseen. Each fixture here uses `#require`, so any regression that breaks a reflectable combinator fails loudly rather than passing vacuously. `boundRange` and `unfolded` are excluded because their bind/unfold construction is forward-only — nil reflection is expected for them, not a defect.
+    /// The round-trip sweeps skip any value whose generator fails to reflect (`catch { return true }` in `checkAllValues`, `else { continue }` in the fixture tests), so a combinator that silently stopped reflecting would leave those tests green. Zip did exactly this for months: a projecting `.map` made its output unreflectable and every zip assertion was skipped unseen. Each fixture here uses `#require`, so any regression that breaks a reflectable combinator fails loudly rather than passing vacuously. `boundRange` and `unfolded` are excluded because their bind/unfold construction is forward-only, so nil reflection is expected for them, not a defect.
     @Test("Every reflectable combinator reflects and round-trips", arguments: reflectableCombinatorFixtures)
     func everyReflectableCombinatorRoundTrips(fixture: CombinatorFixture) throws {
         let gen = buildGenerator(from: fixture.recipe)
@@ -234,15 +234,15 @@ extension MetaGeneratorPropertyTests {
 
     /// Pins the combinators the coverage sweep deliberately omits, so their exemption is an assertion rather than silence.
     ///
-    /// `unfolded` builds a `bindReified` chain with no backward, so reflection throws for every value. `boundRange` uses the invisible `FreerMonad.bind`, whose dependent `choose` reflects only occasionally. Both are excluded from ``reflectableCombinatorFixtures`` because a nil or thrown reflection is expected, not a defect. Asserting that here means that if backward support is ever added — making these reflect — this test fails and prompts promoting the kind into the reflectable set and the round-trip sweeps.
+    /// `unfolded` builds a `bindReified` chain with no backward, so reflection throws for every value. `boundRange` is a reified bind with no backward, because the lower bound cannot be recovered from a value drawn above it. Both are excluded from ``reflectableCombinatorFixtures`` because a nil or thrown reflection is expected, not a defect. Asserting that here means that if backward support is ever added, making these reflect, this test fails and prompts promoting the kind into the reflectable set and the round-trip sweeps.
     @Test("Forward-only combinators stay unreflectable")
     func forwardOnlyCombinatorsStayUnreflectable() throws {
         let unfolded: GenRecipe = .combinator(.unfolded(depthRange: 0 ... 3))
         let unfoldedReflected = try reflectableValueCount(unfolded, seed: 42, maxRuns: 12)
-        #expect(unfoldedReflected == 0, "unfolded reflected \(unfoldedReflected)/12 values — it is now reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
+        #expect(unfoldedReflected == 0, "unfolded reflected \(unfoldedReflected)/12 values. It is now reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
 
         let boundRange: GenRecipe = .combinator(.boundRange(.leaf(.int(0 ... 10))))
         let boundRangeReflected = try reflectableValueCount(boundRange, seed: 42, maxRuns: 12)
-        #expect(boundRangeReflected < 12, "boundRange reflected all 12 values — it is now fully reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
+        #expect(boundRangeReflected < 12, "boundRange reflected all 12 values. It is now fully reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
     }
 }

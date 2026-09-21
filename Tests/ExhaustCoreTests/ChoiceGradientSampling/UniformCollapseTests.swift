@@ -2,7 +2,7 @@
 //  UniformCollapseTests.swift
 //  Exhaust
 //
-//  Pins the Stage-4 collapse restriction in ChoiceGradientTuner. The uniform-collapse pass exists to undo Stage 0's chooseBits-into-pick subdivisions when tuning found no signal, but its structural guard also matched user-written oneOf-of-chooses: collapsing those broke structural compatibility with the untuned generator (exact replay of tuned flattenings rejected) and merged gapped branch ranges into values from neither branch. Found by the self-fuzzing harness (ExhaustDocs/coverage-guided-self-fuzzing.md).
+//  Pins the Stage-4 collapse restriction in ChoiceGradientTuner. The uniform-collapse pass exists to undo Stage 0's chooseBits-into-pick subdivisions when tuning found no signal, but its structural guard also matched user-written oneOf-of-chooses: collapsing those broke structural compatibility with the untuned generator (exact replay of tuned flattenings rejected) and merged gapped branch ranges into values from neither branch. Found by the self-fuzzing harness.
 //
 
 import ExhaustCore

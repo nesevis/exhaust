@@ -6,18 +6,12 @@
 // MARK: - Structural Relax Round
 
 extension ReductionMachine {
-    /// Runs a structural relax-solve-round pass: checkpoint, apply a shortlex-worsening structural perturbation, reduce from the perturbed state, commit if the result beats the checkpoint.
+    /// Runs a relax round: improving pivot probes, then a structural excursion.
+    ///
+    /// An accepted improving probe already precedes the current sequence, so it returns without a checkpoint. The excursion checkpoints, applies a shortlex-worsening perturbation, reduces from it, and commits only if the result beats the checkpoint.
     ///
     /// - Returns: True if the relax round produced a net improvement (committed).
     mutating func runRelaxRound() throws -> Bool {
-        let checkpointSequence = sequence
-        let checkpointTree = tree
-        let checkpointOutput = output
-        let checkpointConvergence = ChoiceGraphScheduler.extractAllConvergence(from: graph)
-        // The exploitation loop applies pass reports that set these per-cycle flags. On rollback the committed counterexample is unchanged, so the flags must be restored too — otherwise a stale `anyAccepted` defers termination for a cycle that produced nothing.
-        let checkpointAnyAccepted = anyAccepted
-        let checkpointShortlexRejection = hadReplacementShortlexRejection
-
         // Value-only deadline probe: `self` is passed `inout` below, so the closure captures the deadline bounds rather than `self`.
         let deadlineNanos = deadlineNanoseconds
         let startNanos = startNanoseconds
@@ -25,6 +19,19 @@ extension ReductionMachine {
             guard deadlineNanos > 0 else { return false }
             return monotonicNanoseconds() - startNanos >= deadlineNanos
         }
+
+        // Before the checkpoint, which an accepted improving probe does not need.
+        if try runImprovingPivotProbes(deadlineCheck: deadlineCheck) {
+            return true
+        }
+
+        let checkpointSequence = sequence
+        let checkpointTree = tree
+        let checkpointOutput = output
+        let checkpointConvergence = ChoiceGraphScheduler.extractAllConvergence(from: graph)
+        // The exploitation loop applies pass reports that set these per-cycle flags. On rollback the committed counterexample is unchanged, so the flags must be restored too. Otherwise a stale `anyAccepted` defers termination for a cycle that produced nothing.
+        let checkpointAnyAccepted = anyAccepted
+        let checkpointUnresolvedReplacement = hadUnresolvedReplacement
 
         ChoiceGraphScheduler.logReducer("relax_round_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(sequence.count)",
@@ -179,7 +186,7 @@ extension ReductionMachine {
         tree = checkpointTree
         output = checkpointOutput
         anyAccepted = checkpointAnyAccepted
-        hadReplacementShortlexRejection = checkpointShortlexRejection
+        hadUnresolvedReplacement = checkpointUnresolvedReplacement
         _ = rebuildAndUpdateGraph()
         ChoiceGraphScheduler.transferConvergence(checkpointConvergence, to: &graph)
 
@@ -187,6 +194,106 @@ extension ReductionMachine {
             "seq_len": "\(sequence.count)",
         ])
         return false
+    }
+
+    // MARK: - Improving Pivot Probes
+
+    /// Probes improving pivots at non-minimal content and accepts the first that still fails the property.
+    ///
+    /// The next cycle minimizes the accepted arm under ordinary scheduling, so no exploitation runs here.
+    private mutating func runImprovingPivotProbes(deadlineCheck: () -> Bool) throws -> Bool {
+        let budget = tuning.relaxImprovingProbeBudget
+        guard budget > 0 else {
+            return false
+        }
+        var probesUsed = 0
+        var probeCounts = ReductionProbeCounts()
+        defer {
+            if collectStats {
+                stats.recordStructuralRelax(probeCounts)
+                stats.relaxImprovingProbes += probesUsed
+            }
+        }
+        for (candidate, probeHash) in unprobedImprovingPivotCandidates() {
+            guard probesUsed < budget, deadlineCheck() == false else {
+                break
+            }
+            probesUsed += 1
+            probeCounts.recordEmission()
+            let decoder: SequenceDecoder = .exact(materializePicks: true)
+            var filterObservations: [UInt64: FilterObservation] = [:]
+            let outcome = try decoder.decodeAny(
+                candidate: candidate,
+                gen: gen,
+                tree: tree,
+                originalSequence: sequence,
+                property: wrappedProperty(for: candidate),
+                filterObservations: &filterObservations
+            )
+            probeCounts.record(outcome)
+
+            guard let result = outcome.reduction, result.sequence.shortLexPrecedes(sequence) else {
+                rejectCache.insert(probeHash)
+                continue
+            }
+            sequence = result.sequence
+            tree = result.tree
+            output = result.output
+            if collectStats {
+                stats.relaxImprovingAcceptances += 1
+            }
+            _ = rebuildAndUpdateGraph()
+            // The stalled cycle that led here already spent a stall. The accepted arm holds non-minimal content, so the run must not end before a cycle has minimized it.
+            convergence.stallBudget = convergence.maxStalls
+            ChoiceGraphScheduler.logReducer("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
+                "seq_len": "\(sequence.count)", "probes": "\(probesUsed)",
+            ])
+            return true
+        }
+        return false
+    }
+
+    /// Whether the improving phase has a probe to spend.
+    var hasUnprobedImprovingPivot: Bool {
+        tuning.relaxImprovingProbeBudget > 0 && unprobedImprovingPivotCandidates().isEmpty == false
+    }
+
+    /// Improving pivot candidates absent from the reject cache, so exhausted pivots stop triggering relax rounds.
+    private func unprobedImprovingPivotCandidates() -> [(candidate: ChoiceSequence, probeHash: UInt64)] {
+        Self.buildImprovingPivotCandidates(sequence: sequence, graph: graph).compactMap { candidate in
+            let probeHash = ZobristHash.hash(of: candidate)
+            guard rejectCache.contains(probeHash) == false else {
+                return nil
+            }
+            return (candidate, probeHash)
+        }
+    }
+
+    /// Non-minimal fills of every pivot that precedes `sequence`, shortest first. Precedence is independent of the fill, so the first fill decides for the scope.
+    private static func buildImprovingPivotCandidates(
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph
+    ) -> [ChoiceSequence] {
+        var candidates: [ChoiceSequence] = []
+        for scope in ReplacementQuery.build(graph: graph) {
+            guard case let .branchPivot(pickNodeID, targetBranchID) = scope else {
+                continue
+            }
+            for fill in [PivotLeafFill.recorded, .farthestFromTarget] {
+                guard let candidate = GraphStructuralEncoder.branchPivotCandidate(
+                    pickNodeID: pickNodeID,
+                    targetBranchID: targetBranchID,
+                    fill: fill,
+                    sequence: sequence,
+                    graph: graph
+                ), candidate.shortLexPrecedes(sequence) else {
+                    break
+                }
+                candidates.append(candidate)
+            }
+        }
+        candidates.sort { $0.count < $1.count }
+        return candidates
     }
 
     // MARK: - Perturbation Candidate Construction
@@ -200,7 +307,7 @@ extension ReductionMachine {
         for scope in ReplacementQuery.build(graph: graph) {
             switch scope {
                 case let .branchPivot(pickNodeID, targetBranchID):
-                    if let candidate = buildUnguardedBranchPivot(
+                    if let candidate = GraphStructuralEncoder.branchPivotCandidate(
                         pickNodeID: pickNodeID,
                         targetBranchID: targetBranchID,
                         sequence: sequence,
@@ -234,47 +341,6 @@ extension ReductionMachine {
         // Length only, deliberately not full shortlex. A lex tiebreak among equal-length candidates was tried and reverted: it preferred perturbations that decode successfully, triggering full exploitation loops in relax rounds that previously ended cheaply at the perturbation stage.
         candidates.sort { $0.count < $1.count }
         return candidates
-    }
-
-    private static func buildUnguardedBranchPivot(
-        pickNodeID: Int,
-        targetBranchID: UInt64,
-        sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> ChoiceSequence? {
-        guard pickNodeID < graph.nodes.count else { return nil }
-        guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else { return nil }
-        guard let pickRange = graph.nodes[pickNodeID].positionRange else { return nil }
-
-        let elements = pickMetadata.branchElements
-        guard pickMetadata.selectedChildIndex < elements.count else { return nil }
-
-        guard let targetElementIndex = elements.firstIndex(where: { element in
-            switch element {
-                case let .branch(b):
-                    b.id == targetBranchID
-                default:
-                    false
-            }
-        }) else { return nil }
-
-        let minimizedTarget = elements[targetElementIndex].minimizingLeaves
-        let targetContent = ChoiceSequence.flatten(minimizedTarget.selecting())
-
-        var replacement: [ChoiceSequenceValue] = []
-        replacement.reserveCapacity(targetContent.count + 3)
-        replacement.append(.group(true))
-        replacement.append(.branch(.init(
-            id: targetBranchID,
-            branchCount: pickMetadata.branchCount,
-            fingerprint: pickMetadata.fingerprint
-        )))
-        replacement.append(contentsOf: targetContent)
-        replacement.append(.group(false))
-
-        var candidate = sequence
-        candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
-        return candidate
     }
 
     private static func buildUnguardedSelfSimilar(

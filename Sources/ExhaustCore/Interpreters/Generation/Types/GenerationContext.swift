@@ -69,10 +69,10 @@ package struct GenerationContext: ~Copyable {
     /// Selects sampling behavior or the coordinated depth, pick, and bind policies used to discover a screening model.
     package var purpose: Purpose = .sampling
 
-    /// Set when screening analysis skipped a pick arm whose shape depends on a drawn value.
+    /// Set when screening analysis skipped a pick arm that draws a choice.
     ///
     /// The skipped arm leaves no trace in the template, so nothing downstream can recover this from the tree. Screening reads it to know its enumeration was partial.
-    package var hasElidedDataDependentArm = false
+    package var hasElidedDrawingArm = false
     /// Whether this context materializes an unselected pick branch. Such branches are best-effort alternatives recorded for structural encoders, never the run's output, so a generator failure inside one is swallowed by the caller and must not reach the user as a diagnostic.
     package var isSpeculative: Bool = false
     /// Number of property invocations completed so far.

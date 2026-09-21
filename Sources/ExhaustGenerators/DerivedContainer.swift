@@ -2,20 +2,14 @@ import ExhaustCore
 
 /// Describes a standard container without resolving or constructing its contents.
 ///
-/// The derivation plan resolves every child through its own override and default rules. At a depth where any child is unavailable, the empty generator supplies a terminating value without requesting a generator at a negative depth.
+/// The derivation plan resolves every child through its own override and default rules. When the available recursive fuel cannot construct a child, the empty generator supplies a terminating value without requesting a negative fuel allowance.
 package protocol DerivedContainer {
     static var derivationRecipe: DerivedContainerRecipe { get }
 }
 
 /// How many elements one built container layer may hold.
 package enum ContainerCardinality {
-    /// The container factory's own size-scaled count, used when neither a node allowance nor a bounded state space applies.
-    case sizeScaled
-
-    /// Sampled within `0 ... maximum`, leaving larger counts reflectable so a value that arrives through `reflecting:` still decomposes.
-    case within(Int)
-
-    /// Keeps the node-feasible reflection ceiling distinct from the potentially tighter state-space sampling ceiling.
+    /// Keeps the node-feasible reflection ceiling distinct from the potentially tighter domain sampling ceiling.
     case bounded(sampling: Int, reflecting: Int)
 
     /// Exactly this many elements, rejecting every other count.
@@ -107,7 +101,7 @@ extension Optional: DerivedContainer {
             build: { cardinality, children in
                 let wrapped: Generator<Wrapped> = children.typed(0)
                 switch cardinality {
-                    case .sizeScaled, .within, .bounded:
+                    case .bounded:
                         return ReflectiveGenerator<Wrapped>
                             .optional(wrapped.wrapped(isReflective: true))
                             .gen
@@ -141,7 +135,7 @@ package extension DerivedContainerRecipe {
         empty: Container,
         isEmpty: @escaping (Container) -> Bool,
         count: @escaping (Container) -> Int,
-        build: @escaping (Generator<Element>, Generator<UInt64>?) -> Generator<Container>
+        build: @escaping (Generator<Element>, Generator<UInt64>) -> Generator<Container>
     ) -> Self {
         Self(
             type: type,
@@ -167,7 +161,7 @@ package extension DerivedContainerRecipe {
         empty: Container,
         isEmpty: @escaping (Container) -> Bool,
         count: @escaping (Container) -> Int,
-        build: @escaping (Generator<Key>, Generator<Value>, Generator<UInt64>?) -> Generator<Container>
+        build: @escaping (Generator<Key>, Generator<Value>, Generator<UInt64>) -> Generator<Container>
     ) -> Self {
         Self(
             type: type,
@@ -188,13 +182,9 @@ package extension DerivedContainerRecipe {
 // MARK: - Helpers
 
 extension ContainerCardinality {
-    /// The length generator this policy asks a container factory for. A `nil` generator leaves the factory's own size scaling in place.
-    var lengths: Generator<UInt64>? {
+    /// The length generator this policy asks a container factory for.
+    var lengths: Generator<UInt64> {
         switch self {
-            case .sizeScaled:
-                nil
-            case let .within(maximum):
-                derivedLengths(upTo: maximum)
             case let .exactly(count):
                 Gen.choose(in: UInt64(count) ... UInt64(count))
             case let .bounded(sampling, reflecting):
@@ -202,10 +192,11 @@ extension ContainerCardinality {
                     case true:
                         Gen.chooseDerived(
                             in: UInt64(0) ... UInt64(reflecting),
-                            samplingWithin: UInt64(0) ... UInt64(sampling)
+                            samplingWithin: UInt64(0) ... UInt64(sampling),
+                            scaling: .exponential
                         )
                     case false:
-                        Gen.choose(in: UInt64(0) ... UInt64(reflecting), scaling: .linear)
+                        Gen.choose(in: UInt64(0) ... UInt64(reflecting), scaling: .exponential)
                 }
         }
     }
@@ -222,9 +213,9 @@ extension [AnyGenerator] {
 
 /// Samples a cardinality in `0 ... maximum` while leaving larger cardinalities reflectable.
 ///
-/// A state space or node ceiling narrows what the derivation generates, not what a test can reduce from, so a value that arrives through `reflecting:` with more elements than this ceiling still decomposes.
+/// A domain or node ceiling narrows what the derivation generates, not what a test can reduce from, so a value that arrives through `reflecting:` with more elements than this ceiling still decomposes.
 func derivedLengths(upTo maximum: Int) -> Generator<UInt64> {
-    Gen.chooseDerived(in: UInt64(0) ... UInt64(maximum), scaling: .linear)
+    Gen.chooseDerived(in: UInt64(0) ... UInt64(maximum), scaling: .exponential)
 }
 
 extension ReflectiveGenerator {
@@ -241,21 +232,15 @@ private func boundedContainer<Value>(
     count: @escaping (Value) -> Int
 ) -> AnyGenerator {
     let maximumReflectableCount = layers.count - 1
-    let reflectableRange = UInt64(0) ... UInt64(maximumReflectableCount)
-    let countGenerator = switch maximumGeneratedCount < maximumReflectableCount {
-        case true:
-            Gen.chooseDerived(
-                in: reflectableRange,
-                samplingWithin: UInt64(0) ... UInt64(maximumGeneratedCount)
-            )
-        case false:
-            Gen.choose(in: reflectableRange, scaling: .linear)
-    }
+    let countGenerator = ContainerCardinality.bounded(
+        sampling: maximumGeneratedCount,
+        reflecting: maximumReflectableCount
+    ).lengths
     let generator: Generator<Value> = countGenerator._bound(
         forward: { selectedCount in layers[Int(selectedCount)] },
         backward: { (value: Value) in UInt64(count(value)) }
     )
-    // chooseDerived retains a wider reflection domain than its sampling range. Check cardinality before either count generator reaches the layer lookup.
+    // A bounded sampling range can remain narrower than reflection's layer range. Check cardinality before either count generator reaches the layer lookup.
     return Gen.comap(
         { (value: Value) in
             let selectedCount = count(value)

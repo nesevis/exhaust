@@ -154,7 +154,7 @@ struct StructuralReplacementTests {
             _ = encoder.nextProbe(into: &buffer, lastAccepted: false)
         }
 
-        #expect(encoder.hadReplacementShortlexRejection == true)
+        #expect(encoder.hadUnresolvedReplacement == true)
     }
 
     // MARK: - ReplacementQuery

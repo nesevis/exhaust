@@ -30,6 +30,9 @@ struct MetaFuzzProbe: ParsableCommand {
     @Option(help: "Recipe node-count ceiling. Calibrate raises with ExhaustStackProbe.")
     var nodeBudget: Int = 80
 
+    @Option(help: "Oracle roster to fuzz against: pipeline (interpreter agreement) or screening (enumerability verdicts).")
+    var campaign: Campaign = .pipeline
+
     @Option(help: "Directory for freeze-candidate records.")
     var findingsDirectory: String = "metafuzz-findings"
 
@@ -44,31 +47,57 @@ struct MetaFuzzProbe: ParsableCommand {
 
         // The property must be a closure literal in each invocation: the macro's Void-closure handling is syntactic, and a function reference expands as if the property returned Bool.
         let report: FuzzReport
-        if let seed {
-            report = #explore(
-                MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
-                time: .seconds(budgetSeconds),
-                .replay(.numeric(seed))
-            ) { fuzzCase in
-                do {
-                    try MetaFuzz.check(fuzzCase)
-                } catch {
-                    MetaFuzz.recordFinding(fuzzCase, violation: error, in: findings)
-                    throw error
+        switch (campaign, seed) {
+            case let (.pipeline, seed?):
+                report = #explore(
+                    MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
+                    time: .seconds(budgetSeconds),
+                    .replay(.numeric(seed))
+                ) { fuzzCase in
+                    do {
+                        try MetaFuzz.check(fuzzCase)
+                    } catch {
+                        MetaFuzz.recordFinding(fuzzCase, violation: error, in: findings)
+                        throw error
+                    }
                 }
-            }
-        } else {
-            report = #explore(
-                MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
-                time: .seconds(budgetSeconds)
-            ) { fuzzCase in
-                do {
-                    try MetaFuzz.check(fuzzCase)
-                } catch {
-                    MetaFuzz.recordFinding(fuzzCase, violation: error, in: findings)
-                    throw error
+            case (.pipeline, nil):
+                report = #explore(
+                    MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
+                    time: .seconds(budgetSeconds)
+                ) { fuzzCase in
+                    do {
+                        try MetaFuzz.check(fuzzCase)
+                    } catch {
+                        MetaFuzz.recordFinding(fuzzCase, violation: error, in: findings)
+                        throw error
+                    }
                 }
-            }
+            case let (.screening, seed?):
+                report = #explore(
+                    MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
+                    time: .seconds(budgetSeconds),
+                    .replay(.numeric(seed))
+                ) { fuzzCase in
+                    do {
+                        try MetaFuzz.checkScreening(fuzzCase)
+                    } catch {
+                        MetaFuzz.recordFinding(fuzzCase, kind: .screeningCase, violation: error, in: findings)
+                        throw error
+                    }
+                }
+            case (.screening, nil):
+                report = #explore(
+                    MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
+                    time: .seconds(budgetSeconds)
+                ) { fuzzCase in
+                    do {
+                        try MetaFuzz.checkScreening(fuzzCase)
+                    } catch {
+                        MetaFuzz.recordFinding(fuzzCase, kind: .screeningCase, violation: error, in: findings)
+                        throw error
+                    }
+                }
         }
 
         let percentage: (TimeSpan) -> String = { duration in
@@ -101,7 +130,7 @@ struct MetaFuzzProbe: ParsableCommand {
         print(report.renderedAttachmentSummary())
 
         if report.clusters.isEmpty {
-            print("metafuzz: no findings in \(budgetSeconds)s")
+            print("metafuzz: no \(campaign.rawValue) findings in \(budgetSeconds)s")
             return
         }
 
@@ -134,4 +163,12 @@ private func describe(_ termination: FuzzReport.Termination) -> String {
         case .uncontainedAsyncWork:
             "uncontained async work outlived cancellation"
     }
+}
+
+// MARK: - Campaign
+
+/// The oracle roster one probe process fuzzes against. One roster per process: coverage counters are process-global, so two searches cannot share one.
+enum Campaign: String, ExpressibleByArgument {
+    case pipeline
+    case screening
 }

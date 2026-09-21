@@ -7,22 +7,22 @@ import Testing
 struct DerivedDepthControlTests {
     @Test("Derived generation and reflection record tagged depth controls")
     func taggedDepth() throws {
-        let generator = DepthControlEnvelope.gen(maximumDepth: 20)
-        var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 1)
+        let generator = DepthControlTree.gen(.budget(.custom(recursion: 20, nodes: 3)))
+        var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
         let (value, generated) = try #require(try interpreter.next())
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: value))
-        guard case let .bind(_, .choice(drawnDepth, drawnMetadata), _) = generated,
-              case let .bind(_, .choice(reflectedDepth, reflectedMetadata), _) = reflected
-        else {
-            Issue.record("Expected root depth-control binds")
-            return
-        }
+        let drawnControls = depthControls(in: generated)
+        let reflectedControls = depthControls(in: reflected)
+        #expect(drawnControls.count == 1)
+        #expect(reflectedControls.count == 1)
+        let (drawnDepth, drawnMetadata) = try #require(drawnControls.first)
+        let (reflectedDepth, reflectedMetadata) = try #require(reflectedControls.first)
         #expect(drawnDepth.tag == .depthControl)
         #expect(reflectedDepth.tag == .depthControl)
-        #expect(drawnDepth.bitPattern64 == 1)
+        #expect(drawnDepth.bitPattern64 == 14)
         #expect(reflectedDepth.bitPattern64 == 20)
-        #expect(drawnMetadata.validRange == 1 ... 20)
-        #expect(reflectedMetadata.validRange == 1 ... 20)
+        #expect(drawnMetadata.validRange == 0 ... 20)
+        #expect(reflectedMetadata.validRange == 0 ... 20)
         #expect(ChoiceTree.compareValues(generated, reflected) == nil)
         #expect(try Interpreters.replay(generator.gen, using: reflected) == value)
     }
@@ -34,16 +34,31 @@ struct DerivedDepthControlTests {
             .linearFrom(origin: Int.min), .linearFrom(origin: 7), .linearFrom(origin: Int.max),
             .exponentialFrom(origin: Int.min), .exponentialFrom(origin: 7), .exponentialFrom(origin: Int.max),
         ]
-        let layers = (1 ... 20).map { DepthControlEnvelope.gen(depth: $0) }
+        let layers = (0 ... 20).map {
+            DepthControlTree.gen(
+                recursion: $0,
+                .budget(.custom(recursion: $0, nodes: 3))
+            )
+        }
         for scaling in scalings {
-            let generator = DepthControlEnvelope.gen(maximumDepth: 20, scaling: scaling)
-            // Reproduces the old root depth draw independently of the new depth-control chooser.
-            let reference = ReflectiveGenerator<Int>.int(in: 1 ... 20, scaling: scaling).gen._bound(
-                forward: { depth in layers[depth - 1].gen.erase() },
-                backward: { (_: DepthControlEnvelope) in 20 }
+            let generator = DepthControlTree.gen(
+                .budget(.custom(recursion: 20, nodes: 3)),
+                scaling: scaling
+            )
+            let reference = ReflectiveGenerator<Int>.int(in: 0 ... 20, scaling: scaling).gen._bound(
+                forward: { recursion in layers[recursion].gen.erase() },
+                backward: { (_: DepthControlTree) in 20 }
             )
             try expectMatchingRandomStream(generator.gen, reference: reference, seed: 42, size: size, draws: 30)
         }
+    }
+
+    @Test("Acyclic derivation omits recursive fuel choices")
+    func acyclicFuel() throws {
+        let generator = DepthControlEnvelope.gen(.budget(.custom(recursion: 20, nodes: 3)))
+        var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
+        let (_, generated) = try #require(try interpreter.next())
+        #expect(depthControls(in: generated).isEmpty)
     }
 
     @Test("Examine accepts different depth allowances in Gen.recursive")
@@ -88,6 +103,23 @@ struct DerivedDepthControlTests {
     }
 }
 
+private func depthControls(in tree: ChoiceTree) -> [(ChoiceValue, ChoiceMetadata)] {
+    switch tree {
+        case let .choice(value, metadata):
+            value.tag == .depthControl ? [(value, metadata)] : []
+        case let .bind(_, inner, bound):
+            depthControls(in: inner) + depthControls(in: bound)
+        case let .group(children, _, _), let .resize(_, children):
+            children.flatMap { depthControls(in: $0) }
+        case let .sequence(elements, _):
+            elements.flatMap { depthControls(in: $0) }
+        case let .branch(branch):
+            depthControls(in: branch.choice)
+        case .just, .getSize:
+            []
+    }
+}
+
 // MARK: - Fixtures
 
 @Exhaustable
@@ -100,6 +132,7 @@ private struct DepthControlEnvelope: Equatable {
     let payload: DepthControlLeaf
 }
 
+@Exhaustable
 private indirect enum DepthControlTree: Equatable {
     case leaf
     case node(DepthControlTree)

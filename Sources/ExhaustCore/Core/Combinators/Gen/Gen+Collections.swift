@@ -90,20 +90,21 @@ package extension Gen {
 
     /// Generates dictionaries with random key-value pairs.
     ///
-    /// Produces a key array first, then generates exactly that many values via a dependent bind. Duplicate keys keep the first value.
+    /// Produces one sequence of key-value pairs. Duplicate keys keep the first value.
     ///
     /// - Parameters:
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
     ///   - valueGenerator: Generator for dictionary values.
     ///   - count: Optional generator for the entry count. Defaults to size-based count.
     /// - Returns: A generator that produces dictionaries with random key-value pairs.
-    /// - Note: Reflection decomposes the dictionary into key/value arrays via `Dictionary/keys` and `Dictionary/values`. Iteration order is not preserved, so the reflected choice sequence may differ from the generation sequence. This does not affect correctness but may degrade reduction quality.
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: Generator<KeyOutput>,
         _ valueGenerator: Generator<ValueOutput>,
         _ count: Generator<UInt64>? = nil
     ) -> Generator<[KeyOutput: ValueOutput]> {
-        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, count), valueGenerator)
+        Gen.arrayOf(Gen.zip(keyGenerator, valueGenerator), count).map {
+            Dictionary($0, uniquingKeysWith: { first, _ in first })
+        }
     }
 
     /// Generates dictionaries with entry count constrained to explicit bounds.
@@ -122,7 +123,13 @@ package extension Gen {
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear
     ) -> Generator<[KeyOutput: ValueOutput]> {
-        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, within: range, scaling: scaling), valueGenerator)
+        Gen.arrayOf(
+            Gen.zip(keyGenerator, valueGenerator),
+            within: range,
+            scaling: scaling
+        ).map {
+            Dictionary($0, uniquingKeysWith: { first, _ in first })
+        }
     }
 
     /// Generates dictionaries of exactly the specified entry count.
@@ -139,45 +146,9 @@ package extension Gen {
         _ valueGenerator: Generator<ValueOutput>,
         exactly: UInt64
     ) -> Generator<[KeyOutput: ValueOutput]> {
-        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, exactly: exactly), valueGenerator)
-    }
-
-    /// Builds the dictionary pipeline from a key-array generator: binds a value array of matching length, zips into a dictionary with first-wins key dedup, and reflects back through `keys`/`values` arrays.
-    private static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
-        keyArrays keyArrayGenerator: Generator<[KeyOutput]>,
-        _ valueGenerator: Generator<ValueOutput>
-    ) -> Generator<[KeyOutput: ValueOutput]> {
-        let pairGen = keyArrayGenerator._bound(
-            forward: { keys -> Generator<([KeyOutput], [ValueOutput])> in
-                // Pairing the bound keys with the generated value array and projecting `pair.1` back out is a framework-authored exact inverse, so it collapses to one `.isomorph` transform node rather than a contramap wrapping a map.
-                Gen.liftF(.transform(
-                    kind: .isomorph(
-                        forward: { anyValues in (keys, anyValues as! [ValueOutput]) },
-                        backward: { anyPair in
-                            guard let pair = anyPair as? ([KeyOutput], [ValueOutput]) else {
-                                throw ReflectionError.contramapWasWrongType
-                            }
-                            return pair.1
-                        },
-                        inputType: [ValueOutput].self,
-                        outputType: ([KeyOutput], [ValueOutput]).self
-                    ),
-                    inner: Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count)).erase()
-                ))
-            },
-            backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
-        )
-
-        return Gen.isomorphed(
-            pairGen,
-            forward: { keys, values in
-                Dictionary(
-                    Swift.zip(keys, values).map { ($0, $1) },
-                    uniquingKeysWith: { first, _ in first }
-                )
-            },
-            backward: { (dict: [KeyOutput: ValueOutput]) in (Array(dict.keys), Array(dict.values)) }
-        ).gen
+        Gen.arrayOf(Gen.zip(keyGenerator, valueGenerator), exactly: exactly).map {
+            Dictionary($0, uniquingKeysWith: { first, _ in first })
+        }
     }
 
     /// Generates sets of random values.

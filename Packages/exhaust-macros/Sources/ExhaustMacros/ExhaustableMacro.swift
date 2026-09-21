@@ -22,9 +22,9 @@ public struct ExhaustableMacro: ExtensionMacro, MemberMacro {
             }
             let typeName = type.trimmedDescription
             let valueType = specializedName(for: declaration, fallback: typeName)
-            let trailing = ["maximumDepth", "maximumNodes", "stateSpace"].compactMap { label in
-                limitArgument(label, of: node).map { ", \(label): \($0)" }
-            }.joined()
+            let settings = node.arguments?.as(LabeledExprListSyntax.self)?.map { $0.expression.trimmedDescription } ?? []
+            let renderedSettings = settings.isEmpty ? "" : ", settings: [\(settings.joined(separator: ", "))]"
+            let trailing = renderedSettings
                 + ", fileID: \(location.file.trimmedDescription)"
                 + ", line: \(location.line.trimmedDescription)"
                 + ", column: \(location.column.trimmedDescription)"
@@ -94,14 +94,6 @@ private func specializedName(for declaration: some DeclGroupSyntax, fallback: St
     }
     let arguments = parameters.parameters.map { $0.name.trimmedDescription }.joined(separator: ", ")
     return "\(fallback)<\(arguments)>"
-}
-
-/// Passes limit expressions through without evaluating them in the macro process.
-private func limitArgument(_ label: String, of node: AttributeSyntax) -> String? {
-    guard let arguments = node.arguments?.as(LabeledExprListSyntax.self) else {
-        return nil
-    }
-    return arguments.first { $0.label?.text == label }?.expression.trimmedDescription
 }
 
 /// Uses only validated fields: every payload has a concrete type and a corresponding memberwise argument and extraction position.

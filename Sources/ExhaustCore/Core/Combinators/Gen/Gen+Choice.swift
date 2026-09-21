@@ -169,13 +169,14 @@ package extension Gen {
     /// Samples from one unsigned range while retaining a wider range for reflection and reduction.
     static func chooseDerived(
         in range: ClosedRange<UInt64>,
-        samplingWithin samplingRange: ClosedRange<UInt64>
+        samplingWithin samplingRange: ClosedRange<UInt64>,
+        scaling: SizeScaling<UInt64>
     ) -> Generator<UInt64> {
         choose(
             in: range,
             type: UInt64.self,
             isRangeExplicit: false,
-            scaling: .linear(originBits: nil, samplingWithin: samplingRange)
+            scaling: scaling.erased(samplingWithin: samplingRange)
         )
     }
 
@@ -219,6 +220,8 @@ package extension Gen {
         let origin: UInt64?
         let isExponential: Bool
         switch scaling.kind {
+            case .constant:
+                return sampled
             case let .linear(configuredOrigin):
                 origin = configuredOrigin
                 isExponential = false

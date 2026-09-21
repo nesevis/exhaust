@@ -144,6 +144,7 @@ struct GraphColoringChallenge {
             Self.gen,
             .suppress(.issueReporting),
             .budget(.extensive),
+            .replay("6V9BDDWA3PBSH-6"),
             property: Self.property
         )
 

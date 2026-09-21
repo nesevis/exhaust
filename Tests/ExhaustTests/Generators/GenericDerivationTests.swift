@@ -32,11 +32,11 @@ struct GenericDerivationTests {
         try expectReflectionRoundTrip(GenericScope<Int>.Pair<Bool>.gen().gen, value: .init(first: 7, second: true))
     }
 
-    @Test("Recursive generic enums terminate, reflect, and replay with either budget policy", arguments: [Int?.none, 31])
-    func recursiveEnums(maximumNodes: Int?) throws {
+    @Test("Recursive generic enums terminate, reflect, and replay across node ceilings", arguments: [31, 100])
+    func recursiveEnums(maximumNodes: Int) throws {
         let plan = try GeneratorDerivationPlan(for: GenericTree<Int>.self, overrides: [:])
         #expect(plan.types.count == 1)
-        let generator = GenericTree<Int>.gen(maximumDepth: 4, maximumNodes: maximumNodes, stateSpace: .tiny)
+        let generator = GenericTree<Int>.gen(.budget(.custom(recursion: 4, nodes: maximumNodes)), .domain(.tiny))
         let target = GenericTree<Int>.branch(.value(3), .branch(.empty, .value(5)))
         try expectReflectionRoundTrip(generator.gen, value: target)
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.all)) { $0 == $1 }
@@ -47,7 +47,7 @@ struct GenericDerivationTests {
     func recursiveArrays() throws {
         let plan = try GeneratorDerivationPlan(for: GenericArrayTree<Int>.self, overrides: [:])
         #expect(plan.types.count == 1)
-        let generator = GenericArrayTree<Int>.gen(depth: 1, stateSpace: .tiny)
+        let generator = GenericArrayTree<Int>.gen(recursion: 1, .domain(.tiny))
         try expectReflectionRoundTrip(generator.gen, value: .children([.value(7), .children([])]))
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.all)) { $0 == $1 }
         expectSuccessfulExamination(report, samples: 50)
@@ -76,7 +76,7 @@ struct GenericDerivationTests {
 
     @Test("Generic container payloads retain element overrides and recorded replay")
     func containers() throws {
-        let generator = GenericContainers<Int>.gen(maximumNodes: 32, overriding: .int(in: 7 ... 7))
+        let generator = GenericContainers<Int>.gen(.budget(.custom(recursion: 10, nodes: 32)), overriding: .int(in: 7 ... 7))
         #expect(generator.isReflective == false)
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: 100)
         var sawArray = false
@@ -115,10 +115,10 @@ struct GenericDerivationTests {
         let swapping = try GeneratorDerivationPlan(for: GenericSwap<Int, Bool>.self, overrides: [:])
         #expect(swapping.types.count == 2)
         let target = GenericSwap<Int, Bool>.next(.next(.value(7, true)))
-        try expectReflectionRoundTrip(GenericSwap<Int, Bool>.gen(maximumDepth: 3).gen, value: target)
+        try expectReflectionRoundTrip(GenericSwap<Int, Bool>.gen(.budget(.custom(recursion: 3, nodes: 100))).gen, value: target)
         let settling = try GeneratorDerivationPlan(for: GenericSettles<Bool>.self, overrides: [:])
         #expect(settling.types.count == 2)
-        try expectReflectionRoundTrip(GenericSettles<Bool>.gen(maximumDepth: 3).gen, value: .next(.value(7)))
+        try expectReflectionRoundTrip(GenericSettles<Bool>.gen(.budget(.custom(recursion: 3, nodes: 100))).gen, value: .next(.value(7)))
     }
 
     @Test("Unbounded generic specialization fails with a bounded discovery diagnostic")
@@ -141,11 +141,11 @@ struct GenericDerivationTests {
     func finiteDiscoveryBoundary() throws {
         let plan = try GeneratorDerivationPlan(for: GenericThirtyTwo.self, overrides: [:])
         #expect(plan.types.count == 32)
-        #expect(try plan.minimumDepth(for: GenericThirtyTwo.self, at: 31) == 31)
+        #expect(try plan.minimumRecursionBudget(for: GenericThirtyTwo.self, at: 0) == 0)
         typealias TwoDeepBranches = GenericScope<GenericThirtyTwo>.Pair<GenericSixteen<GenericSixteen<Bool>>>
         let branched = try GeneratorDerivationPlan(for: TwoDeepBranches.self, overrides: [:])
         #expect(branched.types.count == 65)
-        #expect(try branched.minimumDepth(for: TwoDeepBranches.self, at: 32) == 32)
+        #expect(try branched.minimumRecursionBudget(for: TwoDeepBranches.self, at: 0) == 0)
         #expect(throws: GeneratorDerivationError.specializationLimitExceeded(
             type: String(describing: GenericBox<GenericThirtyTwo>.self),
             limit: 32
@@ -162,7 +162,7 @@ struct GenericDerivationTests {
             overrides: [ObjectIdentifier(GenericExpansion<[Int]>.self): supplied.erasedForDerivation()]
         )
         #expect(plan.types.count == 1)
-        let generator = GenericExpansion<Int>.gen(depth: 1, overriding: supplied)
+        let generator = GenericExpansion<Int>.gen(recursion: 1, overriding: supplied)
         let samples = try #example(generator, count: 20)
         for sample in samples {
             switch sample {

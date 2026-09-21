@@ -10,6 +10,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import Testing
 
@@ -169,6 +170,54 @@ struct SizeScalingDistributionTests {
         }
     }
 
+    @Test("Exponential bounds start narrow, reach their full range, and never shrink")
+    func exponentialBounds() throws {
+        let extents = Gen.zip(
+            Gen.choose(in: 2 ... 10000),
+            Gen.choose(in: 2 ... 10000)
+        )
+        let signed = extents.map { lowerExtent, upperExtent in
+            let lowerBound = -lowerExtent
+            return ScalingRange(
+                declared: lowerBound.bitPattern64 ... upperExtent.bitPattern64,
+                tag: Int.tag,
+                sizeOneAnchor: Int.zero.bitPattern64
+            )
+        }
+        let unsigned = extents.map { lowerExtent, upperExtent in
+            let lowerBound = UInt64(lowerExtent)
+            let upperBound = lowerBound + UInt64(upperExtent)
+            return ScalingRange(
+                declared: lowerBound.bitPattern64 ... upperBound.bitPattern64,
+                tag: UInt64.tag,
+                sizeOneAnchor: lowerBound.bitPattern64
+            )
+        }
+        let floatingPoint = extents.map { lowerExtent, upperExtent in
+            let lowerBound = -Double(lowerExtent)
+            let upperBound = Double(upperExtent)
+            return ScalingRange(
+                declared: lowerBound.bitPattern64 ... upperBound.bitPattern64,
+                tag: Double.tag,
+                sizeOneAnchor: Double.zero.bitPattern64
+            )
+        }
+        let range = Gen.pick(choices: [
+            (1, signed),
+            (1, unsigned),
+            (1, floatingPoint),
+        ])
+        let sizes = Gen.zip(
+            Gen.choose(in: UInt64(1) ... 100),
+            Gen.choose(in: UInt64(1) ... 100)
+        ).map { first, second in
+            min(first, second) ... max(first, second)
+        }
+        try exhaustCheck(Gen.zip(range, sizes), maxIterations: 1000) { range, sizes in
+            exponentialBoundsHold(range, sizes: sizes)
+        }
+    }
+
     @Test("Exponential effective range does not collapse at any size from 1 to 100")
     func exponentialNoEvenSizeCollapse() {
         for size in UInt64(1) ... 100 {
@@ -208,6 +257,37 @@ struct SizeScalingDistributionTests {
 }
 
 // MARK: - Helpers
+
+private struct ScalingRange {
+    let declared: ClosedRange<UInt64>
+    let tag: TypeTag
+    let sizeOneAnchor: UInt64
+}
+
+private func exponentialBoundsHold(
+    _ range: ScalingRange,
+    sizes: ClosedRange<UInt64>
+) -> Bool {
+    func scaled(to size: UInt64) -> ClosedRange<UInt64> {
+        Gen.applyScaling(
+            min: range.declared.lowerBound,
+            max: range.declared.upperBound,
+            tag: range.tag,
+            scaling: .exponential(originBits: nil),
+            size: size
+        )
+    }
+    let sizeOne = scaled(to: 1)
+    let smaller = scaled(to: sizes.lowerBound)
+    let larger = scaled(to: sizes.upperBound)
+    let sizeOneIsExpected = range.tag.isFloatingPoint
+        ? sizeOne != range.declared && sizeOne.contains(range.sizeOneAnchor)
+        : sizeOne == (range.sizeOneAnchor ... range.sizeOneAnchor)
+    return sizeOneIsExpected
+        && scaled(to: 100) == range.declared
+        && larger.lowerBound <= smaller.lowerBound
+        && larger.upperBound >= smaller.upperBound
+}
 
 private func sample<Value>(
     _ gen: Generator<Value>,

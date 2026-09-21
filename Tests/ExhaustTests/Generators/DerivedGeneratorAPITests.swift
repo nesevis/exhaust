@@ -35,7 +35,7 @@ struct DerivedGeneratorAPITests {
         let reference = ReflectiveGenerator<ConfiguredTree>.derived()
         try expectMatchingRandomStream(ConfiguredTree.gen().gen, reference: reference.gen, seed: seed, size: 1, draws: 50)
         try expectMatchingRandomStream(
-            ConfiguredTree.gen(maximumDepth: nil, maximumNodes: nil, stateSpace: nil, scaling: .linear).gen,
+            ConfiguredTree.gen(scaling: .linear).gen,
             reference: reference.gen,
             seed: seed,
             size: 1,
@@ -45,8 +45,8 @@ struct DerivedGeneratorAPITests {
 
     @Test("The type-level factory forwards the root ceiling and scaling", arguments: [UInt64(0), 1, 42])
     func configurableFactoryParity(seed: UInt64) throws {
-        let generator = ConfiguredTree.gen(maximumDepth: 3, scaling: .constant)
-        let reference = ReflectiveGenerator<ConfiguredTree>.derived(maximumDepth: 3, scaling: .constant)
+        let generator = ConfiguredTree.gen(.budget(.custom(recursion: 3, nodes: 100)), scaling: .constant)
+        let reference = ReflectiveGenerator<ConfiguredTree>.derived(.budget(.custom(recursion: 3, nodes: 100)), scaling: .constant)
         try expectMatchingRandomStream(generator.gen, reference: reference.gen, seed: seed, size: 1, draws: 50)
         // This exceeds the root annotation's default ceiling but fits the explicit root ceiling and all nested ceilings.
         let target: ConfiguredTree = .node(.node(.node(.leaf)))
@@ -54,13 +54,53 @@ struct DerivedGeneratorAPITests {
         #expect(try Interpreters.replay(generator.gen, using: tree) == target)
     }
 
-    @Test("The type-level pinned factory retains its depth and random stream", arguments: [0, 1, 3])
-    func pinnedFactoryParity(depth: Int) throws {
-        let generator = ConfiguredTree.gen(depth: depth)
-        let reference = ReflectiveGenerator<ConfiguredTree>.derived(depth: depth)
+    @Test("Repeated variadic settings use the last value", arguments: [UInt64(0), 1, 42])
+    func repeatedSettings(seed: UInt64) throws {
+        let generated = ConfiguredTree.gen(
+            .budget(.custom(recursion: 0, nodes: 1)),
+            .domain(.tiny),
+            .budget(.custom(recursion: 3, nodes: 100)),
+            .domain(.small),
+            scaling: .constant
+        )
+        let generatedReference = ReflectiveGenerator<ConfiguredTree>.derived(
+            .budget(.custom(recursion: 3, nodes: 100)),
+            .domain(.small),
+            scaling: .constant
+        )
+        try expectMatchingRandomStream(
+            generated.gen,
+            reference: generatedReference.gen,
+            seed: seed,
+            size: 100,
+            draws: 50
+        )
+
+        let pinned = ReflectiveGenerator<ConfiguredTree>.derived(
+            recursion: 3,
+            .domain(.tiny),
+            .domain(.small)
+        )
+        let pinnedReference = ReflectiveGenerator<ConfiguredTree>.derived(
+            recursion: 3,
+            .domain(.small)
+        )
+        try expectMatchingRandomStream(
+            pinned.gen,
+            reference: pinnedReference.gen,
+            seed: seed,
+            size: 100,
+            draws: 50
+        )
+    }
+
+    @Test("The type-level pinned factory retains its recursive fuel and random stream", arguments: [0, 1, 3])
+    func pinnedFactoryParity(recursion: Int) throws {
+        let generator = ConfiguredTree.gen(recursion: recursion)
+        let reference = ReflectiveGenerator<ConfiguredTree>.derived(recursion: recursion)
         try expectMatchingRandomStream(generator.gen, reference: reference.gen, seed: 42, size: 1, draws: 50)
         var target: ConfiguredTree = .leaf
-        for _ in 0 ..< depth {
+        for _ in 0 ..< recursion {
             target = .node(target)
         }
         let tree = try #require(try Interpreters.reflect(generator.gen, with: target))
@@ -73,7 +113,7 @@ struct DerivedGeneratorAPITests {
             case false:
                 ConfiguredProduct.gen(overriding: .uint8(in: 7 ... 7), .just(true))
             case true:
-                ConfiguredProduct.gen(depth: 0, overriding: .uint8(in: 7 ... 7), .just(true))
+                ConfiguredProduct.gen(recursion: 0, overriding: .uint8(in: 7 ... 7), .just(true))
         }
         let generator = #gen(configured, DefaultThird.gen())
         let samples = try #example(generator, count: 20)
@@ -110,7 +150,7 @@ struct DerivedGeneratorAPITests {
 
     @Test("Examine validates the configurable size-ramped generator")
     func examinesRampedGenerator() {
-        let generator = ConfiguredTree.gen(maximumDepth: 3, scaling: .constant)
+        let generator = ConfiguredTree.gen(.budget(.custom(recursion: 3, nodes: 100)), scaling: .constant)
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.logs)) { first, second in
             first == second
         }
@@ -118,9 +158,9 @@ struct DerivedGeneratorAPITests {
     }
 
     @Test("Examine validates pinned derived generators", arguments: [0, 1, 3])
-    func examinesPinnedGenerator(depth: Int) {
+    func examinesPinnedGenerator(recursion: Int) {
         let report = #examine(
-            ConfiguredTree.gen(depth: depth),
+            ConfiguredTree.gen(recursion: recursion),
             .samples(50),
             .replay(42),
             .suppress(.logs)
@@ -136,9 +176,9 @@ struct DerivedGeneratorAPITests {
             case false:
                 ConfiguredProduct.gen(overriding: .uint8(in: 7 ... 7), .just(true))
             case true:
-                ConfiguredProduct.gen(depth: 0, overriding: .uint8(in: 7 ... 7), .just(true))
+                ConfiguredProduct.gen(recursion: 0, overriding: .uint8(in: 7 ... 7), .just(true))
         }
-        let generator = #gen(configured, DefaultThird.gen(depth: 0))
+        let generator = #gen(configured, DefaultThird.gen(recursion: 0))
         let report = #examine(generator, .samples(50), .replay(42), .suppress(.logs)) { first, second in
             first == second
         }
@@ -182,7 +222,7 @@ private struct DefaultComposition: Equatable {
     let count: Int
 }
 
-@Exhaustable(maximumDepth: 2)
+@Exhaustable(.budget(.custom(recursion: 2, nodes: 100)))
 private indirect enum ConfiguredTree: Equatable {
     case leaf
     case node(ConfiguredTree)

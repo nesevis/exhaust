@@ -46,10 +46,10 @@ protocol GraphEncoder {
     /// - Returns: The projected mutation for this probe, or `nil` when converged.
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe?
 
-    /// Whether any replacement probe was rejected because the candidate was not shortlex-smaller than the original.
+    /// Whether a replacement candidate was dropped by the shortlex gate without being probed.
     ///
     /// The scheduler uses this to decide whether a relax round is worth attempting after structural reduction completes. Default `false` for non-structural encoders.
-    var hadReplacementShortlexRejection: Bool { get }
+    var hadUnresolvedReplacement: Bool { get }
 
     /// Convergence records accumulated during the probe loop.
     ///
@@ -84,8 +84,8 @@ protocol StatefulGraphEncoder: GraphEncoder {
 }
 
 extension GraphEncoder {
-    /// Default: no replacement shortlex rejections.
-    var hadReplacementShortlexRejection: Bool {
+    /// Default: no unresolved replacements.
+    var hadUnresolvedReplacement: Bool {
         false
     }
 

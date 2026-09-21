@@ -247,11 +247,11 @@
             }
         }
 
-        @Test("Depth, node, and state-space policies are carried onto the descriptor")
-        func carriesLimits() {
+        @Test("Budget and domain settings are carried onto the descriptor")
+        func carriesSettings() {
             assertMacro {
                 """
-                @Exhaustable(maximumDepth: 6, maximumNodes: 31, stateSpace: .small)
+                @Exhaustable(.budget(.custom(recursion: 6, nodes: 31)), .domain(.small))
                 indirect enum Expr {
                     case leaf
                     case node(Expr)
@@ -285,7 +285,7 @@
                                                     return nil
                                                 }
                                             })
-                        ], maximumDepth: 6, maximumNodes: 31, stateSpace: .small, fileID: "TestModule/Test.swift", line: 1, column: 1)
+                        ], settings: [.budget(.custom(recursion: 6, nodes: 31)), .domain(.small)], fileID: "TestModule/Test.swift", line: 1, column: 1)
                     }
                 }
                 """

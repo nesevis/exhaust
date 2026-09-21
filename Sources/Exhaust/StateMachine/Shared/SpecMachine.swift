@@ -277,7 +277,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
             enabledEncoders: [.valueSearch, .floatSearch, .deletion],
-            tuning: SchedulerTuning(relaxMaterializationBudget: 0)
+            tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         if let reduced = try? Interpreters.choiceGraphReduceCollectingStats(
             gen: setupGen.gen,

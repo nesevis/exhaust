@@ -17,28 +17,32 @@ struct GeneratorFingerprintTests {
         #expect(nested.column == 5)
     }
 
-    @Test("Every depth uses the declaration's source fingerprint", arguments: 0 ... 4)
-    func sharesFamilyAcrossDepths(depth: Int) {
+    @Test("Every recursive-fuel layer uses the declaration's source fingerprint", arguments: 0 ... 4)
+    func sharesFamilyAcrossRecursion(recursion: Int) throws {
         let expected = Gen.sourceFingerprint(
             fileID: #fileID,
             line: fingerprintTreeAnnotationLine,
             column: 1
         )
-        let generator = ReflectiveGenerator<FingerprintTree>.derived(depth: depth)
-        let fingerprints = pickFingerprints(generator)
-        #expect(fingerprints.count == (depth == 0 ? 1 : 2))
+        let generator = ReflectiveGenerator<FingerprintTree>.derived(recursion: recursion)
+        let value: FingerprintTree = switch recursion {
+            case 0: .leaf
+            default: .node(.leaf)
+        }
+        let fingerprints = try pickFingerprints(generator, reflecting: value)
+        #expect(fingerprints.count == (recursion == 0 ? 1 : 2))
         #expect(Set(fingerprints) == [expected])
 
-        let rebuilt = ReflectiveGenerator<FingerprintTree>.derived(depth: depth)
-        #expect(pickFingerprints(rebuilt) == fingerprints)
+        let rebuilt = ReflectiveGenerator<FingerprintTree>.derived(recursion: recursion)
+        #expect(try pickFingerprints(rebuilt, reflecting: value) == fingerprints)
     }
 
     @Test("Same-named declarations have distinct derived families")
     func separatesDeclarations() throws {
-        let first = ReflectiveGenerator<FingerprintTree>.derived(depth: 2)
-        let second = ReflectiveGenerator<FingerprintScope.FingerprintTree>.derived(depth: 2)
-        let firstFingerprint = try #require(pickFingerprints(first).first)
-        let secondFingerprint = try #require(pickFingerprints(second).first)
+        let first = ReflectiveGenerator<FingerprintTree>.derived(recursion: 2)
+        let second = ReflectiveGenerator<FingerprintScope.FingerprintTree>.derived(recursion: 2)
+        let firstFingerprint = try #require(try pickFingerprints(first, reflecting: .leaf).first)
+        let secondFingerprint = try #require(try pickFingerprints(second, reflecting: .leaf).first)
         #expect(firstFingerprint != secondFingerprint)
         #expect(secondFingerprint == Gen.sourceFingerprint(
             fileID: #fileID,
@@ -49,15 +53,10 @@ struct GeneratorFingerprintTests {
 
     @Test("Recursive occurrences retain the root family through reflection and replay")
     func sharesFamilyWithDescendants() throws {
-        let generator = ReflectiveGenerator<FingerprintTree>.derived(depth: 3)
+        let generator = ReflectiveGenerator<FingerprintTree>.derived(recursion: 3)
         let value: FingerprintTree = .node(.node(.leaf))
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
-        let fingerprints = ChoiceSequence.flatten(tree).compactMap { entry -> UInt64? in
-            guard case let .branch(branch) = entry else {
-                return nil
-            }
-            return branch.fingerprint
-        }
+        let fingerprints = pickFingerprints(in: tree)
         let expected = Gen.sourceFingerprint(
             fileID: #fileID,
             line: fingerprintTreeAnnotationLine,
@@ -90,10 +89,19 @@ enum FingerprintScope {
 
 // MARK: - Helpers
 
-private func pickFingerprints(_ generator: ReflectiveGenerator<some Any>) -> [UInt64] {
-    guard case let .impure(.pick(choices, _), _) = generator.gen else {
-        Issue.record("Expected a derived generator to start with a pick")
-        return []
+private func pickFingerprints<Value>(
+    _ generator: ReflectiveGenerator<Value>,
+    reflecting value: Value
+) throws -> [UInt64] {
+    let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
+    return pickFingerprints(in: tree)
+}
+
+private func pickFingerprints(in tree: ChoiceTree) -> [UInt64] {
+    ChoiceSequence.flatten(tree).compactMap { entry in
+        guard case let .branch(branch) = entry else {
+            return nil
+        }
+        return branch.fingerprint
     }
-    return choices.map(\.fingerprint)
 }

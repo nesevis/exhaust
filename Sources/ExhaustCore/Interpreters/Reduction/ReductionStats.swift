@@ -196,6 +196,12 @@ package struct ReductionStats: Sendable {
     /// One record per relax round that had perturbation candidates, in run order. Populated only when ``ReductionMachine``'s maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed excursions actually cross.
     package var relaxRoundLog: [RelaxRoundRecord] = []
 
+    /// Improving pivot probes spent. An improving probe has no barrier to measure, so ``relaxRoundLog`` does not hold these.
+    package var relaxImprovingProbes: Int = 0
+
+    /// Improving pivot probes accepted.
+    package var relaxImprovingAcceptances: Int = 0
+
     // MARK: - Stall Diagnostic
 
     /// Leaves that terminated with a convergence record at their current value while short of their reduction target. Nonzero counts are normal for successful reductions (a property demanding nonzero values leaves surviving leaves short of their targets); the silent-stall signal is a nonzero count with ``anyAcceptanceEverOccurred`` false.
@@ -251,6 +257,8 @@ package struct ReductionStats: Sendable {
         stalledLeafResidualDistance += other.stalledLeafResidualDistance
         anyAcceptanceEverOccurred = anyAcceptanceEverOccurred || other.anyAcceptanceEverOccurred
         relaxRoundLog.append(contentsOf: other.relaxRoundLog)
+        relaxImprovingProbes += other.relaxImprovingProbes
+        relaxImprovingAcceptances += other.relaxImprovingAcceptances
         for (key, value) in other.filterObservations {
             filterObservations[key, default: FilterObservation()].merge(value)
         }

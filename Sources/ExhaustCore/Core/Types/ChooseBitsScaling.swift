@@ -9,12 +9,15 @@
 ///
 /// ``Kind`` says how the effective range grows with size; ``samplingBounds`` says where it may reach. Keeping them apart is what lets the range computation dispatch on every kind, rather than special-casing a bounded variant before it.
 ///
-/// - Note: A `nil` scaling on ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` means the full declared range is sampled uniformly at every size (the `.constant` case from ``SizeScaling``).
+/// - Note: A `nil` scaling on ``ReflectiveOperation/chooseBits(min:max:tag:isRangeExplicit:scaling:)`` samples the full declared range uniformly at every size. A ``Kind/constant`` scaling represents the same distribution when ``samplingBounds`` narrows generation to part of the declared range.
 @usableFromInline
 package struct ChooseBitsScaling: Sendable, Hashable {
     /// How the effective sampling range grows from its origin as size increases.
     @usableFromInline
     package enum Kind: Sendable, Hashable {
+        /// Samples the complete sampling range at every size.
+        case constant
+
         /// Linear interpolation from the origin toward both bounds as size grows.
         ///
         /// When `originBits` is `nil`, the origin is resolved at sample time to the tag's ``TypeTag/simplestBitPattern`` clamped into the range.
@@ -34,10 +37,17 @@ package struct ChooseBitsScaling: Sendable, Hashable {
     /// How the effective range grows with size.
     package let kind: Kind
 
-    /// Bounds the sample stays inside, narrower than the operation's declared range. A `nil` value samples the declared range, which is the only shape a generator built from ``SizeScaling`` produces.
+    /// Bounds the sample stays inside, narrower than the operation's declared range. A `nil` value samples the declared range.
     ///
     /// Only generation reads these. Reflection, analysis, and the reducer see the declared range, so a value beyond these bounds still decomposes and still reduces.
     package let samplingBounds: ClosedRange<UInt64>?
+
+    /// Constant sampling, optionally confined to bounds narrower than the declared range.
+    package static func constant(
+        samplingWithin samplingBounds: ClosedRange<UInt64>? = nil
+    ) -> Self {
+        Self(kind: .constant, samplingBounds: samplingBounds)
+    }
 
     /// Linear scaling, optionally confined to bounds narrower than the declared range.
     package static func linear(

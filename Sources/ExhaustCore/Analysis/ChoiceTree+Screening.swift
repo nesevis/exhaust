@@ -66,3 +66,46 @@ extension ChoiceTree {
         }
     }
 }
+
+extension ChoiceTree {
+    /// Whether a node screening preserves rather than models can still vary between runs.
+    ///
+    /// Mirrors ``screeningShape(in:)`` at root scope. Preserved nodes keep the template's value or go to the materializer's PRNG, so a run that enumerates every modeled parameter has still not seen the whole domain when one of them holds a choice. The pick model counts the branch index alone, so a recorded arm that draws is hidden too; an arm analysis skipped has no subtree and is reported through ``GenerationContext/hasElidedDrawingArm`` instead. Binds and sequences resolve to `true` because neither is fully modeled.
+    var hidesChoiceFromScreening: Bool {
+        switch screeningShape(in: .root) {
+            case .preserved:
+                drawsChoice
+            case .invalid, .bind, .sequence:
+                true
+            case .choice:
+                false
+            case let .pick(children):
+                children.contains { child in
+                    guard case let .branch(branch) = child else {
+                        return true
+                    }
+                    return branch.choice.drawsChoice
+                }
+            case let .singleton(branch, _):
+                branch.choice.hidesChoiceFromScreening
+            case let .group(children, _), let .resize(_, children):
+                children.contains(where: \.hidesChoiceFromScreening)
+        }
+    }
+
+    /// Whether any node under this one records a draw, a size read, or a branch selection.
+    private var drawsChoice: Bool {
+        switch self {
+            case .just:
+                false
+            case let .choice(_, metadata):
+                metadata.validRange.map { $0.lowerBound != $0.upperBound } ?? true
+            case .getSize, .sequence, .bind:
+                true
+            case let .branch(branch):
+                branch.branchCount > 1 || branch.choice.drawsChoice
+            case let .group(children, _, _), let .resize(_, children):
+                children.contains(where: \.drawsChoice)
+        }
+    }
+}

@@ -53,6 +53,20 @@ struct MetaFuzzOracleTests {
         #expect(checked > 0, "The case generator must produce checkable cases")
     }
 
+    @Test("The fallback fidelity oracle fires when a wrapper drops its inner generator's tree")
+    func fallbackFidelityOracleFires() {
+        // The one shape known to lose its fallback: an invisible bind records an untagged callee-continuation pair, and a wrapper with no tree node of its own splits that pair as if it were the wrapper's. No recipe builds this any more, so the oracle is shown live on a hand-built generator.
+        let invisibleBind = Gen.choose(in: 0 ... 9).bind { low in Gen.choose(in: low ... low + 50) }
+        let wrapped = Gen.classify(invisibleBind, ("any", { _ in true }))
+        let fuzzCase = MetaFuzzCase(recipe: .leaf(.int(0 ... 9)), valueSeed: 1, perturbationSeed: 2)
+        #expect(throws: GuidedFallbackFidelityViolation.self) {
+            try MetaFuzz.checkGuidedFallbackFidelity(wrapped.erase(), fuzzCase)
+        }
+        #expect(throws: Never.self) {
+            try MetaFuzz.checkGuidedFallbackFidelity(invisibleBind.erase(), fuzzCase)
+        }
+    }
+
     @Test("Tuned filter laws compare one stable generator identity")
     func tunedFilterLawsUseStableGeneratorIdentity() throws {
         let recipe = GenRecipe.combinator(.filtered(

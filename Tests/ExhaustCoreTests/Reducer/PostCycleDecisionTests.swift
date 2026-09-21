@@ -59,7 +59,7 @@ struct PostCycleDecisionTests {
     func relaxWhenStalledWithShortlexRejection() {
         let result = Self.evaluate(
             anyAccepted: false,
-            hadReplacementShortlexRejection: true
+            hadUnresolvedReplacement: true
         )
         #expect(result.actions.contains(.relaxRound))
     }
@@ -68,7 +68,7 @@ struct PostCycleDecisionTests {
     func noRelaxWhenAccepted() {
         let result = Self.evaluate(
             anyAccepted: true,
-            hadReplacementShortlexRejection: true
+            hadUnresolvedReplacement: true
         )
         #expect(result.actions.contains(.relaxRound) == false)
     }
@@ -77,7 +77,7 @@ struct PostCycleDecisionTests {
     func noRelaxWithoutShortlexRejection() {
         let result = Self.evaluate(
             anyAccepted: false,
-            hadReplacementShortlexRejection: false
+            hadUnresolvedReplacement: false
         )
         #expect(result.actions.contains(.relaxRound) == false)
     }
@@ -144,7 +144,7 @@ struct PostCycleDecisionTests {
     func stalledWithShortlexAndConvergence() {
         let result = Self.evaluate(
             anyAccepted: false,
-            hadReplacementShortlexRejection: true,
+            hadUnresolvedReplacement: true,
             allConverged: true,
             structurallyImproved: false
         )
@@ -182,7 +182,7 @@ struct PostCycleDecisionTests {
 
     private static func evaluate(
         anyAccepted: Bool = false,
-        hadReplacementShortlexRejection: Bool = false,
+        hadUnresolvedReplacement: Bool = false,
         allConverged: Bool = false,
         improved: Bool = false,
         structurallyImproved: Bool = false,
@@ -192,7 +192,7 @@ struct PostCycleDecisionTests {
         ChoiceGraphScheduler.evaluatePostCycle(
             outcome: .init(
                 anyAccepted: anyAccepted,
-                hadReplacementShortlexRejection: hadReplacementShortlexRejection,
+                hadUnresolvedReplacement: hadUnresolvedReplacement,
                 allConverged: allConverged,
                 improved: improved,
                 structurallyImproved: structurallyImproved

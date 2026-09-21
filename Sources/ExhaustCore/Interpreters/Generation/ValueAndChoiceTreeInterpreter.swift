@@ -57,9 +57,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         context.purpose = .screeningAnalysis
     }
 
-    /// Whether this run skipped a pick arm whose shape depends on a drawn value, leaving the template partial.
-    package var hasElidedDataDependentArm: Bool {
-        context.hasElidedDataDependentArm
+    /// Whether this run skipped a pick arm that draws a choice, leaving the template partial.
+    package var hasElidedDrawingArm: Bool {
+        context.hasElidedDrawingArm
     }
 
     /// The PRNG seed used for this interpreter's generation runs.
@@ -548,6 +548,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return try handleAnalysisPick(
                 choices,
                 selectedChoice: selectedChoice,
+                jumpSeed: jumpSeed,
                 continuation: continuation,
                 context: &context
             )
@@ -640,7 +641,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ///
     /// Best-effort: a branch whose filter cannot be satisfied, whose unique budget is exhausted, or whose backtrack node has no producing arm is skipped, exactly like a branch that produces nil. Only the selected branch's failures abort the run; without the catch, an unsatisfiable filter on an untaken branch kills runs that the value-only interpreter completes, breaking VI/VACTI parity.
     @inline(__always)
-    private static func materializeUnselectedBranch(
+    static func materializeUnselectedBranch(
         _ choice: ReflectiveOperation.PickTuple,
         fingerprint: UInt64,
         branchCount: UInt64,

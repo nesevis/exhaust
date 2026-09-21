@@ -54,8 +54,11 @@ package struct SchedulerTuning: Sendable {
     /// Maximum upstream probes per bind site before exponential decay kicks in.
     public var boundValueBaseBudget: Int
 
-    /// Maximum materializations the relax round will attempt before giving up. Set to 0 to disable the relax round entirely.
+    /// Maximum excursion materializations per relax round. Zero disables excursions.
     public var relaxMaterializationBudget: Int
+
+    /// Maximum improving pivot probes per relax round. Separate from ``relaxMaterializationBudget`` so that spending it never changes which excursions a round reaches. Zero disables the phase.
+    public var relaxImprovingProbeBudget: Int
 
     /// Half-width of the bit-pattern window used by bind classification endpoint probing. Unsigned tags probe `0 ... windowRadius`; signed tags probe `simplest ± windowRadius`.
     public var classificationWindowRadius: UInt64
@@ -72,12 +75,14 @@ package struct SchedulerTuning: Sendable {
     package init(
         boundValueBaseBudget: Int = 15,
         relaxMaterializationBudget: Int = 10,
+        relaxImprovingProbeBudget: Int = 2,
         classificationWindowRadius: UInt64 = 10000,
         composedFirstDispatchProbeCap: Int = 16,
         migrationDemotionThreshold: Int = 3
     ) {
         self.boundValueBaseBudget = boundValueBaseBudget
         self.relaxMaterializationBudget = relaxMaterializationBudget
+        self.relaxImprovingProbeBudget = relaxImprovingProbeBudget
         self.classificationWindowRadius = classificationWindowRadius
         self.composedFirstDispatchProbeCap = composedFirstDispatchProbeCap
         self.migrationDemotionThreshold = migrationDemotionThreshold

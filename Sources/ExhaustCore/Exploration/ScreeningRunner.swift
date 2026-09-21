@@ -219,7 +219,10 @@ package enum ScreeningRunner {
         // Erase once for the whole screening loop; materializeRow takes the erased generator to avoid per-row erasure.
         let erasedGen = gen.erase()
         // A passing row's tree is only read by the onExample stats callback; without one, the row is materialized without a tree and a failing row is materialized again for the report.
-        let needsTree = onExample != nil
+        // An exhaustive candidate also needs each row's tree, to count the distinct choice sequences its rows realized.
+        let needsTree = onExample != nil || plan.isExhaustiveCandidate
+        // Hashes stand in for the sequences; a collision undercounts, which can only withhold the verdict.
+        var realizedSequences = Set<UInt64>()
 
         var rows = Rows(plan: plan, coveringSeed: coveringSeed, skipToRow: skipToRow)
         var summary = Summary()
@@ -235,6 +238,9 @@ package enum ScreeningRunner {
             guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
                 summary.rejectedRows += 1
                 break
+            }
+            if plan.isExhaustiveCandidate {
+                realizedSequences.insert(ZobristHash.hash(of: ChoiceSequence.flatten(tree)))
             }
             summary.propertyInvocations += 1
             let passed = property(value)
@@ -263,14 +269,15 @@ package enum ScreeningRunner {
             }
         }
 
-        // Only report exhaustive when every point in the domain was tested, not just all t-tuples.
+        // Only report exhaustive when every point in the domain was tested, not just all t-tuples. Counting realized sequences rather than rows catches a materializer that did not honor a row and fell back to its PRNG: such rows repeat points, so fewer distinct sequences than domain points means part of the domain went unseen.
         let domainRows = plan.parameterCount >= 2 ? plan.totalSpace : plan.domainSizes[0]
         if plan.isExhaustiveCandidate,
            skipToRow == nil,
            failureObserved == false,
            deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
            summary.rejectedRows == 0,
-           UInt64(summary.rowAttempts) >= domainRows
+           UInt64(summary.rowAttempts) >= domainRows,
+           UInt64(realizedSequences.count) >= domainRows
         {
             return .exhaustive(summary: summary)
         }
