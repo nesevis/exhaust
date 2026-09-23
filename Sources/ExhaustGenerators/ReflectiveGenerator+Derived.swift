@@ -47,7 +47,7 @@ public extension __Exhaustable.Conformance {
     ///
     /// With no settings, `gen()` uses the annotation's budget and domain. Root settings replace the corresponding annotation setting, while nested annotated types retain their own ceilings.
     ///
-    /// Recursive fuel grows with Exhaust's size parameter and is divided among payload edges that participate in a type cycle. Constructors keep fixed weights while fuel remains, and constructors that can terminate without crossing a cycle remain available at zero. The node ceiling counts annotated values, standard containers, and opaque payloads; it does not bound memory or work inside an override. The domain controls default numeric magnitudes, collection lengths, and date ranges.
+    /// Recursive fuel grows with Exhaust's size parameter and is divided among payload edges that participate in a type cycle. Constructors keep fixed weights while fuel remains, and constructors that can terminate without crossing a cycle remain available at zero. The node ceiling bounds structural support independently of size; size-scaled cardinality choices still keep early samples small. The ceiling counts annotated values, standard containers, and opaque payloads; it does not bound memory or work inside an override. The domain controls default numeric magnitudes, collection lengths, and date ranges.
     ///
     /// Overrides match payload types, including occurrences inside standard containers. They replace built-in or derived payload generators but do not replace the root generator. Sets, dictionaries, and forward-only overrides can disable reflection.
     ///

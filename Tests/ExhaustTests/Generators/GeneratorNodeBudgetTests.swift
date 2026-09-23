@@ -66,22 +66,22 @@ struct GeneratorNodeBudgetTests {
         }
     }
 
-    @Test("The root allowance ramps container-driven nodes with size", arguments: [UInt64(1), 25, 50, 100])
-    func sizeRamping(size: UInt64) throws {
-        let generator = BudgetRose.gen(recursion: 5, .budget(.custom(recursion: 5, nodes: 32)))
+    @Test("The root node ceiling is independent of size", arguments: [UInt64(1), 25, 50, 100])
+    func sizeIndependentNodeCeiling(size: UInt64) throws {
+        let maximumNodes = 32
+        let generator = BudgetRose.gen(recursion: 5, .budget(.custom(recursion: 5, nodes: maximumNodes)))
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: size)
-        let allowance = BudgetRose.minimumNodes + Int(30 * size / 100)
-        let maximumChildCount = UInt64(max(0, (allowance - BudgetRose.minimumNodes) / BudgetRose.minimumNodes))
+        let maximumChildCount = UInt64((maximumNodes - BudgetRose.minimumNodes) / BudgetRose.minimumNodes)
         var counts: [Int] = []
         for _ in 0 ..< 30 {
             let (value, tree) = try #require(try interpreter.next())
             counts.append(value.nodes)
-            #expect(value.nodes <= allowance)
+            #expect(value.nodes <= maximumNodes)
             #expect(unsignedChoiceRanges(in: tree).contains(0 ... maximumChildCount))
         }
-        // Exponential cardinality scaling keeps the size-25 samples empty even though their declared container layer already admits children. At larger sizes, deterministic sampling also exercises that support.
+        // Exponential cardinality scaling still keeps early samples small while every size retains the complete structural support.
         if size >= 50 {
-            #expect(counts.contains { $0 > BudgetRose.minimumNodes }, "every draw stayed at the minimum, so the ramped allowance was never used")
+            #expect(counts.contains { $0 > BudgetRose.minimumNodes }, "every draw stayed at the minimum, so the full node allowance was never used")
         }
     }
 

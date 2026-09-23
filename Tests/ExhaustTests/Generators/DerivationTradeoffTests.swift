@@ -43,13 +43,13 @@ private func makeTradeoffGenerator() throws -> ReflectiveGenerator<TradeoffTree>
     )
 }
 
-/// Checks the exact size allowance as well as both replay paths for every generated value.
+/// Checks the size-independent node ceiling as well as both replay paths for every generated value.
 private func tradeoffSamples(_ generator: ReflectiveGenerator<TradeoffTree>, size: UInt64) throws -> [TradeoffTree] {
     var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 42, sizeOverride: size)
     var result: [TradeoffTree] = []
     for _ in 0 ..< 4 {
         let (value, choices) = try #require(try interpreter.next())
-        #expect(value.nodes <= 2 + Int(198 * size / 100))
+        #expect(value.nodes <= 200)
         #expect(try Interpreters.replay(generator.gen, using: choices) == value)
         let reflected = try #require(try Interpreters.reflect(generator.gen, with: value))
         #expect(try Interpreters.replay(generator.gen, using: reflected) == value)

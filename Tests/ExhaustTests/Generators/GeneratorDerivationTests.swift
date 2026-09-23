@@ -154,22 +154,24 @@ struct GeneratorDerivationTests {
     @Test("The drawn depth ramps with the size and is reducible")
     func drawnDepthRampsAndReduces() throws {
         let generator = ReflectiveGenerator<Term>.derived(overriding: .int(in: 0 ... 3))
-        func deepest(atSize size: UInt64, samples: Int) throws -> Int {
+        func depthStats(atSize size: UInt64, samples: Int) throws -> (deepest: Int, mean: Double) {
             var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, seed: 3, maxRuns: 10000, sizeOverride: size)
             var deepest = 0
+            var totalDepth = 0
             for _ in 0 ..< samples {
                 let (value, _) = try #require(try interpreter.next())
                 deepest = max(deepest, value.depth)
+                totalDepth += value.depth
             }
-            return deepest
+            return (deepest, Double(totalDepth) / Double(samples))
         }
-        let atSmall = try deepest(atSize: 5, samples: 200)
-        let atMiddle = try deepest(atSize: 50, samples: 200)
-        let atFull = try deepest(atSize: 100, samples: 400)
-        #expect(atSmall <= 1)
-        #expect(atMiddle > atSmall)
-        #expect(atFull > atMiddle)
-        #expect(atFull <= Term.__generatorDescriptor.budget.recursion)
+        let atSmall = try depthStats(atSize: 5, samples: 200)
+        let atMiddle = try depthStats(atSize: 50, samples: 200)
+        let atFull = try depthStats(atSize: 100, samples: 400)
+        #expect(atSmall.deepest < atMiddle.deepest)
+        #expect(atSmall.mean < atMiddle.mean)
+        #expect(atMiddle.mean < atFull.mean)
+        #expect(atFull.deepest <= Term.__generatorDescriptor.budget.recursion)
 
         var interpreter = ValueAndChoiceTreeInterpreter(generator.gen, materializePicks: true, seed: 11, maxRuns: 10000, sizeOverride: 100)
         let property: (Term) -> Bool = { $0.caseNames.contains("typeApplication") == false }
@@ -245,9 +247,9 @@ struct GeneratorDerivationTests {
         let nonemptyTreeArrays = samples.count(where: { $0.trees.isEmpty == false })
         let presentBestTrees = samples.count(where: { $0.best != nil })
         let nonemptyNestedArrays = samples.count(where: { $0.nested.isEmpty == false })
-        #expect((600 ... 660).contains(nonemptyTreeArrays), "\(nonemptyTreeArrays) of \(samples.count) tree arrays were nonempty")
+        #expect((690 ... 750).contains(nonemptyTreeArrays), "\(nonemptyTreeArrays) of \(samples.count) tree arrays were nonempty")
         #expect((180 ... 220).contains(presentBestTrees), "\(presentBestTrees) of \(samples.count) optional trees were present")
-        #expect((600 ... 660).contains(nonemptyNestedArrays), "\(nonemptyNestedArrays) of \(samples.count) nested arrays were nonempty")
+        #expect((690 ... 750).contains(nonemptyNestedArrays), "\(nonemptyNestedArrays) of \(samples.count) nested arrays were nonempty")
         #expect(samples.allSatisfy { $0.trees.allSatisfy { $0.depth <= 3 } })
 
         let target = Forest(trees: [.leaf, .node(.leaf, .leaf)], best: .leaf, nested: [[.leaf]])

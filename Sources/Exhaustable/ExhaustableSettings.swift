@@ -27,7 +27,7 @@ public enum ExhaustableBudget: Sendable {
     ///
     /// - Parameters:
     ///   - recursion: The fuel divided among recursive edges. Must be nonnegative.
-    ///   - nodes: The maximum structural node count at size 100. Must be positive.
+    ///   - nodes: The structural node ceiling at every size. Must be positive.
     case custom(recursion: Int, nodes: Int)
 
     /// Returns the recursive fuel available at size 100.
@@ -46,7 +46,7 @@ public enum ExhaustableBudget: Sendable {
         }
     }
 
-    /// Returns the structural node ceiling available at size 100.
+    /// Returns the structural node ceiling available at every size.
     public var nodes: Int {
         switch self {
             case .quick:

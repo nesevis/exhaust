@@ -14,7 +14,7 @@ final class BudgetedGeneratorDerivation {
         budget = GeneratorNodeBudget(plan: plan)
     }
 
-    /// Validates recursion before node limits so an insufficient recursion retains the plan's specific diagnostic. The 100 size slots reference shared completed generators; repeated allowances do not rebuild the graph.
+    /// Validates recursion before node limits so an insufficient recursion retains the plan's specific diagnostic. The node ceiling limits structural support independently of the active generation size.
     func root<Value: __Exhaustable.Conformance>(
         for type: Value.Type,
         recursion: RootRecursionBudget,
@@ -41,18 +41,11 @@ final class BudgetedGeneratorDerivation {
                 requested: maximumNodes
             )
         }
-        let span = maximumNodes - minimum
-        return sizeIndexedLayers(
-            // Divide before multiplying so even a ceiling near Int.max cannot overflow.
-            key: { size in minimum + (span / 100) * size + ((span % 100) * size) / 100 },
-            build: { allowance in
-                rootLayer(
-                    for: type,
-                    recursion: effectiveRecursion,
-                    nodes: allowance,
-                    domain: domain
-                )
-            }
+        return rootLayer(
+            for: type,
+            recursion: effectiveRecursion,
+            nodes: maximumNodes,
+            domain: domain
         )
     }
 
