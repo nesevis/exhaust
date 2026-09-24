@@ -103,6 +103,7 @@ enum UnmodeledChoiceShape: CaseIterable, CustomTestStringConvertible {
     case sizeReadingArm
     case continuationBuiltArm
     case backtrackArms
+    case backtrackUnmaterializableArm
     case opaqueZip
 
     var testDescription: String {
@@ -129,6 +130,11 @@ enum UnmodeledChoiceShape: CaseIterable, CustomTestStringConvertible {
                 return Gen.pick(choices: [(1000, constant), (1, constant.bind { _ in large })])
             case .backtrackArms:
                 return Gen.backtrack(always: [(1, large.map { Optional($0) }), (1, constant.map { Optional($0) })])
+            case .backtrackUnmaterializableArm:
+                // The second element repeats the first, so recording the unselected arm exhausts the unique budget and leaves no subtree to judge it by.
+                let duplicating = Gen.just(UInt64(4)).wrapped(isReflective: true).unique().gen
+                let unmaterializable = Gen.arrayOf(duplicating, exactly: 2).map { Optional($0[0]) }
+                return Gen.backtrack(always: [(1000, constant.map { Optional($0) }), (1, unmaterializable)])
             case .opaqueZip:
                 return Gen.zip(Gen.choose(in: UInt64(0) ... 1), Gen.zip(constant, large, isOpaque: true).map { $0 + $1 }).map { $0 + $1 }
         }

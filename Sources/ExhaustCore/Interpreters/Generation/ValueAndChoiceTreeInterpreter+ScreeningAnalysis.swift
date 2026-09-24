@@ -23,19 +23,42 @@ extension ValueAndChoiceTreeInterpreter {
         else {
             throw GeneratorError.choiceTreeConstructionFailed
         }
+        let selectedBranch = ChoiceTree.branch(
+            fingerprint: selectedChoice.fingerprint,
+            weight: selectedChoice.weight,
+            id: selectedChoice.id,
+            branchCount: UInt64(choices.count),
+            choice: final.1,
+            isSelected: true
+        )
+        let branches = try recordAnalysisBranches(
+            choices,
+            selectedBranch: selectedBranch,
+            selectedID: selectedChoice.id,
+            jumpSeed: jumpSeed,
+            continuation: continuation,
+            context: &context
+        )
+        return (final.0, .group(branches))
+    }
+
+    /// Records every arm of an analysis pick around the already-recorded selected branch, eliding unselected arms that draw.
+    ///
+    /// Shared by committed and backtrack picks, which differ only in how the selected arm was chosen. An unselected arm whose graph draws, or whose materialization fails, is recorded as a placeholder and flagged on the context: dropping it would shrink the pick's branch index domain and hide its draws from ``ChoiceTree/hidesChoiceFromScreening``.
+    static func recordAnalysisBranches(
+        _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        selectedBranch: ChoiceTree,
+        selectedID: UInt64,
+        jumpSeed: UInt64,
+        continuation: (Any) throws -> AnyGenerator,
+        context: inout GenerationContext
+    ) throws -> [ChoiceTree] {
         let branchCount = UInt64(choices.count)
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
         for choice in choices {
-            if choice.id == selectedChoice.id {
-                branches.append(.branch(
-                    fingerprint: choice.fingerprint,
-                    weight: choice.weight,
-                    id: choice.id,
-                    branchCount: branchCount,
-                    choice: final.1,
-                    isSelected: true
-                ))
+            if choice.id == selectedID {
+                branches.append(selectedBranch)
                 continue
             }
             if choice.generator.drawsChoice == false,
@@ -61,6 +84,6 @@ extension ValueAndChoiceTreeInterpreter {
                 isSelected: false
             ))
         }
-        return (final.0, .group(branches))
+        return branches
     }
 }

@@ -675,7 +675,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     /// Auditions the arms of a backtrack pick without replacement and records only the winner.
     ///
-    /// The recorded node is an ordinary selected `.branch` carrying the winning arm's id and subtree, so every downstream pass reads it as a committed pick. A failed arm's draws stay consumed and its subtree is discarded; its value-side traces are rolled back because the value never reached the output. Under `materializePicks` the unselected arms are recorded on jumped contexts exactly as for a committed pick, seeded from the winning draw.
+    /// The recorded node is an ordinary selected `.branch` carrying the winning arm's id and subtree, so every downstream pass reads it as a committed pick. A failed arm's draws stay consumed and its subtree is discarded; its value-side traces are rolled back because the value never reached the output. Under `materializePicks` the unselected arms are recorded on jumped contexts exactly as for a committed pick, seeded from the winning draw, and screening analysis elides drawing arms through ``recordAnalysisBranches(_:selectedBranch:selectedID:jumpSeed:continuation:context:)`` as it does for a committed pick.
     @inline(__always)
     private static func handleBacktrack(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
@@ -742,6 +742,17 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         )
         if context.materializePicks == false {
             return (final.0, .group([selectedBranch]))
+        }
+        if context.purpose == .screeningAnalysis {
+            let branches = try recordAnalysisBranches(
+                choices,
+                selectedBranch: selectedBranch,
+                selectedID: arm.id,
+                jumpSeed: lastJumpSeed,
+                continuation: continuation,
+                context: &context
+            )
+            return (final.0, .group(branches))
         }
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)

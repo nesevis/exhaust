@@ -1,0 +1,71 @@
+{
+  "kind": "screeningCase",
+  "note": "Screening granted the exhaustive verdict to a backtrack pick whose unselected arm draws: backtrack picks bypassed the analysis pick handler, and an unselected arm that failed to materialize (unique budget exhausted) was dropped from the template without flagging an elided drawing arm. Fixed 2026-09-24 by routing backtrack picks through the shared analysis branch recording.",
+  "oracle": "ExhaustiveVerdictSoundnessViolation",
+  "perturbationSeed": 10047723181821166451,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "backtrack": {
+          "_0": [
+            {
+              "predicate": "isNonEmpty",
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "metamorphed": {
+                      "_0": {
+                        "leaf": {
+                          "_0": {
+                            "justInt": {
+                              "_0": 14
+                            }
+                          }
+                        }
+                      },
+                      "_1": "negate"
+                    }
+                  }
+                }
+              },
+              "weight": 3
+            },
+            {
+              "predicate": "always",
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "boundArray": {
+                      "element": {
+                        "combinator": {
+                          "_0": {
+                            "unique": {
+                              "_0": {
+                                "leaf": {
+                                  "_0": {
+                                    "justInt": {
+                                      "_0": 4
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "maxLength": 3
+                    }
+                  }
+                }
+              },
+              "weight": 1
+            }
+          ],
+          "failable": false
+        }
+      }
+    }
+  },
+  "valueSeed": 9223372036854775809,
+  "version": 1
+}
