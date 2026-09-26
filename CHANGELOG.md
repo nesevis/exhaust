@@ -6,6 +6,26 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-09-26
+
+### Changed
+
+- `@Exhaustable` node budgets now cap derived values at every generation size instead of growing to their ceiling at size 100. Early samples still start small because recursion fuel and size-scaled lengths grow with size.
+
+### Fixed
+
+- `#exhaust` no longer skips random sampling for `.anyNonNil` generators with an arm that draws values. Previously, screening could miss an arm like this when it failed to generate during analysis, for example if a `.unique()` inside it ran out of retries. It would then treat the remaining arms as the whole domain and reported a pass without sampling.
+
+### Replay
+
+- Seeds that use `@Exhaustable`-derived generators can take a different path below size 100 because the node ceiling no longer scales with size.
+
+## [1.4.2] - 2026-09-21
+
+### Fixed
+
+- `@Exhaustable` now derives generators for generic types that refer to themselves without generic arguments, such as `case node(Element, Heap, Heap)` inside `Heap<Element>`.
+
 ## [1.4.1] - 2026-09-21
 
 ### Fixed
@@ -157,7 +177,9 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.4.3...HEAD
+[1.4.3]: https://github.com/nesevis/exhaust/compare/v1.4.2...v1.4.3
+[1.4.2]: https://github.com/nesevis/exhaust/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/nesevis/exhaust/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/nesevis/exhaust/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/nesevis/exhaust/compare/v1.2.1...v1.3.0
