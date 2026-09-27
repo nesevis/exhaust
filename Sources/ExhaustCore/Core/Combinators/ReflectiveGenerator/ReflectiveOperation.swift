@@ -26,22 +26,6 @@
 //
 // 3. mapInnerGenerator() already factors the structural recursion pattern for cases that wrap a single inner generator. Adaptation uses it at three call sites. A second enum would not reduce code beyond what this method already eliminates.
 
-// swiftlint:disable:next orphaned_doc_comment
-/// The primitive operations that enable bidirectional property-based testing.
-///
-/// Each case is interpreted by multiple passes (generation, reflection, replay, adaptation). The interpretation table in the MARK section below lists which source file handles each case in each pass. Per-case doc comments explain design rationale and invariants, not interpreter behavior.
-///
-/// ## Type Erasure StateMachine
-///
-/// Associated values use `Any` because Swift enums cannot vary generic parameters across cases. The public API never exposes this: users see only typed generators and typed closures.
-///
-/// Every `as!` cast in an interpreter succeeds because the ``Gen`` combinator that constructed the operation guarantees the type: the value an interpreter produces for an operation is the type that operation's continuation was built to receive. The compiler cannot verify this. If you add a case or write an interpreter, the contract is yours to uphold.
-///
-/// A failing cast means the interpreter produced the wrong type, or the combinator attached the wrong continuation. The fault is always internal to the framework.
-///
-/// **Construction**: Operations are created by ``Gen`` combinators and interpreted by ``Interpreters``. Never construct directly.
-///
-/// - SeeAlso: ``Generator``, ``Gen``, ``Interpreters``
 // MARK: - Interpretation Sites
 
 //
@@ -60,6 +44,21 @@
 // unique            InterpreterWrapperHandlers    (pass-through)    (pass-through)    (pass-through)
 // transform         VACTI / VI                    Reflect.swift     Replay.swift      ChoiceGraphBuilder
 
+/// The primitive operations that enable bidirectional property-based testing.
+///
+/// Each case is interpreted by multiple passes (generation, reflection, replay, adaptation). The interpretation table in the MARK section below lists which source file handles each case in each pass. Per-case doc comments explain design rationale and invariants, not interpreter behavior.
+///
+/// ## Type Erasure StateMachine
+///
+/// Associated values use `Any` because Swift enums cannot vary generic parameters across cases. The public API never exposes this: users see only typed generators and typed closures.
+///
+/// Every `as!` cast in an interpreter succeeds because the ``Gen`` combinator that constructed the operation guarantees the type: the value an interpreter produces for an operation is the type that operation's continuation was built to receive. The compiler cannot verify this. If you add a case or write an interpreter, the contract is yours to uphold.
+///
+/// A failing cast means the interpreter produced the wrong type, or the combinator attached the wrong continuation. The fault is always internal to the framework.
+///
+/// **Construction**: Operations are created by ``Gen`` combinators and interpreted by ``Interpreters``. Never construct directly.
+///
+/// - SeeAlso: ``Generator``, ``Gen``, ``Interpreters``
 @usableFromInline
 package enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
