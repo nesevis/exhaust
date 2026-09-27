@@ -142,8 +142,9 @@ extension Interpreters {
         } else {
             candidates = choices
         }
+        typealias ArmReflection = (value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)
         var deferredBranchError: ReflectionError?
-        let reflectArm = { (choice: ReflectiveOperation.PickTuple) throws -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
+        let reflectArm = { (choice: ReflectiveOperation.PickTuple) throws -> [ArmReflection] in
             do {
                 let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, context: context.enteringPickArm())
                 let value = reflectionPaths.firstNonNil { $0.value }
@@ -161,16 +162,13 @@ extension Interpreters {
                     isPicked = reflectionPaths.first.map { structurallyEqual($0.value, finalOutput) } ?? false
                 }
 
-                var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
+                var results: [ArmReflection] = []
                 if isPicked {
                     for (value, pathTree) in reflectionPaths {
                         guard let path = pathTree.first else {
                             continue
                         }
                         results.append((value, fingerprint, choice.weight, choice.id, true, path))
-                        if context.stopsAtFirstMatchingArm {
-                            break
-                        }
                     }
                 }
                 return results
@@ -194,17 +192,17 @@ extension Interpreters {
                 }
             }
         }
-        var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
-        if context.stopsAtFirstMatchingArm {
+        func firstMatchingArmPath() throws -> [ArmReflection] {
             for choice in candidates {
-                results = try reflectArm(choice)
-                if results.isEmpty == false {
-                    break
+                if let first = try reflectArm(choice).first {
+                    return [first]
                 }
             }
-        } else {
-            results = try candidates.flatMap(reflectArm)
+            return []
         }
+        let results = try context.stopsAtFirstMatchingArm
+            ? firstMatchingArmPath()
+            : candidates.flatMap(reflectArm)
         if results.isEmpty {
             if let deferredBranchError {
                 throw deferredBranchError

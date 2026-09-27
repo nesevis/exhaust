@@ -293,10 +293,6 @@ extension ReductionMachine {
             anyAcceptanceEverOccurred = true
         }
 
-        if case .rebuildAndResume = acceptanceAction {
-            convergence.gate.clearFruitless()
-        }
-
         switch acceptanceAction {
             case .continueDispatching:
                 if report.anyAccepted == false {
@@ -311,6 +307,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .sourceExhausted)
 
             case .rebuildAndResume:
+                convergence.gate.clearFruitless()
                 dispatchPhase = .rebuild
                 return .dispatched(decision: .sourceExhausted)
         }

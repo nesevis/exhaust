@@ -36,8 +36,15 @@ enum ConstantArmReencoder {
         let sites = capture.sites
             .filter { eligibleIndices.contains($0.branchIndex) }
             .sorted { $0.branchIndex > $1.branchIndex }
-        for site in sites {
-            for (constantIndex, constantChoice) in site.choices.enumerated() {
+        var siteIndex = 0
+        while siteIndex < sites.count {
+            let site = sites[siteIndex]
+            siteIndex += 1
+            var choiceIndex = 0
+            while choiceIndex < site.choices.count {
+                let constantIndex = choiceIndex
+                let constantChoice = site.choices[constantIndex]
+                choiceIndex += 1
                 guard let constantValue = constantValue(of: constantChoice.generator),
                       let (sibling, armEntries) = reproducingSibling(
                           for: site,
@@ -77,10 +84,15 @@ enum ConstantArmReencoder {
         return (ChoiceSequence(freshTree), freshTree, excludedPivots)
     }
 
+    /// Continuation steps ``constantValue(of:)`` follows before treating a generator as not constant. Bounds the walk, since each step runs a user continuation.
+    private static let maximumConstantSteps = 8
+
     /// The value a choice-free generator produces, found by following `.just` continuations to `.pure`, or nil.
     static func constantValue(of generator: AnyGenerator) -> Any? {
         var current = generator
-        for _ in 0 ..< 8 {
+        var steps = 0
+        while steps < maximumConstantSteps {
+            steps += 1
             switch current {
                 case let .pure(value):
                     return value
@@ -149,8 +161,14 @@ enum ConstantArmReencoder {
         var context = ReflectionContext.root
         context.stopsAtFirstMatchingArm = true
         context.excludedPickFingerprint = site.choices[constantIndex].fingerprint
-        for (index, sibling) in site.choices.enumerated() where index != constantIndex {
-            guard self.constantValue(of: sibling.generator) == nil else {
+        var choiceIndex = 0
+        while choiceIndex < site.choices.count {
+            let siblingIndex = choiceIndex
+            let sibling = site.choices[siblingIndex]
+            choiceIndex += 1
+            guard siblingIndex != constantIndex,
+                  self.constantValue(of: sibling.generator) == nil
+            else {
                 continue
             }
             guard let outcomes = try? Interpreters.reflectRecursive(
@@ -165,7 +183,7 @@ enum ConstantArmReencoder {
         return nil
     }
 
-    /// Equality as pick reflection decides it.
+    /// Value equality, falling back to structural comparison for values that are not `Equatable`. Unlike pick reflection, which accepts a `BitPatternConvertible` value that lies in the arm's range, this requires the reflected value to equal the constant.
     private static func reproduces(_ reflected: Any, _ constant: Any) -> Bool {
         if let reflectedEquatable = reflected as? any Equatable,
            let constantEquatable = constant as? any Equatable

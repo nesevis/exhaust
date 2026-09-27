@@ -135,15 +135,18 @@ struct GraphSingleLeafDomainEncoder: GraphEncoder {
             append(current + 1)
         }
 
-        for offset in 0 ... domain.upperBound - domain.lowerBound {
+        let span = domain.upperBound - domain.lowerBound
+        var offset: UInt64 = 0
+        while values.count < candidateBudget {
             append(domain.lowerBound + offset)
             guard values.count < candidateBudget else {
                 break
             }
             append(domain.upperBound - offset)
-            guard values.count < candidateBudget else {
+            guard offset < span else {
                 break
             }
+            offset += 1
         }
         return values
     }

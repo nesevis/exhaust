@@ -3,100 +3,72 @@ import Testing
 
 @Suite("Constant arm re-encoding")
 struct ConstantArmReencodingTests {
-    @Test("A constant arm reduces through a sibling arm that can express a smaller failing value")
-    func constantReducesThroughSibling() throws {
-        let gen = #gen(.oneOf(.string(), .just("xyzzy-plover")))
-        for seed in UInt64(1) ... 8 {
-            let counterexample = #exhaust(
-                gen,
-                .replay(.numeric(seed)),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            ) { text in
-                text.contains("xyzzy") == false
-            }
-            #expect(try #require(counterexample) == "xyzzy")
+    @Test("A constant arm reduces through a sibling arm that can express a smaller failing value", arguments: seeds)
+    func constantReducesThroughSibling(seed: UInt64) throws {
+        let counterexample = reduce(#gen(.oneOf(.string(), .just("exhaust-constant-value"))), seed: seed) { text in
+            text.contains("exhaust") == false
         }
+        #expect(try #require(counterexample) == "exhaust")
     }
 
-    @Test("A constant stays when only its own value fails")
-    func constantStaysWhenOnlyItFails() throws {
-        let gen = #gen(.oneOf(.string(), .just("xyzzy-plover")))
-        for seed in UInt64(1) ... 8 {
-            let counterexample = #exhaust(
-                gen,
-                .replay(.numeric(seed)),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            ) { text in
-                text != "xyzzy-plover"
-            }
-            #expect(try #require(counterexample) == "xyzzy-plover")
+    @Test("A constant stays when only its own value fails", arguments: seeds)
+    func constantStaysWhenOnlyItFails(seed: UInt64) throws {
+        let counterexample = reduce(#gen(.oneOf(.string(), .just("exhaust-constant-value"))), seed: seed) { text in
+            text != "exhaust-constant-value"
         }
+        #expect(try #require(counterexample) == "exhaust-constant-value")
     }
 
-    @Test("A constant declared before its sibling reduces through the sibling")
-    func constantDeclaredFirstReducesThroughSibling() throws {
-        let gen = #gen(.oneOf(.just("xyzzy-plover"), .string()))
-        for seed in UInt64(1) ... 8 {
-            let counterexample = #exhaust(
-                gen,
-                .replay(.numeric(seed)),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            ) { text in
-                text.contains("xyzzy") == false
-            }
-            #expect(try #require(counterexample) == "xyzzy")
+    @Test("A constant declared before its sibling reduces through the sibling", arguments: seeds)
+    func constantDeclaredFirstReducesThroughSibling(seed: UInt64) throws {
+        let counterexample = reduce(#gen(.oneOf(.just("exhaust-constant-value"), .string())), seed: seed) { text in
+            text.contains("exhaust") == false
         }
+        #expect(try #require(counterexample) == "exhaust")
     }
 
-    @Test("A scalar constant reduces to the smallest failing value of its sibling arm", arguments: [3, 500])
-    func scalarConstantReducesThroughSibling(threshold: Int) throws {
+    @Test("A scalar constant reduces to the smallest failing value of its sibling arm", arguments: [3, 500], seeds)
+    func scalarConstantReducesThroughSibling(threshold: Int, seed: UInt64) throws {
         let gen = #gen(.oneOf(weighted: (1, .int(in: 0 ... 1000)), (1000, .just(500))))
-        for seed in UInt64(1) ... 8 {
-            let counterexample = #exhaust(
-                gen,
-                .replay(.numeric(seed)),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            ) { value in
-                value < threshold
-            }
-            #expect(try #require(counterexample) == threshold)
+        let counterexample = reduce(gen, seed: seed) { value in
+            value < threshold
         }
+        #expect(try #require(counterexample) == threshold)
     }
 
-    @Test("An absent optional stays absent")
-    func absentOptionalStaysAbsent() throws {
-        let gen = #gen(.int(in: 0 ... 100).optional())
-        for seed in UInt64(1) ... 8 {
-            let counterexample = #exhaust(
-                gen,
-                .replay(.numeric(seed)),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            ) { value in
-                value != nil
-            }
-            #expect(try #require(counterexample) == nil)
+    @Test("An absent optional stays absent", arguments: seeds)
+    func absentOptionalStaysAbsent(seed: UInt64) throws {
+        let counterexample = reduce(#gen(.int(in: 0 ... 100).optional()), seed: seed) { value in
+            value != nil
         }
+        #expect(try #require(counterexample) == nil)
     }
 
-    @Test("Array elements holding a constant still reduce to it")
-    func arrayElementsReduceToConstant() throws {
+    @Test("Array elements holding a constant still reduce to it", arguments: seeds)
+    func arrayElementsReduceToConstant(seed: UInt64) throws {
         let element = #gen(.oneOf(.string(), .just("x")))
-        let gen = #gen(.array(element, length: 1 ... 5))
-        for seed in UInt64(1) ... 8 {
-            let counterexample = #exhaust(
-                gen,
-                .replay(.numeric(seed)),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            ) { values in
-                values.contains("x") == false
-            }
-            #expect(try #require(counterexample) == ["x"])
+        let counterexample = reduce(#gen(.array(element, length: 1 ... 5)), seed: seed) { values in
+            values.contains("x") == false
         }
+        #expect(try #require(counterexample) == ["x"])
     }
+}
+
+// MARK: - Helpers
+
+private let seeds = UInt64(1) ... 8
+
+/// Replays `seed` with sampling only, so each seed reaches a counterexample through a different initial draw.
+private func reduce<Value>(
+    _ gen: ReflectiveGenerator<Value>,
+    seed: UInt64,
+    property: @escaping @Sendable (Value) -> Bool
+) -> Value? {
+    #exhaust(
+        gen,
+        .replay(.numeric(seed)),
+        .budget(.custom(screening: 0, sampling: 200)),
+        .suppress(.issueReporting),
+        property: property
+    )
 }
