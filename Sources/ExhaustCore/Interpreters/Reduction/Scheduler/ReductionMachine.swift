@@ -222,7 +222,7 @@ package struct ReductionMachine: ProbeSessionState {
             sequence = ChoiceSequence(fullTree)
         }
         // Once, before the first graph build.
-        let reencoded = ConstantArmReencoder.reencode(sequence: sequence, gen: erasedGen)
+        let reencoded = ConstantArmReencoder.reencode(sequence: sequence, tree: tree, gen: erasedGen)
         if let reencoded {
             sequence = reencoded.sequence
             tree = reencoded.tree

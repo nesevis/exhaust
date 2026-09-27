@@ -73,15 +73,22 @@ enum ReplacementQuery {
             guard node.children.count == Int(metadata.branchCount) else { continue }
 
             let selectedLeafCount = leafCount(in: metadata.branchElements[metadata.selectedChildIndex])
+            // Signed only when an exclusion names this pick's fingerprint, since signing walks every arm.
+            let armDomainSignature: Int? = graph.excludedPivots.contains { $0.fingerprint == metadata.fingerprint }
+                ? ExcludedPivot.armDomainSignature(of: metadata)
+                : nil
 
             for index in 0 ..< Int(metadata.branchCount) {
                 let branchID = UInt64(index)
                 guard branchID != metadata.selectedID else { continue }
                 // Do not restore a constant arm whose value has an exposed sibling representation.
-                if graph.excludedPivots.contains(ExcludedPivot(
-                    fingerprint: metadata.fingerprint,
-                    constantBranchID: branchID
-                )) {
+                if let armDomainSignature,
+                   graph.excludedPivots.contains(ExcludedPivot(
+                       fingerprint: metadata.fingerprint,
+                       constantBranchID: branchID,
+                       armDomainSignature: armDomainSignature
+                   ))
+                {
                     continue
                 }
 

@@ -60,7 +60,7 @@ package struct ChoiceGraph: Sendable {
     /// Last-observed upstream bit pattern and downstream topology fingerprint per bind site. Keyed by `BindMetadata.fingerprint`. Survives rebuilds so the scheduler can passively classify binds by comparing topology across natural upstream variation without materialization probes.
     var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
 
-    /// Pivots back to the reproducible constant arms that ``ConstantArmReencoder`` moved the initial counterexample out of. Set once before the first build and carried across rebuilds by ``build(from:inheriting:observations:excludedPivots:)``; ``ReplacementQuery`` skips these pivots so a later pivot cannot restore the opaque encoding. Keyed by pick fingerprint, which is source-location-stable.
+    /// Pivots back to the reproducible constant arms that ``ConstantArmReencoder`` moved the initial counterexample out of. Set once before the first build and carried across rebuilds by ``build(from:inheriting:observations:excludedPivots:)``; ``ReplacementQuery`` skips these pivots so a later pivot cannot restore the opaque encoding. Keyed by pick fingerprint and ``ExcludedPivot/armDomainSignature(of:)``, both of which are stable across rebuilds while the pick's arm domains are unchanged.
     var excludedPivots: Set<ExcludedPivot> = []
 
     /// Convergence records from prior encoder passes, keyed by graph node ID. Each entry records the bound at which a value search converged for a leaf, its signal, and the cycle number. Stored at graph level rather than per-node because convergence is reduction-session state, not structural metadata — it must survive value-only graph updates without per-node copy overhead.
