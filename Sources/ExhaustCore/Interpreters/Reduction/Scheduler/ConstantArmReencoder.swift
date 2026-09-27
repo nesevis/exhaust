@@ -13,6 +13,8 @@
 ///
 /// Every level of a recursive generator shares its pick fingerprint, so a site under a pick with the same fingerprint is skipped, and sibling reflection stops at that fingerprint.
 ///
+/// Sibling reflection runs in pick-arm context, where nodes that would echo the target rebuild it instead, and the rewrite is abandoned unless replaying it produces the original output: reflection can decompose values its forward pass cannot produce.
+///
 /// - Complexity: O(*n*) without reproducible constant arms. Otherwise performs two exact materializations and up to one first-match reflection per sibling of each constant arm.
 enum ConstantArmReencoder {
     /// Returns the normalized sequence and the constant-arm pivots excluded at its pick sites, or nil when no arm can be re-encoded.
@@ -34,7 +36,7 @@ enum ConstantArmReencoder {
         let capture = ConstantArmCapture()
         var captureContext = Materializer.Context(prefix: sequence, mode: .exact, skipTree: true, collectDecodingReport: false)
         captureContext.constantArmCapture = capture
-        guard case .success = Materializer.materializeAny(gen, context: captureContext) else {
+        guard case let .success(originalOutput, _, _) = Materializer.materializeAny(gen, context: captureContext) else {
             return nil
         }
 
@@ -92,10 +94,11 @@ enum ConstantArmReencoder {
             return nil
         }
 
-        guard case let .success(_, freshTree, _) = Materializer.materializeAny(
+        // Reflection can report the requested value without producing it, so the rewrite stands only if replaying it produces the original output.
+        guard case let .success(reencodedOutput, freshTree, _) = Materializer.materializeAny(
             gen,
             context: .init(prefix: candidate, mode: .exact, materializePicks: true, collectDecodingReport: false)
-        ) else {
+        ), reproduces(reencodedOutput, originalOutput) else {
             return nil
         }
         return (ChoiceSequence(freshTree), freshTree, excludedPivots)
@@ -190,7 +193,7 @@ enum ConstantArmReencoder {
         constantIndex: Int,
         constantValue: Any
     ) -> (sibling: ReflectiveOperation.PickTuple, armEntries: ChoiceSequence)? {
-        var context = ReflectionContext.root
+        var context = ReflectionContext.root.enteringPickArm()
         context.stopsAtFirstMatchingArm = true
         context.excludedPickFingerprint = site.choices[constantIndex].fingerprint
         var choiceIndex = 0

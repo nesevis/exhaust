@@ -92,6 +92,40 @@ struct ConstantArmReencoderTests {
         #expect(result == nil)
     }
 
+    @Test("Re-encoding through a sibling whose reflection echoes the target keeps the counterexample's value")
+    func reencodingPreservesValueThroughEchoingSibling() throws {
+        // A metamorphic node reports the requested array unchanged outside a pick arm, although it produces `[0, 0]`.
+        let echoingSibling: AnyGenerator = .impure(
+            operation: .transform(
+                kind: .metamorphic(transforms: [{ $0 }], inputType: Int.self),
+                inner: Gen.just(0).erase()
+            ),
+            continuation: { .pure($0) }
+        )
+        let generator: AnyGenerator = Gen.pick(choices: [
+            (1, Gen.just([0, 99] as [Any]).erase()),
+            (1, echoingSibling),
+        ])
+        let initialTree = try #require(try Interpreters.reflect(generator, with: [0, 99] as [Any]))
+
+        let result = ConstantArmReencoder.reencode(
+            sequence: ChoiceSequence.flatten(initialTree),
+            tree: initialTree,
+            gen: generator
+        )
+
+        if let result {
+            guard case let .success(value, _, _) = Materializer.materializeAny(
+                generator,
+                context: .init(prefix: result.sequence, mode: .exact)
+            ) else {
+                Issue.record("The re-encoded sequence did not materialize")
+                return
+            }
+            #expect(value as? [Int] == [0, 99])
+        }
+    }
+
     @Test("An exclusion applies only to picks whose arms draw from the classified domains")
     func exclusionIsScopedToArmDomains() throws {
         let generator = Gen.zip(sharedLocationPick(in: 0 ... 10), sharedLocationPick(in: 5 ... 10))
