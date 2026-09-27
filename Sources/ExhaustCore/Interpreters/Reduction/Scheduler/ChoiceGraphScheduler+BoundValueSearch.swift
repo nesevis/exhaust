@@ -162,11 +162,14 @@ extension ChoiceGraphScheduler {
             return nil
         }
 
-        let downstreamLeaves = liftedGraph.leafNodes.filter { leafID in
+        let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }
             if liftedGraph.nodes[leafID].scopeAnnotation.isDepthControl { return false }
             return boundRange.contains(range.lowerBound)
         }
+        // Nested bind inners stay fixed: changing one reshapes its bound subtree, which exact decoding rejects. Their own composition searches them.
+        let freeLeaves = boundLeaves.filter { liftedGraph.nodes[$0].scopeAnnotation.isBindInner == false }
+        let downstreamLeaves = freeLeaves.isEmpty ? boundLeaves : freeLeaves
         guard downstreamLeaves.isEmpty == false else { return nil }
 
         // 6. Build the downstream scope as a plain integer-leaves minimization on the lifted graph. The downstream encoder doesn't know it's downstream.
