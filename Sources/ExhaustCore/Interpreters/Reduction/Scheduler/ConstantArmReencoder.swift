@@ -23,10 +23,12 @@ enum ConstantArmReencoder {
     ///   - sequence: The counterexample's choice sequence.
     ///   - tree: The tree `sequence` flattens from, with unselected branches materialized. Arm domain signatures are read from its pick nodes; a site without a matching pick node is left unchanged.
     ///   - gen: The generator that produced the counterexample.
+    ///   - materializations: Incremented once per generator materialization, whether or not re-encoding succeeds.
     static func reencode(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        gen: AnyGenerator
+        gen: AnyGenerator,
+        materializations: inout Int
     ) -> (sequence: ChoiceSequence, tree: ChoiceTree, excludedPivots: Set<ExcludedPivot>)? {
         let eligibleIndices = eligiblePickIndices(in: sequence)
         guard eligibleIndices.isEmpty == false else {
@@ -36,6 +38,7 @@ enum ConstantArmReencoder {
         let capture = ConstantArmCapture()
         var captureContext = Materializer.Context(prefix: sequence, mode: .exact, skipTree: true, collectDecodingReport: false)
         captureContext.constantArmCapture = capture
+        materializations += 1
         guard case let .success(originalOutput, _, _) = Materializer.materializeAny(gen, context: captureContext) else {
             return nil
         }
@@ -95,6 +98,7 @@ enum ConstantArmReencoder {
         }
 
         // Reflection can report the requested value without producing it, so the rewrite stands only if replaying it produces the original output.
+        materializations += 1
         guard case let .success(reencodedOutput, freshTree, _) = Materializer.materializeAny(
             gen,
             context: .init(prefix: candidate, mode: .exact, materializePicks: true, collectDecodingReport: false)

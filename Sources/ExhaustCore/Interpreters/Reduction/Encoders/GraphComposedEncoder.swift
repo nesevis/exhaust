@@ -212,6 +212,25 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     /// Upstream probes that produced a valid lift during the current pass. Each one paid a generator materialization plus a downstream search, so this is the composition's expensive axis. Read by the pass report for diagnostics; deliberately not cleared by ``refreshState(graph:sequence:)`` so accepting passes report their true lift spend.
     private(set) var upstreamProbesUsed = 0
 
+    /// Builder calls at this level in the current pass, including those that returned nil.
+    private var ownDownstreamBuilds = 0
+    /// Downstream builds of stages that ran dry or were dropped by ``refreshState(graph:sequence:)``, so their nested spend outlives the stage.
+    private var retiredStageBuilds = 0
+
+    /// Builder calls in the current pass by this composition and every composition nested below it, including builds that returned nil. Unlike ``upstreamProbesUsed``, a failed build counts: the bound value builder materializes before it can fail. Not cleared by ``refreshState(graph:sequence:)``.
+    var downstreamBuilds: Int {
+        var builds = ownDownstreamBuilds + retiredStageBuilds
+        if let activeStage {
+            builds += activeStage.encoder.downstreamBuilds
+        }
+        var stageIndex = 0
+        while stageIndex < suspendedStages.count {
+            builds += suspendedStages[stageIndex].encoder.downstreamBuilds
+            stageIndex += 1
+        }
+        return builds
+    }
+
     /// Creates a composition and starts the upstream encoder on `upstreamScope`.
     ///
     /// - Parameters:
@@ -280,6 +299,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         suspendedStages = []
         upstreamExhausted = false
         upstreamProbesUsed = 0
+        ownDownstreamBuilds = 0
+        retiredStageBuilds = 0
         probesEmitted = 0
     }
 
@@ -303,6 +324,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
                 into: &candidate,
                 lastAccepted: false
             ) else {
+                retiredStageBuilds += stage.encoder.downstreamBuilds
                 continue
             }
 
@@ -351,6 +373,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
                 upstreamExhausted = true
                 return nil
             }
+            ownDownstreamBuilds += 1
             guard var built = buildDownstream(upstreamCandidate, upstreamMutation, parent) else {
                 continue
             }
@@ -369,8 +392,9 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     ///
     /// The composition caches the pre-dispatch scope, the in-flight upstream probe, and the downstream stages. After any accepted probe triggers a reshape or full rebuild, all three are stale — the upstream binary search was calibrated to the old sequence, the lifted downstream scopes were built from the old tree, and continuing would emit probes that may not shortlex-precede the new live sequence. Resetting to idle aborts the current pass; the scheduler re-dispatches a fresh composition next cycle.
     ///
-    /// ``upstreamProbesUsed`` is intentionally left intact: with `parentScope` nil the budget loop is unreachable, so the counter is dead for control flow, and clearing it would erase the lift spend from the pass report of exactly the accepting passes.
+    /// ``upstreamProbesUsed`` and ``downstreamBuilds`` are intentionally left intact: with `parentScope` nil the budget loop is unreachable, so the counters are dead for control flow, and clearing them would erase the lift spend from the pass report of exactly the accepting passes.
     mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
+        retiredStageBuilds = downstreamBuilds - ownDownstreamBuilds
         parentScope = nil
         activeStage = nil
         suspendedStages = []

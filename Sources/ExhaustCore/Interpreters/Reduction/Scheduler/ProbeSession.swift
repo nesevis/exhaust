@@ -246,6 +246,7 @@ struct ProbeSession {
             transformation: transformation,
             boundValueFingerprint: boundValueFingerprint,
             composedUpstreamLifts: encoder.composedUpstreamProbesUsed,
+            liftMaterializations: encoder.liftMaterializations,
             counts: counts,
             anyAccepted: anyAccepted,
             anyRequiresRebuild: anyRequiresRebuild,
@@ -283,6 +284,9 @@ struct PassReport {
 
     /// Upstream probes that produced a valid lift, for composed passes; nil for every other encoder.
     let composedUpstreamLifts: Int?
+
+    /// Materializations the encoder ran outside the probe decoder, for lifting encoders; nil for every other encoder.
+    let liftMaterializations: (site: MaterializationSite, count: Int)?
 
     let counts: ReductionProbeCounts
 

@@ -18,16 +18,18 @@ extension ChoiceGraph {
     ///   - baseSequence: The live ``ChoiceSequence``. The classifier overwrites a single upstream entry to construct each endpoint candidate.
     ///   - fallbackTree: The live ``ChoiceTree``. Passed to ``Materializer/materializeAny(_:context:)`` as the guided-mode fallback so downstream positions outside the probed endpoint's domain re-resolve coherently.
     ///   - upstreamLeafNodeID: The ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf whose valid range defines the probe endpoints. Typically the bind's inner child.
+    /// - Returns: The number of materializations the endpoint lifts ran: two when both endpoints were lifted, otherwise zero.
+    @discardableResult
     mutating func classifyBind(
         at bindNodeID: Int,
         gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree,
         upstreamLeafNodeID: Int
-    ) {
-        guard bindNodeID < nodes.count else { return }
-        guard case let .bind(bindMetadata) = nodes[bindNodeID].kind else { return }
-        if bindMetadata.classification != nil { return }
+    ) -> Int {
+        guard bindNodeID < nodes.count else { return 0 }
+        guard case let .bind(bindMetadata) = nodes[bindNodeID].kind else { return 0 }
+        if bindMetadata.classification != nil { return 0 }
 
         let verdict = computeClassification(
             bindNodeID: bindNodeID,
@@ -37,7 +39,8 @@ extension ChoiceGraph {
             baseSequence: baseSequence,
             fallbackTree: fallbackTree
         )
-        writeClassification(verdict, bindMetadata: bindMetadata, bindNodeID: bindNodeID)
+        writeClassification((verdict.classification, verdict.fingerprint), bindMetadata: bindMetadata, bindNodeID: bindNodeID)
+        return verdict.materializations
     }
 
     private func computeClassification(
@@ -47,29 +50,31 @@ extension ChoiceGraph {
         gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree
-    ) -> (classification: BindClassification, fingerprint: UInt64?) {
+    ) -> (classification: BindClassification, fingerprint: UInt64?, materializations: Int) {
         guard upstreamLeafNodeID < nodes.count else {
-            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil, 0)
         }
         guard case let .chooseBits(leafMetadata) = nodes[upstreamLeafNodeID].kind else {
-            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil, 0)
         }
         guard let upstreamIndex = nodes[upstreamLeafNodeID].positionRange?.lowerBound else {
-            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil, 0)
         }
         if leafMetadata.typeTag.isFloatingPoint {
             // Integer-indexed binds only. Float upstreams require extending the clamp heuristic to the Hedgehog-style signed float encoding.
-            return (BindClassification(topology: .unclassifiable, liftability: .both), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: .both), nil, 0)
         }
         let fullRange = leafMetadata.validRange ?? leafMetadata.typeTag.bitPatternRange
         guard let endpoints = Self.clampedEndpoints(range: fullRange, typeTag: leafMetadata.typeTag) else {
-            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: .neither), nil, 0)
         }
         if endpoints.low == endpoints.high {
             // Singleton domain — no structural comparison to perform, and no reason to run composed.
-            return (BindClassification(topology: .unclassifiable, liftability: .both), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: .both), nil, 0)
         }
 
+        // `lift` materializes unless the upstream index is outside the sequence, which is the same for both endpoints.
+        let liftMaterializations = upstreamIndex < baseSequence.count ? 2 : 0
         let lowLift = lift(
             bitPattern: endpoints.low,
             upstreamIndex: upstreamIndex,
@@ -95,11 +100,11 @@ extension ChoiceGraph {
             case (.none, .none): .neither
         }
         guard let lowSubtree = lowLift, let highSubtree = highLift else {
-            return (BindClassification(topology: .unclassifiable, liftability: liftability), nil)
+            return (BindClassification(topology: .unclassifiable, liftability: liftability), nil, liftMaterializations)
         }
         let topology: BindTopology = Self.sameTopology(lowSubtree, highSubtree) ? .identical : .divergent
         let fingerprint = Self.subtreeFingerprint(lowSubtree)
-        return (BindClassification(topology: topology, liftability: liftability), fingerprint)
+        return (BindClassification(topology: topology, liftability: liftability), fingerprint, liftMaterializations)
     }
 
     private func lift(

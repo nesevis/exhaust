@@ -106,6 +106,59 @@ struct GraphComposedEncoderTests {
         #expect(Array(emittedCandidates.prefix(nestedCandidates.count)) == nestedCandidates)
     }
 
+    @Test("Downstream builds total every builder call across nesting levels, including failed builds")
+    func downstreamBuildsCountNestedAndFailedBuilds() throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        var outerBuilds = 0
+        var nestedBuilds = 0
+        var composed = GraphComposedEncoder(
+            name: .composed,
+            upstream: .binarySearch(GraphBinarySearchEncoder()),
+            upstreamScope: scope,
+            upstreamBudget: 3,
+            probesPerStageTurn: 1,
+            downstreamBuilder: { candidate, _, _ in
+                outerBuilds += 1
+                // Every other outer build fails, as a lift rejected after materializing would.
+                guard outerBuilds.isMultiple(of: 2) == false,
+                      let liftedValue = candidate.compactMap({ $0.value?.choice.bitPattern64 }).first,
+                      let nestedScope = singleLeafScope(value: liftedValue)
+                else {
+                    return nil
+                }
+                let nested = GraphComposedEncoder(
+                    name: .composed,
+                    upstream: .binarySearch(GraphBinarySearchEncoder()),
+                    upstreamScope: nestedScope,
+                    upstreamBudget: 2,
+                    downstreamBuilder: { nestedCandidate, _, _ in
+                        nestedBuilds += 1
+                        guard let nestedValue = nestedCandidate.compactMap({ $0.value?.choice.bitPattern64 }).first else {
+                            return nil
+                        }
+                        return singleLeafScope(value: nestedValue).map { (.binarySearch(GraphBinarySearchEncoder()), $0) }
+                    }
+                )
+                return (.composed(nested), nestedScope)
+            }
+        )
+
+        composed.start(scope: scope)
+        var buffer = scope.baseSequence
+        var probeCount = 0
+        while composed.nextProbe(into: &buffer, lastAccepted: false) != nil {
+            probeCount += 1
+            if probeCount == 5 {
+                composed.refreshState(graph: scope.graph, sequence: buffer)
+            }
+        }
+
+        #expect(probeCount >= 5)
+        #expect(outerBuilds > 1)
+        #expect(nestedBuilds > 0)
+        #expect(composed.downstreamBuilds == outerBuilds + nestedBuilds)
+    }
+
     // MARK: - Stage Turns
 
     @Test("Each stage emits one turn of probes before the next stage starts, and suspended stages resume oldest first")

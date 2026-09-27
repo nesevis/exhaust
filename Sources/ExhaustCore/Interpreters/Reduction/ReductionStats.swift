@@ -80,12 +80,33 @@ package struct ReductionProbeCounts: Sendable, Equatable {
     }
 }
 
+/// Where a reduction materialization ran.
+///
+/// ``decoder`` counts probe decodes. Every other site materializes outside the probe loop, so the probe counts never see it.
+package enum MaterializationSite: String, Sendable, CaseIterable {
+    /// Decoding an encoder's probe.
+    case decoder
+    /// The machine's full-tree materialization and constant-arm re-encoding, once per reduction.
+    case setup
+    /// ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` endpoint lifts.
+    case classification
+    /// Restoring the unselected branches of a stripped tree.
+    case rematerialization
+    /// Lifting a controller candidate in a bound value composition, at every nesting level.
+    case boundValueLift
+    /// Lifting a bind pivot seed.
+    case bindPivotLift
+}
+
 /// Statistics collected from a single reduction run.
 ///
 /// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionMachine`` during reduction and extracted at the end of the pipeline.
 package struct ReductionStats: Sendable {
     /// Run-wide reduction probe outcomes. Encoder passes and structural relax proposals merge into this value after their local work finishes.
     private var probeCounts = ReductionProbeCounts()
+
+    /// Materializations outside the probe decoder, by site. Never keyed by ``MaterializationSite/decoder``, whose count lives in ``probeCounts``.
+    private var outOfLoopMaterializations: [MaterializationSite: Int] = [:]
 
     /// Reduction proposals opened across encoder passes and structural relax rounds.
     package var reductionProbes: Int {
@@ -155,9 +176,26 @@ package struct ReductionStats: Sendable {
         encoderCounts.mapValues { $0.decoderRejections }
     }
 
-    /// Total materialization attempts (decoder invocations) during reduction.
+    /// Every materialization during reduction: probe decodes plus the lifts, classification, setup, and rematerialization that run outside the probe loop.
     package var totalMaterializations: Int {
-        probeCounts.materializationAttempts
+        materializationsBySite.values.reduce(0, +)
+    }
+
+    /// ``totalMaterializations`` split by where each materialization ran. Sites that never ran are absent.
+    package var materializationsBySite: [MaterializationSite: Int] {
+        var sites = outOfLoopMaterializations
+        if probeCounts.materializationAttempts > 0 {
+            sites[.decoder] = probeCounts.materializationAttempts
+        }
+        return sites
+    }
+
+    /// Records materializations that ran outside the probe decoder.
+    mutating func recordMaterializations(_ count: Int, at site: MaterializationSite) {
+        guard count > 0 else {
+            return
+        }
+        outOfLoopMaterializations[site, default: 0] += count
     }
 
     /// Total reduction cycles completed.
@@ -240,6 +278,9 @@ package struct ReductionStats: Sendable {
             encoderCounts[name, default: ReductionProbeCounts()].merge(counts)
         }
         probeCounts.merge(other.probeCounts)
+        for (site, count) in other.outOfLoopMaterializations {
+            outOfLoopMaterializations[site, default: 0] += count
+        }
         cycles += other.cycles
         structuralFloorMotionEvents += other.structuralFloorMotionEvents
         valueFloorMotionEvents += other.valueFloorMotionEvents

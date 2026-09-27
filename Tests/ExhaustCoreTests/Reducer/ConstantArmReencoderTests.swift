@@ -13,10 +13,12 @@ struct ConstantArmReencoderTests {
         let initialTree = try #require(try Interpreters.reflect(generator, with: "gamma"))
         let initialSequence = ChoiceSequence.flatten(initialTree)
 
+        var materializations = 0
         let result = try #require(ConstantArmReencoder.reencode(
             sequence: initialSequence,
             tree: initialTree,
-            gen: generator.erase()
+            gen: generator.erase(),
+            materializations: &materializations
         ))
 
         #expect(Set(result.excludedPivots.map(\.constantBranchID)) == [1, 2])
@@ -40,10 +42,12 @@ struct ConstantArmReencoderTests {
         ])
         let initialTree = try #require(try Interpreters.reflect(generator, with: "alpha"))
 
+        var materializations = 0
         let result = try #require(ConstantArmReencoder.reencode(
             sequence: ChoiceSequence.flatten(initialTree),
             tree: initialTree,
-            gen: generator.erase()
+            gen: generator.erase(),
+            materializations: &materializations
         ))
 
         #expect(Set(result.excludedPivots.map(\.constantBranchID)) == [0])
@@ -66,10 +70,12 @@ struct ConstantArmReencoderTests {
         ])
         let initialTree = try #require(try Interpreters.reflect(generator, with: "plain"))
 
+        var materializations = 0
         let result = ConstantArmReencoder.reencode(
             sequence: ChoiceSequence.flatten(initialTree),
             tree: initialTree,
-            gen: generator.erase()
+            gen: generator.erase(),
+            materializations: &materializations
         )
 
         #expect(result == nil)
@@ -83,10 +89,12 @@ struct ConstantArmReencoderTests {
         ])
         let initialTree = try #require(try Interpreters.reflect(generator, with: "alpha"))
 
+        var materializations = 0
         let result = ConstantArmReencoder.reencode(
             sequence: ChoiceSequence.flatten(initialTree),
             tree: initialTree,
-            gen: generator.erase()
+            gen: generator.erase(),
+            materializations: &materializations
         )
 
         #expect(result == nil)
@@ -108,10 +116,12 @@ struct ConstantArmReencoderTests {
         ])
         let initialTree = try #require(try Interpreters.reflect(generator, with: [0, 99] as [Any]))
 
+        var materializations = 0
         let result = ConstantArmReencoder.reencode(
             sequence: ChoiceSequence.flatten(initialTree),
             tree: initialTree,
-            gen: generator
+            gen: generator,
+            materializations: &materializations
         )
 
         if let result {
@@ -144,10 +154,12 @@ struct ConstantArmReencoderTests {
             return
         }
 
+        var materializations = 0
         let result = try #require(ConstantArmReencoder.reencode(
             sequence: ChoiceSequence(fullTree),
             tree: fullTree,
-            gen: generator.erase()
+            gen: generator.erase(),
+            materializations: &materializations
         ))
         var graph = ChoiceGraph.build(from: result.tree)
         graph.excludedPivots = result.excludedPivots

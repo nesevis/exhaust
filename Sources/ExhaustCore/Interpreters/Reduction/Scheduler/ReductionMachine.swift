@@ -209,6 +209,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
+        var setupMaterializations = 1
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             erasedGen,
             context: .init(
@@ -222,7 +223,12 @@ package struct ReductionMachine: ProbeSessionState {
             sequence = ChoiceSequence(fullTree)
         }
         // Once, before the first graph build.
-        let reencoded = ConstantArmReencoder.reencode(sequence: sequence, tree: tree, gen: erasedGen)
+        let reencoded = ConstantArmReencoder.reencode(
+            sequence: sequence,
+            tree: tree,
+            gen: erasedGen,
+            materializations: &setupMaterializations
+        )
         if let reencoded {
             sequence = reencoded.sequence
             tree = reencoded.tree
@@ -255,6 +261,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
+            stats.recordMaterializations(setupMaterializations, at: .setup)
         }
 
         ChoiceGraphScheduler.logReducer("graph_reducer_start", isInstrumented: isInstrumented, metadata: [
