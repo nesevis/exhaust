@@ -17,8 +17,7 @@ enum ReplacementQuery {
     /// - Returns: Replacement scopes for changed (or all, if `previousGraph` is nil) groups.
     static func build(
         graph: ChoiceGraph,
-        previousGraph: ChoiceGraph? = nil,
-        excludedPivots: Set<ExcludedPivot> = []
+        previousGraph: ChoiceGraph? = nil
     ) -> [ReplacementScope] {
         var scopes: [ReplacementScope] = []
 
@@ -79,12 +78,10 @@ enum ReplacementQuery {
                 let branchID = UInt64(index)
                 guard branchID != metadata.selectedID else { continue }
                 // Do not restore a constant arm whose value has an exposed sibling representation.
-                if excludedPivots.isEmpty == false,
-                   excludedPivots.contains(ExcludedPivot(
-                       fingerprint: metadata.fingerprint,
-                       constantBranchID: branchID
-                   ))
-                {
+                if graph.excludedPivots.contains(ExcludedPivot(
+                    fingerprint: metadata.fingerprint,
+                    constantBranchID: branchID
+                )) {
                     continue
                 }
 

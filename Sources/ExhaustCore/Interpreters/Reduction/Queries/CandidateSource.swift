@@ -108,18 +108,16 @@ enum CandidateSourceBuilder {
     static func buildSources(
         from graph: ChoiceGraph,
         deferBindInner: Bool = false,
-        previousGraph: ChoiceGraph? = nil,
-        excludedPivots: Set<ExcludedPivot> = []
+        previousGraph: ChoiceGraph? = nil
     ) -> [AnyCandidateSource] {
-        buildStructuralSources(from: graph, previousGraph: previousGraph, excludedPivots: excludedPivots)
+        buildStructuralSources(from: graph, previousGraph: previousGraph)
             + buildValueSources(from: graph, deferBindInner: deferBindInner)
     }
 
     /// Sources whose scopes depend on graph topology (node parent-child relationships, element counts, self-similarity edges) but not on leaf values. Stable across structurally-identical rebuilds.
     static func buildStructuralSources(
         from graph: ChoiceGraph,
-        previousGraph: ChoiceGraph? = nil,
-        excludedPivots: Set<ExcludedPivot> = []
+        previousGraph: ChoiceGraph? = nil
     ) -> [AnyCandidateSource] {
         var sources: [AnyCandidateSource] = []
 
@@ -168,7 +166,7 @@ enum CandidateSourceBuilder {
         }
 
         // Replacement.
-        let replacementCandidates = buildReplacementCandidates(graph: graph, previousGraph: previousGraph, excludedPivots: excludedPivots)
+        let replacementCandidates = buildReplacementCandidates(graph: graph, previousGraph: previousGraph)
         if replacementCandidates.isEmpty == false {
             sources.append(.sorted(SortedCandidateSource(replacementCandidates)))
         }
