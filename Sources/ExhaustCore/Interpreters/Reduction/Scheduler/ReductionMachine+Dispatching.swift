@@ -293,6 +293,10 @@ extension ReductionMachine {
             anyAcceptanceEverOccurred = true
         }
 
+        if case .rebuildAndResume = acceptanceAction {
+            convergence.gate.clearFruitless()
+        }
+
         switch acceptanceAction {
             case .continueDispatching:
                 if report.anyAccepted == false {
