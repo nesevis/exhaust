@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -200,6 +201,42 @@ struct GraphEncoderTests {
     }
 
     // MARK: - GraphLockstepEncoder
+
+    @Test("Lockstep isolates matching values from a different trailing value")
+    func lockstepIsolatesMatchingValues() throws {
+        let fixture = GraphFixture(.uint64Zip([12, 12, 1], in: 0 ... 100))
+        let tandemScope = try #require(ExchangeQuery.build(graph: fixture.graph).tandemScope)
+        let transformation = GraphTransformation(
+            operation: .exchange(.tandem(tandemScope)),
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 12,
+                estimatedCost: 1
+            )
+        )
+        let input = EncoderInput(
+            transformation: transformation,
+            baseSequence: fixture.sequence,
+            tree: fixture.tree,
+            graph: fixture.graph,
+            warmStartRecords: [:]
+        )
+        var encoder = GraphLockstepEncoder()
+        encoder.start(scope: input)
+
+        var candidate = fixture.sequence
+        var isolatedCandidate: [UInt64]?
+        while encoder.nextProbe(into: &candidate, lastAccepted: false) != nil {
+            let bitPatterns = candidate.compactMap { $0.value?.choice.bitPattern64 }
+            if bitPatterns == [0, 0, 1] {
+                isolatedCandidate = bitPatterns
+                break
+            }
+        }
+
+        #expect(isolatedCandidate == [0, 0, 1])
+    }
 
     @Test("Lockstep window plan clamps float distances beyond UInt64.max")
     func lockstepPlanClampsHugeFloatDistance() throws {

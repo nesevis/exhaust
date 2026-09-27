@@ -112,6 +112,25 @@ struct ExchangeQueryTests {
         #expect(tandemScopes.count == 1, "A pair of same-type leaves should produce exactly one tandem scope")
     }
 
+    @Test("Equal values receive a tandem group that excludes different values of the same type")
+    func tandemGroupForEqualValues() throws {
+        let graph = GraphFixture(.uint64Zip([12, 12, 0], in: 0 ... 100)).graph
+        let scopes = ExchangeQuery.build(graph: graph)
+
+        let tandemScope = try #require(scopes.tandemScope)
+        #expect(tandemScope.groups.count == 2)
+        #expect(tandemScope.groups[0].leaves.count == 3)
+
+        let matchingLeaves = tandemScope.groups[1].leaves
+        #expect(matchingLeaves.count == 2)
+        #expect(matchingLeaves.allSatisfy { leaf in
+            guard case let .chooseBits(metadata) = graph.nodes[leaf.nodeID].kind else {
+                return false
+            }
+            return metadata.value.bitPattern64 == 12
+        })
+    }
+
     @Test("Tandem groups are ordered by first-leaf position, not by type-tag hash order")
     func tandemGroupsOrderedByPosition() throws {
         // Six groups, so an unsorted build has a 1-in-720 chance of landing in position order by luck.
@@ -122,14 +141,7 @@ struct ExchangeQueryTests {
             }
         )
         let graph = ChoiceGraph.build(from: tree)
-        let scopes = ExchangeQuery.build(graph: graph)
-        var tandem: TandemScope?
-        for scope in scopes {
-            if case let .tandem(found) = scope {
-                tandem = found
-            }
-        }
-        let groups = try #require(tandem).groups
+        let groups = try #require(ExchangeQuery.build(graph: graph).tandemScope).groups
         #expect(groups.count == tags.count, "Each type tag with two leaves should form one group")
 
         let firstPositions = groups.map { graph.nodes[$0.leaves[0].nodeID].positionRange?.lowerBound ?? -1 }

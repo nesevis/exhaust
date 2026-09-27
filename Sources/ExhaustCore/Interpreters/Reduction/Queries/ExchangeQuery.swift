@@ -74,18 +74,26 @@ enum ExchangeQuery {
             if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl { continue }
             leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
-        // Sorted because `leafGroups` is keyed by `TypeTag`, so its iteration order varies with the per-process hash seed. `FuzzMutator.lockstepDelta` maps a seeded draw through this order and would pick a different group after a restart.
-        let tandemGroups = leafGroups
-            .compactMap { tag, leafIDs -> TandemGroup? in
-                guard leafIDs.count >= 2 else { return nil }
-                let entries = leafIDs.map { leafEntry(for: $0, graph: graph) }
-                return TandemGroup(leaves: entries, typeTag: tag)
+
+        var tandemGroups: [TandemGroup] = []
+        for (tag, nodeIdentifiers) in leafGroups where nodeIdentifiers.count >= 2 {
+            let entries = nodeIdentifiers.map { leafEntry(for: $0, graph: graph) }
+            tandemGroups.append(TandemGroup(leaves: entries, typeTag: tag))
+            for matchingNodeIdentifiers in equalValueSubgroups(of: nodeIdentifiers, graph: graph) {
+                let matchingEntries = matchingNodeIdentifiers.map { leafEntry(for: $0, graph: graph) }
+                tandemGroups.append(TandemGroup(leaves: matchingEntries, typeTag: tag))
             }
-            .sorted { groupA, groupB in
-                let positionA = graph.nodes[groupA.leaves[0].nodeID].positionRange?.lowerBound ?? 0
-                let positionB = graph.nodes[groupB.leaves[0].nodeID].positionRange?.lowerBound ?? 0
+        }
+
+        // Dictionary iteration order varies with the per-process hash seed. The broader type group precedes an equal-value subgroup at the same position so the existing search order remains first.
+        tandemGroups.sort { groupA, groupB in
+            let positionA = graph.nodes[groupA.leaves[0].nodeID].positionRange?.lowerBound ?? 0
+            let positionB = graph.nodes[groupB.leaves[0].nodeID].positionRange?.lowerBound ?? 0
+            if positionA != positionB {
                 return positionA < positionB
             }
+            return groupA.leaves.count > groupB.leaves.count
+        }
         if tandemGroups.isEmpty == false {
             scopes.append(.tandem(TandemScope(groups: tandemGroups)))
         }
@@ -254,6 +262,20 @@ enum ExchangeQuery {
                 sourceTag: tag,
                 sinkTag: tag
             )
+        }
+    }
+
+    /// Same-type leaves that currently share a bit pattern, one group per shared value. Skips a group covering every leaf, since it would duplicate the whole type group.
+    private static func equalValueSubgroups(of nodeIdentifiers: [Int], graph: ChoiceGraph) -> [[Int]] {
+        var nodeIdentifiersByBitPattern: [UInt64: [Int]] = [:]
+        for nodeIdentifier in nodeIdentifiers {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeIdentifier].kind else {
+                continue
+            }
+            nodeIdentifiersByBitPattern[metadata.value.bitPattern64, default: []].append(nodeIdentifier)
+        }
+        return nodeIdentifiersByBitPattern.values.filter { matchingNodeIdentifiers in
+            matchingNodeIdentifiers.count >= 2 && matchingNodeIdentifiers.count < nodeIdentifiers.count
         }
     }
 }
