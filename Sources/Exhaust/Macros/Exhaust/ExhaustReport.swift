@@ -113,6 +113,9 @@ public struct ExhaustReport: Sendable {
     /// Keys are `"decoder"` (decoding a reduction probe), `"setup"` (preparing the counterexample before reduction starts), `"classification"` (probing a bind's dependency shape), `"rematerialization"` (restoring unselected branches), `"boundValueLift"` (lifting candidate values through bind chains), and `"bindPivotLift"` (lifting a branch change inside a bind). Sites that never ran are absent.
     public var materializationsBySite: [String: Int] = [:]
 
+    /// Bound value composition downstream builds by stage and outcome. A diagnostic for benchmark harnesses; not public because the stage and outcome types are reducer internals.
+    package var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
+
     /// Counts reduction proposals opened by encoder passes and structural relax rounds.
     public var reductionProbes: Int = 0
 
@@ -323,6 +326,7 @@ public struct ExhaustReport: Sendable {
         materializationsBySite = [String: Int](
             uniqueKeysWithValues: stats.materializationsBySite.map { ($0.key.rawValue, $0.value) }
         )
+        boundValueBuildOutcomes = stats.boundValueBuildOutcomes
         cycles = stats.cycles
         structuralFloorMotionEvents = stats.structuralFloorMotionEvents
         valueFloorMotionEvents = stats.valueFloorMotionEvents

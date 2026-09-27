@@ -96,6 +96,8 @@ package struct ReductionMachine: ProbeSessionState {
     var graph: ChoiceGraph
     var stats: ReductionStats = .init()
     var rejectCache: Set<UInt64> = []
+    /// Shared with every bound value composition the machine builds; folded into ``stats`` by ``typedResult()``.
+    let boundValueBuildTally = BoundValueBuildTally()
     let gen: AnyGenerator
     let property: (Any) -> Bool
     let probeWrapper: ProbeWrapper?
@@ -276,6 +278,7 @@ package struct ReductionMachine: ProbeSessionState {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
+        stats.boundValueBuildOutcomes = boundValueBuildTally.counts
         let finalStats = stats
         // swiftlint:disable:next force_cast
         let typedOutput = output as! Output

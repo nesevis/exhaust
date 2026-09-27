@@ -27,7 +27,8 @@ extension ChoiceGraphScheduler {
         graph: ChoiceGraph,
         gen: AnyGenerator,
         upstreamBudget: Int = 15,
-        totalProbeCap: Int = 0
+        totalProbeCap: Int = 0,
+        buildTally: BoundValueBuildTally = BoundValueBuildTally()
     ) -> EncoderDispatch {
         // Synthesize the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesizes the reshape change in ``GraphComposedEncoder/wrap``
         // when wrapping each downstream probe — the upstream encoder produces a pure value-only mutation and the composition flips ``mayReshape`` on its way out.
@@ -68,7 +69,8 @@ extension ChoiceGraphScheduler {
                 gen: gen,
                 upstreamBudget: upstreamBudget,
                 rootSequenceCount: scope.baseSequence.count,
-                seenBindFingerprints: seenBindFingerprints
+                seenBindFingerprints: seenBindFingerprints,
+                buildTally: buildTally
             ),
             totalProbeCap: totalProbeCap
         ))
@@ -163,6 +165,7 @@ extension ChoiceGraphScheduler {
                 "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
                 "candidate_len": "\(upstreamCandidate.count)",
             ])
+            chain.buildTally.record(stage, .materializationFailed)
             return nil
         }
 
@@ -170,6 +173,7 @@ extension ChoiceGraphScheduler {
         if stage.canRecurseIntoNestedBind == false,
            liftedSequence.count > chain.rootSequenceCount
         {
+            chain.buildTally.record(stage, .liftedTooLong)
             return nil
         }
         let liftedGraph = ChoiceGraph.build(from: freshTree)
@@ -186,10 +190,12 @@ extension ChoiceGraphScheduler {
               case let .bind(metadata) = liftedGraph.nodes[liftedBindNodeID].kind,
               liftedGraph.nodes[liftedBindNodeID].children.count > metadata.boundChildIndex
         else {
+            chain.buildTally.record(stage, .bindNotFound)
             return nil
         }
         let boundChildID = liftedGraph.nodes[liftedBindNodeID].children[metadata.boundChildIndex]
         guard let boundRange = liftedGraph.nodes[boundChildID].positionRange else {
+            chain.buildTally.record(stage, .bindNotFound)
             return nil
         }
 
@@ -206,6 +212,7 @@ extension ChoiceGraphScheduler {
            )
         {
             guard case let .bind(nestedMetadata) = liftedGraph.nodes[nestedBindNodeID].kind else {
+                chain.buildTally.record(stage, .bindNotFound)
                 return nil
             }
             let nestedControllerLeafNodeID = liftedGraph.nodes[nestedBindNodeID].children[nestedMetadata.innerChildIndex]
@@ -230,10 +237,12 @@ extension ChoiceGraphScheduler {
                 chain: nestedChain,
                 totalProbeCap: 0
             )
+            chain.buildTally.record(stage, .nestedStage)
             return (.composed(nestedEncoder), nestedInput)
         }
 
         guard liftedSequence.count <= chain.rootSequenceCount else {
+            chain.buildTally.record(stage, .liftedTooLong)
             return nil
         }
         // Nested bind inners stay fixed when the bound subtree is not a single chain. Changing one without recursively rebuilding its descendants produces an exact candidate with stale structure.
@@ -241,7 +250,10 @@ extension ChoiceGraphScheduler {
             liftedGraph.nodes[$0].scopeAnnotation.isBindInner == false
         }
         let downstreamLeaves = freeLeaves.isEmpty ? boundLeaves : freeLeaves
-        guard downstreamLeaves.isEmpty == false else { return nil }
+        guard downstreamLeaves.isEmpty == false else {
+            chain.buildTally.record(stage, .noDownstreamLeaves)
+            return nil
+        }
 
         let downstreamScope = EncoderInput(
             transformation: GraphTransformation(
@@ -269,6 +281,7 @@ extension ChoiceGraphScheduler {
             "downstream_leaves": "\(downstreamLeaves.count)",
             "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
         ])
+        chain.buildTally.record(stage, .terminalSearch)
         return (downstreamEncoder, downstreamScope)
     }
 
@@ -367,7 +380,7 @@ extension ChoiceGraphScheduler {
 // MARK: - Supporting Types
 
 /// Where one composition sits in a chain of nested binds. Each case fixes the upstream encoder, whether the controller's current value is a candidate, and whether a lift may descend into a nested bind.
-private enum BoundValueStage {
+package enum BoundValueStage: Hashable, Sendable {
     /// The dispatched bind has no composable nested bind. Binary search over the controller, then a terminal search over the bound leaves.
     case single
     /// The dispatched bind, whose bound subtree holds one composable nested bind. Every lift descends, so the controller can move against a nested one.
@@ -414,6 +427,8 @@ private struct BoundValueChain {
     let rootSequenceCount: Int
     /// Fingerprints of the binds already composed on the path from the root. A repeat marks recursive generator expansion.
     let seenBindFingerprints: Set<UInt64>
+    /// Shared by every stage of every composition the machine builds in one run.
+    let buildTally: BoundValueBuildTally
 
     /// The chain one level deeper, with the nested bind's fingerprint recorded.
     func descending(into fingerprint: UInt64) -> BoundValueChain {
@@ -423,7 +438,17 @@ private struct BoundValueChain {
             gen: gen,
             upstreamBudget: upstreamBudget,
             rootSequenceCount: rootSequenceCount,
-            seenBindFingerprints: fingerprints
+            seenBindFingerprints: fingerprints,
+            buildTally: buildTally
         )
+    }
+}
+
+/// Counts downstream build outcomes across one reduction run, for ``ReductionStats/boundValueBuildOutcomes``. A class so every stage of every composition records into the machine's single instance.
+final class BoundValueBuildTally {
+    private(set) var counts: [BoundValueBuildRecord: Int] = [:]
+
+    func record(_ stage: BoundValueStage, _ outcome: BoundValueBuildOutcome) {
+        counts[BoundValueBuildRecord(stage: stage, outcome: outcome), default: 0] += 1
     }
 }

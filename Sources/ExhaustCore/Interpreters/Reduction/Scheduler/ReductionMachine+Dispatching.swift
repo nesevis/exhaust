@@ -127,7 +127,8 @@ extension ReductionMachine {
                 upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint),
                 totalProbeCap: convergence.gate.isFirstDispatch(fingerprint: fingerprint)
                     ? tuning.composedFirstDispatchProbeCap
-                    : 0
+                    : 0,
+                buildTally: boundValueBuildTally
             )
             convergence.gate.markDispatched(fingerprint)
         } else {
