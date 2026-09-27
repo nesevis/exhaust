@@ -96,6 +96,8 @@ package struct ReductionMachine: ProbeSessionState {
     var graph: ChoiceGraph
     var stats: ReductionStats = .init()
     var rejectCache: Set<UInt64> = []
+    /// Pivots to reproducible constant arms at pick sites classified by ``ConstantArmReencoder``.
+    let excludedPivots: Set<ExcludedPivot>
     let gen: AnyGenerator
     let property: (Any) -> Bool
     let probeWrapper: ProbeWrapper?
@@ -221,11 +223,19 @@ package struct ReductionMachine: ProbeSessionState {
             tree = fullTree
             sequence = ChoiceSequence(fullTree)
         }
+        // Once, before the first graph build.
+        var constantArmPivots: Set<ExcludedPivot> = []
+        if let reencoded = ConstantArmReencoder.reencode(sequence: sequence, gen: erasedGen) {
+            sequence = reencoded.sequence
+            tree = reencoded.tree
+            constantArmPivots = reencoded.excludedPivots
+        }
 
         var graph = ChoiceGraph.build(from: tree)
         graph.observeBindTopologies(tree: tree)
 
         initialSequence = sequence
+        excludedPivots = constantArmPivots
         self.sequence = sequence
         self.tree = tree
         output = initialOutput
@@ -311,7 +321,7 @@ package struct ReductionMachine: ProbeSessionState {
     }
 
     private mutating func stepBuildSources() -> Transition {
-        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner)
+        sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, excludedPivots: excludedPivots)
 
         ChoiceGraphScheduler.logReducer("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
             "cycle": "\(cycles)", "seq_len": "\(sequence.count)",

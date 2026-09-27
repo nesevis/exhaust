@@ -86,7 +86,7 @@ extension ReductionMachine {
 
             case .rematerialize:
                 let graphBefore = rematerializeUnselectedBranches()
-                sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
+                sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore, excludedPivots: excludedPivots)
                 return .dispatched(decision: .rematerialized)
 
             case let .readyToDispatch(boundValueFingerprint):
@@ -373,7 +373,7 @@ extension ReductionMachine {
             ])
         } else {
             scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore, excludedPivots: excludedPivots)
 
             ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",

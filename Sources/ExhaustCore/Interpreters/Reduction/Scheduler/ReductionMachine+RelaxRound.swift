@@ -39,7 +39,8 @@ extension ReductionMachine {
 
         let candidates = Self.buildRelaxCandidates(
             sequence: sequence,
-            graph: graph
+            graph: graph,
+            excludedPivots: excludedPivots
         )
 
         guard candidates.isEmpty == false else {
@@ -106,7 +107,7 @@ extension ReductionMachine {
         }
 
         _ = rebuildAndUpdateGraph()
-        var exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+        var exploitSources = CandidateSourceBuilder.buildSources(from: graph, excludedPivots: excludedPivots)
 
         ChoiceGraphScheduler.logReducer("relax_round_exploitation_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(sequence.count)", "sources": "\(exploitSources.count)",
@@ -160,7 +161,7 @@ extension ReductionMachine {
                     valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs
                         .union(report.convergenceRecords.keys)
                 )
-                exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+                exploitSources = CandidateSourceBuilder.buildSources(from: graph, excludedPivots: excludedPivots)
             }
         }
         rejectCache = savedRejectCache
@@ -260,7 +261,7 @@ extension ReductionMachine {
 
     /// Improving pivot candidates absent from the reject cache, so exhausted pivots stop triggering relax rounds.
     private func unprobedImprovingPivotCandidates() -> [(candidate: ChoiceSequence, probeHash: UInt64)] {
-        Self.buildImprovingPivotCandidates(sequence: sequence, graph: graph).compactMap { candidate in
+        Self.buildImprovingPivotCandidates(sequence: sequence, graph: graph, excludedPivots: excludedPivots).compactMap { candidate in
             let probeHash = ZobristHash.hash(of: candidate)
             guard rejectCache.contains(probeHash) == false else {
                 return nil
@@ -272,10 +273,11 @@ extension ReductionMachine {
     /// Non-minimal fills of every pivot that precedes `sequence`, shortest first. Precedence is independent of the fill, so the first fill decides for the scope.
     private static func buildImprovingPivotCandidates(
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: ChoiceGraph,
+        excludedPivots: Set<ExcludedPivot>
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
-        for scope in ReplacementQuery.build(graph: graph) {
+        for scope in ReplacementQuery.build(graph: graph, excludedPivots: excludedPivots) {
             guard case let .branchPivot(pickNodeID, targetBranchID) = scope else {
                 continue
             }
@@ -300,11 +302,12 @@ extension ReductionMachine {
 
     private static func buildRelaxCandidates(
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: ChoiceGraph,
+        excludedPivots: Set<ExcludedPivot>
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
 
-        for scope in ReplacementQuery.build(graph: graph) {
+        for scope in ReplacementQuery.build(graph: graph, excludedPivots: excludedPivots) {
             switch scope {
                 case let .branchPivot(pickNodeID, targetBranchID):
                     if let candidate = GraphStructuralEncoder.branchPivotCandidate(

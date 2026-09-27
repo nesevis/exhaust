@@ -105,13 +105,22 @@ enum AnyCandidateSource {
 /// Builds the collection of candidate sources from a graph.
 enum CandidateSourceBuilder {
     /// Assembles the full candidate source array by combining structural sources (removal, migration, replacement, permutation) with value sources (minimization, exchange). Structural sources are stable across structurally-identical rebuilds; value sources must be rebuilt after any leaf value change.
-    static func buildSources(from graph: ChoiceGraph, deferBindInner: Bool = false, previousGraph: ChoiceGraph? = nil) -> [AnyCandidateSource] {
-        buildStructuralSources(from: graph, previousGraph: previousGraph)
+    static func buildSources(
+        from graph: ChoiceGraph,
+        deferBindInner: Bool = false,
+        previousGraph: ChoiceGraph? = nil,
+        excludedPivots: Set<ExcludedPivot> = []
+    ) -> [AnyCandidateSource] {
+        buildStructuralSources(from: graph, previousGraph: previousGraph, excludedPivots: excludedPivots)
             + buildValueSources(from: graph, deferBindInner: deferBindInner)
     }
 
     /// Sources whose scopes depend on graph topology (node parent-child relationships, element counts, self-similarity edges) but not on leaf values. Stable across structurally-identical rebuilds.
-    static func buildStructuralSources(from graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [AnyCandidateSource] {
+    static func buildStructuralSources(
+        from graph: ChoiceGraph,
+        previousGraph: ChoiceGraph? = nil,
+        excludedPivots: Set<ExcludedPivot> = []
+    ) -> [AnyCandidateSource] {
         var sources: [AnyCandidateSource] = []
 
         let elementScopes = RemovalQuery.elementRemovalScopes(graph: graph)
@@ -159,7 +168,7 @@ enum CandidateSourceBuilder {
         }
 
         // Replacement.
-        let replacementCandidates = buildReplacementCandidates(graph: graph, previousGraph: previousGraph)
+        let replacementCandidates = buildReplacementCandidates(graph: graph, previousGraph: previousGraph, excludedPivots: excludedPivots)
         if replacementCandidates.isEmpty == false {
             sources.append(.sorted(SortedCandidateSource(replacementCandidates)))
         }
