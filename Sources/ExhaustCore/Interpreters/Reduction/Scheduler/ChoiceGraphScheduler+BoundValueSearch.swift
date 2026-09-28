@@ -72,7 +72,7 @@ extension ChoiceGraphScheduler {
         {
             seenBindFingerprints.insert(metadata.fingerprint)
         }
-        let hasComposableNestedBind = composableNestedBindNodeID(
+        let hasComposableNestedBind = composableNestedBind(
             under: bindScope.bindNodeID,
             graph: graph,
             seenBindFingerprints: seenBindFingerprints
@@ -166,7 +166,7 @@ extension ChoiceGraphScheduler {
         }
     }
 
-    /// Lifts one controller candidate, then builds either the next nested composition or the terminal bound-value search.
+    /// Lifts one controller candidate, then builds either the next nested composition or the terminal bound-value search, recording how the build ended.
     private static func buildBoundValueDownstream(
         upstreamCandidate: ChoiceSequence,
         parent: EncoderInput,
@@ -175,8 +175,27 @@ extension ChoiceGraphScheduler {
         stage: BoundValueStage,
         chain: BoundValueChain
     ) -> (encoder: EncoderDispatch, scope: EncoderInput)? {
-        let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
+        let build = liftAndBuildDownstream(
+            upstreamCandidate: upstreamCandidate,
+            parent: parent,
+            bindNodeID: bindNodeID,
+            controllerLeafNodeID: controllerLeafNodeID,
+            stage: stage,
+            chain: chain
+        )
+        chain.buildTally.record(stage, build.outcome)
+        return build.downstream
+    }
 
+    /// Runs the build's steps: lift, then a nested stage when the stage may recurse and the lifted bound subtree holds one composable nested bind, otherwise a terminal search.
+    private static func liftAndBuildDownstream(
+        upstreamCandidate: ChoiceSequence,
+        parent: EncoderInput,
+        bindNodeID: Int,
+        controllerLeafNodeID: Int,
+        stage: BoundValueStage,
+        chain: BoundValueChain
+    ) -> BoundValueBuild {
         // Read the proposed upstream value for instrumentation.
         let upstreamSeqIndex = parent.graph.nodes[controllerLeafNodeID].positionRange?.lowerBound
         let upstreamProposedBitPattern: UInt64? = upstreamSeqIndex.flatMap { i in
@@ -184,6 +203,54 @@ extension ChoiceGraphScheduler {
                 ? upstreamCandidate[i].value?.choice.bitPattern64
                 : nil
         }
+
+        let lifted: LiftedBind
+        switch liftBind(
+            upstreamCandidate: upstreamCandidate,
+            upstreamProposedBitPattern: upstreamProposedBitPattern,
+            parent: parent,
+            bindNodeID: bindNodeID,
+            stage: stage,
+            chain: chain
+        ) {
+            case let .lifted(liftedBind):
+                lifted = liftedBind
+            case let .failed(outcome):
+                return BoundValueBuild(outcome: outcome)
+        }
+
+        if stage.canRecurseIntoNestedBind,
+           let nestedBind = composableNestedBind(
+               under: lifted.bindNodeID,
+               graph: lifted.graph,
+               seenBindFingerprints: chain.seenBindFingerprints
+           )
+        {
+            return nestedStage(
+                lifted: lifted,
+                nestedBind: nestedBind,
+                parent: parent,
+                chain: chain
+            )
+        }
+        return terminalStage(
+            lifted: lifted,
+            upstreamProposedBitPattern: upstreamProposedBitPattern,
+            parent: parent,
+            chain: chain
+        )
+    }
+
+    /// Materializes the upstream candidate and locates the dispatched bind again in the lifted graph, by path and fingerprint.
+    private static func liftBind(
+        upstreamCandidate: ChoiceSequence,
+        upstreamProposedBitPattern: UInt64?,
+        parent: EncoderInput,
+        bindNodeID: Int,
+        stage: BoundValueStage,
+        chain: BoundValueChain
+    ) -> BoundValueLift {
+        let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 
         // 1. Materialize through the generator to get the new bound subtree. Use guided mode so that downstream coordinates outside the new range get re-resolved from the fallback tree (or PRNG when the fallback has no info) instead of being rejected. The upstream candidate carries the *previous* downstream values, which are typically out-of-range for the new upstream value (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
         //    out-of-range for the new `int(in: 0...1)` element generator). Mirrors
@@ -201,16 +268,15 @@ extension ChoiceGraphScheduler {
                 "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
                 "candidate_len": "\(upstreamCandidate.count)",
             ])
-            chain.buildTally.record(stage, .materializationFailed)
-            return nil
+            return .failed(.materializationFailed)
         }
 
         let liftedSequence = ChoiceSequence(freshTree)
+        // A stage that cannot recurse always ends in a terminal search, so a lift the terminal search would reject is dropped before the graph build.
         if stage.canRecurseIntoNestedBind == false,
-           liftedSequence.count > chain.rootSequenceCount
+           chain.admitsTerminalSearch(liftedSequenceCount: liftedSequence.count) == false
         {
-            chain.buildTally.record(stage, .liftedTooLong)
-            return nil
+            return .failed(.liftedTooLong)
         }
         let liftedGraph = ChoiceGraph.build(from: freshTree)
 
@@ -226,60 +292,72 @@ extension ChoiceGraphScheduler {
               case let .bind(metadata) = liftedGraph.nodes[liftedBindNodeID].kind,
               liftedGraph.nodes[liftedBindNodeID].children.count > metadata.boundChildIndex
         else {
-            chain.buildTally.record(stage, .bindNotFound)
-            return nil
+            return .failed(.bindNotFound)
         }
         let boundChildID = liftedGraph.nodes[liftedBindNodeID].children[metadata.boundChildIndex]
         guard let boundRange = liftedGraph.nodes[boundChildID].positionRange else {
-            chain.buildTally.record(stage, .bindNotFound)
-            return nil
+            return .failed(.bindNotFound)
         }
+        return .lifted(LiftedBind(
+            sequence: liftedSequence,
+            tree: freshTree,
+            graph: liftedGraph,
+            bindNodeID: liftedBindNodeID,
+            boundRange: boundRange
+        ))
+    }
 
+    /// Builds the composition one bind deeper, whose controller is the nested bind's inner leaf.
+    private static func nestedStage(
+        lifted: LiftedBind,
+        nestedBind: (nodeID: Int, metadata: BindMetadata),
+        parent: EncoderInput,
+        chain: BoundValueChain
+    ) -> BoundValueBuild {
+        let nestedControllerLeafNodeID = lifted.graph.nodes[nestedBind.nodeID].children[nestedBind.metadata.innerChildIndex]
+        let nestedChain = chain.descending(into: nestedBind.metadata.fingerprint)
+        let nestedInput = boundValueInput(
+            controllerLeafNodeID: nestedControllerLeafNodeID,
+            sequence: lifted.sequence,
+            tree: lifted.tree,
+            graph: lifted.graph,
+            priority: parent.transformation.priority
+        )
+        let nestedHasDescendant = composableNestedBind(
+            under: nestedBind.nodeID,
+            graph: lifted.graph,
+            seenBindFingerprints: nestedChain.seenBindFingerprints
+        ) != nil
+        let nestedEncoder = makeBoundValueCompositionEncoder(
+            bindNodeID: nestedBind.nodeID,
+            controllerLeafNodeID: nestedControllerLeafNodeID,
+            upstreamScope: nestedInput,
+            stage: nestedHasDescendant ? .chainInterior : .chainTail,
+            chain: nestedChain,
+            totalProbeCap: 0
+        )
+        return BoundValueBuild(
+            outcome: .nestedStage,
+            downstream: (.composed(nestedEncoder), nestedInput)
+        )
+    }
+
+    /// Builds the value search over the lifted bound subtree's leaves: binary search for one leaf, covering for several.
+    private static func terminalStage(
+        lifted: LiftedBind,
+        upstreamProposedBitPattern: UInt64?,
+        parent: EncoderInput,
+        chain: BoundValueChain
+    ) -> BoundValueBuild {
+        let liftedGraph = lifted.graph
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }
             if liftedGraph.nodes[leafID].scopeAnnotation.isDepthControl { return false }
-            return boundRange.contains(range.lowerBound)
-        }
-        if stage.canRecurseIntoNestedBind,
-           let nestedBindNodeID = composableNestedBindNodeID(
-               under: liftedBindNodeID,
-               graph: liftedGraph,
-               seenBindFingerprints: chain.seenBindFingerprints
-           )
-        {
-            guard case let .bind(nestedMetadata) = liftedGraph.nodes[nestedBindNodeID].kind else {
-                chain.buildTally.record(stage, .bindNotFound)
-                return nil
-            }
-            let nestedControllerLeafNodeID = liftedGraph.nodes[nestedBindNodeID].children[nestedMetadata.innerChildIndex]
-            let nestedChain = chain.descending(into: nestedMetadata.fingerprint)
-            let nestedInput = boundValueInput(
-                controllerLeafNodeID: nestedControllerLeafNodeID,
-                sequence: liftedSequence,
-                tree: freshTree,
-                graph: liftedGraph,
-                priority: parent.transformation.priority
-            )
-            let nestedHasDescendant = composableNestedBindNodeID(
-                under: nestedBindNodeID,
-                graph: liftedGraph,
-                seenBindFingerprints: nestedChain.seenBindFingerprints
-            ) != nil
-            let nestedEncoder = makeBoundValueCompositionEncoder(
-                bindNodeID: nestedBindNodeID,
-                controllerLeafNodeID: nestedControllerLeafNodeID,
-                upstreamScope: nestedInput,
-                stage: nestedHasDescendant ? .chainInterior : .chainTail,
-                chain: nestedChain,
-                totalProbeCap: 0
-            )
-            chain.buildTally.record(stage, .nestedStage)
-            return (.composed(nestedEncoder), nestedInput)
+            return lifted.boundRange.contains(range.lowerBound)
         }
 
-        guard liftedSequence.count <= chain.rootSequenceCount else {
-            chain.buildTally.record(stage, .liftedTooLong)
-            return nil
+        guard chain.admitsTerminalSearch(liftedSequenceCount: lifted.sequence.count) else {
+            return BoundValueBuild(outcome: .liftedTooLong)
         }
         // Nested bind inners stay fixed when the bound subtree is not a single chain. Changing one without recursively rebuilding its descendants produces an exact candidate with stale structure.
         let freeLeaves = boundLeaves.filter {
@@ -287,8 +365,7 @@ extension ChoiceGraphScheduler {
         }
         let downstreamLeaves = freeLeaves.isEmpty ? boundLeaves : freeLeaves
         guard downstreamLeaves.isEmpty == false else {
-            chain.buildTally.record(stage, .noDownstreamLeaves)
-            return nil
+            return BoundValueBuild(outcome: .noDownstreamLeaves)
         }
 
         let downstreamScope = EncoderInput(
@@ -301,8 +378,8 @@ extension ChoiceGraphScheduler {
                 ))),
                 priority: parent.transformation.priority
             ),
-            baseSequence: liftedSequence,
-            tree: freshTree,
+            baseSequence: lifted.sequence,
+            tree: lifted.tree,
             graph: liftedGraph,
             warmStartRecords: [:]
         )
@@ -310,25 +387,27 @@ extension ChoiceGraphScheduler {
             ? .binarySearch(GraphBinarySearchEncoder())
             : .boundValueCovering(GraphBoundValueCoveringEncoder())
 
-        Self.logReducer("bound_value_lift_built", isInstrumented: isInstrumented, metadata: [
+        Self.logReducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
             "parent_seq_len": "\(parent.baseSequence.count)",
-            "lifted_seq_len": "\(liftedSequence.count)",
+            "lifted_seq_len": "\(lifted.sequence.count)",
             "downstream_leaves": "\(downstreamLeaves.count)",
-            "bound_range": "\(boundRange.lowerBound)...\(boundRange.upperBound)",
+            "bound_range": "\(lifted.boundRange.lowerBound)...\(lifted.boundRange.upperBound)",
         ])
-        chain.buildTally.record(stage, .terminalSearch)
-        return (downstreamEncoder, downstreamScope)
+        return BoundValueBuild(
+            outcome: .terminalSearch,
+            downstream: (downstreamEncoder, downstreamScope)
+        )
     }
 
     /// Returns the sole nested bind when composition can descend without revisiting a bind site.
     ///
     /// A repeated fingerprint identifies another expansion of a recursive generator's bind. Treating that expansion as another composition dimension makes work grow with the generated value's recursion depth. Branching dependencies and recursive expansions instead retain their controllers for later scheduler passes.
-    private static func composableNestedBindNodeID(
+    private static func composableNestedBind(
         under bindNodeID: Int,
         graph: ChoiceGraph,
         seenBindFingerprints: Set<UInt64>
-    ) -> Int? {
+    ) -> (nodeID: Int, metadata: BindMetadata)? {
         let nestedBindNodeIDs = directNestedBindNodeIDs(
             under: bindNodeID,
             graph: graph
@@ -343,7 +422,7 @@ extension ChoiceGraphScheduler {
         else {
             return nil
         }
-        return nestedBindNodeID
+        return (nestedBindNodeID, metadata)
     }
 
     /// Returns the outermost active binds with a `chooseBits` controller directly beneath this bind's bound child. More than one is a branching dependency rather than a chain and is left to the existing fixed-inner terminal search.
@@ -410,91 +489,5 @@ extension ChoiceGraphScheduler {
             graph: graph,
             warmStartRecords: [:]
         )
-    }
-}
-
-// MARK: - Supporting Types
-
-/// Where one composition sits in a chain of nested binds. Each case fixes the upstream encoder, whether the controller's current value is a candidate, and whether a lift may descend into a nested bind.
-package enum BoundValueStage: Hashable, Sendable {
-    /// The dispatched bind has no composable nested bind. Binary search over the controller, then a terminal search over the bound leaves.
-    case single
-    /// The dispatched bind, whose bound subtree holds one composable nested bind. Every lift descends, so the controller can move against a nested one.
-    case chainRoot
-    /// A nested bind with a further composable nested bind beneath it. Its current value stays a candidate so deeper controllers can move while it holds.
-    case chainInterior
-    /// The deepest composable nested bind. Every lift ends in a terminal search.
-    case chainTail
-
-    /// Whether the controller is enumerated across its domain rather than binary searched toward its target.
-    var searchesWholeDomain: Bool {
-        switch self {
-            case .single:
-                false
-            case .chainRoot, .chainInterior, .chainTail:
-                true
-        }
-    }
-
-    var includesCurrentController: Bool {
-        switch self {
-            case .chainInterior:
-                true
-            case .single, .chainRoot, .chainTail:
-                false
-        }
-    }
-
-    var canRecurseIntoNestedBind: Bool {
-        switch self {
-            case .chainRoot, .chainInterior:
-                true
-            case .single, .chainTail:
-                false
-        }
-    }
-}
-
-/// State shared by every composition in one chain of nested binds.
-private struct BoundValueChain {
-    let gen: AnyGenerator
-    let upstreamBudget: Int
-    /// The live sequence's length at dispatch. Terminal searches reject lifts longer than this; intermediate lifts may exceed it while a deeper controller compensates.
-    let rootSequenceCount: Int
-    /// Fingerprints of the binds already composed on the path from the root. A repeat marks recursive generator expansion.
-    let seenBindFingerprints: Set<UInt64>
-    /// Shared by every stage of every composition the machine builds in one run.
-    let buildTally: BoundValueBuildTally
-    /// Nesting depth of the stage this chain builds, zero at the dispatched bind.
-    let depth: Int
-    /// Shared by every stage of one dispatch of a nested chain. A single bind's composition does not draw from it.
-    let buildPool: CompositionBuildPool
-
-    /// The chain one level deeper, with the nested bind's fingerprint recorded.
-    func descending(into fingerprint: UInt64) -> BoundValueChain {
-        var fingerprints = seenBindFingerprints
-        fingerprints.insert(fingerprint)
-        return BoundValueChain(
-            gen: gen,
-            upstreamBudget: upstreamBudget,
-            rootSequenceCount: rootSequenceCount,
-            seenBindFingerprints: fingerprints,
-            buildTally: buildTally,
-            depth: depth + 1,
-            buildPool: buildPool
-        )
-    }
-}
-
-/// Counts downstream build outcomes across one reduction run, for ``ReductionStats/boundValueBuildOutcomes``. A class so every stage of every composition records into the machine's single instance.
-///
-/// Every build materializes the generator once before it records its outcome, so ``total`` is the run's ``MaterializationSite/boundValueLift`` count. Builds in a pass cut short by the deadline are included.
-final class BoundValueBuildTally {
-    private(set) var counts: [BoundValueBuildRecord: Int] = [:]
-    private(set) var total = 0
-
-    func record(_ stage: BoundValueStage, _ outcome: BoundValueBuildOutcome) {
-        counts[BoundValueBuildRecord(stage: stage, outcome: outcome), default: 0] += 1
-        total += 1
     }
 }
