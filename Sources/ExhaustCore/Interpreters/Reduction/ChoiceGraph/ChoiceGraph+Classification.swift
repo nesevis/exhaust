@@ -73,8 +73,7 @@ extension ChoiceGraph {
             return (BindClassification(topology: .unclassifiable, liftability: .both), nil, 0)
         }
 
-        // `lift` materializes unless the upstream index is outside the sequence, which is the same for both endpoints.
-        let liftMaterializations = upstreamIndex < baseSequence.count ? 2 : 0
+        var liftMaterializations = 0
         let lowLift = lift(
             bitPattern: endpoints.low,
             upstreamIndex: upstreamIndex,
@@ -82,7 +81,8 @@ extension ChoiceGraph {
             gen: gen,
             baseSequence: baseSequence,
             fallbackTree: fallbackTree,
-            bindPath: bindMetadata.bindPath
+            bindPath: bindMetadata.bindPath,
+            materializations: &liftMaterializations
         )
         let highLift = lift(
             bitPattern: endpoints.high,
@@ -91,7 +91,8 @@ extension ChoiceGraph {
             gen: gen,
             baseSequence: baseSequence,
             fallbackTree: fallbackTree,
-            bindPath: bindMetadata.bindPath
+            bindPath: bindMetadata.bindPath,
+            materializations: &liftMaterializations
         )
         let liftability: BindLiftability = switch (lowLift, highLift) {
             case (.some, .some): .both
@@ -107,6 +108,9 @@ extension ChoiceGraph {
         return (BindClassification(topology: topology, liftability: liftability), fingerprint, liftMaterializations)
     }
 
+    /// Materializes `baseSequence` with the upstream leaf set to `bitPattern` and returns the lifted bound subtree, or nil when the lift fails.
+    ///
+    /// - Parameter materializations: Incremented once per generator materialization, whether or not the lift succeeds.
     private func lift(
         bitPattern: UInt64,
         upstreamIndex: Int,
@@ -114,7 +118,8 @@ extension ChoiceGraph {
         gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree,
-        bindPath: ChoicePath
+        bindPath: ChoicePath,
+        materializations: inout Int
     ) -> ChoiceTree? {
         guard upstreamIndex < baseSequence.count else { return nil }
         var candidate = baseSequence
@@ -127,6 +132,7 @@ extension ChoiceGraph {
             validRange: leafMetadata.validRange,
             isRangeExplicit: leafMetadata.isRangeExplicit
         ))
+        materializations += 1
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(
             gen,
             context: .init(
