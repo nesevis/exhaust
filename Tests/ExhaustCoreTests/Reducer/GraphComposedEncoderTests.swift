@@ -209,7 +209,7 @@ struct GraphComposedEncoderTests {
             upstream: .binarySearch(GraphBinarySearchEncoder()),
             upstreamScope: scope,
             upstreamBudget: 100,
-            maxBuildsPerStart: 3,
+            chainLimits: chainLimits(maxBuildsPerStart: 3),
             downstreamBuilder: { _, _, _ in
                 builderCalls += 1
                 return nil
@@ -233,7 +233,7 @@ struct GraphComposedEncoderTests {
             upstream: .binarySearch(GraphBinarySearchEncoder()),
             upstreamScope: scope,
             upstreamBudget: 100,
-            buildPool: pool,
+            chainLimits: chainLimits(buildPool: pool),
             downstreamBuilder: { candidate, _, parent in
                 builderCalls += 1
                 let nestedScope = EncoderInput(
@@ -248,7 +248,7 @@ struct GraphComposedEncoderTests {
                     upstream: .binarySearch(GraphBinarySearchEncoder()),
                     upstreamScope: nestedScope,
                     upstreamBudget: 100,
-                    buildPool: pool,
+                    chainLimits: chainLimits(buildPool: pool),
                     downstreamBuilder: { _, _, _ in
                         builderCalls += 1
                         return nil
@@ -600,7 +600,7 @@ private func stageProbes(probesPerStageTurn: Int?) throws -> [(stage: UInt64, ca
         upstream: .binarySearch(GraphBinarySearchEncoder()),
         upstreamScope: scope,
         upstreamBudget: 3,
-        probesPerStageTurn: probesPerStageTurn,
+        chainLimits: probesPerStageTurn.map { chainLimits(probesPerStageTurn: $0) },
         downstreamBuilder: { candidate, _, _ in
             guard let liftedValue = candidate.compactMap({ $0.value?.choice.bitPattern64 }).first,
                   let liftedScope = singleLeafScope(value: liftedValue)
@@ -622,6 +622,19 @@ private func stageProbes(probesPerStageTurn: Int?) throws -> [(stage: UInt64, ca
         probes.append((change.newValue.bitPattern64, buffer))
     }
     return probes
+}
+
+/// Chain limits that leave every limit not named unbounded.
+private func chainLimits(
+    probesPerStageTurn: Int = .max,
+    maxBuildsPerStart: Int = .max,
+    buildPool: CompositionBuildPool = CompositionBuildPool(capacity: .max)
+) -> NestedChainLimits {
+    NestedChainLimits(
+        probesPerStageTurn: probesPerStageTurn,
+        maxBuildsPerStart: maxBuildsPerStart,
+        buildPool: buildPool
+    )
 }
 
 private func singleLeafScope(value: UInt64) -> EncoderInput? {

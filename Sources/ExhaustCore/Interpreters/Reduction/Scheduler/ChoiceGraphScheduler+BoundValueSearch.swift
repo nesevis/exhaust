@@ -89,9 +89,7 @@ extension ChoiceGraphScheduler {
                 seenBindFingerprints: seenBindFingerprints,
                 buildTally: buildTally,
                 depth: 0,
-                buildPool: hasComposableNestedBind
-                    ? CompositionBuildPool(capacity: nestedChainBuildPool)
-                    : nil
+                buildPool: CompositionBuildPool(capacity: nestedChainBuildPool)
             ),
             totalProbeCap: totalProbeCap
         ))
@@ -137,9 +135,7 @@ extension ChoiceGraphScheduler {
             upstreamScope: upstreamScope,
             upstreamBudget: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
-            probesPerStageTurn: stage.searchesWholeDomain ? probesPerControllerCandidateTurn : nil,
-            maxBuildsPerStart: chain.buildPool == nil ? .max : nestedChainBuildsPerStart(depth: chain.depth),
-            buildPool: chain.buildPool,
+            chainLimits: chainLimits(for: stage, chain: chain),
             downstreamBuilder: { upstreamCandidate, _, parent in
                 buildBoundValueDownstream(
                     upstreamCandidate: upstreamCandidate,
@@ -151,6 +147,23 @@ extension ChoiceGraphScheduler {
                 )
             }
         )
+    }
+
+    /// Stage turns and build limits for one stage's composition. Nil for a single bind, whose builds do not multiply.
+    private static func chainLimits(
+        for stage: BoundValueStage,
+        chain: BoundValueChain
+    ) -> NestedChainLimits? {
+        switch stage {
+            case .single:
+                nil
+            case .chainRoot, .chainInterior, .chainTail:
+                NestedChainLimits(
+                    probesPerStageTurn: probesPerControllerCandidateTurn,
+                    maxBuildsPerStart: nestedChainBuildsPerStart(depth: chain.depth),
+                    buildPool: chain.buildPool
+                )
+        }
     }
 
     /// Lifts one controller candidate, then builds either the next nested composition or the terminal bound-value search.
@@ -454,8 +467,8 @@ private struct BoundValueChain {
     let buildTally: BoundValueBuildTally
     /// Nesting depth of the stage this chain builds, zero at the dispatched bind.
     let depth: Int
-    /// Shared by every stage of one dispatch of a nested chain. Nil for a single bind, whose builds do not multiply.
-    let buildPool: CompositionBuildPool?
+    /// Shared by every stage of one dispatch of a nested chain. A single bind's composition does not draw from it.
+    let buildPool: CompositionBuildPool
 
     /// The chain one level deeper, with the nested bind's fingerprint recorded.
     func descending(into fingerprint: UInt64) -> BoundValueChain {
