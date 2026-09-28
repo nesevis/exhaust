@@ -9,6 +9,23 @@ extension ChoiceGraphScheduler {
     /// Probes one controller candidate's downstream search emits before a nested-bind composition moves on to the next candidate. Paused searches resume in later turns, so one controller tuple cannot consume the root's total cap.
     private static let probesPerControllerCandidateTurn = 2
 
+    /// Downstream builds one dispatch of a nested bind chain may spend across all its stages, counting failed builds and builds whose search emits nothing. Each build materializes the generator, and nesting multiplies them, so the chain root owns one pool for the whole chain. Two nested controllers over 12 and 41 values need more than 64 builds to reach a tail value inside the range.
+    static let nestedChainBuildPool = 128
+
+    /// Builds the chain root may spend per start. Deeper stages get less; see ``nestedChainBuildsPerStart(depth:)``.
+    static let nestedChainRootBuildsPerStart = 64
+
+    /// Builds a stage at nesting depth *d* may spend per start: ``nestedChainRootBuildsPerStart`` scaled by (3/4)^*d*, and at least one. Shallow controllers get more breadth, and no single deep stage can drain the shared pool.
+    static func nestedChainBuildsPerStart(depth: Int) -> Int {
+        var builds = nestedChainRootBuildsPerStart
+        var level = 0
+        while level < depth {
+            builds = builds * 3 / 4
+            level += 1
+        }
+        return max(builds, 1)
+    }
+
     /// Builds a ``GraphComposedEncoder`` for a bound value scope.
     ///
     /// A single bind uses ``GraphBinarySearchEncoder`` upstream and terminates in binary or covering value search. A bound subtree containing exactly one nested bind from an unseen bind site uses ``GraphSingleLeafDomainEncoder`` and recursively builds another composition, allowing controllers at different depths to compensate in opposite directions. Repeated fingerprints mark recursive generator expansion and terminate composition before work grows with the generated recursion depth.
@@ -70,7 +87,11 @@ extension ChoiceGraphScheduler {
                 upstreamBudget: upstreamBudget,
                 rootSequenceCount: scope.baseSequence.count,
                 seenBindFingerprints: seenBindFingerprints,
-                buildTally: buildTally
+                buildTally: buildTally,
+                depth: 0,
+                buildPool: hasComposableNestedBind
+                    ? CompositionBuildPool(capacity: nestedChainBuildPool)
+                    : nil
             ),
             totalProbeCap: totalProbeCap
         ))
@@ -117,6 +138,8 @@ extension ChoiceGraphScheduler {
             upstreamBudget: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
             probesPerStageTurn: stage.searchesWholeDomain ? probesPerControllerCandidateTurn : nil,
+            maxBuildsPerStart: chain.buildPool == nil ? .max : nestedChainBuildsPerStart(depth: chain.depth),
+            buildPool: chain.buildPool,
             downstreamBuilder: { upstreamCandidate, _, parent in
                 buildBoundValueDownstream(
                     upstreamCandidate: upstreamCandidate,
@@ -429,6 +452,10 @@ private struct BoundValueChain {
     let seenBindFingerprints: Set<UInt64>
     /// Shared by every stage of every composition the machine builds in one run.
     let buildTally: BoundValueBuildTally
+    /// Nesting depth of the stage this chain builds, zero at the dispatched bind.
+    let depth: Int
+    /// Shared by every stage of one dispatch of a nested chain. Nil for a single bind, whose builds do not multiply.
+    let buildPool: CompositionBuildPool?
 
     /// The chain one level deeper, with the nested bind's fingerprint recorded.
     func descending(into fingerprint: UInt64) -> BoundValueChain {
@@ -439,7 +466,9 @@ private struct BoundValueChain {
             upstreamBudget: upstreamBudget,
             rootSequenceCount: rootSequenceCount,
             seenBindFingerprints: fingerprints,
-            buildTally: buildTally
+            buildTally: buildTally,
+            depth: depth + 1,
+            buildPool: buildPool
         )
     }
 }

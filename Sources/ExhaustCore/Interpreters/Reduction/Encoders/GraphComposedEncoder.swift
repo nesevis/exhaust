@@ -202,6 +202,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     private let upstreamBudget: Int
     private let totalProbeCap: Int
     private let probesPerStageTurn: Int
+    private let maxBuildsPerStart: Int
+    private let buildPool: CompositionBuildPool?
 
     private var parentScope: EncoderInput?
     private var activeStage: DownstreamStage?
@@ -241,6 +243,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one downstream build plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
     ///   - totalProbeCap: Maximum probes the composition emits per ``start(scope:)`` call, across all lifts. Zero means uncapped. Intended for a bind fingerprint's first dispatch of the run, where a fruitless multi-leaf covering enumeration would otherwise run to exhaustion before the gate can blacklist the bind.
     ///   - probesPerStageTurn: Probes a downstream stage emits in one turn before the next stage takes over. `nil` runs each stage to exhaustion. Recursive compositions pass a small value to keep one controller tuple from consuming the root's total cap while retaining every downstream iterator for later turns.
+    ///   - maxBuildsPerStart: Maximum builder calls at this level per ``start(scope:)`` call, counting builds that return nil. Unlike `upstreamBudget`, a failed build counts, since the builder may materialize before it fails.
+    ///   - buildPool: Builder calls left to every composition sharing the pool, counting builds that return nil and builds whose downstream search emits nothing. Nested compositions draw from their root's pool, so work stays bounded however deep the nesting. `nil` leaves builds unbounded beyond `maxBuildsPerStart`.
     init(
         name: EncoderName,
         upstream: EncoderDispatch,
@@ -248,6 +252,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         upstreamBudget: Int = 15,
         totalProbeCap: Int = 0,
         probesPerStageTurn: Int? = nil,
+        maxBuildsPerStart: Int = .max,
+        buildPool: CompositionBuildPool? = nil,
         downstreamBuilder: @escaping DownstreamBuilder
     ) {
         self.name = name
@@ -256,6 +262,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         self.upstreamBudget = upstreamBudget
         self.totalProbeCap = totalProbeCap
         self.probesPerStageTurn = probesPerStageTurn ?? .max
+        self.maxBuildsPerStart = maxBuildsPerStart
+        self.buildPool = buildPool
         self.upstream.start(scope: upstreamScope)
     }
 
@@ -359,7 +367,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         return resumed
     }
 
-    /// Advances upstream until the builder produces a downstream stage. The budget caps upstream probes that contributed to a valid downstream stage; failed builds do not count because they incur no downstream search.
+    /// Advances upstream until the builder produces a downstream stage. `upstreamBudget` caps upstream probes that contributed to a valid downstream stage, so failed builds do not count against it. `maxBuildsPerStart` and the shared build pool count every builder call.
     private mutating func pullUpstreamStage(
         candidate: ChoiceSequence,
         parent: EncoderInput
@@ -370,6 +378,10 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
                 into: &upstreamCandidate,
                 lastAccepted: false
             ) else {
+                upstreamExhausted = true
+                return nil
+            }
+            guard ownDownstreamBuilds < maxBuildsPerStart, buildPool?.consume() ?? true else {
                 upstreamExhausted = true
                 return nil
             }
@@ -421,5 +433,27 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
             )
         }
         return .leafValues(reshapeChanges)
+    }
+}
+
+// MARK: - Build Pool
+
+/// Builder calls left to one dispatch of a composition and every composition nested below it.
+///
+/// A class so that nested compositions, which are copied into ``EncoderDispatch`` values, all draw from the root's count. Nesting otherwise multiplies each level's builds, so a per-level limit alone does not bound the total.
+final class CompositionBuildPool {
+    private(set) var remaining: Int
+
+    init(capacity: Int) {
+        remaining = capacity
+    }
+
+    /// Takes one build from the pool, returning false when none remain.
+    func consume() -> Bool {
+        guard remaining > 0 else {
+            return false
+        }
+        remaining -= 1
+        return true
     }
 }

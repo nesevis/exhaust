@@ -251,6 +251,130 @@ struct GraphComposedEncoderTests {
         #expect(cappedProbes == cap, "A capped composition should emit exactly the cap when the uncapped run exceeds it")
     }
 
+    // MARK: - Build Limits
+
+    @Test("A stage's per-start build limit counts builds that return nil")
+    func perStartBuildLimitCountsFailedBuilds() throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        var builderCalls = 0
+        var composed = GraphComposedEncoder(
+            name: .composed,
+            upstream: .binarySearch(GraphBinarySearchEncoder()),
+            upstreamScope: scope,
+            upstreamBudget: 100,
+            maxBuildsPerStart: 3,
+            downstreamBuilder: { _, _, _ in
+                builderCalls += 1
+                return nil
+            }
+        )
+
+        composed.start(scope: scope)
+        let probes = drainCandidates(of: &composed, sequence: scope.baseSequence)
+
+        #expect(probes.isEmpty)
+        #expect(builderCalls == 3)
+    }
+
+    @Test("A shared build pool bounds builder calls across nested compositions, including stages whose search emits nothing")
+    func sharedBuildPoolBoundsNestedBuilds() throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        let pool = CompositionBuildPool(capacity: 5)
+        var builderCalls = 0
+        var composed = GraphComposedEncoder(
+            name: .composed,
+            upstream: .binarySearch(GraphBinarySearchEncoder()),
+            upstreamScope: scope,
+            upstreamBudget: 100,
+            buildPool: pool,
+            downstreamBuilder: { candidate, _, parent in
+                builderCalls += 1
+                let nestedScope = EncoderInput(
+                    transformation: parent.transformation,
+                    baseSequence: candidate,
+                    tree: parent.tree,
+                    graph: parent.graph,
+                    warmStartRecords: [:]
+                )
+                let emptyNested = GraphComposedEncoder(
+                    name: .composed,
+                    upstream: .binarySearch(GraphBinarySearchEncoder()),
+                    upstreamScope: nestedScope,
+                    upstreamBudget: 100,
+                    buildPool: pool,
+                    downstreamBuilder: { _, _, _ in
+                        builderCalls += 1
+                        return nil
+                    }
+                )
+                return (.composed(emptyNested), nestedScope)
+            }
+        )
+
+        composed.start(scope: scope)
+        let probes = drainCandidates(of: &composed, sequence: scope.baseSequence)
+
+        #expect(probes.isEmpty)
+        #expect(builderCalls == 5)
+        #expect(pool.remaining == 0)
+    }
+
+    @Test("Per-start build limits drop by a quarter per nesting level and never reach zero")
+    func nestedChainBuildsPerStartDecay() {
+        let limits = (0 ..< 8).map { ChoiceGraphScheduler.nestedChainBuildsPerStart(depth: $0) }
+        #expect(limits == [64, 48, 36, 27, 20, 15, 11, 8])
+        #expect(ChoiceGraphScheduler.nestedChainBuildsPerStart(depth: 40) == 1)
+    }
+
+    @Test("A nested bind chain's composition stays within its shared build pool on one probe request")
+    func nestedBindChainRespectsBuildPool() throws {
+        let continuationCalls = ContinuationCounter()
+        let chainDepth = 6
+        let generator = nestedBindChain(depth: chainDepth, continuationCalls: continuationCalls)
+        let tree = try #require(try Interpreters.reflect(generator, with: UInt64(0)))
+        let graph = ChoiceGraph.build(from: tree)
+        let sequence = ChoiceSequence.flatten(tree)
+        let bindNodeID = try #require(graph.liveNodeIDs.first { nodeID in
+            if case .bind = graph.nodes[nodeID].kind { true } else { false }
+        })
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+            Issue.record("Expected a bind node")
+            return
+        }
+        let bindScope = BoundValueScope(
+            bindNodeID: bindNodeID,
+            upstreamLeafNodeID: graph.nodes[bindNodeID].children[metadata.innerChildIndex],
+            downstreamNodeIDs: Array(graph.leafNodes.dropFirst()),
+            boundSubtreeSize: sequence.count
+        )
+        let scope = EncoderInput(
+            transformation: GraphTransformation(
+                operation: .minimize(.boundValue(bindScope)),
+                priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
+            ),
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+        var encoder = ChoiceGraphScheduler.makeBoundValueComposition(
+            bindScope: bindScope,
+            scope: scope,
+            graph: graph,
+            gen: generator,
+            upstreamBudget: 4,
+            totalProbeCap: 1
+        )
+        encoder.start(scope: scope)
+        continuationCalls.value = 0
+
+        var candidate = sequence
+        _ = encoder.nextProbe(into: &candidate, lastAccepted: false)
+
+        // Each build materializes the whole chain once, calling every bind's continuation.
+        #expect(continuationCalls.value <= ChoiceGraphScheduler.nestedChainBuildPool * chainDepth)
+    }
+
     // MARK: - Lift Failure
 
     @Test("Failed lifts are skipped without counting against budget")
@@ -576,4 +700,32 @@ private func longestRun(of stages: [UInt64]) -> Int {
         previous = stage
     }
     return longest
+}
+
+/// A chain of `depth` nested binds, each bound value drawn from `0...3`, ending in a constant leaf. Every continuation call is counted.
+private func nestedBindChain(depth: Int, continuationCalls: ContinuationCounter) -> AnyGenerator {
+    guard depth > 0 else {
+        return Gen.choose(in: UInt64(0) ... 0).erase()
+    }
+    let next = nestedBindChain(depth: depth - 1, continuationCalls: continuationCalls)
+    return .impure(
+        operation: .transform(
+            kind: .bind(
+                fingerprint: UInt64(depth),
+                forward: { _ in
+                    continuationCalls.value += 1
+                    return next
+                },
+                backward: { _ in UInt64(1) },
+                inputType: UInt64.self,
+                outputType: UInt64.self
+            ),
+            inner: Gen.choose(in: UInt64(0) ... 3).erase()
+        ),
+        continuation: { .pure($0) }
+    )
+}
+
+private final class ContinuationCounter {
+    var value = 0
 }
