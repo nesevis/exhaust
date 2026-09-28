@@ -474,10 +474,14 @@ private struct BoundValueChain {
 }
 
 /// Counts downstream build outcomes across one reduction run, for ``ReductionStats/boundValueBuildOutcomes``. A class so every stage of every composition records into the machine's single instance.
+///
+/// Every build materializes the generator once before it records its outcome, so ``total`` is the run's ``MaterializationSite/boundValueLift`` count. Builds in a pass cut short by the deadline are included.
 final class BoundValueBuildTally {
     private(set) var counts: [BoundValueBuildRecord: Int] = [:]
+    private(set) var total = 0
 
     func record(_ stage: BoundValueStage, _ outcome: BoundValueBuildOutcome) {
         counts[BoundValueBuildRecord(stage: stage, outcome: outcome), default: 0] += 1
+        total += 1
     }
 }

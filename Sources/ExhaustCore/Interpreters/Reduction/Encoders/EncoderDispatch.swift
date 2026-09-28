@@ -241,17 +241,9 @@ extension EncoderDispatch: GraphEncoder {
         return nil
     }
 
-    /// ``GraphComposedEncoder/downstreamBuilds`` for the composed case, zero for every other encoder. Lets a composition total the builds of the compositions nested in its stages.
-    var downstreamBuilds: Int {
-        if case let .composed(encoder) = self { return encoder.downstreamBuilds }
-        return 0
-    }
-
-    /// Generator materializations the encoder ran outside the probe decoder during the current pass, with the site they are reported under; nil for encoders that never materialize. The bound value builder materializes once per downstream build.
+    /// Generator materializations the encoder ran outside the probe decoder during the current pass, with the site they are reported under; nil for encoders that never materialize. Bound value lifts are counted run-wide by ``BoundValueBuildTally`` instead.
     var liftMaterializations: (site: MaterializationSite, count: Int)? {
         switch self {
-            case let .composed(encoder):
-                (.boundValueLift, encoder.downstreamBuilds)
             case let .bindPivot(encoder):
                 (.bindPivotLift, encoder.liftsPerformed)
             default:

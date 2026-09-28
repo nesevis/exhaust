@@ -106,59 +106,6 @@ struct GraphComposedEncoderTests {
         #expect(Array(emittedCandidates.prefix(nestedCandidates.count)) == nestedCandidates)
     }
 
-    @Test("Downstream builds total every builder call across nesting levels, including failed builds")
-    func downstreamBuildsCountNestedAndFailedBuilds() throws {
-        let scope = try #require(singleLeafScope(value: 100))
-        var outerBuilds = 0
-        var nestedBuilds = 0
-        var composed = GraphComposedEncoder(
-            name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            upstreamBudget: 3,
-            probesPerStageTurn: 1,
-            downstreamBuilder: { candidate, _, _ in
-                outerBuilds += 1
-                // Every other outer build fails, as a lift rejected after materializing would.
-                guard outerBuilds.isMultiple(of: 2) == false,
-                      let liftedValue = candidate.compactMap({ $0.value?.choice.bitPattern64 }).first,
-                      let nestedScope = singleLeafScope(value: liftedValue)
-                else {
-                    return nil
-                }
-                let nested = GraphComposedEncoder(
-                    name: .composed,
-                    upstream: .binarySearch(GraphBinarySearchEncoder()),
-                    upstreamScope: nestedScope,
-                    upstreamBudget: 2,
-                    downstreamBuilder: { nestedCandidate, _, _ in
-                        nestedBuilds += 1
-                        guard let nestedValue = nestedCandidate.compactMap({ $0.value?.choice.bitPattern64 }).first else {
-                            return nil
-                        }
-                        return singleLeafScope(value: nestedValue).map { (.binarySearch(GraphBinarySearchEncoder()), $0) }
-                    }
-                )
-                return (.composed(nested), nestedScope)
-            }
-        )
-
-        composed.start(scope: scope)
-        var buffer = scope.baseSequence
-        var probeCount = 0
-        while composed.nextProbe(into: &buffer, lastAccepted: false) != nil {
-            probeCount += 1
-            if probeCount == 5 {
-                composed.refreshState(graph: scope.graph, sequence: buffer)
-            }
-        }
-
-        #expect(probeCount >= 5)
-        #expect(outerBuilds > 1)
-        #expect(nestedBuilds > 0)
-        #expect(composed.downstreamBuilds == outerBuilds + nestedBuilds)
-    }
-
     // MARK: - Stage Turns
 
     @Test("Each stage emits one turn of probes before the next stage starts, and suspended stages resume oldest first")
@@ -331,48 +278,46 @@ struct GraphComposedEncoderTests {
         let continuationCalls = ContinuationCounter()
         let chainDepth = 6
         let generator = nestedBindChain(depth: chainDepth, continuationCalls: continuationCalls)
-        let tree = try #require(try Interpreters.reflect(generator, with: UInt64(0)))
-        let graph = ChoiceGraph.build(from: tree)
-        let sequence = ChoiceSequence.flatten(tree)
-        let bindNodeID = try #require(graph.liveNodeIDs.first { nodeID in
-            if case .bind = graph.nodes[nodeID].kind { true } else { false }
-        })
-        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
-            Issue.record("Expected a bind node")
-            return
-        }
-        let bindScope = BoundValueScope(
-            bindNodeID: bindNodeID,
-            upstreamLeafNodeID: graph.nodes[bindNodeID].children[metadata.innerChildIndex],
-            downstreamNodeIDs: Array(graph.leafNodes.dropFirst()),
-            boundSubtreeSize: sequence.count
-        )
-        let scope = EncoderInput(
-            transformation: GraphTransformation(
-                operation: .minimize(.boundValue(bindScope)),
-                priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
-            ),
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
-            warmStartRecords: [:]
-        )
-        var encoder = ChoiceGraphScheduler.makeBoundValueComposition(
-            bindScope: bindScope,
-            scope: scope,
-            graph: graph,
-            gen: generator,
+        var (encoder, scope) = try boundValueComposition(
+            of: generator,
             upstreamBudget: 4,
             totalProbeCap: 1
         )
         encoder.start(scope: scope)
         continuationCalls.value = 0
 
-        var candidate = sequence
+        var candidate = scope.baseSequence
         _ = encoder.nextProbe(into: &candidate, lastAccepted: false)
 
         // Each build materializes the whole chain once, calling every bind's continuation.
         #expect(continuationCalls.value <= ChoiceGraphScheduler.nestedChainBuildPool * chainDepth)
+    }
+
+    @Test("The build tally counts one entry per generator materialization at every nesting level")
+    func buildTallyCountsEveryLiftMaterialization() throws {
+        let rootContinuationCalls = ContinuationCounter()
+        let generator = nestedBindChain(
+            depth: 3,
+            continuationCalls: ContinuationCounter(),
+            rootContinuationCalls: rootContinuationCalls
+        )
+        let buildTally = BoundValueBuildTally()
+        var (encoder, scope) = try boundValueComposition(
+            of: generator,
+            upstreamBudget: 4,
+            buildTally: buildTally
+        )
+        encoder.start(scope: scope)
+        rootContinuationCalls.value = 0
+
+        var candidate = scope.baseSequence
+        while encoder.nextProbe(into: &candidate, lastAccepted: false) != nil {}
+
+        let stagesThatBuilt = Set(buildTally.counts.keys.map(\.stage))
+        #expect(stagesThatBuilt.contains(.chainRoot))
+        #expect(stagesThatBuilt.contains(.chainTail))
+        // Every materialization enters the root bind's continuation exactly once.
+        #expect(buildTally.total == rootContinuationCalls.value)
     }
 
     // MARK: - Lift Failure
@@ -702,8 +647,12 @@ private func longestRun(of stages: [UInt64]) -> Int {
     return longest
 }
 
-/// A chain of `depth` nested binds, each bound value drawn from `0...3`, ending in a constant leaf. Every continuation call is counted.
-private func nestedBindChain(depth: Int, continuationCalls: ContinuationCounter) -> AnyGenerator {
+/// A chain of `depth` nested binds, each bound value drawn from `0...3`, ending in a constant leaf. Every continuation call is counted in `continuationCalls`, and the outermost bind's calls also in `rootContinuationCalls`.
+private func nestedBindChain(
+    depth: Int,
+    continuationCalls: ContinuationCounter,
+    rootContinuationCalls: ContinuationCounter? = nil
+) -> AnyGenerator {
     guard depth > 0 else {
         return Gen.choose(in: UInt64(0) ... 0).erase()
     }
@@ -714,6 +663,7 @@ private func nestedBindChain(depth: Int, continuationCalls: ContinuationCounter)
                 fingerprint: UInt64(depth),
                 forward: { _ in
                     continuationCalls.value += 1
+                    rootContinuationCalls?.value += 1
                     return next
                 },
                 backward: { _ in UInt64(1) },
@@ -724,6 +674,54 @@ private func nestedBindChain(depth: Int, continuationCalls: ContinuationCounter)
         ),
         continuation: { .pure($0) }
     )
+}
+
+/// The bound value composition the scheduler dispatches for the outermost bind of `generator`, reflected at zero, with the scope to start it on.
+private func boundValueComposition(
+    of generator: AnyGenerator,
+    upstreamBudget: Int,
+    totalProbeCap: Int = 0,
+    buildTally: BoundValueBuildTally = BoundValueBuildTally()
+) throws -> (encoder: EncoderDispatch, scope: EncoderInput) {
+    let tree = try #require(try Interpreters.reflect(generator, with: UInt64(0)))
+    let graph = ChoiceGraph.build(from: tree)
+    let sequence = ChoiceSequence.flatten(tree)
+    let bindNodeID = try #require(graph.liveNodeIDs.first { nodeID in
+        if case .bind = graph.nodes[nodeID].kind { true } else { false }
+    })
+    guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+        throw BoundValueCompositionFixtureError.missingBind
+    }
+    let bindScope = BoundValueScope(
+        bindNodeID: bindNodeID,
+        upstreamLeafNodeID: graph.nodes[bindNodeID].children[metadata.innerChildIndex],
+        downstreamNodeIDs: Array(graph.leafNodes.dropFirst()),
+        boundSubtreeSize: sequence.count
+    )
+    let scope = EncoderInput(
+        transformation: GraphTransformation(
+            operation: .minimize(.boundValue(bindScope)),
+            priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
+        ),
+        baseSequence: sequence,
+        tree: tree,
+        graph: graph,
+        warmStartRecords: [:]
+    )
+    let encoder = ChoiceGraphScheduler.makeBoundValueComposition(
+        bindScope: bindScope,
+        scope: scope,
+        graph: graph,
+        gen: generator,
+        upstreamBudget: upstreamBudget,
+        totalProbeCap: totalProbeCap,
+        buildTally: buildTally
+    )
+    return (encoder, scope)
+}
+
+private enum BoundValueCompositionFixtureError: Error {
+    case missingBind
 }
 
 private final class ContinuationCounter {

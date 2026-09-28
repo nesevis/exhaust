@@ -279,6 +279,9 @@ package struct ReductionMachine: ProbeSessionState {
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
         stats.boundValueBuildOutcomes = boundValueBuildTally.counts
+        if collectStats {
+            stats.recordMaterializations(boundValueBuildTally.total, at: .boundValueLift)
+        }
         let finalStats = stats
         // swiftlint:disable:next force_cast
         let typedOutput = output as! Output
