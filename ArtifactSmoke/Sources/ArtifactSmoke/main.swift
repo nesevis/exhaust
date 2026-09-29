@@ -9,6 +9,11 @@ struct Person: Codable, Equatable {
     let tags: [String]
 }
 
+struct CoupledPair {
+    let first: Int
+    let second: Int
+}
+
 nonisolated(unsafe) var reports: [ExhaustReport] = []
 nonisolated(unsafe) var failures: [String] = []
 
@@ -73,8 +78,31 @@ let reflected = #exhaust(
 
 check(reflected != nil, "reflecting run did not fail")
 
+/// Nested binds: bound value composition fills the report's bind diagnostics, which stay empty for bind-free generators.
+let coupledPairs = #gen(.int(in: 0 ... 10000)).bound(
+    forward: { first in
+        #gen(.int(in: 0 ... 10000)).bound(
+            forward: { second in
+                .just(CoupledPair(first: first, second: second))
+            },
+            backward: \CoupledPair.second
+        )
+    },
+    backward: \CoupledPair.first
+)
+let coupledCounterexample = #exhaust(
+    coupledPairs,
+    reflecting: CoupledPair(first: 113, second: 113),
+    .suppress(.all),
+    .onReport { reports.append($0) }
+) { pair in
+    abs(pair.first - pair.second) > 1 || pair.first < 10
+}
+
+check(coupledCounterexample != nil, "nested bind run did not fail")
+
 // The consumer crash path: copy every report out of the array and read it.
-check(reports.count == 4, "expected 4 reports, got \(reports.count)")
+check(reports.count == 5, "expected 5 reports, got \(reports.count)")
 var copies: [ExhaustReport] = []
 for report in reports {
     copies.append(report)
@@ -88,11 +116,13 @@ for report in copies {
     _ = report.filterObservations.count
     _ = report.reductionStalled
     _ = report.reductionFailed
+    _ = report.materializationsBySite.count
 }
 
 check(totalInvocations > 0, "reports carried no invocations")
 check(reports[0].reductionInvocations > 0, "integer array run did not reduce")
 check(reports[1].reductionInvocations > 0, "string run did not reduce")
+check(reports[4].boundValueBuildOutcomes.isEmpty == false, "nested bind run recorded no bound value builds")
 
 if failures.isEmpty {
     print("ArtifactSmoke: OK (\(reports.count) reports, \(totalInvocations) invocations)")

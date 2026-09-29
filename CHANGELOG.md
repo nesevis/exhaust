@@ -6,6 +6,12 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-30
+
+### Fixed
+
+- Fixed an `.onReport` crash with the prebuilt binary when reducing generators with binds.
+
 ## [1.5.0] - 2026-09-29
 
 ### Added
@@ -191,7 +197,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/nesevis/exhaust/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/nesevis/exhaust/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/nesevis/exhaust/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/nesevis/exhaust/compare/v1.4.1...v1.4.2

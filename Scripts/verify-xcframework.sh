@@ -10,6 +10,9 @@ if [ ! -d "${PACKAGE_DIR}/Frameworks/ExhaustCore.xcframework" ]; then
     exit 1
 fi
 
+# Catches package-typed fields in public structs statically; the smoke run below only crashes on them when a run fills the field.
+python3 "${PACKAGE_DIR}/Scripts/check-public-struct-fields.py"
+
 # A source-built ExhaustCore module left in .build shadows the artifact's interface, so start clean.
 rm -rf "${SMOKE_DIR}/.build"
 

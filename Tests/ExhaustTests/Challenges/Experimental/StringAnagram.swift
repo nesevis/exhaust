@@ -44,10 +44,7 @@ struct StringAnagramChallenge {
             reflecting: ("a gentle man and astronomer", "elegant man and moon starer"),
             .suppress(.issueReporting)
         ) { lhs, rhs in
-            guard lhs != rhs, lhs.count == rhs.count else {
-                return true
-            }
-            return lhs.sorted() != rhs.sorted()
+            return lhs == rhs || lhs.sorted() != rhs.sorted()
         }
         let output = try #require(result)
 

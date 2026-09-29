@@ -113,8 +113,10 @@ public struct ExhaustReport: Sendable {
     /// Each key names a place in the reducer that materializes the generator (for example `"decoder"` for decoding a reduction probe, or `"boundValueLift"` for lifting candidate values through a bind), and the value is the number of materializations that ran there. Key names follow the reducer's internal site names. Sites that never ran are absent.
     public var materializationsBySite: [String: Int] = [:]
 
-    /// Bound value composition downstream builds by stage and outcome. A diagnostic for benchmark harnesses; not public because the stage and outcome types are reducer internals.
-    package var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
+    /// Downstream builds made while lifting candidate values through binds, split by chain stage and outcome.
+    ///
+    /// Each key has the form `"stage.outcome"` (for example `"chainRoot.terminalSearch"` or `"single.materializationFailed"`), and the value is the number of builds that ended that way. Key names follow the reducer's internal stage and outcome names. Combinations that never occurred are absent.
+    public var boundValueBuildOutcomes: [String: Int] = [:]
 
     /// Counts reduction proposals opened by encoder passes and structural relax rounds.
     public var reductionProbes: Int = 0
@@ -326,7 +328,9 @@ public struct ExhaustReport: Sendable {
         materializationsBySite = [String: Int](
             uniqueKeysWithValues: stats.materializationsBySite.map { ($0.key.rawValue, $0.value) }
         )
-        boundValueBuildOutcomes = stats.boundValueBuildOutcomes
+        boundValueBuildOutcomes = [String: Int](
+            uniqueKeysWithValues: stats.boundValueBuildOutcomes.map { ("\($0.key.stage.rawValue).\($0.key.outcome.rawValue)", $0.value) }
+        )
         cycles = stats.cycles
         structuralFloorMotionEvents = stats.structuralFloorMotionEvents
         valueFloorMotionEvents = stats.valueFloorMotionEvents

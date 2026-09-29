@@ -6,7 +6,7 @@
 // MARK: - Bound Value Composition Types
 
 /// Where one composition sits in a chain of nested binds. Each case fixes the upstream encoder, whether the controller's current value is a candidate, and whether a lift may descend into a nested bind.
-package enum BoundValueStage: Hashable, Sendable {
+package enum BoundValueStage: String, Hashable, Sendable {
     /// The dispatched bind has no composable nested bind. Binary search over the controller, then a terminal search over the bound leaves.
     case single
     /// The dispatched bind, whose bound subtree holds one composable nested bind. Every lift descends, so the controller can move against a nested one.
