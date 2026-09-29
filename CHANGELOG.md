@@ -6,6 +6,20 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-29
+
+### Added
+
+- `ExhaustReport.materializationsBySite` splits `totalMaterializations` by where each materialisation ran during reduction.
+
+### Changed
+
+- Counterexamples from generators with nested binds now reduce further, including when one bound value has to increase while another decreases.
+- Counterexamples that select a `.just` arm, such as `.oneOf(.string(), .just("xyzzy-plover"))`, can now reduce below the constant when a sibling arm can produce the same value.
+- Equal values of the same type can now be reduced together without also moving different values of that type.
+- `totalMaterializations` now counts every materialisation during reduction, including those made while lifting values through binds.
+- `#explore(time:)` reduces a failure only while it fails with the same symptom, the same thrown error type or a `false` return, so faults with different symptoms are no longer merged into one cluster.
+
 ## [1.4.3] - 2026-09-26
 
 ### Changed
@@ -177,7 +191,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.4.3...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/nesevis/exhaust/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/nesevis/exhaust/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/nesevis/exhaust/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/nesevis/exhaust/compare/v1.4.0...v1.4.1
