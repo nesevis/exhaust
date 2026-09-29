@@ -17,7 +17,10 @@
 
 extension CandidateSourceBuilder {
     /// Constructs replacement candidates (self-similar subtree collapse, branch pivots, descendant promotions) from the graph's structural topology. Each candidate replaces a subtree with a smaller equivalent, sorted by structural yield descending.
-    static func buildReplacementCandidates(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [GraphTransformation] {
+    static func buildReplacementCandidates(
+        graph: ChoiceGraph,
+        previousGraph: ChoiceGraph? = nil
+    ) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
 
         for scope in ReplacementQuery.build(graph: graph, previousGraph: previousGraph) {

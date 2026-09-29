@@ -170,9 +170,14 @@ enum MinimizationQuery {
                     guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else {
                         continue
                     }
+                    let excludedTargets = graph.excludedPivotTargets(for: pickMetadata)
                     for index in 0 ..< Int(pickMetadata.branchCount) {
                         let branchID = UInt64(index)
                         guard branchID != pickMetadata.selectedID else {
+                            continue
+                        }
+                        // Do not restore a constant arm whose value has an exposed sibling representation.
+                        guard excludedTargets.contains(branchID) == false else {
                             continue
                         }
                         scopes.bindScopes.append(.bindPivot(BindPivotScope(

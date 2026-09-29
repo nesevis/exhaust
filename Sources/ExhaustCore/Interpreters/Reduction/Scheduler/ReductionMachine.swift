@@ -96,6 +96,8 @@ package struct ReductionMachine: ProbeSessionState {
     var graph: ChoiceGraph
     var stats: ReductionStats = .init()
     var rejectCache: Set<UInt64> = []
+    /// Shared with every bound value composition the machine builds; folded into ``stats`` by ``typedResult()``.
+    let boundValueBuildTally = BoundValueBuildTally()
     let gen: AnyGenerator
     let property: (Any) -> Bool
     let probeWrapper: ProbeWrapper?
@@ -209,6 +211,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
+        var setupMaterializations = 1
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             erasedGen,
             context: .init(
@@ -221,9 +224,21 @@ package struct ReductionMachine: ProbeSessionState {
             tree = fullTree
             sequence = ChoiceSequence(fullTree)
         }
+        // Once, before the first graph build.
+        let reencoded = ConstantArmReencoder.reencode(
+            sequence: sequence,
+            tree: tree,
+            gen: erasedGen,
+            materializations: &setupMaterializations
+        )
+        if let reencoded {
+            sequence = reencoded.sequence
+            tree = reencoded.tree
+        }
 
         var graph = ChoiceGraph.build(from: tree)
         graph.observeBindTopologies(tree: tree)
+        graph.excludedPivots = reencoded?.excludedPivots ?? []
 
         initialSequence = sequence
         self.sequence = sequence
@@ -248,6 +263,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
+            stats.recordMaterializations(setupMaterializations, at: .setup)
         }
 
         ChoiceGraphScheduler.logReducer("graph_reducer_start", isInstrumented: isInstrumented, metadata: [
@@ -262,6 +278,10 @@ package struct ReductionMachine: ProbeSessionState {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
+        stats.boundValueBuildOutcomes = boundValueBuildTally.counts
+        if collectStats {
+            stats.recordMaterializations(boundValueBuildTally.total, at: .boundValueLift)
+        }
         let finalStats = stats
         // swiftlint:disable:next force_cast
         let typedOutput = output as! Output
@@ -609,7 +629,8 @@ package struct ReductionMachine: ProbeSessionState {
         var newGraph = ChoiceGraph.build(
             from: tree,
             inheriting: inheritedClassifications,
-            observations: inheritedObservations
+            observations: inheritedObservations,
+            excludedPivots: graph.excludedPivots
         )
         newGraph.observeBindTopologies(tree: tree)
         ChoiceGraphScheduler.transferConvergence(oldConvergence, to: &newGraph)

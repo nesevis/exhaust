@@ -129,6 +129,9 @@ extension Interpreters {
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
+        if let excludedPickFingerprint = context.excludedPickFingerprint, fingerprint == excludedPickFingerprint {
+            return []
+        }
         // On a backtrack node only the framework-built absent arm may record an outer nil: a user arm that reflects nil is a withdrawn arm, and exact materialization rejects a recorded arm that replays nil. An always node has no absent arm and cannot have produced nil at all.
         let candidates: ContiguousArray<ReflectiveOperation.PickTuple>
         if choices[0].isBacktrack, isNilOptional(finalOutput) {
@@ -139,8 +142,9 @@ extension Interpreters {
         } else {
             candidates = choices
         }
+        typealias ArmReflection = (value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)
         var deferredBranchError: ReflectionError?
-        let results = try candidates.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
+        let reflectArm = { (choice: ReflectiveOperation.PickTuple) throws -> [ArmReflection] in
             do {
                 let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, context: context.enteringPickArm())
                 let value = reflectionPaths.firstNonNil { $0.value }
@@ -158,7 +162,7 @@ extension Interpreters {
                     isPicked = reflectionPaths.first.map { structurallyEqual($0.value, finalOutput) } ?? false
                 }
 
-                var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
+                var results: [ArmReflection] = []
                 if isPicked {
                     for (value, pathTree) in reflectionPaths {
                         guard let path = pathTree.first else {
@@ -188,6 +192,17 @@ extension Interpreters {
                 }
             }
         }
+        func firstMatchingArmPath() throws -> [ArmReflection] {
+            for choice in candidates {
+                if let first = try reflectArm(choice).first {
+                    return [first]
+                }
+            }
+            return []
+        }
+        let results = try context.stopsAtFirstMatchingArm
+            ? firstMatchingArmPath()
+            : candidates.flatMap(reflectArm)
         if results.isEmpty {
             if let deferredBranchError {
                 throw deferredBranchError

@@ -263,6 +263,7 @@ private func printECOOPReport(
     printDispatchReport(name: name, results: results)
     printRelaxBarrierReport(name: name, results: results)
     printEncoderBreakdownReport(name: name, results: results, foundCount: foundCount)
+    printMaterializationReport(name: name, results: results)
     printTimingReport(name: name, results: results)
 
     if enableCounterExamples {
@@ -593,6 +594,37 @@ private func printEncoderBreakdownReport(name: String, results: [SeedResult], fo
         let propPass = totalPropPass[encoder] ?? 0
         let propFail = totalPropFail[encoder] ?? 0
         print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej) propPass=\(propPass) propFail=\(propFail)")
+    }
+}
+
+// MARK: - Materialization Report
+
+private func printMaterializationReport(name: String, results: [SeedResult]) {
+    let allStats = results.compactMap(\.stats)
+    var bySite: [MaterializationSite: Int] = [:]
+    var builds: [BoundValueBuildRecord: Int] = [:]
+    for stats in allStats {
+        for (site, count) in stats.materializationsBySite {
+            bySite[site, default: 0] += count
+        }
+        for (record, count) in stats.boundValueBuildOutcomes {
+            builds[record, default: 0] += count
+        }
+    }
+    let siteComponents = MaterializationSite.allCases.compactMap { site in
+        bySite[site].map { "\(site.rawValue)=\($0)" }
+    }
+    print("[\(name) ECOOP] materializations by site (summed across \(allStats.count) seeds): \(siteComponents.joined(separator: " "))")
+    guard builds.isEmpty == false else {
+        return
+    }
+    print("[\(name) ECOOP] bound value builds by stage and outcome (\(builds.values.reduce(0, +)) total):")
+    let stages = Set(builds.keys.map(\.stage)).sorted { "\($0)" < "\($1)" }
+    for stage in stages {
+        let outcomes = BoundValueBuildOutcome.allCases.compactMap { outcome in
+            builds[BoundValueBuildRecord(stage: stage, outcome: outcome)].map { "\(outcome.rawValue)=\($0)" }
+        }
+        print("  \(stage): \(outcomes.joined(separator: " "))")
     }
 }
 

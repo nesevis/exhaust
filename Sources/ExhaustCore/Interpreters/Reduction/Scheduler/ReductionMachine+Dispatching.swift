@@ -58,13 +58,16 @@ extension ReductionMachine {
             guard case let .minimize(.boundValue(bindScope)) = transformation.operation else {
                 return .dispatched(decision: .skipped)
             }
-            graph.classifyBind(
+            let classificationMaterializations = graph.classifyBind(
                 at: bindNodeID,
                 gen: gen,
                 baseSequence: sequence,
                 fallbackTree: tree,
                 upstreamLeafNodeID: bindScope.upstreamLeafNodeID
             )
+            if collectStats {
+                stats.recordMaterializations(classificationMaterializations, at: .classification)
+            }
             guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
                   let classification = updatedMetadata.classification
             else {
@@ -124,7 +127,8 @@ extension ReductionMachine {
                 upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint),
                 totalProbeCap: convergence.gate.isFirstDispatch(fingerprint: fingerprint)
                     ? tuning.composedFirstDispatchProbeCap
-                    : 0
+                    : 0,
+                buildTally: boundValueBuildTally
             )
             convergence.gate.markDispatched(fingerprint)
         } else {
@@ -245,6 +249,9 @@ extension ReductionMachine {
 
         if collectStats {
             stats.record(report.counts, for: report.encoderName)
+            if let liftMaterializations = report.liftMaterializations {
+                stats.recordMaterializations(liftMaterializations.count, at: liftMaterializations.site)
+            }
         }
 
         if collectDiagnostics {
@@ -307,6 +314,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .sourceExhausted)
 
             case .rebuildAndResume:
+                convergence.gate.clearFruitless()
                 dispatchPhase = .rebuild
                 return .dispatched(decision: .sourceExhausted)
         }
@@ -394,6 +402,9 @@ extension ReductionMachine {
     /// - Returns: The graph before the rebuild.
     @discardableResult
     mutating func rematerializeUnselectedBranches() -> ChoiceGraph {
+        if collectStats {
+            stats.recordMaterializations(1, at: .rematerialization)
+        }
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             gen,
             context: .init(

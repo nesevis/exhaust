@@ -137,6 +137,7 @@ private func passReport(encoderName: EncoderName, transformation: GraphTransform
         transformation: transformation,
         boundValueFingerprint: nil,
         composedUpstreamLifts: nil,
+        liftMaterializations: nil,
         counts: ReductionProbeCounts(
             emitted: 1,
             accepted: accepted ? 1 : 0,

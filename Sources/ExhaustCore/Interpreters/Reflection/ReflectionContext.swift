@@ -7,6 +7,10 @@ struct ReflectionContext {
 
     /// The size fixed by the innermost enclosing ``ReflectiveOperation/resize(newSize:next:)``. A `nil` size preserves reflection's size-100 default, which lets size-dependent generators expose their full range.
     var sizeOverride: UInt64?
+    /// Keeps only a pick's first matching arm and path. Enumerating every arm is exponential in depth when arms overlap recursively.
+    var stopsAtFirstMatchingArm = false
+    /// Picks with this fingerprint reflect as producing nothing, so a search cannot recurse through that call site.
+    var excludedPickFingerprint: UInt64?
 
     /// Outside every pick arm and every resize, which is where a top-level reflection starts.
     static let root = Self()

@@ -15,7 +15,10 @@ enum ReplacementQuery {
     ///   - graph: The current choice graph.
     ///   - previousGraph: The graph from before the most recent rebuild. When non-nil, unchanged self-similarity groups are skipped.
     /// - Returns: Replacement scopes for changed (or all, if `previousGraph` is nil) groups.
-    static func build(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [ReplacementScope] {
+    static func build(
+        graph: ChoiceGraph,
+        previousGraph: ChoiceGraph? = nil
+    ) -> [ReplacementScope] {
         var scopes: [ReplacementScope] = []
 
         let unchangedFingerprints: Set<UInt64> = computeUnchangedFingerprints(
@@ -70,10 +73,13 @@ enum ReplacementQuery {
             guard node.children.count == Int(metadata.branchCount) else { continue }
 
             let selectedLeafCount = leafCount(in: metadata.branchElements[metadata.selectedChildIndex])
+            let excludedTargets = graph.excludedPivotTargets(for: metadata)
 
             for index in 0 ..< Int(metadata.branchCount) {
                 let branchID = UInt64(index)
                 guard branchID != metadata.selectedID else { continue }
+                // Do not restore a constant arm whose value has an exposed sibling representation.
+                guard excludedTargets.contains(branchID) == false else { continue }
 
                 let candidateLeafCount = leafCount(in: metadata.branchElements[index])
                 guard candidateLeafCount <= selectedLeafCount else { continue }

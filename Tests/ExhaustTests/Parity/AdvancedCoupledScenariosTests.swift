@@ -6,6 +6,7 @@
 //  Hypothesis, and CsCheck challenge cases.
 //
 
+import Exhaust
 import ExhaustCore
 import ExhaustTestSupport
 import Testing
@@ -102,6 +103,26 @@ struct AdvancedCoupledScenariosTests {
 
         #expect(property(output) == false)
         #expect(output == "001")
+    }
+
+    @Test("Run-length encoding preserves equal-scalar lockstep groups")
+    func runLengthEncodingEqualScalarLockstep() throws {
+        let property: @Sendable (String) -> Bool = { text in
+            let scalars = Array(text.unicodeScalars)
+            return AdvancedCoupledFixtures.decodeBrokenRunLengthEncoding(
+                AdvancedCoupledFixtures.brokenRunLengthEncode(scalars)
+            ) == scalars
+        }
+
+        let output = try #require(#exhaust(
+            #gen(.string()),
+            reflecting: "hello world",
+            .suppress(.all),
+            property: property
+        ))
+
+        #expect(property(output) == false)
+        #expect(output == "\0\0 ")
     }
 
     @Test("2.4 Floating Point Summation (Hypothesis)")
@@ -258,5 +279,35 @@ private enum AdvancedCoupledFixtures {
             chars.append(contentsOf: repeatElement(character, count: count))
         }
         return String(chars)
+    }
+
+    static func brokenRunLengthEncode(
+        _ scalars: [Unicode.Scalar]
+    ) -> [(count: Int, scalar: Unicode.Scalar)] {
+        guard let last = scalars.last else {
+            return []
+        }
+
+        var count = 1
+        var previous: Unicode.Scalar?
+        var runs: [(count: Int, scalar: Unicode.Scalar)] = []
+        for scalar in scalars {
+            if scalar != previous {
+                if let previous {
+                    runs.append((count, previous))
+                }
+                previous = scalar
+            } else {
+                count += 1
+            }
+        }
+        runs.append((count, last))
+        return runs
+    }
+
+    static func decodeBrokenRunLengthEncoding(
+        _ runs: [(count: Int, scalar: Unicode.Scalar)]
+    ) -> [Unicode.Scalar] {
+        runs.flatMap { run in Array(repeating: run.scalar, count: run.count) }
     }
 }

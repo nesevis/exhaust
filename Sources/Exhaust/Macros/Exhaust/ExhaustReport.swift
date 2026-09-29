@@ -103,8 +103,18 @@ public struct ExhaustReport: Sendable {
             + diagnosticInvocations
     }
 
-    /// Total materialization attempts (decoder invocations) during the reduction phase.
+    /// Total generator materializations during the reduction phase.
+    ///
+    /// Counts every materialization, not only probe decodes. Bind-heavy generators can spend most of their materializations outside the probe loop, lifting candidate values through the generator before any probe is emitted, so ``materializationsBySite`` is where to look when this exceeds ``reductionProbes`` by a wide margin.
     public var totalMaterializations: Int = 0
+
+    /// ``totalMaterializations`` split by where each materialization ran.
+    ///
+    /// Each key names a place in the reducer that materializes the generator (for example `"decoder"` for decoding a reduction probe, or `"boundValueLift"` for lifting candidate values through a bind), and the value is the number of materializations that ran there. Key names follow the reducer's internal site names. Sites that never ran are absent.
+    public var materializationsBySite: [String: Int] = [:]
+
+    /// Bound value composition downstream builds by stage and outcome. A diagnostic for benchmark harnesses; not public because the stage and outcome types are reducer internals.
+    package var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
 
     /// Counts reduction proposals opened by encoder passes and structural relax rounds.
     public var reductionProbes: Int = 0
@@ -287,7 +297,11 @@ public struct ExhaustReport: Sendable {
         } else {
             timingLabel = ""
         }
-        return "cycles=\(cycles) invocations=\(screeningInvocations)scr/\(randomSamplingInvocations)gen/\(reductionInvocations)red/\(diagnosticInvocations)diag materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
+        let materializationSiteLabel = MaterializationSite.allCases.compactMap { site -> String? in
+            materializationsBySite[site.rawValue].map { "\(site.rawValue)=\($0)" }
+        }.joined(separator: "/")
+        let materializationLabel = materializationSiteLabel.isEmpty ? "" : "(\(materializationSiteLabel))"
+        return "cycles=\(cycles) invocations=\(screeningInvocations)scr/\(randomSamplingInvocations)gen/\(reductionInvocations)red/\(diagnosticInvocations)diag materializations=\(totalMaterializations)\(materializationLabel)\(graphLabel)\(encoderLabel)\(timingLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.
@@ -309,6 +323,10 @@ public struct ExhaustReport: Sendable {
         reductionProbesWherePropertyPassed = stats.reductionProbesWherePropertyPassed
         reductionProbesWherePropertyFailed = stats.reductionProbesWherePropertyFailed
         totalMaterializations = stats.totalMaterializations
+        materializationsBySite = [String: Int](
+            uniqueKeysWithValues: stats.materializationsBySite.map { ($0.key.rawValue, $0.value) }
+        )
+        boundValueBuildOutcomes = stats.boundValueBuildOutcomes
         cycles = stats.cycles
         structuralFloorMotionEvents = stats.structuralFloorMotionEvents
         valueFloorMotionEvents = stats.valueFloorMotionEvents

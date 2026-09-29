@@ -132,7 +132,7 @@ The `.onReport` setting delivers an `ExhaustReport` with timing and invocation d
 
 Reduction statistics separate proposals rejected before the property ran from values for which the property passed or failed. `reductionProbes` is the complete proposal count, including structural relax proposals that do not belong to an encoder. `reductionProbesAccepted` is a separate decision made after the property fails, since a still-failing proposal can be rejected by a later materialisation or ordering check.
 
-`totalMaterializations` counts entries into the materialiser. It can exceed `reductionProbes` because Exhaust first materialises a value for the property, then materialises a still-failing value again to build its full choice tree.
+`totalMaterializations` counts every entry into the materialiser during reduction. It can exceed `reductionProbes` because Exhaust first materialises a value for the property, then materialises a still-failing value again to build its full choice tree. Generators with binds also materialise outside the probe loop, when the reducer lifts candidate values through a bind before it proposes anything. `materializationsBySite` shows where each materialisation ran.
 
 ## Test observability
 

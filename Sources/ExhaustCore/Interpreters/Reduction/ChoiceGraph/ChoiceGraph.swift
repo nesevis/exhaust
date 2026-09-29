@@ -60,6 +60,9 @@ package struct ChoiceGraph: Sendable {
     /// Last-observed upstream bit pattern and downstream topology fingerprint per bind site. Keyed by `BindMetadata.fingerprint`. Survives rebuilds so the scheduler can passively classify binds by comparing topology across natural upstream variation without materialization probes.
     var bindTopologyObservations: [UInt64: BindTopologyObservation] = [:]
 
+    /// Pivots back to the reproducible constant arms that ``ConstantArmReencoder`` moved the initial counterexample out of. Set once before the first build and carried across rebuilds by ``build(from:inheriting:observations:excludedPivots:)``; ``ReplacementQuery`` skips these pivots so a later pivot cannot restore the opaque encoding. Keyed by pick fingerprint and ``ExcludedPivot/armDomainSignature(of:)``, both of which are stable across rebuilds while the pick's arm domains are unchanged.
+    var excludedPivots: Set<ExcludedPivot> = []
+
     /// Convergence records from prior encoder passes, keyed by graph node ID. Each entry records the bound at which a value search converged for a leaf, its signal, and the cycle number. Stored at graph level rather than per-node because convergence is reduction-session state, not structural metadata — it must survive value-only graph updates without per-node copy overhead.
     ///
     /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and transferred across full rebuilds by ``ChoiceGraphScheduler/transferConvergence(_:to:)``. Read by ``MinimizationQuery`` (skip converged leaves), ``ChoiceGraphScheduler/allValuesConverged(in:graph:)`` (termination check), and ``ChoiceGraphScheduler/extractWarmStarts(from:)`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk by ``clearConvergence(inPositionRange:)`` for bound subtree regions after reshape.
@@ -143,7 +146,7 @@ package extension ChoiceGraph {
         ChoiceGraphBuilder.build(from: tree)
     }
 
-    /// Builds a ``ChoiceGraph`` from a tree, inheriting classification and observation caches.
+    /// Builds a ``ChoiceGraph`` from a tree, inheriting classification and observation caches and the excluded constant-arm pivots.
     ///
     /// Used after a structural rebuild when the scheduler wants to preserve previously-computed bind classifications and topology observations across the rebuild. Cache keys are ``BindMetadata/fingerprint`` values (per-source-location hashes), so they remain valid for the rebuilt graph as long as the underlying generator has not changed — the same `.bind` source location always produces a bind node with the same fingerprint, regardless of where in the rebuilt graph it appears.
     ///
@@ -151,14 +154,17 @@ package extension ChoiceGraph {
     ///   - tree: The generator's compositional structure.
     ///   - cachedClassifications: Map from `BindMetadata.fingerprint` to a previously-computed ``BindClassification``. Typically the previous graph's ``bindClassifications`` field.
     ///   - cachedObservations: Map from `BindMetadata.fingerprint` to the last-seen topology observation. Typically the previous graph's ``bindTopologyObservations`` field.
-    static func build(
+    ///   - excludedPivots: The previous graph's ``excludedPivots``.
+    internal static func build(
         from tree: ChoiceTree,
         inheriting cachedClassifications: [UInt64: BindClassification],
-        observations cachedObservations: [UInt64: BindTopologyObservation]
+        observations cachedObservations: [UInt64: BindTopologyObservation],
+        excludedPivots: Set<ExcludedPivot>
     ) -> ChoiceGraph {
         var graph = ChoiceGraphBuilder.build(from: tree)
         graph.bindClassifications = cachedClassifications
         graph.bindTopologyObservations = cachedObservations
+        graph.excludedPivots = excludedPivots
         return graph
     }
 }

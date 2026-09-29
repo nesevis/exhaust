@@ -36,6 +36,9 @@ struct GraphBindPivotEncoder: GraphEncoder {
     private var baseCount = 0
     private var fallbackTree: ChoiceTree?
 
+    /// ``lift`` calls in the current pass. Each materializes the generator, whether or not the lifted seed is usable.
+    private(set) var liftsPerformed = 0
+
     init(lift: @escaping Lift) {
         self.lift = lift
     }
@@ -45,6 +48,7 @@ struct GraphBindPivotEncoder: GraphEncoder {
         mutation = nil
         seeds = []
         liftedProbe = nil
+        liftsPerformed = 0
 
         guard case let .minimize(.bindPivot(pivotScope)) = scope.transformation.operation else {
             return
@@ -120,7 +124,11 @@ struct GraphBindPivotEncoder: GraphEncoder {
 
     /// Lifts `seed` through the generator and starts the covering search over the lifted bound subtree. False when the lift fails, the lifted sequence is longer than the base, or the bind cannot be located in the lifted graph.
     private mutating func startCovering(seed: ChoiceSequence) -> Bool {
-        guard let fallbackTree, let freshTree = lift(seed, fallbackTree) else {
+        guard let fallbackTree else {
+            return false
+        }
+        liftsPerformed += 1
+        guard let freshTree = lift(seed, fallbackTree) else {
             return false
         }
         // A lift that comes out longer is dropped without flagging a shortlex rejection: the relax round exploits replacement candidates, and a regenerated bound subtree is not one.
