@@ -4,7 +4,7 @@ import ExhaustCore
 
 /// The outcome of a `#explore(time:)` coverage-guided run: a clustered fault inventory plus throughput and coverage statistics.
 ///
-/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries the fault clusters the run discovered. Cluster count is a lower bound on distinct bugs: reduction preserves failure rather than the *reason* for failure, so a fault whose inputs reduce toward another fault's counterexample is absorbed into it and never reported separately. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
+/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries the fault clusters the run discovered. Cluster count is a lower bound on distinct bugs: reduction preserves the failure's symptom (the thrown error type, or a `false` return) rather than the *reason* for failure, so a fault whose inputs reduce toward the counterexample of another fault with the same symptom is absorbed into it and never reported separately. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 public struct FuzzReport: Sendable {
