@@ -110,7 +110,7 @@ public struct ExhaustReport: Sendable {
 
     /// ``totalMaterializations`` split by where each materialization ran.
     ///
-    /// Keys are `"decoder"` (decoding a reduction probe), `"setup"` (preparing the counterexample before reduction starts), `"classification"` (probing a bind's dependency shape), `"rematerialization"` (restoring unselected branches), `"boundValueLift"` (lifting candidate values through bind chains), and `"bindPivotLift"` (lifting a branch change inside a bind). Sites that never ran are absent.
+    /// Each key names a place in the reducer that materializes the generator (for example `"decoder"` for decoding a reduction probe, or `"boundValueLift"` for lifting candidate values through a bind), and the value is the number of materializations that ran there. Key names follow the reducer's internal site names. Sites that never ran are absent.
     public var materializationsBySite: [String: Int] = [:]
 
     /// Bound value composition downstream builds by stage and outcome. A diagnostic for benchmark harnesses; not public because the stage and outcome types are reducer internals.

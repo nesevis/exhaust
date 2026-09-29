@@ -303,6 +303,25 @@ struct ExcludedPivot: Hashable {
     }
 }
 
+extension ChoiceGraph {
+    /// Branch IDs of this pick's constant arms that ``excludedPivots`` rules out as pivot targets.
+    ///
+    /// Signs the pick's arm domains only when an exclusion names its fingerprint, since signing walks every arm.
+    func excludedPivotTargets(for metadata: PickMetadata) -> Set<UInt64> {
+        guard excludedPivots.contains(where: { $0.fingerprint == metadata.fingerprint }) else {
+            return []
+        }
+        let armDomainSignature = ExcludedPivot.armDomainSignature(of: metadata)
+        var targets: Set<UInt64> = []
+        for pivot in excludedPivots
+            where pivot.fingerprint == metadata.fingerprint && pivot.armDomainSignature == armDomainSignature
+        {
+            targets.insert(pivot.constantBranchID)
+        }
+        return targets
+    }
+}
+
 /// One domain an arm draws from, as ``ExcludedPivot/armDomainSignature(of:)`` records it.
 private enum ArmDomain: Hashable {
     case leaf(tag: TypeTag, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool)

@@ -248,31 +248,6 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         self.upstream.start(scope: upstreamScope)
     }
 
-    /// Creates a composition whose downstream encoder type is fixed while its scope is lifted per upstream probe.
-    init(
-        name: EncoderName,
-        upstream: EncoderDispatch,
-        upstreamScope: EncoderInput,
-        downstream: EncoderDispatch,
-        upstreamBudget: Int = 15,
-        totalProbeCap: Int = 0,
-        lift: @escaping (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
-    ) {
-        self.init(
-            name: name,
-            upstream: upstream,
-            upstreamScope: upstreamScope,
-            upstreamBudget: upstreamBudget,
-            totalProbeCap: totalProbeCap,
-            downstreamBuilder: { candidate, mutation, parent in
-                guard let scope = lift(candidate, mutation, parent) else {
-                    return nil
-                }
-                return (downstream, scope)
-            }
-        )
-    }
-
     /// Convergence records from the upstream encoder.
     ///
     /// The downstream encoder's records are scoped to the lifted graph and meaningless on the live graph after acceptance — they are deliberately not exposed.

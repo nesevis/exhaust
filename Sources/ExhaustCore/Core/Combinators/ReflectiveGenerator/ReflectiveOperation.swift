@@ -46,7 +46,7 @@
 
 /// The primitive operations that enable bidirectional property-based testing.
 ///
-/// Each case is interpreted by multiple passes (generation, reflection, replay, adaptation). The interpretation table in the MARK section below lists which source file handles each case in each pass. Per-case doc comments explain design rationale and invariants, not interpreter behavior.
+/// Each case is interpreted by multiple passes (generation, reflection, replay, adaptation). The interpretation table in the MARK section above lists which source file handles each case in each pass. Per-case doc comments explain design rationale and invariants, not interpreter behavior.
 ///
 /// ## Type Erasure StateMachine
 ///

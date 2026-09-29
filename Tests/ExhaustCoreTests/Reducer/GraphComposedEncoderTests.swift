@@ -740,3 +740,30 @@ private enum BoundValueCompositionFixtureError: Error {
 private final class ContinuationCounter {
     var value = 0
 }
+
+extension GraphComposedEncoder {
+    /// Creates a composition whose downstream encoder type is fixed while its scope is lifted per upstream probe.
+    init(
+        name: EncoderName,
+        upstream: EncoderDispatch,
+        upstreamScope: EncoderInput,
+        downstream: EncoderDispatch,
+        upstreamBudget: Int = 15,
+        totalProbeCap: Int = 0,
+        lift: @escaping (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
+    ) {
+        self.init(
+            name: name,
+            upstream: upstream,
+            upstreamScope: upstreamScope,
+            upstreamBudget: upstreamBudget,
+            totalProbeCap: totalProbeCap,
+            downstreamBuilder: { candidate, mutation, parent in
+                guard let scope = lift(candidate, mutation, parent) else {
+                    return nil
+                }
+                return (downstream, scope)
+            }
+        )
+    }
+}
