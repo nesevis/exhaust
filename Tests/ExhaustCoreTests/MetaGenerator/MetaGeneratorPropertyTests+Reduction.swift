@@ -62,6 +62,11 @@ extension MetaGeneratorPropertyTests {
                 guard property(value) == false else {
                     continue
                 }
+                // Constant arm re-encoding deliberately starts reduction from a shortlex-larger sequence, so the law only holds for starts it leaves unchanged.
+                guard ConstantArmReencoder.reencodesStart(of: tree, gen: gen) == false else {
+                    tally.vacuous += 1
+                    continue
+                }
                 let originalSequence = ChoiceSequence.flatten(tree)
                 guard case let .reduced(shrunkSequence, _, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
@@ -128,7 +133,7 @@ extension MetaGeneratorPropertyTests {
 
     // MARK: 22. Reduction monotonicity
 
-    /// Re-reducing an already-reduced tree must never produce a shortlex-larger sequence, since reduction only ever shrinks. A budgeted reducer (`maxStalls: 2`) need not fully converge in one pass, so a smaller second result is legal; a larger one is a defect, an encoder that grew a reduced input.
+    /// Re-reducing an already-reduced tree must never produce a shortlex-larger sequence unless the second pass re-encodes a constant arm. Reduction simplifies the output value, and the choice sequence is its internal representation: it shrinks too in every case except constant arm re-encoding, which lengthens it to reach values the constant arm could not. A budgeted reducer (`maxStalls: 2`) need not fully converge in one pass, so a smaller second result is legal; a larger one is a defect, an encoder that grew a reduced input.
     ///
     /// The second pass reads its sequence from `.unreduced` as well as `.reduced`. Both carry one, and measured over every recipe here the second pass is a fixed point: it returns the first pass's sequence unchanged, so matching `.reduced` alone skipped the comparison every time.
     @Test("Re-reducing never enlarges the sequence", arguments: metaRecipeTypes)
@@ -152,6 +157,11 @@ extension MetaGeneratorPropertyTests {
                 guard case let .reduced(firstSequence, firstTree, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
+                    tally.vacuous += 1
+                    continue
+                }
+                // Constant arm re-encoding can enlarge the second pass's start, so the law only holds for starts it leaves unchanged.
+                guard ConstantArmReencoder.reencodesStart(of: firstTree, gen: gen) == false else {
                     tally.vacuous += 1
                     continue
                 }

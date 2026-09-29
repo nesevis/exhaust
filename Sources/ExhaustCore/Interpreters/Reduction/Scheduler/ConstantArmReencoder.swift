@@ -16,7 +16,34 @@
 /// Sibling reflection runs in pick-arm context, where nodes that would echo the target rebuild it instead, and the rewrite is abandoned unless replaying it produces the original output: reflection can decompose values its forward pass cannot produce.
 ///
 /// - Complexity: O(*n*) without reproducible constant arms. Otherwise performs two exact materializations and up to one first-match reflection per sibling of each constant arm.
-enum ConstantArmReencoder {
+package enum ConstantArmReencoder {
+    /// Whether reduction from `tree` starts by re-encoding a constant arm, repeating the reducer's setup: an exact rematerialization with picks, then ``reencode(sequence:tree:gen:materializations:)``.
+    ///
+    /// A re-encoded start is shortlex-larger than the counterexample it came from, so reduction can finish above the original sequence. Shortlex monotonicity holds only for starts where this returns false, and oracles use it to exempt the rest.
+    package static func reencodesStart(of tree: ChoiceTree, gen: AnyGenerator) -> Bool {
+        var sequence = ChoiceSequence.flatten(tree)
+        var fullTree = tree
+        if case let .success(_, materializedTree, _) = Materializer.materializeAny(
+            gen,
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: tree,
+                materializePicks: true
+            )
+        ) {
+            fullTree = materializedTree
+            sequence = ChoiceSequence(materializedTree)
+        }
+        var materializations = 0
+        return reencode(
+            sequence: sequence,
+            tree: fullTree,
+            gen: gen,
+            materializations: &materializations
+        ) != nil
+    }
+
     /// Returns the normalized sequence and the constant-arm pivots excluded at its pick sites, or nil when no arm can be re-encoded.
     ///
     /// - Parameters:

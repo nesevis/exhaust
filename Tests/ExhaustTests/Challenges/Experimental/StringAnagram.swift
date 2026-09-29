@@ -38,9 +38,28 @@ struct StringAnagramChallenge {
      */
 
     @Test("String anagram")
+    func stringAnagramCouplingReduction() throws {
+        let result = #exhaust(
+            #gen(.string(), .string()),
+            reflecting: ("a gentle man and astronomer", "elegant man and moon starer"),
+            .suppress(.issueReporting)
+        ) { lhs, rhs in
+            guard lhs != rhs, lhs.count == rhs.count else {
+                return true
+            }
+            return lhs.sorted() != rhs.sorted()
+        }
+        let output = try #require(result)
+
+        // Space is set as. string(…)'s semantically simplest target. NUL is the otherwise simplest
+        // .string() covers ~160,000 Unicode code points.
+        #expect(output.0 == " \0")
+        #expect(output.1 == "\0 ")
+    }
+
+    @Test("String anagram")
     func stringAnagram() throws {
-        let charGen = #gen(.asciiString())
-            .filter { $0.count >= 2 }
+        let charGen = #gen(.string())
         let gen = #gen(charGen, charGen)
 
         let property: @Sendable (String, String) -> Bool = { a, b in
@@ -49,20 +68,24 @@ struct StringAnagramChallenge {
         }
 
         // "dcba" and "abcd" as byte arrays — a known anagram pair
-        let value = ("dcba", "abcd")
+        let value = ("a gentle man and astronomer", "elegant man and moon starer")
         #expect(property(value.0, value.1) == false)
+
+        var report: ExhaustReport!
 
         let result = #exhaust(
             gen,
             reflecting: value,
             .suppress(.issueReporting),
+            .onReport { report = $0 },
             property: property
         )
         let output = try #require(result)
+        print(report.profilingSummary)
 
         // Both arrays should be length 2, using the two smallest printable ASCII chars in the allowed range (space and !)
-        #expect(output.0 == " !")
-        #expect(output.1 == "! ")
+        #expect(output.0 == " \0")
+        #expect(output.1 == "\0 ")
     }
 
     @Test("Long string reduction")

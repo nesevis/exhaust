@@ -536,7 +536,10 @@ extension MetaFuzz {
         // `shortLexPrecedes` is strict: distinct sequences can belong to the same equivalence
         // class. Match the reducer's monotonicity contract by rejecting only a strictly larger
         // result, where the original sequence precedes the reduced sequence.
-        guard originalSequence.shortLexPrecedes(reducedSequence) == false else {
+        // Constant arm re-encoding deliberately starts reduction from a shortlex-larger sequence,
+        // so the law only holds for starts it leaves unchanged.
+        let reencodesStart = ConstantArmReencoder.reencodesStart(of: tree, gen: gen)
+        guard reencodesStart || originalSequence.shortLexPrecedes(reducedSequence) == false else {
             throw ReductionShortlexViolation("reduction enlarged the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
         switch Materializer.materialize(gen, context: .init(
@@ -560,7 +563,10 @@ extension MetaFuzz {
             ),
             property: property
         )
-        if case let .reduced(secondSequence, _, _) = secondOutcome {
+        // Constant arm re-encoding can enlarge the second pass's start, as above.
+        if case let .reduced(secondSequence, _, _) = secondOutcome,
+           ConstantArmReencoder.reencodesStart(of: reducedTree, gen: gen) == false
+        {
             guard reducedSequence.shortLexPrecedes(secondSequence) == false else {
                 throw ReductionMonotonicityViolation("re-reduction enlarged the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
             }
