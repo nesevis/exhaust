@@ -4,7 +4,9 @@
 ///
 /// Unlike per-coordinate minimizers, this encoder does not assume the current state already fails the property. It searches the bound value space for ANY assignment that fails — the right strategy for the downstream slot of a ``GraphComposedEncoder``, where the lifted state may pass the property and a failure needs to be discovered.
 ///
-/// Three regimes based on the subtree leaves' total domain size:
+/// Only the first ``maxCoveredPositions`` value positions are searched; the rest keep their base values.
+///
+/// Three regimes based on the searched leaves' total domain size:
 /// - **Small domains** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
 /// - **Large domains, 2 or more parameters**: pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 /// - **Large domain, one parameter**: the ends of the range, alternating lowest and highest and working inward, up to ``coveringBudget`` rows. Pairwise covering needs two parameters, and a range that a lift has just widened fails at its edges when it fails at all: the values the previous configuration could not express are the ones farthest from where it sat.
@@ -16,6 +18,11 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
 
     /// Maximum probes for the covering array regime.
     public static let coveringBudget: Int = 64
+
+    /// Maximum number of value positions a pass searches. Positions past it, in collection order, stay fixed at their base values.
+    ///
+    /// Pairwise covering builds one slice per parameter pair, so its setup grows quadratically with the parameter count. The reduction deadline is only checked between probes, so a bound array of a few thousand elements would stall the reducer inside generator construction where the deadline cannot stop it.
+    public static let maxCoveredPositions: Int = 64
 
     // MARK: - State
 
@@ -88,6 +95,7 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
     ) {
         var collected: [ValuePosition] = []
         for index in positions {
+            guard collected.count < Self.maxCoveredPositions else { break }
             guard let position = valuePosition(at: index, in: sequence) else {
                 continue
             }
@@ -176,7 +184,7 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
     ) -> [ValuePosition] {
         var positions: [ValuePosition] = []
         for index in range {
-            guard index < sequence.count else { break }
+            guard index < sequence.count, positions.count < Self.maxCoveredPositions else { break }
             guard let position = valuePosition(at: index, in: sequence) else { continue }
             positions.append(position)
         }
