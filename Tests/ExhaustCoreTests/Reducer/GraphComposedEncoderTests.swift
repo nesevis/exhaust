@@ -1,3 +1,4 @@
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -320,6 +321,43 @@ struct GraphComposedEncoderTests {
         #expect(buildTally.total == rootContinuationCalls.value)
     }
 
+    // MARK: - Bound Value Covering
+
+    @Test("Covering search changes only the scope's leaves, even when other leaves sit between them")
+    func coveringChangesOnlyScopeLeaves() throws {
+        try exhaustCheck(coveringScopeGen, maxIterations: 500) { entries in
+            let fixture = GraphFixture(.uint64Zip(entries.map(\.value), in: 0 ... 3))
+            let leafNodeIDs = fixture.graph.leafNodes
+            let scopedNodeIDs = zip(leafNodeIDs, entries).filter { $0.1.isInScope }.map(\.0)
+            let fixedPositions = zip(leafNodeIDs, entries).compactMap { nodeID, entry in
+                entry.isInScope ? nil : fixture.graph.nodes[nodeID].positionRange?.lowerBound
+            }
+            let scope = EncoderInput(
+                transformation: GraphTransformation(
+                    operation: .minimize(.valueLeaves(ValueMinimizationScope(
+                        leaves: scopedNodeIDs.map { LeafEntry(nodeID: $0, mayReshapeOnAcceptance: false) },
+                        batchZeroEligible: false
+                    ))),
+                    priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
+                ),
+                baseSequence: fixture.sequence,
+                tree: fixture.tree,
+                graph: fixture.graph,
+                warmStartRecords: [:]
+            )
+            var encoder = GraphBoundValueCoveringEncoder()
+            encoder.start(scope: scope)
+
+            var candidate = fixture.sequence
+            while encoder.nextProbe(into: &candidate, lastAccepted: false) != nil {
+                for position in fixedPositions where candidate[position] != fixture.sequence[position] {
+                    return false
+                }
+            }
+            return true
+        }
+    }
+
     // MARK: - Lift Failure
 
     @Test("Failed lifts are skipped without counting against budget")
@@ -559,6 +597,23 @@ private func minimizationScope(
         warmStartRecords: [:]
     )
 }
+
+/// One leaf of a covering fixture: its value, and whether the covering scope includes it.
+private struct CoveringScopeEntry: CustomStringConvertible {
+    let value: UInt64
+    let isInScope: Bool
+
+    var description: String {
+        "\(value)\(isInScope ? "" : " (fixed)")"
+    }
+}
+
+/// Three to six leaves over `0...3`, each in or out of the covering scope, so out-of-scope leaves regularly fall between in-scope ones.
+private let coveringScopeGen: Generator<[CoveringScopeEntry]> = Gen.arrayOf(
+    Gen.zip(Gen.choose(in: UInt64(0) ... 3), Gen.choose(in: UInt64(0) ... 1))
+        .map { value, flag in CoveringScopeEntry(value: value, isInScope: flag == 1) },
+    within: 3 ... 6
+)
 
 /// A composition over the scope's single leaf whose downstream re-searches the lifted candidate.
 private func nestedComposition(scope: EncoderInput) -> GraphComposedEncoder {

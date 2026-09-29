@@ -1,3 +1,4 @@
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -183,6 +184,30 @@ struct ConstantArmReencoderTests {
         #expect(pivots.contains { $0.pickNodeID == secondPick && $0.targetBranchID == 1 })
     }
 
+    @Test("Bind pivots skip excluded constant arms of a pick in the bind's controller", arguments: UInt64(0) ..< 8)
+    func bindPivotsSkipExcludedConstantArms(seed: UInt64) throws {
+        let generated = try generate(constantControllerGen.gen, seed: seed)
+        var materializations = 0
+        let result = try #require(ConstantArmReencoder.reencode(
+            sequence: ChoiceSequence(generated.tree),
+            tree: generated.tree,
+            gen: constantControllerGen.gen.erase(),
+            materializations: &materializations
+        ))
+        var graph = ChoiceGraph.build(from: result.tree)
+        graph.excludedPivots = result.excludedPivots
+
+        let bindPivots = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: false).compactMap { scope -> BindPivotScope? in
+            guard case let .bindPivot(pivotScope) = scope else {
+                return nil
+            }
+            return pivotScope
+        }
+
+        #expect(result.excludedPivots.map(\.constantBranchID) == [0])
+        #expect(bindPivots.contains { $0.targetBranchID == 0 } == false)
+    }
+
     @Test("Excluded constant-arm pivots survive a structural graph rebuild")
     func exclusionSurvivesRebuild() throws {
         let generator = Gen.pick(choices: [
@@ -216,6 +241,17 @@ private func branchIDs(in sequence: ChoiceSequence) -> [UInt64] {
         }
         return branch.id
     }
+}
+
+/// A bind whose controller picks between the constant three and a range that can also produce it, so the constant arm is always excluded, whichever arm the draw selects.
+private let constantControllerGen: ReflectiveGenerator<(UInt64, UInt64)> = ReflectiveGenerator<UInt64>.oneOf(
+    .just(3),
+    Gen.choose(in: UInt64(0) ... 10).wrapped(isReflective: true)
+)
+.bind { count in
+    Gen.choose(in: UInt64(0) ... count)
+        .map { (count, $0) }
+        .wrapped(isReflective: false)
 }
 
 /// Target branch IDs of every branch pivot ``ReplacementQuery`` proposes on `graph`.

@@ -105,7 +105,7 @@ struct GraphBinarySearchEncoder: GraphEncoder {
 ///
 /// ``BoundValueCoveringEncoder`` enumerates the entire bound value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
 ///
-/// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the leaf positions are read from the scope's leaves, the contiguous position range is computed from them, and the inner encoder is started on the scope's `baseSequence` over that range.
+/// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the inner encoder is started on the scope's `baseSequence` at exactly the leaves' positions. Entries between them, such as a nested bind's controller the scope leaves out, stay fixed.
 struct GraphBoundValueCoveringEncoder: GraphEncoder {
     let name: EncoderName = .boundValueSearch
 
@@ -123,9 +123,7 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
         let graph = scope.graph
         let sequence = scope.baseSequence
 
-        // Resolve leaf sequence positions and the spanning range.
-        var lower = Int.max
-        var upper = Int.min
+        var positions: [Int] = []
         var validEntries: [LeafEntry] = []
         for entry in integerScope.leaves {
             guard entry.nodeID < graph.nodes.count,
@@ -133,19 +131,14 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
                   range.lowerBound < sequence.count,
                   sequence[range.lowerBound].value != nil
             else { continue }
-            lower = Swift.min(lower, range.lowerBound)
-            upper = Swift.max(upper, range.upperBound)
+            positions.append(range.lowerBound)
             validEntries.append(entry)
         }
-        guard lower <= upper, validEntries.isEmpty == false else { return }
+        guard validEntries.isEmpty == false else { return }
 
         leafEntries = validEntries
-        let positionRange = lower ... upper
-        inner.start(
-            sequence: sequence,
-            tree: scope.tree,
-            positionRange: positionRange
-        )
+        // Ascending, so covering rows assign values in sequence order.
+        inner.start(sequence: sequence, positions: positions.sorted())
         hasInner = true
     }
 

@@ -75,8 +75,33 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
         tree _: ChoiceTree,
         positionRange: ClosedRange<Int>
     ) {
+        begin(
+            sequence: sequence,
+            valuePositions: collectValuePositions(in: positionRange, from: sequence)
+        )
+    }
+
+    /// Starts a pass over the value entries at `positions` only, in the order given. Every other entry stays fixed, which a spanning range does not guarantee: a bound value scope can leave out a nested bind's controller that sits between two of its leaves.
+    package mutating func start(
+        sequence: ChoiceSequence,
+        positions: [Int]
+    ) {
+        var collected: [ValuePosition] = []
+        for index in positions {
+            guard let position = valuePosition(at: index, in: sequence) else {
+                continue
+            }
+            collected.append(position)
+        }
+        begin(sequence: sequence, valuePositions: collected)
+    }
+
+    private mutating func begin(
+        sequence: ChoiceSequence,
+        valuePositions: [ValuePosition]
+    ) {
         baseSequence = sequence
-        valuePositions = collectValuePositions(in: positionRange, from: sequence)
+        self.valuePositions = valuePositions
         exhaustiveProbeIndex = 0
         exhaustiveProbes = []
         generator = nil
@@ -152,21 +177,28 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
         var positions: [ValuePosition] = []
         for index in range {
             guard index < sequence.count else { break }
-            guard let value = sequence[index].value,
-                  let validRange = value.validRange
-            else { continue }
-
-            let domainSize = validRange.saturatingCount
-            positions.append(ValuePosition(
-                index: index,
-                domainLower: validRange.lowerBound,
-                domainSize: domainSize,
-                tag: value.choice.tag,
-                validRange: validRange,
-                isRangeExplicit: value.isRangeExplicit
-            ))
+            guard let position = valuePosition(at: index, in: sequence) else { continue }
+            positions.append(position)
         }
         return positions
+    }
+
+    /// The ranged value entry at `index`, or nil when the index is outside the sequence or the entry is not a value with a valid range.
+    private func valuePosition(at index: Int, in sequence: ChoiceSequence) -> ValuePosition? {
+        guard index < sequence.count,
+              let value = sequence[index].value,
+              let validRange = value.validRange
+        else {
+            return nil
+        }
+        return ValuePosition(
+            index: index,
+            domainLower: validRange.lowerBound,
+            domainSize: validRange.saturatingCount,
+            tag: value.choice.tag,
+            validRange: validRange,
+            isRangeExplicit: value.isRangeExplicit
+        )
     }
 
     private func computeTotalSpace(_ positions: [ValuePosition]) -> UInt64 {
