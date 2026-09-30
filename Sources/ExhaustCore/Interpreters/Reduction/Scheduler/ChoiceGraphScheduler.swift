@@ -180,6 +180,14 @@ enum ChoiceGraphScheduler {
             return .readyToDispatch(boundValueFingerprint: fingerprint)
         }
 
+        if case let .exchange(.boundExchange(exchange)) = transformation.operation {
+            guard anyAccepted == false,
+                  isStalledBindInner(bindInnerLeafNodeID: exchange.sourceLeafNodeID, graph: graph, gate: gate)
+            else {
+                return .skip
+            }
+        }
+
         if graphIsStripped, transformation.operation.isPathChanging {
             return .rematerialize
         }
@@ -187,9 +195,31 @@ enum ChoiceGraphScheduler {
         return .readyToDispatch(boundValueFingerprint: nil)
     }
 
+    /// Whether a bind inner is stalled: value search converged it at its current value, or its bind's bound value search came back fruitless, having tried lowering it under every downstream assignment in its covering.
+    ///
+    /// Bind inners are usually lowered by bound value search, whose upstream records no convergence, so the gate's fruitless verdict is the usual evidence. Bound exchange waits for one of the two, as bound value search waits for a cycle without acceptances: each of its probes lifts the generator.
+    static func isStalledBindInner(bindInnerLeafNodeID: Int, graph: ChoiceGraph, gate: BoundValueGate) -> Bool {
+        guard bindInnerLeafNodeID < graph.nodes.count,
+              case let .chooseBits(metadata) = graph.nodes[bindInnerLeafNodeID].kind
+        else {
+            return false
+        }
+        if let record = graph.convergenceStore[bindInnerLeafNodeID],
+           record.bound == metadata.value.bitPattern64
+        {
+            return true
+        }
+        guard let bindNodeID = graph.nodes[bindInnerLeafNodeID].scopeAnnotation.controllingBindNodeID,
+              case let .bind(bindMetadata) = graph.nodes[bindNodeID].kind
+        else {
+            return false
+        }
+        return gate.isFruitless(bindMetadata.fingerprint)
+    }
+
     // MARK: - Encoder Selection
 
-    /// Selects the appropriate encoder for a graph operation type. Bound value minimization scopes are not handled here because they also need the bind's dispatch gate state; the dispatch step builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead. Bind pivot needs only the generator, which is why it is taken here.
+    /// Selects the appropriate encoder for a graph operation type. Bound value minimization scopes are not handled here because they also need the bind's dispatch gate state; the dispatch step builds them via ``makeBoundValueComposition(bindScope:scope:graph:gen:upstreamBudget:)`` instead. Bind pivot and bound exchange need only the generator, which is why they are taken here.
     static func selectEncoder(for operation: GraphOperation, gen: AnyGenerator) -> EncoderDispatch {
         switch operation {
             case .remove, .replace, .migrate:
@@ -210,6 +240,8 @@ enum ChoiceGraphScheduler {
                 .lockstep(GraphLockstepEncoder())
             case .exchange(.relation):
                 .relation(GraphRelationEncoder())
+            case .exchange(.boundExchange):
+                makeBoundExchangeEncoder(gen: gen)
             case .reorder:
                 .reorder(GraphReorderEncoder())
         }

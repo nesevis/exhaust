@@ -5,7 +5,7 @@
 
 // MARK: - Exchange Scope Query
 
-/// Static scope builder for exchange operations (redistribution and tandem lockstep reduction).
+/// Static scope builder for exchange operations (redistribution, tandem lockstep reduction, relation search, and bound exchange).
 enum ExchangeQuery {
     /// Computes exchange scopes from type-compatibility edges, homogeneous group descriptors, and leaf groupings.
     ///
@@ -62,7 +62,6 @@ enum ExchangeQuery {
                 ))
             }
         }
-        pairs.append(contentsOf: bindChainRedistributionPairs(graph: graph))
         if pairs.isEmpty == false {
             scopes.append(.redistribution(RedistributionScope(pairs: pairs)))
         }
@@ -102,6 +101,8 @@ enum ExchangeQuery {
             scopes.append(.relation(relationScope))
         }
 
+        scopes.append(contentsOf: boundExchangeScopes(graph: graph).map { .boundExchange($0) })
+
         return scopes
     }
 
@@ -116,13 +117,15 @@ enum ExchangeQuery {
         )
     }
 
-    // MARK: - Bind Chain Redistribution Pairs
+    // MARK: - Bound Exchange Scopes
 
-    /// Pairs each controller of a bind with the controllers of the binds further down its composable chain, so value moves from an outer controller to an inner one.
+    /// Builds one exchange per bind inner off its target and each same-type leaf its bind determines further down a composable chain.
     ///
-    /// Lowering an outer controller while raising an inner one is the move a nested chain needs to trade factors, such as `(62, 1, 1, 1)` towards `(6, 6, 6, 6)`. Type-compatibility edges never connect these leaves, since each controller sits in the bound subtree of the bind before it. The chain follows ``ChoiceGraphScheduler/composableNestedBind(under:graph:seenBindFingerprints:)``, so a recursive expansion, whose binds repeat a fingerprint, and a branching dependency, with several nested binds, never pair across binds.
-    private static func bindChainRedistributionPairs(graph: ChoiceGraph) -> [RedistributionPair] {
-        var controllersByBind: [Int: [Int]] = [:]
+    /// Lowering an outer bind inner while raising a leaf it determines is the move a nested chain needs to trade factors, such as `(62, 1, 1, 1)` towards `(6, 6, 6, 6)`, or `(3, 2, 2, 2, 1)` towards `(2, 2, 2, 2, 2)` when the last factor is mapped rather than bound. Sinks are the bind inners of the binds down the chain, then the leaves of the chain's last bound subtree when that subtree has a fixed shape. The chain follows ``ChoiceGraphScheduler/composableNestedBind(under:graph:seenBindFingerprints:)``, so a recursive expansion, whose binds repeat a fingerprint, and a branching dependency, with several nested binds, end it.
+    ///
+    /// Every bind inner off its target is a source here. Each exchange lifts the generator per probe, so ``ChoiceGraphScheduler/evaluateDispatch(transformation:graph:sequence:gate:scopeCache:graphIsStripped:anyAccepted:)`` holds it back until the source is known to be stalled, as ``RelationQuery`` does for leaf pairs.
+    private static func boundExchangeScopes(graph: ChoiceGraph) -> [BoundExchangeScope] {
+        var bindInnersByBind: [Int: [Int]] = [:]
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             guard case .chooseBits = node.kind,
@@ -131,15 +134,19 @@ enum ExchangeQuery {
                   node.scopeAnnotation.isLaneControl == false,
                   let bindNodeID = node.scopeAnnotation.controllingBindNodeID
             else { continue }
-            controllersByBind[bindNodeID, default: []].append(nodeID)
+            bindInnersByBind[bindNodeID, default: []].append(nodeID)
         }
 
-        var pairs: [RedistributionPair] = []
-        for bindNodeID in controllersByBind.keys.sorted() {
-            guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { continue }
+        var scopes: [BoundExchangeScope] = []
+        for bindNodeID in bindInnersByBind.keys.sorted() {
+            let sourceIDs = (bindInnersByBind[bindNodeID] ?? []).filter { isOffTarget($0, graph: graph) }
+            guard sourceIDs.isEmpty == false,
+                  case let .bind(metadata) = graph.nodes[bindNodeID].kind
+            else { continue }
+
+            var sinks: [(leafNodeID: Int, bindNodeID: Int, isBindInner: Bool)] = []
             var seenBindFingerprints: Set<UInt64> = [metadata.fingerprint]
             var current = bindNodeID
-            var chainControllerIDs: [Int] = []
             while let nested = ChoiceGraphScheduler.composableNestedBind(
                 under: current,
                 graph: graph,
@@ -147,28 +154,64 @@ enum ExchangeQuery {
             ) {
                 seenBindFingerprints.insert(nested.metadata.fingerprint)
                 current = nested.nodeID
-                chainControllerIDs.append(contentsOf: controllersByBind[nested.nodeID] ?? [])
+                for bindInnerID in bindInnersByBind[nested.nodeID] ?? [] {
+                    sinks.append((bindInnerID, nested.nodeID, true))
+                }
             }
-            guard chainControllerIDs.isEmpty == false else { continue }
+            for leafID in fixedShapeBoundLeaves(of: current, graph: graph) {
+                sinks.append((leafID, current, false))
+            }
 
-            for sourceID in controllersByBind[bindNodeID] ?? [] {
+            for sourceID in sourceIDs {
                 guard case let .chooseBits(sourceMetadata) = graph.nodes[sourceID].kind else { continue }
-                let target = sourceMetadata.value.reductionTarget(in: sourceMetadata.validRange)
-                guard sourceMetadata.value.bitPattern64 != target else { continue }
-                for sinkID in chainControllerIDs {
-                    guard case let .chooseBits(sinkMetadata) = graph.nodes[sinkID].kind,
-                          sinkMetadata.typeTag == sourceMetadata.typeTag
+                for sink in sinks {
+                    guard case let .chooseBits(sinkMetadata) = graph.nodes[sink.leafNodeID].kind,
+                          sinkMetadata.typeTag == sourceMetadata.typeTag,
+                          sinkMetadata.typeTag.isFloatingPoint == false
                     else { continue }
-                    pairs.append(RedistributionPair(
-                        source: leafEntry(for: sourceID, graph: graph),
-                        sink: leafEntry(for: sinkID, graph: graph),
-                        sourceTag: sourceMetadata.typeTag,
-                        sinkTag: sinkMetadata.typeTag
+                    scopes.append(BoundExchangeScope(
+                        sourceLeafNodeID: sourceID,
+                        sinkLeafNodeID: sink.leafNodeID,
+                        sinkBindNodeID: sink.bindNodeID,
+                        sinkIsBindInner: sink.isBindInner
                     ))
                 }
             }
         }
-        return pairs
+        return scopes
+    }
+
+    /// Whether the leaf sits away from its reduction target, so it has magnitude to give up.
+    private static func isOffTarget(_ nodeID: Int, graph: ChoiceGraph) -> Bool {
+        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return false }
+        return metadata.value.bitPattern64 != metadata.value.reductionTarget(in: metadata.validRange)
+    }
+
+    /// Returns the value leaves of a bind's bound subtree when that subtree has a fixed shape: no binds, picks, or sequences, so a lift keeps each leaf at the same offset in the bound range, and the sinks stay a handful of scalars rather than every element of a payload.
+    private static func fixedShapeBoundLeaves(of bindNodeID: Int, graph: ChoiceGraph) -> [Int] {
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind,
+              graph.nodes[bindNodeID].children.count > metadata.boundChildIndex
+        else { return [] }
+
+        var leaves: [Int] = []
+        var stack = [graph.nodes[bindNodeID].children[metadata.boundChildIndex]]
+        while let nodeID = stack.popLast() {
+            let node = graph.nodes[nodeID]
+            guard node.positionRange != nil else { continue }
+            switch node.kind {
+                case .bind, .pick, .sequence:
+                    return []
+                case .chooseBits:
+                    if node.scopeAnnotation.isDepthControl == false,
+                       node.scopeAnnotation.isLaneControl == false
+                    {
+                        leaves.append(nodeID)
+                    }
+                default:
+                    stack.append(contentsOf: node.children.reversed())
+            }
+        }
+        return leaves
     }
 
     // MARK: - Homogeneous Redistribution Pairs

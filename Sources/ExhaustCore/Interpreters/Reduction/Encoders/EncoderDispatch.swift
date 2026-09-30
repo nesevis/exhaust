@@ -14,6 +14,7 @@ indirect enum EncoderDispatch {
     case boundValueCovering(GraphBoundValueCoveringEncoder)
     case composed(GraphComposedEncoder)
     case bindPivot(GraphBindPivotEncoder)
+    case boundExchange(GraphBoundExchangeEncoder)
 }
 
 extension EncoderDispatch: GraphEncoder {
@@ -33,6 +34,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .boundValueCovering(encoder): encoder.name
             case let .composed(encoder): encoder.name
             case let .bindPivot(encoder): encoder.name
+            case let .boundExchange(encoder): encoder.name
         }
     }
 
@@ -80,6 +82,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .bindPivot(encoder):
                 encoder.start(scope: scope)
                 self = .bindPivot(encoder)
+            case var .boundExchange(encoder):
+                encoder.start(scope: scope)
+                self = .boundExchange(encoder)
         }
     }
 
@@ -141,6 +146,10 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .bindPivot(encoder)
                 return result
+            case var .boundExchange(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .boundExchange(encoder)
+                return result
         }
     }
 
@@ -160,6 +169,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .boundValueCovering(encoder): encoder.hadUnresolvedReplacement
             case let .composed(encoder): encoder.hadUnresolvedReplacement
             case let .bindPivot(encoder): encoder.hadUnresolvedReplacement
+            case let .boundExchange(encoder): encoder.hadUnresolvedReplacement
         }
     }
 
@@ -179,6 +189,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .boundValueCovering(encoder): encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
             case let .bindPivot(encoder): encoder.convergenceRecords
+            case let .boundExchange(encoder): encoder.convergenceRecords
         }
     }
 
@@ -226,19 +237,32 @@ extension EncoderDispatch: GraphEncoder {
             case var .bindPivot(encoder):
                 encoder.flushPartialConvergence()
                 self = .bindPivot(encoder)
+            case var .boundExchange(encoder):
+                encoder.flushPartialConvergence()
+                self = .boundExchange(encoder)
         }
     }
 
-    /// Returns true for encoders whose probes alter the bound subtree, requiring a full graph rebuild and ``refreshState(graph:sequence:)`` call after each acceptance. Currently only the ``GraphComposedEncoder`` case.
+    /// Returns true for encoders whose probes alter the bound subtree, requiring a full graph rebuild and ``refreshState(graph:sequence:)`` call after each acceptance. The ``GraphComposedEncoder`` and ``GraphBoundExchangeEncoder`` cases.
     var isStateful: Bool {
-        if case .composed = self { return true }
-        return false
+        switch self {
+            case .composed, .boundExchange:
+                true
+            default:
+                false
+        }
     }
 
-    /// Upstream probes that produced a valid lift in the current pass, for the ``GraphComposedEncoder`` case; nil for every other encoder.
+    /// Upstream probes that produced a valid lift in the current pass, for the ``GraphComposedEncoder`` and ``GraphBoundExchangeEncoder`` cases; nil for every other encoder.
     var composedUpstreamProbesUsed: Int? {
-        if case let .composed(encoder) = self { return encoder.upstreamProbesUsed }
-        return nil
+        switch self {
+            case let .composed(encoder):
+                encoder.upstreamProbesUsed
+            case let .boundExchange(encoder):
+                encoder.keptLifts
+            default:
+                nil
+        }
     }
 
     /// Generator materializations the encoder ran outside the probe decoder during the current pass, with the site they are reported under; nil for encoders that never materialize. Bound value lifts are counted run-wide by ``BoundValueBuildTally`` instead.
@@ -253,8 +277,15 @@ extension EncoderDispatch: GraphEncoder {
 
     /// Re-derives cached scope state from the live graph after a structural mutation. No-op for non-stateful encoders.
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
-        guard case var .composed(encoder) = self else { return }
-        encoder.refreshState(graph: graph, sequence: sequence)
-        self = .composed(encoder)
+        switch self {
+            case var .composed(encoder):
+                encoder.refreshState(graph: graph, sequence: sequence)
+                self = .composed(encoder)
+            case var .boundExchange(encoder):
+                encoder.refreshState(graph: graph, sequence: sequence)
+                self = .boundExchange(encoder)
+            default:
+                break
+        }
     }
 }

@@ -224,11 +224,11 @@ struct ExchangeQueryTests {
         #expect(crossSlotPairs.allSatisfy { $0.source.mayReshapeOnAcceptance && $0.sink.mayReshapeOnAcceptance })
     }
 
-    @Test("Redistribution moves value down a chain of distinct binds and not down a recursive expansion", arguments: [
-        (innerFingerprint: UInt64(2), pairsAcrossBinds: true),
-        (innerFingerprint: UInt64(1), pairsAcrossBinds: false),
+    @Test("Bound exchange moves value down a chain of distinct binds and not down a recursive expansion", arguments: [
+        (innerFingerprint: UInt64(2), exchangesAcrossBinds: true),
+        (innerFingerprint: UInt64(1), exchangesAcrossBinds: false),
     ])
-    func redistributionFollowsComposableBindChains(innerFingerprint: UInt64, pairsAcrossBinds: Bool) {
+    func boundExchangeFollowsComposableBindChains(innerFingerprint: UInt64, exchangesAcrossBinds: Bool) {
         // The outer bind's controller draws the inner bind, like the first two factors of a nested flatmap. A repeated fingerprint marks a recursive expansion instead.
         let tree = ChoiceTree.bind(
             fingerprint: 1,
@@ -241,17 +241,52 @@ struct ExchangeQueryTests {
         )
         let graph = GraphFixture(tree).graph
 
-        let pairs = ExchangeQuery.build(graph: graph).flatMap { scope -> [RedistributionPair] in
+        let scopes = ExchangeQuery.build(graph: graph)
+        let exchanges = scopes.compactMap { scope -> BoundExchangeScope? in
+            if case let .boundExchange(exchange) = scope { return exchange }
+            return nil
+        }
+        let crossBindRedistributions = scopes.flatMap { scope -> [RedistributionPair] in
             if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
             return []
-        }
-        let crossBindPairs = pairs.filter { pair in
+        }.filter { pair in
             let source = graph.nodes[pair.source.nodeID].scopeAnnotation.controllingBindNodeID
             let sink = graph.nodes[pair.sink.nodeID].scopeAnnotation.controllingBindNodeID
             return source != nil && sink != nil && source != sink
         }
+        let outerBindInner = leafNodeID(holding: 30, in: graph)
+        let innerBindInner = leafNodeID(holding: 20, in: graph)
+        let terminalLeaf = leafNodeID(holding: 5, in: graph)
 
-        #expect(crossBindPairs.isEmpty == (pairsAcrossBinds == false))
+        #expect(crossBindRedistributions.isEmpty, "Redistribution assumes independent ranges, so it must not pair a bind inner with a bind inner its bind determines")
+        // The inner bind trades with its own bound leaf either way; only the outer bind inner's exchanges cross binds.
+        let exchangesFromOuter = exchanges.filter { $0.sourceLeafNodeID == outerBindInner }
+        #expect(exchangesFromOuter.isEmpty == (exchangesAcrossBinds == false))
+        if exchangesAcrossBinds {
+            #expect(exchangesFromOuter.contains { $0.sinkLeafNodeID == innerBindInner && $0.sinkIsBindInner })
+            #expect(exchangesFromOuter.contains { $0.sinkLeafNodeID == terminalLeaf && $0.sinkIsBindInner == false })
+        }
+        #expect(exchanges.contains { $0.sourceLeafNodeID == innerBindInner && $0.sinkLeafNodeID == terminalLeaf })
+    }
+
+    @Test("Bound exchange dispatches only once its source is stalled")
+    func boundExchangeRequiresStalledSource() throws {
+        let tree = ChoiceTree.bind(
+            fingerprint: 1,
+            inner: .uint64(30, in: 0 ... 100),
+            bound: .uint64(5, in: 0 ... 100)
+        )
+        var graph = GraphFixture(tree).graph
+        let bindInner = try #require(leafNodeID(holding: 30, in: graph))
+        var gate = BoundValueGate(baseBudget: 15)
+
+        #expect(ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: bindInner, graph: graph, gate: gate) == false, "A bind inner nothing has tried to lower is not ready to trade magnitude")
+
+        gate.markFruitless(1)
+        #expect(ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: bindInner, graph: graph, gate: gate), "A fruitless bound value search marks the bind inner as stalled")
+
+        markStallConverged(&graph)
+        #expect(ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: bindInner, graph: graph, gate: BoundValueGate(baseBudget: 15)), "A convergence record at the current value marks the bind inner as stalled")
     }
 }
 
@@ -373,4 +408,27 @@ private func leaf(_ value: UInt64, tag: TypeTag) -> ChoiceTree {
         ChoiceValue(value, tag: tag),
         .init(validRange: 0 ... 1_000_000, isRangeExplicit: true)
     )
+}
+
+/// Records every value leaf as converged at its current value, the state value search leaves when no single-leaf reduction exists.
+private func markStallConverged(_ graph: inout ChoiceGraph) {
+    for nodeID in graph.leafNodes {
+        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+            continue
+        }
+        graph.convergenceStore[nodeID] = ConvergedOrigin(
+            bound: metadata.value.bitPattern64,
+            signal: .monotoneConvergence,
+            configuration: .binarySearchSemanticSimplest,
+            cycle: 0
+        )
+    }
+}
+
+/// The value leaf whose current value is `value`. Fixtures give each leaf a distinct value.
+private func leafNodeID(holding value: UInt64, in graph: ChoiceGraph) -> Int? {
+    graph.leafNodes.first { nodeID in
+        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return false }
+        return metadata.value.bitPattern64 == value
+    }
 }
