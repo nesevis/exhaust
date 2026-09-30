@@ -62,6 +62,7 @@ enum ExchangeQuery {
                 ))
             }
         }
+        pairs.append(contentsOf: bindChainRedistributionPairs(graph: graph))
         if pairs.isEmpty == false {
             scopes.append(.redistribution(RedistributionScope(pairs: pairs)))
         }
@@ -113,6 +114,61 @@ enum ExchangeQuery {
             mayReshapeOnAcceptance: annotation.isBindInner,
             bindDepth: annotation.controllingBindDepth
         )
+    }
+
+    // MARK: - Bind Chain Redistribution Pairs
+
+    /// Pairs each controller of a bind with the controllers of the binds further down its composable chain, so value moves from an outer controller to an inner one.
+    ///
+    /// Lowering an outer controller while raising an inner one is the move a nested chain needs to trade factors, such as `(62, 1, 1, 1)` towards `(6, 6, 6, 6)`. Type-compatibility edges never connect these leaves, since each controller sits in the bound subtree of the bind before it. The chain follows ``ChoiceGraphScheduler/composableNestedBind(under:graph:seenBindFingerprints:)``, so a recursive expansion, whose binds repeat a fingerprint, and a branching dependency, with several nested binds, never pair across binds.
+    private static func bindChainRedistributionPairs(graph: ChoiceGraph) -> [RedistributionPair] {
+        var controllersByBind: [Int: [Int]] = [:]
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case .chooseBits = node.kind,
+                  node.positionRange != nil,
+                  node.scopeAnnotation.isDepthControl == false,
+                  node.scopeAnnotation.isLaneControl == false,
+                  let bindNodeID = node.scopeAnnotation.controllingBindNodeID
+            else { continue }
+            controllersByBind[bindNodeID, default: []].append(nodeID)
+        }
+
+        var pairs: [RedistributionPair] = []
+        for bindNodeID in controllersByBind.keys.sorted() {
+            guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { continue }
+            var seenBindFingerprints: Set<UInt64> = [metadata.fingerprint]
+            var current = bindNodeID
+            var chainControllerIDs: [Int] = []
+            while let nested = ChoiceGraphScheduler.composableNestedBind(
+                under: current,
+                graph: graph,
+                seenBindFingerprints: seenBindFingerprints
+            ) {
+                seenBindFingerprints.insert(nested.metadata.fingerprint)
+                current = nested.nodeID
+                chainControllerIDs.append(contentsOf: controllersByBind[nested.nodeID] ?? [])
+            }
+            guard chainControllerIDs.isEmpty == false else { continue }
+
+            for sourceID in controllersByBind[bindNodeID] ?? [] {
+                guard case let .chooseBits(sourceMetadata) = graph.nodes[sourceID].kind else { continue }
+                let target = sourceMetadata.value.reductionTarget(in: sourceMetadata.validRange)
+                guard sourceMetadata.value.bitPattern64 != target else { continue }
+                for sinkID in chainControllerIDs {
+                    guard case let .chooseBits(sinkMetadata) = graph.nodes[sinkID].kind,
+                          sinkMetadata.typeTag == sourceMetadata.typeTag
+                    else { continue }
+                    pairs.append(RedistributionPair(
+                        source: leafEntry(for: sourceID, graph: graph),
+                        sink: leafEntry(for: sinkID, graph: graph),
+                        sourceTag: sourceMetadata.typeTag,
+                        sinkTag: sinkMetadata.typeTag
+                    ))
+                }
+            }
+        }
+        return pairs
     }
 
     // MARK: - Homogeneous Redistribution Pairs

@@ -168,7 +168,7 @@ struct ExchangeQueryTests {
         #expect(redistScopes.isEmpty, "Leaves at target should not produce redistribution pairs")
     }
 
-    @Test("Redistribution pairs leaves controlling the same bind and never pairs across binds")
+    @Test("Redistribution pairs leaves controlling the same bind and never pairs across sibling binds")
     func redistributionPairsStayWithinOneBind() {
         // Bind A has two controllers, like a bind over a zipped price and quantity. Bind B has one.
         let tree = ChoiceTree.group([
@@ -196,7 +196,7 @@ struct ExchangeQueryTests {
             )
         }
 
-        #expect(controllingBinds.allSatisfy { $0.source == $0.sink }, "A pair must not move value between leaves of different binds")
+        #expect(controllingBinds.allSatisfy { $0.source == $0.sink }, "A pair must not move value between leaves of sibling binds")
         #expect(controllingBinds.contains { $0.source != nil }, "The two controllers of bind A should form a pair")
     }
 
@@ -222,6 +222,36 @@ struct ExchangeQueryTests {
 
         #expect(crossSlotPairs.isEmpty == false, "Same-type sequences in the slots of one bind's inner zip should exchange value")
         #expect(crossSlotPairs.allSatisfy { $0.source.mayReshapeOnAcceptance && $0.sink.mayReshapeOnAcceptance })
+    }
+
+    @Test("Redistribution moves value down a chain of distinct binds and not down a recursive expansion", arguments: [
+        (innerFingerprint: UInt64(2), pairsAcrossBinds: true),
+        (innerFingerprint: UInt64(1), pairsAcrossBinds: false),
+    ])
+    func redistributionFollowsComposableBindChains(innerFingerprint: UInt64, pairsAcrossBinds: Bool) {
+        // The outer bind's controller draws the inner bind, like the first two factors of a nested flatmap. A repeated fingerprint marks a recursive expansion instead.
+        let tree = ChoiceTree.bind(
+            fingerprint: 1,
+            inner: .uint64(30, in: 0 ... 100),
+            bound: .bind(
+                fingerprint: innerFingerprint,
+                inner: .uint64(20, in: 0 ... 100),
+                bound: .uint64(5, in: 0 ... 100)
+            )
+        )
+        let graph = GraphFixture(tree).graph
+
+        let pairs = ExchangeQuery.build(graph: graph).flatMap { scope -> [RedistributionPair] in
+            if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
+            return []
+        }
+        let crossBindPairs = pairs.filter { pair in
+            let source = graph.nodes[pair.source.nodeID].scopeAnnotation.controllingBindNodeID
+            let sink = graph.nodes[pair.sink.nodeID].scopeAnnotation.controllingBindNodeID
+            return source != nil && sink != nil && source != sink
+        }
+
+        #expect(crossBindPairs.isEmpty == (pairsAcrossBinds == false))
     }
 }
 

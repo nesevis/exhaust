@@ -440,7 +440,7 @@ extension ChoiceGraphScheduler {
     /// Returns the sole nested bind when composition can descend without revisiting a bind site.
     ///
     /// A repeated fingerprint identifies another expansion of a recursive generator's bind. Treating that expansion as another composition dimension makes work grow with the generated value's recursion depth. Branching dependencies and recursive expansions instead retain their controllers for later scheduler passes.
-    private static func composableNestedBind(
+    static func composableNestedBind(
         under bindNodeID: Int,
         graph: ChoiceGraph,
         seenBindFingerprints: Set<UInt64>
