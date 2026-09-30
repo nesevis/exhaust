@@ -9,7 +9,7 @@
 enum ExchangeQuery {
     /// Computes exchange scopes from type-compatibility edges, homogeneous group descriptors, and leaf groupings.
     ///
-    /// Reads ``ScopeAnnotation`` on each node for bind-inner and depth-control classification.
+    /// A redistribution pair moves value between leaves controlling the same bind, or between independent leaves, never across binds. Only type-compatibility edges can span binds. Homogeneous pairs never do: the children of one sequence share its bind role, which ``ChoiceGraphBuilder`` assigns from the walk context, and ``QueryHelpers/findSequenceBeneath(_:graph:)`` never descends into a bind's inner subtree, so every sequence it finds beneath a zip shares the zip's bind role.
     static func build(graph: ChoiceGraph) -> [ExchangeScope] {
         var scopes: [ExchangeScope] = []
 
@@ -18,8 +18,7 @@ enum ExchangeQuery {
         for edge in graph.typeCompatibilityEdges {
             let annotationA = graph.nodes[edge.nodeA].scopeAnnotation
             let annotationB = graph.nodes[edge.nodeB].scopeAnnotation
-            guard annotationA.isBindInner == false,
-                  annotationB.isBindInner == false,
+            guard annotationA.controllingBindNodeID == annotationB.controllingBindNodeID,
                   annotationA.isDepthControl == false,
                   annotationB.isDepthControl == false,
                   annotationA.isLaneControl == false,
@@ -195,7 +194,6 @@ enum ExchangeQuery {
     ) -> [RedistributionPair] {
         var leaves: [(nodeID: Int, position: Int, distance: UInt64)] = []
         for childID in childIDs {
-            guard graph.nodes[childID].scopeAnnotation.isBindInner == false else { continue }
             guard case let .chooseBits(metadata) = graph.nodes[childID].kind else { continue }
             guard let range = graph.nodes[childID].positionRange else { continue }
             let target = metadata.value.reductionTarget(in: metadata.validRange)
@@ -229,19 +227,12 @@ enum ExchangeQuery {
         tag: TypeTag,
         graph: ChoiceGraph
     ) -> [RedistributionPair] {
-        var firstSinkID: Int?
-        for childID in sinkChildIDs {
-            guard graph.nodes[childID].positionRange != nil else { continue }
-            if graph.nodes[childID].scopeAnnotation.isBindInner == false {
-                firstSinkID = childID
-                break
-            }
+        guard let firstSinkID = sinkChildIDs.first(where: { graph.nodes[$0].positionRange != nil }) else {
+            return []
         }
-        guard let firstSinkID else { return [] }
 
         var sources: [(nodeID: Int, distance: UInt64)] = []
         for childID in sourceChildIDs {
-            guard graph.nodes[childID].scopeAnnotation.isBindInner == false else { continue }
             guard case let .chooseBits(metadata) = graph.nodes[childID].kind else { continue }
             guard graph.nodes[childID].positionRange != nil else { continue }
             let target = metadata.value.reductionTarget(in: metadata.validRange)

@@ -167,6 +167,62 @@ struct ExchangeQueryTests {
         }
         #expect(redistScopes.isEmpty, "Leaves at target should not produce redistribution pairs")
     }
+
+    @Test("Redistribution pairs leaves controlling the same bind and never pairs across binds")
+    func redistributionPairsStayWithinOneBind() {
+        // Bind A has two controllers, like a bind over a zipped price and quantity. Bind B has one.
+        let tree = ChoiceTree.group([
+            .bind(
+                fingerprint: 1,
+                inner: .uint64Zip([30, 40], in: 0 ... 100),
+                bound: .uint64(5, in: 0 ... 100)
+            ),
+            .bind(
+                fingerprint: 2,
+                inner: .uint64(50, in: 0 ... 100),
+                bound: .uint64(6, in: 0 ... 100)
+            ),
+        ])
+        let graph = GraphFixture(tree).graph
+
+        let pairs = ExchangeQuery.build(graph: graph).flatMap { scope -> [RedistributionPair] in
+            if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
+            return []
+        }
+        let controllingBinds = pairs.map { pair in
+            (
+                source: graph.nodes[pair.source.nodeID].scopeAnnotation.controllingBindNodeID,
+                sink: graph.nodes[pair.sink.nodeID].scopeAnnotation.controllingBindNodeID
+            )
+        }
+
+        #expect(controllingBinds.allSatisfy { $0.source == $0.sink }, "A pair must not move value between leaves of different binds")
+        #expect(controllingBinds.contains { $0.source != nil }, "The two controllers of bind A should form a pair")
+    }
+
+    @Test("Redistribution pairs same-type sequences across the slots of one bind's inner zip")
+    func redistributionPairsSequenceSlotsWithinOneBind() {
+        let tree = ChoiceTree.bind(
+            fingerprint: 1,
+            inner: .group([
+                .uint64Sequence([30, 40], in: 0 ... 100),
+                .uint64Sequence([50, 60], in: 0 ... 100),
+            ]),
+            bound: .uint64(5, in: 0 ... 100)
+        )
+        let graph = GraphFixture(tree).graph
+
+        let pairs = ExchangeQuery.build(graph: graph).flatMap { scope -> [RedistributionPair] in
+            if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
+            return []
+        }
+        let crossSlotPairs = pairs.filter { pair in
+            graph.nodes[pair.source.nodeID].parent != graph.nodes[pair.sink.nodeID].parent
+        }
+
+        #expect(crossSlotPairs.isEmpty == false, "Same-type sequences in the slots of one bind's inner zip should exchange value")
+        #expect(crossSlotPairs.allSatisfy { $0.source.mayReshapeOnAcceptance && $0.sink.mayReshapeOnAcceptance })
+    }
 }
 
 // MARK: - PermutationQuery Tests
