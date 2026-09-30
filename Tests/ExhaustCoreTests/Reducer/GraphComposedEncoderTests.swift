@@ -274,6 +274,13 @@ struct GraphComposedEncoderTests {
         #expect(ChoiceGraphScheduler.nestedChainBuildsPerStart(depth: 40) == 1)
     }
 
+    @Test("Chain build pools hold at the base through three stages, quadruple per stage beyond, and stop at the maximum")
+    func nestedChainBuildPoolGrowth() {
+        let pools = (1 ... 6).map { ChoiceGraphScheduler.nestedChainBuildPool(chainLength: $0) }
+        #expect(pools == [128, 128, 128, 512, 1024, 1024])
+        #expect(ChoiceGraphScheduler.nestedChainBuildPool(chainLength: 40) == ChoiceGraphScheduler.nestedChainMaxBuildPool)
+    }
+
     @Test("A nested bind chain's composition stays within its shared build pool on one probe request")
     func nestedBindChainRespectsBuildPool() throws {
         let continuationCalls = ContinuationCounter()
@@ -291,7 +298,7 @@ struct GraphComposedEncoderTests {
         _ = encoder.nextProbe(into: &candidate, lastAccepted: false)
 
         // Each build materializes the whole chain once, calling every bind's continuation.
-        #expect(continuationCalls.value <= ChoiceGraphScheduler.nestedChainBuildPool * chainDepth)
+        #expect(continuationCalls.value <= ChoiceGraphScheduler.nestedChainBuildPool(chainLength: chainDepth) * chainDepth)
     }
 
     @Test("The build tally counts one entry per generator materialization at every nesting level")

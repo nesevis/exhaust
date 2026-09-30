@@ -9,8 +9,22 @@ extension ChoiceGraphScheduler {
     /// Probes one controller candidate's downstream search emits before a nested-bind composition moves on to the next candidate. Paused searches resume in later turns, so one controller tuple cannot consume the root's total cap.
     private static let probesPerControllerCandidateTurn = 2
 
-    /// Downstream builds one dispatch of a nested bind chain may spend across all its stages, counting failed builds and builds whose search emits nothing. Each build materializes the generator, and nesting multiplies them, so the chain root owns one pool for the whole chain. Two nested controllers over 12 and 41 values need more than 64 builds to reach a tail value inside the range.
-    static let nestedChainBuildPool = 128
+    /// Downstream builds one dispatch of a nested bind chain of three or fewer stages may spend across all its stages, counting failed builds and builds whose search emits nothing. Each build materializes the generator, and nesting multiplies them, so the chain root owns one pool for the whole chain. Two nested controllers over 12 and 41 values need more than 64 builds to reach a tail value inside the range. Longer chains get more; see ``nestedChainBuildPool(chainLength:)``.
+    static let nestedChainBaseBuildPool = 128
+
+    /// Upper bound on ``nestedChainBuildPool(chainLength:)``, whatever the chain's length.
+    static let nestedChainMaxBuildPool = 1024
+
+    /// Builds a chain of `chainLength` stages may spend: ``nestedChainBaseBuildPool`` for three or fewer stages, quadrupled for each stage beyond that, and at most ``nestedChainMaxBuildPool``. A fixed pool spread over more stages leaves each controller fewer candidates, and at five stages 128 builds allow fewer than three per controller, too few for a move that lowers two controllers while raising a third.
+    static func nestedChainBuildPool(chainLength: Int) -> Int {
+        var pool = nestedChainBaseBuildPool
+        var length = 3
+        while length < chainLength, pool < nestedChainMaxBuildPool {
+            pool *= 4
+            length += 1
+        }
+        return min(pool, nestedChainMaxBuildPool)
+    }
 
     /// Builds the chain root may spend per start. Deeper stages get less; see ``nestedChainBuildsPerStart(depth:)``.
     static let nestedChainRootBuildsPerStart = 64
@@ -72,16 +86,16 @@ extension ChoiceGraphScheduler {
         {
             seenBindFingerprints.insert(metadata.fingerprint)
         }
-        let hasComposableNestedBind = composableNestedBind(
-            under: bindScope.bindNodeID,
+        let chainLength = composableChainLength(
+            from: bindScope.bindNodeID,
             graph: graph,
             seenBindFingerprints: seenBindFingerprints
-        ) != nil
+        )
         return .composed(makeBoundValueCompositionEncoder(
             bindNodeID: bindScope.bindNodeID,
             controllerLeafNodeID: bindScope.upstreamLeafNodeID,
             upstreamScope: upstreamScope,
-            stage: hasComposableNestedBind ? .chainRoot : .single,
+            stage: chainLength > 1 ? .chainRoot : .single,
             chain: BoundValueChain(
                 gen: gen,
                 upstreamBudget: upstreamBudget,
@@ -89,7 +103,7 @@ extension ChoiceGraphScheduler {
                 seenBindFingerprints: seenBindFingerprints,
                 buildTally: buildTally,
                 depth: 0,
-                buildPool: CompositionBuildPool(capacity: nestedChainBuildPool)
+                buildPool: CompositionBuildPool(capacity: nestedChainBuildPool(chainLength: chainLength))
             ),
             totalProbeCap: totalProbeCap
         ))
@@ -398,6 +412,29 @@ extension ChoiceGraphScheduler {
             outcome: .terminalSearch,
             downstream: (downstreamEncoder, downstreamScope)
         )
+    }
+
+    /// Counts the stages a composition rooted at `bindNodeID` can build in `graph`: the root plus each nested bind ``composableNestedBind(under:graph:seenBindFingerprints:)`` descends into. The walk stops where composition stops, at a branching dependency or a repeated fingerprint.
+    ///
+    /// Measured against the current graph only. A lift that changes the shape beneath a controller can lengthen or shorten the chain the stages actually build.
+    private static func composableChainLength(
+        from bindNodeID: Int,
+        graph: ChoiceGraph,
+        seenBindFingerprints: Set<UInt64>
+    ) -> Int {
+        var length = 1
+        var seen = seenBindFingerprints
+        var current = bindNodeID
+        while let nested = composableNestedBind(
+            under: current,
+            graph: graph,
+            seenBindFingerprints: seen
+        ) {
+            seen.insert(nested.metadata.fingerprint)
+            current = nested.nodeID
+            length += 1
+        }
+        return length
     }
 
     /// Returns the sole nested bind when composition can descend without revisiting a bind site.
