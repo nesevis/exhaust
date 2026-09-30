@@ -124,6 +124,20 @@ check(reports[0].reductionInvocations > 0, "integer array run did not reduce")
 check(reports[1].reductionInvocations > 0, "string run did not reduce")
 check(reports[4].boundValueBuildOutcomes.isEmpty == false, "nested bind run recorded no bound value builds")
 
+/// Examine: a run that generates values fills the report's representative tree, which the same copy path must survive.
+let examineReports = [
+    #examine(.int(in: 0 ... 100).array(length: 1 ... 10), .samples(50), .suppress(.issueReporting)),
+]
+var examineCopies: [ExamineReport] = []
+for report in examineReports {
+    examineCopies.append(report)
+}
+
+for report in examineCopies {
+    check(report.valuesGenerated > 0, "examine run generated no values")
+    check(report.treeDescription != report.description, "examine report carried no representative tree")
+}
+
 if failures.isEmpty {
     print("ArtifactSmoke: OK (\(reports.count) reports, \(totalInvocations) invocations)")
     exit(0)

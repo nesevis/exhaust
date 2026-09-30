@@ -76,7 +76,17 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     /// Deciles covered in the normalized per-sample complexity distribution. A value below 10 means the generator does not produce a full variety of structural sizes. Returns 10 when complexity does not vary (for example, generators with no sequences).
     public fileprivate(set) var complexityDeciles = 10
     /// A representative sample from the midpoint of the run, showing the generator's structural shape at a typical size parameter.
-    package fileprivate(set) var representativeTree: ChoiceTree?
+    package fileprivate(set) var representativeTree: ChoiceTree? {
+        get {
+            representativeTreeBox?.tree
+        }
+        set {
+            representativeTreeBox = newValue.map(ExamineReportTreeBox.init(tree:))
+        }
+    }
+
+    /// Holds ``representativeTree`` behind a reference because `ChoiceTree` is `package` in ExhaustCore; see ``ExamineReportTreeBox``.
+    private var representativeTreeBox: ExamineReportTreeBox?
 
     /// The empty report: zero samples, no failures, and passing coverage defaults. The starting state `_validate` fills as the run progresses, and the return value for a run whose replay seed was rejected before any sample was generated.
     init() {}
@@ -640,5 +650,20 @@ private extension ChoiceTree {
             case let .bind(_, inner, bound): inner.justNodeCount + bound.justNodeCount
             case let .resize(_, choices): choices.reduce(0) { $0 + $1.justNodeCount }
         }
+    }
+}
+
+// MARK: - ExamineReportTreeBox
+
+/// Holds ``ExamineReport``'s representative tree, whose type is `package` in ExhaustCore.
+///
+/// A module outside this package computes ``ExamineReport``'s layout from ExhaustCore's public interface, which does not declare `ChoiceTree`. Embedding the tree directly gives that module a wrong layout and corrupts every copy of the report it makes. A class reference is one pointer whatever the class stores, and the class's own layout is computed here, where the package interface is visible.
+///
+/// The box is immutable, so reports that share one keep value semantics without copying it before a mutation.
+package final class ExamineReportTreeBox: Sendable {
+    let tree: ChoiceTree
+
+    init(tree: ChoiceTree) {
+        self.tree = tree
     }
 }
