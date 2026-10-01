@@ -115,6 +115,10 @@ enum GraphOperation {
                         body(nodeID)
                     case .coveringAligned:
                         return false
+                    case let .window(windowScope):
+                        for nodeID in windowScope.elementNodeIDs {
+                            body(nodeID)
+                        }
                 }
             case let .replace(scope):
                 switch scope {
@@ -168,6 +172,10 @@ extension GraphOperation {
                     guard case let .sequence(metadata) = graph.nodes[sibling.sequenceNodeID].kind else { return false }
                     return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
                 }
+            case let .remove(.window(scope)):
+                guard scope.sequenceNodeID < graph.nodes.count else { return false }
+                guard case let .sequence(metadata) = graph.nodes[scope.sequenceNodeID].kind else { return false }
+                return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
             case let .replace(.selfSimilar(targetNodeID, donorNodeID, _)):
                 return targetNodeID < graph.nodes.count
                     && graph.nodes[targetNodeID].positionRange != nil

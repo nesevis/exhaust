@@ -60,6 +60,8 @@ struct GraphStructuralEncoder: GraphEncoder {
                             baseSequence: sequence,
                             graph: graph
                         )
+                    case .window:
+                        break
                 }
 
             case let .replace(replacementScope):

@@ -187,9 +187,11 @@ struct BatchedCrossSequenceRemovalSource {
 
 // MARK: - Batch Removal Source
 
-/// Emits per-parent removal scopes at geometrically decreasing batch sizes for a single sequence.
+/// Emits per-parent removal scopes at geometrically decreasing batch sizes for a single sequence, then interior windows that grow adaptively.
 ///
 /// Starts at the maximum batch size (all deletable elements) and halves on rejection. Alternates head/tail anchors at each batch size. Each emitted scope fully specifies which positions to remove — the encoder applies it in one probe.
+///
+/// Once halving finishes, emits one ``RemovalScope/window(_:)`` seed per halving-grid offset (`count / 2`, `count / 4`, and so on). ``GraphWindowRemovalEncoder`` grows each seed rightward with ``FindIntegerStepper``, reaching runs that neither anchor covers. Seeds whose window cannot hold two elements are skipped, because a one-element window duplicates the per-element removal candidates.
 struct BatchRemovalSource {
     private let sequenceNodeID: Int
     private let elements: [(nodeID: Int, positionRange: ClosedRange<Int>)]
@@ -198,6 +200,8 @@ struct BatchRemovalSource {
     private var triedTail: Bool
     private var exhausted: Bool
     private var cachedPriority: DispatchPriority?
+    private let interiorSeeds: [(scope: WindowRemovalScope, firstElementYield: Int)]
+    private var interiorIndex = 0
 
     init(sequenceNodeID: Int, graph: ChoiceGraph) {
         self.sequenceNodeID = sequenceNodeID
@@ -210,6 +214,7 @@ struct BatchRemovalSource {
             triedTail = false
             exhausted = true
             cachedPriority = nil
+            interiorSeeds = []
             return
         }
         let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
@@ -219,6 +224,24 @@ struct BatchRemovalSource {
             elementList.append((nodeID: childID, positionRange: range))
         }
         elementList.sort { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
+
+        var seeds: [(scope: WindowRemovalScope, firstElementYield: Int)] = []
+        var seedOffset = elementList.count / 2
+        while seedOffset > 0 {
+            let capacity = min(deletable, elementList.count - seedOffset)
+            if capacity >= 2 {
+                let window = elementList[seedOffset ..< seedOffset + capacity]
+                seeds.append((
+                    scope: WindowRemovalScope(
+                        sequenceNodeID: sequenceNodeID,
+                        elementNodeIDs: window.map(\.nodeID)
+                    ),
+                    firstElementYield: elementList[seedOffset].positionRange.count
+                ))
+            }
+            seedOffset /= 2
+        }
+        interiorSeeds = seeds
 
         elements = elementList
         maxBatch = deletable
@@ -237,6 +260,13 @@ struct BatchRemovalSource {
     }
 
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
+        if let transformation = nextHalvingWindow() {
+            return transformation
+        }
+        return nextInteriorSeed()
+    }
+
+    private mutating func nextHalvingWindow() -> GraphTransformation? {
         guard exhausted == false, currentBatch > 0 else { return nil }
 
         let anchor: RemovalAnchor = triedTail ? .head : .tail
@@ -248,7 +278,7 @@ struct BatchRemovalSource {
         }
         guard offset >= 0, offset + currentBatch <= elements.count else {
             exhausted = true
-            cachedPriority = nil
+            recomputePriority()
             return nil
         }
 
@@ -294,11 +324,41 @@ struct BatchRemovalSource {
         return transformation
     }
 
+    private mutating func nextInteriorSeed() -> GraphTransformation? {
+        guard interiorIndex < interiorSeeds.count else {
+            cachedPriority = nil
+            return nil
+        }
+        let seed = interiorSeeds[interiorIndex]
+        interiorIndex += 1
+        let transformation = GraphTransformation(
+            operation: .remove(.window(seed.scope)),
+            priority: Self.interiorSeedPriority(firstElementYield: seed.firstElementYield)
+        )
+        recomputePriority()
+        return transformation
+    }
+
     private enum RemovalAnchor { case head, tail }
+
+    /// The seed's first probe removes one element, so its priority reflects that element's yield rather than the window's capacity.
+    private static func interiorSeedPriority(firstElementYield: Int) -> DispatchPriority {
+        DispatchPriority(
+            structuralBenefit: firstElementYield,
+            valueBenefit: 0,
+            reductionMagnitude: 0,
+            estimatedCost: 1
+        )
+    }
+
+    private var nextInteriorSeedPriority: DispatchPriority? {
+        guard interiorIndex < interiorSeeds.count else { return nil }
+        return Self.interiorSeedPriority(firstElementYield: interiorSeeds[interiorIndex].firstElementYield)
+    }
 
     private mutating func recomputePriority() {
         guard exhausted == false, currentBatch > 0 else {
-            cachedPriority = nil
+            cachedPriority = nextInteriorSeedPriority
             return
         }
         let anchor: RemovalAnchor = triedTail ? .head : .tail
@@ -307,7 +367,7 @@ struct BatchRemovalSource {
             case .head: elements.count - maxBatch
         }
         guard offset >= 0, offset + currentBatch <= elements.count else {
-            cachedPriority = nil
+            cachedPriority = nextInteriorSeedPriority
             return
         }
         var batchYield = 0

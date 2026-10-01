@@ -194,6 +194,56 @@ struct ProbeSessionTraceTests {
         #expect(recorder.events.count == 4)
     }
 
+    @Test("An accepted sibling swap continues into its adaptive extension")
+    func swapExtensionRunsAfterAcceptance() throws {
+        let generator = Gen.zip(
+            Gen.choose(in: UInt64(0) ... 3),
+            Gen.choose(in: UInt64(0) ... 3),
+            Gen.choose(in: UInt64(0) ... 3),
+            Gen.choose(in: UInt64(0) ... 3)
+        )
+        let tree = try #require(try Interpreters.reflect(generator, with: (UInt64(3), UInt64(0), UInt64(0), UInt64(0))))
+        let pushedTree = try #require(try Interpreters.reflect(generator, with: (UInt64(0), UInt64(0), UInt64(0), UInt64(3))))
+        let graph = ChoiceGraph.build(from: tree)
+        let permutation = try #require(PermutationQuery.build(graph: graph).first)
+        let scope = EncoderInput(
+            transformation: GraphTransformation(
+                operation: .permute(permutation),
+                priority: DispatchPriority(
+                    structuralBenefit: 0,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
+            ),
+            baseSequence: ChoiceSequence(tree),
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+        var state = TraceState(
+            sequence: ChoiceSequence(tree),
+            tree: tree,
+            graph: graph,
+            gen: generator.erase(),
+            property: { _ in false }
+        )
+        var encoder = EncoderDispatch.swap(GraphSwapEncoder())
+        encoder.start(scope: scope)
+        var session = ProbeSession(
+            encoder: encoder,
+            transformation: scope.transformation,
+            boundValueFingerprint: nil,
+            baseSequence: state.sequence,
+            hasBind: false
+        )
+        let report = try session.runToCompletion(state: &state)
+
+        try #require(report.anyAccepted)
+        #expect(report.probeCount > 1)
+        #expect(state.sequence == ChoiceSequence(pushedTree))
+    }
+
     @Test("A guided property failure with no admitted reduction has no decoded-choice event")
     func guidedAdmissionRejection() throws {
         var fixture = try pivotFixture()

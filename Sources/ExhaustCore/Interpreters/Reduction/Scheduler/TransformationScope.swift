@@ -17,6 +17,9 @@ enum RemovalScope {
 
     /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
     case coveringAligned(CoveringAlignedRemovalScope)
+
+    /// Removal window anchored at an interior element that grows rightward while the property keeps failing. Handled by ``GraphWindowRemovalEncoder`` rather than ``GraphStructuralEncoder``, because growth needs acceptance feedback that a session finishing on rebuild never delivers.
+    case window(WindowRemovalScope)
 }
 
 /// Scope for element removal across one or more sequences.
@@ -39,6 +42,17 @@ struct SequenceRemovalTarget {
     let sequenceNodeID: Int
 
     /// Deletable element node IDs, ordered by position within the sequence.
+    let elementNodeIDs: [Int]
+}
+
+/// Growable removal window within one sequence, seeded by ``BatchRemovalSource`` after its head and tail halving finishes.
+///
+/// The window always starts at `elementNodeIDs[0]`. A probe of length *k* removes the first *k* entries, so every accepted length is a prefix of every later probe and probes can be built from the dispatch-time base sequence without tracking a running sequence.
+struct WindowRemovalScope {
+    /// The parent sequence node.
+    let sequenceNodeID: Int
+
+    /// Element node IDs from the window's start element rightward, ordered by position. Truncated so that removing all of them keeps the sequence at or above its minimum length.
     let elementNodeIDs: [Int]
 }
 
