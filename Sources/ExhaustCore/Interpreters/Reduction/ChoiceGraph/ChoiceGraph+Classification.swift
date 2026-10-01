@@ -133,14 +133,10 @@ extension ChoiceGraph {
             isRangeExplicit: leafMetadata.isRangeExplicit
         ))
         materializations += 1
-        guard case let .success(_, freshTree, _) = Materializer.materializeAny(
-            gen,
-            context: .init(
-                prefix: candidate,
-                mode: .guided(seed: 0, fallbackTree: fallbackTree),
-                fallbackTree: fallbackTree,
-                materializePicks: true
-            )
+        guard let freshTree = Materializer.guidedLift(
+            generator: gen,
+            prefix: candidate,
+            fallbackTree: fallbackTree
         ) else {
             return nil
         }
