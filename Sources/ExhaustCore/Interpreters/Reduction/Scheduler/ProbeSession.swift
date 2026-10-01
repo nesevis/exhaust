@@ -141,7 +141,7 @@ struct ProbeSession {
 
         let selection = ChoiceGraphScheduler.selectDecoder(
             for: mutation,
-            requiresExactDecoder: encoder.isStateful,
+            requiresExactDecoder: encoder.requiresExactDecoder,
             hasBind: hasBind
         )
 
@@ -200,19 +200,17 @@ struct ProbeSession {
 
             latestTreeIsStripped = selection.materializePicks == false
 
-            if encoder.isStateful {
-                anyRequiresRebuild = true
-            } else {
-                let application = state.graph.apply(mutation)
-                if application.requiresFullRebuild {
+            switch encoder.acceptanceHandling {
+                case .refreshAndIdle:
                     anyRequiresRebuild = true
-                    phase = .finished
-                    return .decoded(encoder: encoderName, accepted: true)
-                }
-            }
-
-            if encoder.isStateful {
-                encoder.refreshState(graph: state.graph, sequence: state.sequence)
+                    encoder.refreshState(graph: state.graph, sequence: state.sequence)
+                case .applyMutation:
+                    let application = state.graph.apply(mutation)
+                    if application.requiresFullRebuild {
+                        anyRequiresRebuild = true
+                        phase = .finished
+                        return .decoded(encoder: encoderName, accepted: true)
+                    }
             }
 
             phase = .encode

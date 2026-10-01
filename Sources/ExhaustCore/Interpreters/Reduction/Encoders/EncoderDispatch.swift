@@ -243,13 +243,23 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
-    /// Returns true for encoders whose probes alter the bound subtree, requiring a full graph rebuild and ``refreshState(graph:sequence:)`` call after each acceptance. The ``GraphComposedEncoder`` and ``GraphBoundExchangeEncoder`` cases.
-    var isStateful: Bool {
+    /// Forces exact decoding for lifted bound-value and exchange probes. False leaves mutation-sensitive selection, including branch materialization, to the scheduler.
+    var requiresExactDecoder: Bool {
         switch self {
             case .composed, .boundExchange:
                 true
             default:
                 false
+        }
+    }
+
+    /// Discards lifted searches after acceptance without applying their mutations to the dispatched graph. Other encoders retain mutation application and finish when it requires a rebuild.
+    var acceptanceHandling: AcceptanceHandling {
+        switch self {
+            case .composed, .boundExchange:
+                .refreshAndIdle
+            default:
+                .applyMutation
         }
     }
 
@@ -275,7 +285,7 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
-    /// Re-derives cached scope state from the live graph after a structural mutation. No-op for non-stateful encoders.
+    /// Discards pre-acceptance lifted scopes on the refresh-and-idle path. No-op for encoders that apply their mutations instead.
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
         switch self {
             case var .composed(encoder):
