@@ -159,6 +159,7 @@ for pid in "${PIDS[@]}"; do wait "${pid}"; done
 #   ExhaustCore.build/ExhaustCore.swiftinterface
 #   ExhaustCore.build/ExhaustCore.private.swiftinterface
 
+# TODO: Swift 6.4 (Xcode 27) SwiftPM builds with Swift Build, which writes products to .build/out/Products/Release-<platform>/ instead of .build/<triple>/release/, so collect() finds no objects. Run with DEVELOPER_DIR pointing at Xcode 26 until the script handles both layouts.
 collect() {
     local triple=$1 arch_qualifier=$2 dest=$3
     local build_products="${PACKAGE_DIR}/.build/${triple}/release"
