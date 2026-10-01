@@ -76,6 +76,11 @@ struct ProbeSession {
     private var pendingProbeHash: UInt64 = 0
     private var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
 
+    /// Characterization tests require one terminal event per emitted probe, including interrupted decodes. Scheduler sessions leave this nil.
+    private let observer: ((ProbeObservation) -> Void)?
+    private var nextProbeID = 0
+    private var pendingObservationID: Int?
+
     private(set) var counts = ReductionProbeCounts()
     private(set) var anyAccepted: Bool = false
     private(set) var anyRequiresRebuild: Bool = false
@@ -91,7 +96,8 @@ struct ProbeSession {
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?,
         baseSequence: ChoiceSequence,
-        hasBind: Bool
+        hasBind: Bool,
+        observer: ((ProbeObservation) -> Void)? = nil
     ) {
         self.encoder = encoder
         self.transformation = transformation
@@ -99,6 +105,7 @@ struct ProbeSession {
         baseHash = ZobristHash.hash(of: baseSequence)
         self.hasBind = hasBind
         candidateBuffer = baseSequence
+        self.observer = observer
     }
 
     // MARK: - Step
@@ -109,7 +116,12 @@ struct ProbeSession {
             case .encode:
                 return stepEncode(state: &state)
             case .decode:
-                return try stepDecode(state: &state)
+                do {
+                    return try stepDecode(state: &state)
+                } catch {
+                    terminateObservation(.interrupted)
+                    throw error
+                }
             case .finished:
                 return .finished
         }
@@ -129,6 +141,12 @@ struct ProbeSession {
         counts.recordEmission()
         lastProbeAccepted = false
 
+        if let observer {
+            nextProbeID += 1
+            pendingObservationID = nextProbeID
+            observer(.emitted(probeID: nextProbeID, sequence: candidateBuffer, mutation: mutation))
+        }
+
         let probeHash = ZobristHash.incrementalHash(
             baseHash: baseHash,
             baseSequence: state.sequence,
@@ -136,6 +154,7 @@ struct ProbeSession {
         )
         if state.rejectCache.contains(probeHash) {
             counts.recordCacheRejection()
+            terminateObservation(.cacheRejected)
             return .encoded(encoder: encoder.name, cacheHit: true)
         }
 
@@ -144,6 +163,14 @@ struct ProbeSession {
             requiresExactDecoder: encoder.requiresExactDecoder,
             hasBind: hasBind
         )
+
+        if let pendingObservationID {
+            observer?(.decoderSelected(
+                probeID: pendingObservationID,
+                preferExact: selection.preferExact,
+                materializePicks: selection.materializePicks
+            ))
+        }
 
         pendingMutation = mutation
         pendingProbeHash = probeHash
@@ -180,6 +207,9 @@ struct ProbeSession {
             precomputedHash: pendingProbeHash
         )
         counts.record(outcome)
+        if let pendingObservationID, let result = outcome.reduction {
+            observer?(.decoded(probeID: pendingObservationID, sequence: result.sequence))
+        }
 
         // Gate on the decoded sequence, not the encoder's candidate: exact materialization re-derives bind wrappers, so a shorter candidate can decode to an enlarging commit and a substitution pair can cycle until the deadline. Equal-comparing commits are lateral moves and stay admissible. numericReorder is exempt: it deliberately regresses shortlex to ascending numeric order.
         if let result = outcome.reduction,
@@ -191,6 +221,7 @@ struct ProbeSession {
             baseHash = ZobristHash.hash(of: state.sequence)
             lastProbeAccepted = true
             anyAccepted = true
+            terminateObservation(.accepted, materializationAttempts: outcome.materializationAttempts)
 
             if case let .leafValues(changes) = mutation {
                 for change in changes {
@@ -217,6 +248,16 @@ struct ProbeSession {
             return .decoded(encoder: encoderName, accepted: true)
         }
 
+        let disposition: ProbeDisposition = switch outcome {
+            case .materializationRejected:
+                .materializationRejected
+            case .propertyPassed:
+                .propertyPassed
+            case let .propertyFailed(reduction, _):
+                .propertyFailedNotAdmitted(reduction == nil ? .decoderReturnedNoReduction : .enlargingCommit)
+        }
+        terminateObservation(disposition, materializationAttempts: outcome.materializationAttempts)
+
         state.rejectCache.insert(pendingProbeHash)
         if state.isInstrumented {
             ChoiceGraphScheduler.logReplacementProbeRejection(
@@ -233,10 +274,27 @@ struct ProbeSession {
         return .decoded(encoder: encoderName, accepted: false)
     }
 
+    /// Completes an observed probe once, including when a caller stops with decoding still pending.
+    private mutating func terminateObservation(
+        _ disposition: ProbeDisposition,
+        materializationAttempts: Int = 0
+    ) {
+        guard let pendingObservationID else {
+            return
+        }
+        observer?(.terminated(
+            probeID: pendingObservationID,
+            disposition: disposition,
+            materializationAttempts: materializationAttempts
+        ))
+        self.pendingObservationID = nil
+    }
+
     // MARK: - Report
 
     /// Produces the pass report by flushing partial convergence and snapshotting all counters.
     mutating func report() -> PassReport {
+        terminateObservation(.interrupted)
         encoder.flushPartialConvergence()
 
         return PassReport(
