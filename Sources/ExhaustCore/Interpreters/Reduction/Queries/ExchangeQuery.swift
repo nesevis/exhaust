@@ -121,7 +121,7 @@ enum ExchangeQuery {
 
     /// Builds one exchange per bind inner off its target and each same-type leaf its bind determines further down a composable chain.
     ///
-    /// Lowering an outer bind inner while raising a leaf it determines is the move a nested chain needs to trade factors, such as `(62, 1, 1, 1)` towards `(6, 6, 6, 6)`, or `(3, 2, 2, 2, 1)` towards `(2, 2, 2, 2, 2)` when the last factor is mapped rather than bound. Sinks are the bind inners of the binds down the chain, then the leaves of the chain's last bound subtree when that subtree has a fixed shape. The chain follows ``ChoiceGraphScheduler/composableNestedBind(under:graph:seenBindFingerprints:)``, so a recursive expansion, whose binds repeat a fingerprint, and a branching dependency, with several nested binds, end it.
+    /// Lowering an outer bind inner while raising a leaf it determines is the move a nested chain needs to trade factors, such as `(62, 1, 1, 1)` towards `(6, 6, 6, 6)`, or `(3, 2, 2, 2, 1)` towards `(2, 2, 2, 2, 2)` when the last factor is mapped rather than bound. Sinks are the bind inners of the binds down the chain, then the leaves of the chain's last bound subtree when that subtree has a fixed shape. The chain follows ``ChoiceGraph/composableNestedBind(under:seenBindFingerprints:)``, so a recursive expansion, whose binds repeat a fingerprint, and a branching dependency, with several nested binds, end it.
     ///
     /// Every bind inner off its target is a source here. Each exchange lifts the generator per probe, so ``ChoiceGraphScheduler/evaluateDispatch(transformation:graph:sequence:gate:scopeCache:graphIsStripped:anyAccepted:)`` holds it back until the source is known to be stalled, as ``RelationQuery`` does for leaf pairs.
     private static func boundExchangeScopes(graph: ChoiceGraph) -> [BoundExchangeScope] {
@@ -147,9 +147,8 @@ enum ExchangeQuery {
             var sinks: [(leafNodeID: Int, bindNodeID: Int, isBindInner: Bool)] = []
             var seenBindFingerprints: Set<UInt64> = [metadata.fingerprint]
             var current = bindNodeID
-            while let nested = ChoiceGraphScheduler.composableNestedBind(
+            while let nested = graph.composableNestedBind(
                 under: current,
-                graph: graph,
                 seenBindFingerprints: seenBindFingerprints
             ) {
                 seenBindFingerprints.insert(nested.metadata.fingerprint)

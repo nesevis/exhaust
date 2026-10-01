@@ -234,9 +234,8 @@ extension ChoiceGraphScheduler {
         }
 
         if stage.canRecurseIntoNestedBind,
-           let nestedBind = composableNestedBind(
+           let nestedBind = lifted.graph.composableNestedBind(
                under: lifted.bindNodeID,
-               graph: lifted.graph,
                seenBindFingerprints: chain.seenBindFingerprints
            )
         {
@@ -296,13 +295,10 @@ extension ChoiceGraphScheduler {
 
         guard bindNodeID < parent.graph.nodes.count,
               case let .bind(sourceMetadata) = parent.graph.nodes[bindNodeID].kind,
-              let liftedBindNodeID = liftedGraph.liveNodeIDs.first(where: { nodeID in
-                  guard case let .bind(metadata) = liftedGraph.nodes[nodeID].kind else {
-                      return false
-                  }
-                  return metadata.fingerprint == sourceMetadata.fingerprint
-                      && metadata.bindPath == sourceMetadata.bindPath
-              }),
+              let liftedBindNodeID = liftedGraph.bindNodeID(
+                  fingerprint: sourceMetadata.fingerprint,
+                  path: sourceMetadata.bindPath
+              ),
               case let .bind(metadata) = liftedGraph.nodes[liftedBindNodeID].kind,
               liftedGraph.nodes[liftedBindNodeID].children.count > metadata.boundChildIndex
         else {
@@ -337,9 +333,8 @@ extension ChoiceGraphScheduler {
             graph: lifted.graph,
             priority: parent.transformation.priority
         )
-        let nestedHasDescendant = composableNestedBind(
+        let nestedHasDescendant = lifted.graph.composableNestedBind(
             under: nestedBind.nodeID,
-            graph: lifted.graph,
             seenBindFingerprints: nestedChain.seenBindFingerprints
         ) != nil
         let nestedEncoder = makeBoundValueCompositionEncoder(
@@ -414,7 +409,7 @@ extension ChoiceGraphScheduler {
         )
     }
 
-    /// Counts the stages a composition rooted at `bindNodeID` can build in `graph`: the root plus each nested bind ``composableNestedBind(under:graph:seenBindFingerprints:)`` descends into. The walk stops where composition stops, at a branching dependency or a repeated fingerprint.
+    /// Counts the stages a composition rooted at `bindNodeID` can build in `graph`: the root plus each nested bind ``ChoiceGraph/composableNestedBind(under:seenBindFingerprints:)`` descends into. The walk stops where composition stops, at a branching dependency or a repeated fingerprint.
     ///
     /// Measured against the current graph only. A lift that changes the shape beneath a controller can lengthen or shorten the chain the stages actually build.
     private static func composableChainLength(
@@ -425,9 +420,8 @@ extension ChoiceGraphScheduler {
         var length = 1
         var seen = seenBindFingerprints
         var current = bindNodeID
-        while let nested = composableNestedBind(
+        while let nested = graph.composableNestedBind(
             under: current,
-            graph: graph,
             seenBindFingerprints: seen
         ) {
             seen.insert(nested.metadata.fingerprint)
@@ -435,71 +429,6 @@ extension ChoiceGraphScheduler {
             length += 1
         }
         return length
-    }
-
-    /// Returns the sole nested bind when composition can descend without revisiting a bind site.
-    ///
-    /// A repeated fingerprint identifies another expansion of a recursive generator's bind. Treating that expansion as another composition dimension makes work grow with the generated value's recursion depth. Branching dependencies and recursive expansions instead retain their controllers for later scheduler passes.
-    static func composableNestedBind(
-        under bindNodeID: Int,
-        graph: ChoiceGraph,
-        seenBindFingerprints: Set<UInt64>
-    ) -> (nodeID: Int, metadata: BindMetadata)? {
-        let nestedBindNodeIDs = directNestedBindNodeIDs(
-            under: bindNodeID,
-            graph: graph
-        )
-        guard nestedBindNodeIDs.count == 1 else {
-            return nil
-        }
-        let nestedBindNodeID = nestedBindNodeIDs[0]
-        guard nestedBindNodeID < graph.nodes.count,
-              case let .bind(metadata) = graph.nodes[nestedBindNodeID].kind,
-              seenBindFingerprints.contains(metadata.fingerprint) == false
-        else {
-            return nil
-        }
-        return (nestedBindNodeID, metadata)
-    }
-
-    /// Returns the outermost active binds with a `chooseBits` controller directly beneath this bind's bound child. More than one is a branching dependency rather than a chain and is left to the existing fixed-inner terminal search.
-    private static func directNestedBindNodeIDs(
-        under bindNodeID: Int,
-        graph: ChoiceGraph
-    ) -> [Int] {
-        guard bindNodeID < graph.nodes.count,
-              case let .bind(metadata) = graph.nodes[bindNodeID].kind,
-              graph.nodes[bindNodeID].children.count > metadata.boundChildIndex
-        else {
-            return []
-        }
-
-        let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
-        var nestedBindNodeIDs: [Int] = []
-        var stack = [boundChildID]
-        while let nodeID = stack.popLast() {
-            let node = graph.nodes[nodeID]
-            guard node.positionRange != nil else {
-                continue
-            }
-            if case let .bind(nestedMetadata) = node.kind,
-               node.children.count > max(
-                   nestedMetadata.innerChildIndex,
-                   nestedMetadata.boundChildIndex
-               )
-            {
-                let innerChildID = node.children[nestedMetadata.innerChildIndex]
-                let nestedBoundChildID = node.children[nestedMetadata.boundChildIndex]
-                if case .chooseBits = graph.nodes[innerChildID].kind,
-                   graph.nodes[nestedBoundChildID].positionRange != nil
-                {
-                    nestedBindNodeIDs.append(nodeID)
-                    continue
-                }
-            }
-            stack.append(contentsOf: node.children.reversed())
-        }
-        return nestedBindNodeIDs
     }
 
     /// Builds the synthetic minimization input that drives one composition stage's controller.
