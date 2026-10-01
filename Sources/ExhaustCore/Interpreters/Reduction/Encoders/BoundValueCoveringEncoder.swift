@@ -307,8 +307,7 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard hasInner else { return nil }
         guard let built = inner.nextProbe(lastAccepted: lastAccepted) else { return nil }
-        // The composition's ``GraphComposedEncoder/wrap(downstreamProbe:upstreamProbe:)``
-        // replaces this mutation with the upstream's reshape mutation, so we report an empty leafValues here as a placeholder — the candidate is what matters.
+        // The composition replaces this mutation with the upstream's reshape mutation, so the empty leafValues is a placeholder; the candidate carries the downstream values.
         candidate = built
         return .leafValues([])
     }

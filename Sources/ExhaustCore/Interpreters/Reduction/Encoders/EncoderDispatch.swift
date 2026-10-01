@@ -10,7 +10,6 @@ indirect enum EncoderDispatch {
     case laneCollapse(GraphLaneCollapseEncoder)
     case depthCollapse(GraphDepthCollapseEncoder)
     case binarySearch(GraphBinarySearchEncoder)
-    case singleLeafDomain(GraphSingleLeafDomainEncoder)
     case boundValueCovering(GraphBoundValueCoveringEncoder)
     case composed(GraphComposedEncoder)
     case bindPivot(GraphBindPivotEncoder)
@@ -30,7 +29,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .laneCollapse(encoder): encoder.name
             case let .depthCollapse(encoder): encoder.name
             case let .binarySearch(encoder): encoder.name
-            case let .singleLeafDomain(encoder): encoder.name
             case let .boundValueCovering(encoder): encoder.name
             case let .composed(encoder): encoder.name
             case let .bindPivot(encoder): encoder.name
@@ -70,9 +68,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .binarySearch(encoder):
                 encoder.start(scope: scope)
                 self = .binarySearch(encoder)
-            case var .singleLeafDomain(encoder):
-                encoder.start(scope: scope)
-                self = .singleLeafDomain(encoder)
             case var .boundValueCovering(encoder):
                 encoder.start(scope: scope)
                 self = .boundValueCovering(encoder)
@@ -130,10 +125,6 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .binarySearch(encoder)
                 return result
-            case var .singleLeafDomain(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
-                self = .singleLeafDomain(encoder)
-                return result
             case var .boundValueCovering(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .boundValueCovering(encoder)
@@ -165,7 +156,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .laneCollapse(encoder): encoder.hadUnresolvedReplacement
             case let .depthCollapse(encoder): encoder.hadUnresolvedReplacement
             case let .binarySearch(encoder): encoder.hadUnresolvedReplacement
-            case let .singleLeafDomain(encoder): encoder.hadUnresolvedReplacement
             case let .boundValueCovering(encoder): encoder.hadUnresolvedReplacement
             case let .composed(encoder): encoder.hadUnresolvedReplacement
             case let .bindPivot(encoder): encoder.hadUnresolvedReplacement
@@ -185,7 +175,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .laneCollapse(encoder): encoder.convergenceRecords
             case let .depthCollapse(encoder): encoder.convergenceRecords
             case let .binarySearch(encoder): encoder.convergenceRecords
-            case let .singleLeafDomain(encoder): encoder.convergenceRecords
             case let .boundValueCovering(encoder): encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
             case let .bindPivot(encoder): encoder.convergenceRecords
@@ -225,9 +214,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .binarySearch(encoder):
                 encoder.flushPartialConvergence()
                 self = .binarySearch(encoder)
-            case var .singleLeafDomain(encoder):
-                encoder.flushPartialConvergence()
-                self = .singleLeafDomain(encoder)
             case var .boundValueCovering(encoder):
                 encoder.flushPartialConvergence()
                 self = .boundValueCovering(encoder)
@@ -246,7 +232,9 @@ extension EncoderDispatch: GraphEncoder {
     /// Forces exact decoding for lifted bound-value and exchange probes. False leaves mutation-sensitive selection, including branch materialization, to the scheduler.
     var requiresExactDecoder: Bool {
         switch self {
-            case .composed, .boundExchange:
+            case let .composed(encoder):
+                encoder.requiresExactDecoder
+            case .boundExchange:
                 true
             default:
                 false
@@ -256,7 +244,9 @@ extension EncoderDispatch: GraphEncoder {
     /// Discards lifted searches after acceptance without applying their mutations to the dispatched graph. Other encoders retain mutation application and finish when it requires a rebuild.
     var acceptanceHandling: AcceptanceHandling {
         switch self {
-            case .composed, .boundExchange:
+            case let .composed(encoder):
+                encoder.acceptanceHandling
+            case .boundExchange:
                 .refreshAndIdle
             default:
                 .applyMutation

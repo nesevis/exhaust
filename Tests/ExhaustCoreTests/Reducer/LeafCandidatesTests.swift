@@ -1,5 +1,5 @@
 //
-//  GraphSingleLeafDomainEncoderTests.swift
+//  LeafCandidatesTests.swift
 //  Exhaust
 //
 
@@ -7,8 +7,8 @@ import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
-@Suite("GraphSingleLeafDomainEncoder candidates")
-struct GraphSingleLeafDomainEncoderTests {
+@Suite("Leaf proposal candidates")
+struct LeafCandidatesTests {
     @Test("Every candidate lies in the domain and appears once")
     func candidatesAreInDomainAndUnique() throws {
         try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
@@ -29,7 +29,7 @@ struct GraphSingleLeafDomainEncoderTests {
     func candidateCountMatchesDomainAndBudget() throws {
         try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
             let admissible = input.domain.saturatingCount - (input.includesCurrent ? 0 : 1)
-            let expected = min(admissible, UInt64(GraphSingleLeafDomainEncoder.candidateBudget))
+            let expected = min(admissible, UInt64(LeafCandidates.candidateBudget))
             return UInt64(input.candidates().count) == expected
         }
     }
@@ -37,7 +37,7 @@ struct GraphSingleLeafDomainEncoderTests {
     @Test("Small domains are enumerated in order of distance from the current value")
     func smallDomainsOrderedByDistance() throws {
         try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
-            guard input.domain.saturatingCount <= GraphSingleLeafDomainEncoder.exhaustiveThreshold else {
+            guard input.domain.saturatingCount <= LeafCandidates.exhaustiveThreshold else {
                 return true
             }
             let distances = input.candidates().map { candidate in
@@ -50,7 +50,7 @@ struct GraphSingleLeafDomainEncoderTests {
     @Test("Large domains try the target and the current value's neighbours first")
     func largeDomainsLeadWithTargetAndNeighbours() throws {
         try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
-            guard input.domain.saturatingCount > GraphSingleLeafDomainEncoder.exhaustiveThreshold else {
+            guard input.domain.saturatingCount > LeafCandidates.exhaustiveThreshold else {
                 return true
             }
             var expectedPrefix: [UInt64] = input.includesCurrent ? [input.current] : []
@@ -75,7 +75,7 @@ struct GraphSingleLeafDomainEncoderTests {
         (UInt64(1) ... 3, UInt64(0)),
     ])
     func smallDomainWithoutCurrentYieldsNothing(domain: ClosedRange<UInt64>, current: UInt64) {
-        let candidates = GraphSingleLeafDomainEncoder.candidates(
+        let candidates = LeafCandidates.candidates(
             in: domain,
             current: current,
             target: domain.lowerBound,
@@ -98,7 +98,7 @@ private struct CandidateInput: CustomStringConvertible {
     }
 
     func candidates() -> [UInt64] {
-        GraphSingleLeafDomainEncoder.candidates(
+        LeafCandidates.candidates(
             in: domain,
             current: current,
             target: target,

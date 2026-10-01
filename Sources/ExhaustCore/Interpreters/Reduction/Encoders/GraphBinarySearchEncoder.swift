@@ -5,20 +5,13 @@
 
 // MARK: - Graph Binary Search Encoder
 
-/// Pure binary search over a single integer leaf in bit-pattern space, intended as the upstream slot of a ``GraphComposedEncoder``.
+/// Feedback-driven binary search over one leaf for depth collapse and terminal value searches. Lifted proposals use the fixed rejected ladder from ``LeafCandidates`` instead.
 ///
-/// Operates on a one-leaf ``ValueMinimizationScope`` and emits a sequence of midpoint probes between the leaf's current bit pattern and its reduction target. On rejection, narrows the lower bound (`lo = lastProbe + 1`). On acceptance, narrows the upper bound (`hi = lastProbe`). Converges to the smallest accepted value, or to the original current value if every probe is rejected.
+/// Reads the first leaf in a ``ValueMinimizationScope`` and searches between its current bit pattern and reduction target. ``BinarySearchStepper`` chooses the direction and narrows the interval using acceptance feedback. Unlike ``GraphValueEncoder``, this search has no linear-scan or cross-zero phases.
 ///
-/// ## Why not ``GraphValueEncoder``?
+/// Each candidate preserves the leaf's type tag and range metadata. The emitted mutation has `mayReshape: false`; an enclosing composition supplies reshaping semantics when necessary.
 ///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialization plus a full downstream bound subtree search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
-///
-/// ## Lifecycle
-///
-/// 1. ``start(scope:)`` extracts the single leaf from the scope's ``ValueMinimizationScope``, reads its current and target bit patterns, and initializes a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
-/// 2. ``nextProbe(into:lastAccepted:)`` returns midpoint candidates until convergence. Each candidate writes the next bit pattern into the caller's inout buffer; the mutation is `.leafValues([LeafChange])` with `mayReshape: false` so the enclosing ``GraphComposedEncoder/wrap(downstreamMutation:candidate:upstreamProbe:)`` can flip the flag to `true` when wrapping the downstream probe.
-///
-/// - SeeAlso: ``GraphComposedEncoder``, ``BinarySearchStepper``
+/// - SeeAlso: ``BinarySearchStepper``, ``LeafCandidates``.
 struct GraphBinarySearchEncoder: GraphEncoder {
     let name: EncoderName = .valueSearch
 
