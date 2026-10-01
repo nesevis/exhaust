@@ -20,10 +20,10 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
         tree: ChoiceTree,
         context: StateMachineRunContext<Spec>
     ) -> StateMachineReduction<Spec.Command> {
+        // Every encoder is enabled. The concurrent passes restrict theirs because each probe there is costly, but a sequential probe is a single replay, and arguments coupled across commands (one key used by several commands) only reduce with encoders such as lockstep
         let config = Interpreters.ReducerConfiguration(
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
-            enabledEncoders: [.laneCollapse, .deletion, .valueSearch, .floatSearch],
             tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         let deadline = context.config.deadlineNanoseconds

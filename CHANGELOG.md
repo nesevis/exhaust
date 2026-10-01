@@ -6,6 +6,12 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-10-01
+
+### Changed
+
+- Sequential @StateMachine reductions now use the full set of encoders.
+
 ## [1.5.2] - 2026-10-01
 
 ### Changed
@@ -204,7 +210,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.2...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.3...HEAD
+[1.5.3]: https://github.com/nesevis/exhaust/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/nesevis/exhaust/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/nesevis/exhaust/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/nesevis/exhaust/compare/v1.4.3...v1.5.0
