@@ -95,6 +95,17 @@ extension CandidateSourceBuilder {
                     }
                     sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
                     estimatedCost = tandemScope.groups.count * 8
+                case let .boundExchange(exchange):
+                    // Ranked by the source's distance to target, like redistribution. Each probe pays a lift before the property runs.
+                    guard case let .chooseBits(metadata) = graph.nodes[exchange.sourceLeafNodeID].kind else {
+                        continue
+                    }
+                    let target = metadata.value.reductionTarget(in: metadata.validRange)
+                    let distance = metadata.value.bitPattern64 > target
+                        ? metadata.value.bitPattern64 - target
+                        : target - metadata.value.bitPattern64
+                    sourceDistance = Int(min(distance, UInt64(Int.max)))
+                    estimatedCost = BoundExchangeSearch.keptExchangeLiftBudget
                 case let .relation(relationScope):
                     // Zero magnitude ranks relation search below redistribution and tandem: it is the last-resort joint move for pairs where every cheaper encoder has already stalled.
                     sourceDistance = 0

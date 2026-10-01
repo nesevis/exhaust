@@ -258,3 +258,57 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
         return rows
     }
 }
+
+// MARK: - Graph Bound Value Covering Encoder
+
+/// Adapts ``BoundValueCoveringEncoder`` (a ``ComposableEncoder``) to the ``GraphEncoder`` protocol so it can be used as the downstream of a ``GraphComposedEncoder``.
+///
+/// The downstream slot of a bound value composition needs to *discover* failures in the lifted bound subtree, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
+///
+/// ``BoundValueCoveringEncoder`` enumerates the entire bound value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
+///
+/// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the inner encoder is started on the scope's `baseSequence` at exactly the leaves' positions. Entries between them, such as a nested bind's controller the scope leaves out, stay fixed.
+struct GraphBoundValueCoveringEncoder: GraphEncoder {
+    let name: EncoderName = .boundValueSearch
+
+    private var inner = BoundValueCoveringEncoder()
+    private var leafEntries: [LeafEntry] = []
+    private var hasInner = false
+
+    mutating func start(scope: EncoderInput) {
+        leafEntries = []
+        hasInner = false
+
+        guard case let .minimize(.valueLeaves(integerScope)) = scope.transformation.operation else {
+            return
+        }
+        let graph = scope.graph
+        let sequence = scope.baseSequence
+
+        var positions: [Int] = []
+        var validEntries: [LeafEntry] = []
+        for entry in integerScope.leaves {
+            guard entry.nodeID < graph.nodes.count,
+                  let range = graph.nodes[entry.nodeID].positionRange,
+                  range.lowerBound < sequence.count,
+                  sequence[range.lowerBound].value != nil
+            else { continue }
+            positions.append(range.lowerBound)
+            validEntries.append(entry)
+        }
+        guard validEntries.isEmpty == false else { return }
+
+        leafEntries = validEntries
+        // Ascending, so covering rows assign values in sequence order.
+        inner.start(sequence: sequence, positions: positions.sorted())
+        hasInner = true
+    }
+
+    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
+        guard hasInner else { return nil }
+        guard let built = inner.nextProbe(lastAccepted: lastAccepted) else { return nil }
+        // The composition replaces this mutation with the upstream's reshape mutation, so the empty leafValues is a placeholder; the candidate carries the downstream values.
+        candidate = built
+        return .leafValues([])
+    }
+}

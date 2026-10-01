@@ -10,10 +10,9 @@ indirect enum EncoderDispatch {
     case laneCollapse(GraphLaneCollapseEncoder)
     case depthCollapse(GraphDepthCollapseEncoder)
     case binarySearch(GraphBinarySearchEncoder)
-    case singleLeafDomain(GraphSingleLeafDomainEncoder)
     case boundValueCovering(GraphBoundValueCoveringEncoder)
+    case liftedStage(GraphLiftedStageEncoder)
     case composed(GraphComposedEncoder)
-    case bindPivot(GraphBindPivotEncoder)
 }
 
 extension EncoderDispatch: GraphEncoder {
@@ -29,10 +28,10 @@ extension EncoderDispatch: GraphEncoder {
             case let .laneCollapse(encoder): encoder.name
             case let .depthCollapse(encoder): encoder.name
             case let .binarySearch(encoder): encoder.name
-            case let .singleLeafDomain(encoder): encoder.name
             case let .boundValueCovering(encoder): encoder.name
+            case let .liftedStage(encoder):
+                encoder.name
             case let .composed(encoder): encoder.name
-            case let .bindPivot(encoder): encoder.name
         }
     }
 
@@ -68,18 +67,15 @@ extension EncoderDispatch: GraphEncoder {
             case var .binarySearch(encoder):
                 encoder.start(scope: scope)
                 self = .binarySearch(encoder)
-            case var .singleLeafDomain(encoder):
-                encoder.start(scope: scope)
-                self = .singleLeafDomain(encoder)
             case var .boundValueCovering(encoder):
                 encoder.start(scope: scope)
                 self = .boundValueCovering(encoder)
+            case var .liftedStage(encoder):
+                encoder.start(scope: scope)
+                self = .liftedStage(encoder)
             case var .composed(encoder):
                 encoder.start(scope: scope)
                 self = .composed(encoder)
-            case var .bindPivot(encoder):
-                encoder.start(scope: scope)
-                self = .bindPivot(encoder)
         }
     }
 
@@ -125,21 +121,17 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .binarySearch(encoder)
                 return result
-            case var .singleLeafDomain(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
-                self = .singleLeafDomain(encoder)
-                return result
             case var .boundValueCovering(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .boundValueCovering(encoder)
                 return result
+            case var .liftedStage(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .liftedStage(encoder)
+                return result
             case var .composed(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .composed(encoder)
-                return result
-            case var .bindPivot(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
-                self = .bindPivot(encoder)
                 return result
         }
     }
@@ -156,10 +148,10 @@ extension EncoderDispatch: GraphEncoder {
             case let .laneCollapse(encoder): encoder.hadUnresolvedReplacement
             case let .depthCollapse(encoder): encoder.hadUnresolvedReplacement
             case let .binarySearch(encoder): encoder.hadUnresolvedReplacement
-            case let .singleLeafDomain(encoder): encoder.hadUnresolvedReplacement
             case let .boundValueCovering(encoder): encoder.hadUnresolvedReplacement
+            case let .liftedStage(encoder):
+                encoder.hadUnresolvedReplacement
             case let .composed(encoder): encoder.hadUnresolvedReplacement
-            case let .bindPivot(encoder): encoder.hadUnresolvedReplacement
         }
     }
 
@@ -175,10 +167,10 @@ extension EncoderDispatch: GraphEncoder {
             case let .laneCollapse(encoder): encoder.convergenceRecords
             case let .depthCollapse(encoder): encoder.convergenceRecords
             case let .binarySearch(encoder): encoder.convergenceRecords
-            case let .singleLeafDomain(encoder): encoder.convergenceRecords
             case let .boundValueCovering(encoder): encoder.convergenceRecords
+            case let .liftedStage(encoder):
+                encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
-            case let .bindPivot(encoder): encoder.convergenceRecords
         }
     }
 
@@ -214,47 +206,66 @@ extension EncoderDispatch: GraphEncoder {
             case var .binarySearch(encoder):
                 encoder.flushPartialConvergence()
                 self = .binarySearch(encoder)
-            case var .singleLeafDomain(encoder):
-                encoder.flushPartialConvergence()
-                self = .singleLeafDomain(encoder)
             case var .boundValueCovering(encoder):
                 encoder.flushPartialConvergence()
                 self = .boundValueCovering(encoder)
+            case var .liftedStage(encoder):
+                encoder.flushPartialConvergence()
+                self = .liftedStage(encoder)
             case var .composed(encoder):
                 encoder.flushPartialConvergence()
                 self = .composed(encoder)
-            case var .bindPivot(encoder):
-                encoder.flushPartialConvergence()
-                self = .bindPivot(encoder)
         }
     }
 
-    /// Returns true for encoders whose probes alter the bound subtree, requiring a full graph rebuild and ``refreshState(graph:sequence:)`` call after each acceptance. Currently only the ``GraphComposedEncoder`` case.
-    var isStateful: Bool {
-        if case .composed = self { return true }
-        return false
-    }
-
-    /// Upstream probes that produced a valid lift in the current pass, for the ``GraphComposedEncoder`` case; nil for every other encoder.
-    var composedUpstreamProbesUsed: Int? {
-        if case let .composed(encoder) = self { return encoder.upstreamProbesUsed }
-        return nil
-    }
-
-    /// Generator materializations the encoder ran outside the probe decoder during the current pass, with the site they are reported under; nil for encoders that never materialize. Bound value lifts are counted run-wide by ``BoundValueBuildTally`` instead.
-    var liftMaterializations: (site: MaterializationSite, count: Int)? {
+    /// Forces exact decoding for lifted bound-value and exchange probes. False leaves mutation-sensitive selection, including branch materialization, to the scheduler.
+    var requiresExactDecoder: Bool {
         switch self {
-            case let .bindPivot(encoder):
-                (.bindPivotLift, encoder.liftsPerformed)
+            case let .composed(encoder):
+                encoder.requiresExactDecoder
+            default:
+                false
+        }
+    }
+
+    /// Discards lifted searches after acceptance without applying their mutations to the dispatched graph. Other encoders retain mutation application and finish when it requires a rebuild.
+    var acceptanceHandling: AcceptanceHandling {
+        switch self {
+            case let .composed(encoder):
+                encoder.acceptanceHandling
+            default:
+                .applyMutation
+        }
+    }
+
+    /// Constructed stages for bound value and exchange pass reporting. Pivot seeds retain their separate lift-site accounting.
+    var composedUpstreamProbesUsed: Int? {
+        switch self {
+            case let .composed(encoder):
+                encoder.reportedConstructedStages
             default:
                 nil
         }
     }
 
-    /// Re-derives cached scope state from the live graph after a structural mutation. No-op for non-stateful encoders.
+    /// Generator materializations the encoder ran outside the probe decoder during the current pass, with the site they are reported under; nil for encoders that never materialize. Bound value lifts are counted run-wide by ``BoundValueBuildTally`` instead.
+    var liftMaterializations: (site: MaterializationSite, count: Int)? {
+        switch self {
+            case let .composed(encoder):
+                encoder.liftMaterializations
+            default:
+                nil
+        }
+    }
+
+    /// Discards pre-acceptance lifted scopes on the refresh-and-idle path. No-op for encoders that apply their mutations instead.
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
-        guard case var .composed(encoder) = self else { return }
-        encoder.refreshState(graph: graph, sequence: sequence)
-        self = .composed(encoder)
+        switch self {
+            case var .composed(encoder):
+                encoder.refreshState(graph: graph, sequence: sequence)
+                self = .composed(encoder)
+            default:
+                break
+        }
     }
 }

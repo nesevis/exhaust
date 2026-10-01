@@ -141,7 +141,7 @@ struct StructuralPathologicalChallenge {
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay(1337)
+            .replay("BH1812E91JRA3-14")
         ) { x, y in
             x + y < 10
         }

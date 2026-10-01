@@ -4,6 +4,199 @@ import Testing
 
 @Suite("GraphComposedEncoder")
 struct GraphComposedEncoderTests {
+    @Test("Failed engine lifts are counted without invoking the downstream factory")
+    func failedEngineLiftsAreCounted() throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        let pool = CompositionBuildPool(capacity: 3)
+        var recordedAttempts = 0
+        var recordedFailures = 0
+        var composed = GraphComposedEncoder(
+            name: .composed,
+            makeProposals: { scope in
+                rejectedLeafProposals(scope: scope)
+            },
+            policy: CompositionPolicy(
+                stageBudget: 1,
+                chainLimits: chainLimits(maxBuildsPerStart: 3, buildPool: pool)
+            ),
+            lift: { _, _ in nil },
+            recordLiftAttempt: { recordedAttempts += 1 },
+            recordBuild: { build in
+                switch build {
+                    case .failed(.materializationFailed):
+                        recordedFailures += 1
+                    default:
+                        Issue.record("Expected a failed lift")
+                }
+            },
+            downstreamFactory: { _, _, _ in
+                Issue.record("A failed lift must not invoke the factory")
+                return .failed(.bindNotFound)
+            }
+        )
+        composed.start(scope: scope)
+        #expect(drainCandidates(of: &composed, sequence: scope.baseSequence).isEmpty)
+        #expect(recordedAttempts == 3)
+        #expect(recordedFailures == 3)
+        #expect(composed.ledger.attempts == 3)
+        #expect(composed.ledger.constructedStages == 0)
+        #expect(composed.ledger.emittedProbes == 0)
+        #expect(pool.remaining == 0)
+    }
+
+    @Test("Each start builds proposals from that scope and resets pass-local work")
+    func proposalsFollowEachStart() throws {
+        let first = try #require(singleLeafScope(value: 100))
+        let second = try #require(singleLeafScope(value: 40))
+        var starts: [ChoiceSequence] = []
+        var prefixes: [ChoiceSequence] = []
+        var encoder = GraphComposedEncoder(
+            name: .composed,
+            makeProposals: { scope in
+                starts.append(scope.baseSequence)
+                return rejectedLeafProposals(scope: scope)
+            },
+            lift: { prefix, _ in
+                prefixes.append(prefix)
+                return nil
+            },
+            downstreamFactory: { _, _, _ in
+                Issue.record("A failed lift must not build a stage")
+                return .failed(.bindNotFound)
+            }
+        )
+        var buffer = first.baseSequence
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
+        #expect(starts.isEmpty)
+        encoder.start(scope: first)
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
+        #expect(prefixes.first == ChoiceSequence(ChoiceTree.group([.uint64(50, in: 0 ... 1000)])))
+        #expect(encoder.ledger.attempts == prefixes.count)
+
+        prefixes = []
+        encoder.start(scope: second)
+        #expect(encoder.ledger.attempts == 0)
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
+        #expect(prefixes.first == ChoiceSequence(ChoiceTree.group([.uint64(20, in: 0 ... 1000)])))
+        #expect(encoder.ledger.attempts == prefixes.count)
+        #expect(starts == [first.baseSequence, second.baseSequence])
+    }
+
+    @Test("The engine constructs the lifted sequence from the returned tree, not the proposal prefix")
+    func liftedResultComesFromTree() throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        let tree = ChoiceTree.uint64(7, in: 0 ... 1000)
+        let expected = ChoiceSequence(tree)
+        var builds = 0
+        var encoder = GraphComposedEncoder(
+            name: .composed,
+            makeProposals: { scope in
+                .seeds(SeedProposalCursor(seeds: [scope.baseSequence], mutation: .leafValues([])))
+            },
+            lift: { prefix, fallbackTree in
+                #expect(prefix == scope.baseSequence)
+                #expect(ChoiceSequence(fallbackTree) == scope.baseSequence)
+                return tree
+            },
+            downstreamFactory: { proposal, lifted, parent in
+                builds += 1
+                #expect(lifted.sequence == expected)
+                #expect(ChoiceSequence(lifted.tree) == expected)
+                return .stage(
+                    encoder: .liftedStage(GraphLiftedStageEncoder(name: .composed, mutation: proposal.mutation)),
+                    scope: EncoderInput(
+                        transformation: parent.transformation,
+                        baseSequence: lifted.sequence,
+                        tree: lifted.tree,
+                        graph: ChoiceGraph.build(from: lifted.tree),
+                        warmStartRecords: [:]
+                    )
+                )
+            }
+        )
+        encoder.start(scope: scope)
+        var buffer = scope.baseSequence
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) != nil)
+        #expect(buffer == expected)
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
+        #expect(builds == 1)
+        #expect(encoder.ledger.attempts == 1)
+        #expect(encoder.ledger.constructedStages == 1)
+    }
+
+    @Test("Accounting follows policy independently of the stats label", arguments: [
+        EncoderName.composed, .bindPivot, .boundExchange, .valueSearch,
+    ], [true, false])
+    func accountingUsesPolicy(name: EncoderName, reportsStages: Bool) throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        var encoder = GraphComposedEncoder(
+            name: name,
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(
+                stageBudget: 1,
+                liftSite: reportsStages ? .bindPivotLift : nil,
+                reportsConstructedStages: reportsStages
+            ),
+            lift: liftLeafProposal,
+            downstreamFactory: binaryLeafStage
+        )
+        encoder.start(scope: scope)
+        #expect(drainCandidates(of: &encoder, sequence: scope.baseSequence).isEmpty == false)
+        let dispatch = EncoderDispatch.composed(encoder)
+        #expect(dispatch.name == name)
+        #expect(dispatch.composedUpstreamProbesUsed == (reportsStages ? 1 : nil))
+        #expect(dispatch.liftMaterializations?.site == (reportsStages ? .bindPivotLift : nil))
+        #expect(dispatch.liftMaterializations?.count == (reportsStages ? 1 : nil))
+    }
+
+    @Test("Each start captures its parsed scope in the downstream factory")
+    func downstreamFactoryFollowsEachStart() throws {
+        let first = try #require(singleLeafScope(value: 100))
+        let second = try #require(singleLeafScope(value: 40))
+        var captures: [ChoiceSequence] = []
+        var encoder = GraphComposedEncoder(
+            name: .composed,
+            makeProposals: { scope in
+                guard let source = rejectedLeafProposals(scope: scope) else {
+                    return nil
+                }
+                let captured = scope.baseSequence
+                return (
+                    source: source,
+                    downstreamFactory: { proposal, lifted, parent in
+                        captures.append(captured)
+                        return binaryLeafStage(proposal, lifted: lifted, parent: parent)
+                    }
+                )
+            },
+            policy: CompositionPolicy(stageBudget: 1),
+            lift: liftLeafProposal
+        )
+        for scope in [first, second] {
+            encoder.start(scope: scope)
+            #expect(drainCandidates(of: &encoder, sequence: scope.baseSequence).isEmpty == false)
+        }
+        #expect(captures == [first.baseSequence, second.baseSequence])
+    }
+
+    @Test("Every shared build failure has a diagnostic outcome")
+    func buildFailureMappingIsTotal() {
+        let failures: [(DownstreamBuildFailure, BoundValueBuildOutcome)] = [
+            (.materializationFailed, .materializationFailed),
+            (.liftedTooLong, .liftedTooLong),
+            (.bindNotFound, .bindNotFound),
+            (.noDownstreamLeaves, .noDownstreamLeaves),
+            (.sinkValueMismatch, .sinkValueMismatch),
+        ]
+        let tally = BoundValueBuildTally()
+        for (failure, outcome) in failures {
+            tally.record(.single, build: .failed(failure))
+            #expect(tally.counts[BoundValueBuildRecord(stage: .single, outcome: outcome)] == 1)
+        }
+        #expect(tally.counts.count == failures.count)
+        #expect(tally.total == 0)
+    }
+
     // MARK: - Upstream × Downstream Iteration
 
     @Test("Composition emits downstream probes for each upstream probe")
@@ -21,19 +214,10 @@ struct GraphComposedEncoderTests {
 
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            downstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamBudget: 100,
-            lift: { candidate, _, parent in
-                EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
-            }
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 100),
+            lift: liftLeafProposal,
+            downstreamFactory: binaryLeafStage
         )
 
         composed.start(scope: scope)
@@ -63,20 +247,14 @@ struct GraphComposedEncoderTests {
         var nestedScopes: [EncoderInput] = []
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            upstreamBudget: 2,
-            downstreamBuilder: { candidate, _, parent in
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 2),
+            lift: liftLeafProposal,
+            downstreamFactory: { _, lifted, parent in
                 downstreamBuildCount += 1
-                let nestedScope = EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
+                let nestedScope = liftedLeafScope(lifted, parent: parent)
                 nestedScopes.append(nestedScope)
-                return (.composed(nestedComposition(scope: nestedScope)), nestedScope)
+                return .stage(encoder: .composed(nestedComposition()), scope: nestedScope)
             }
         )
 
@@ -100,7 +278,7 @@ struct GraphComposedEncoderTests {
             emittedCandidates.append(buffer)
         }
         let firstNestedScope = try #require(nestedScopes.first)
-        var standaloneNested = nestedComposition(scope: firstNestedScope)
+        var standaloneNested = nestedComposition()
         standaloneNested.start(scope: firstNestedScope)
         let nestedCandidates = drainCandidates(of: &standaloneNested, sequence: firstNestedScope.baseSequence)
         #expect(nestedCandidates.isEmpty == false)
@@ -207,13 +385,12 @@ struct GraphComposedEncoderTests {
         var builderCalls = 0
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            upstreamBudget: 100,
-            chainLimits: chainLimits(maxBuildsPerStart: 3),
-            downstreamBuilder: { _, _, _ in
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 100, chainLimits: chainLimits(maxBuildsPerStart: 3)),
+            lift: liftLeafProposal,
+            downstreamFactory: { _, _, _ in
                 builderCalls += 1
-                return nil
+                return .failed(.bindNotFound)
             }
         )
 
@@ -231,31 +408,23 @@ struct GraphComposedEncoderTests {
         var builderCalls = 0
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            upstreamBudget: 100,
-            chainLimits: chainLimits(buildPool: pool),
-            downstreamBuilder: { candidate, _, parent in
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 100, chainLimits: chainLimits(buildPool: pool)),
+            lift: liftLeafProposal,
+            downstreamFactory: { _, lifted, parent in
                 builderCalls += 1
-                let nestedScope = EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
+                let nestedScope = liftedLeafScope(lifted, parent: parent)
                 let emptyNested = GraphComposedEncoder(
                     name: .composed,
-                    upstream: .binarySearch(GraphBinarySearchEncoder()),
-                    upstreamScope: nestedScope,
-                    upstreamBudget: 100,
-                    chainLimits: chainLimits(buildPool: pool),
-                    downstreamBuilder: { _, _, _ in
+                    makeProposals: rejectedLeafProposals,
+                    policy: CompositionPolicy(stageBudget: 100, chainLimits: chainLimits(buildPool: pool)),
+                    lift: liftLeafProposal,
+                    downstreamFactory: { _, _, _ in
                         builderCalls += 1
-                        return nil
+                        return .failed(.bindNotFound)
                     }
                 )
-                return (.composed(emptyNested), nestedScope)
+                return .stage(encoder: .composed(emptyNested), scope: nestedScope)
             }
         )
 
@@ -383,21 +552,16 @@ struct GraphComposedEncoderTests {
         var liftCallCount = 0
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            downstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamBudget: 2,
-            lift: { candidate, _, parent in
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 2),
+            lift: { prefix, fallbackTree in
                 liftCallCount += 1
-                if liftCallCount % 2 == 0 { return nil }
-                return EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
-            }
+                guard liftCallCount % 2 != 0 else {
+                    return nil
+                }
+                return liftLeafProposal(prefix, fallbackTree)
+            },
+            downstreamFactory: binaryLeafStage
         )
 
         composed.start(scope: scope)
@@ -428,19 +592,10 @@ struct GraphComposedEncoderTests {
 
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            downstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamBudget: 5,
-            lift: { candidate, _, parent in
-                EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
-            }
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 5),
+            lift: liftLeafProposal,
+            downstreamFactory: binaryLeafStage
         )
 
         composed.start(scope: scope)
@@ -476,19 +631,10 @@ struct GraphComposedEncoderTests {
 
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamScope: scope,
-            downstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamBudget: 10,
-            lift: { candidate, _, parent in
-                EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
-            }
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 10),
+            lift: liftLeafProposal,
+            downstreamFactory: binaryLeafStage
         )
 
         composed.start(scope: scope)
@@ -502,8 +648,8 @@ struct GraphComposedEncoderTests {
 
     // MARK: - Convergence Records
 
-    @Test("Composition exposes upstream convergence records")
-    func upstreamConvergenceExposed() {
+    @Test("Fixed proposals do not inherit an adaptive encoder's convergence records")
+    func adaptiveConvergenceNotTransferred() {
         let tree = ChoiceTree.group([
             .choice(ChoiceValue(10 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
         ])
@@ -517,19 +663,10 @@ struct GraphComposedEncoderTests {
 
         var composed = GraphComposedEncoder(
             name: .composed,
-            upstream: .value(GraphValueEncoder()),
-            upstreamScope: scope,
-            downstream: .binarySearch(GraphBinarySearchEncoder()),
-            upstreamBudget: 100,
-            lift: { candidate, _, parent in
-                EncoderInput(
-                    transformation: parent.transformation,
-                    baseSequence: candidate,
-                    tree: parent.tree,
-                    graph: parent.graph,
-                    warmStartRecords: [:]
-                )
-            }
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(stageBudget: 100),
+            lift: liftLeafProposal,
+            downstreamFactory: binaryLeafStage
         )
 
         composed.start(scope: scope)
@@ -540,8 +677,12 @@ struct GraphComposedEncoderTests {
         }
         composed.flushPartialConvergence()
 
-        let records = composed.convergenceRecords
-        #expect(records.isEmpty == false, "Upstream value encoder should produce convergence records")
+        var adaptive = GraphValueEncoder()
+        adaptive.start(scope: scope)
+        while adaptive.nextProbe(into: &buffer, lastAccepted: false) != nil {}
+        adaptive.flushPartialConvergence()
+        #expect(adaptive.convergenceRecords.isEmpty == false, "The adaptive oracle produces convergence records")
+        #expect(composed.convergenceRecords.isEmpty, "Fixed proposals have no acceptance-dependent convergence")
     }
 }
 
@@ -555,20 +696,10 @@ private func drainProbes(
 ) -> Int {
     var composed = GraphComposedEncoder(
         name: .composed,
-        upstream: .binarySearch(GraphBinarySearchEncoder()),
-        upstreamScope: scope,
-        downstream: .binarySearch(GraphBinarySearchEncoder()),
-        upstreamBudget: upstreamBudget,
-        totalProbeCap: totalProbeCap,
-        lift: { candidate, _, parent in
-            EncoderInput(
-                transformation: parent.transformation,
-                baseSequence: candidate,
-                tree: parent.tree,
-                graph: parent.graph,
-                warmStartRecords: [:]
-            )
-        }
+        makeProposals: rejectedLeafProposals,
+        policy: CompositionPolicy(stageBudget: upstreamBudget, totalProbeCap: totalProbeCap),
+        lift: liftLeafProposal,
+        downstreamFactory: binaryLeafStage
     )
 
     composed.start(scope: scope)
@@ -623,22 +754,13 @@ private let coveringScopeGen: Generator<[CoveringScopeEntry]> = Gen.arrayOf(
 )
 
 /// A composition over the scope's single leaf whose downstream re-searches the lifted candidate.
-private func nestedComposition(scope: EncoderInput) -> GraphComposedEncoder {
+private func nestedComposition() -> GraphComposedEncoder {
     GraphComposedEncoder(
         name: .composed,
-        upstream: .binarySearch(GraphBinarySearchEncoder()),
-        upstreamScope: scope,
-        downstream: .binarySearch(GraphBinarySearchEncoder()),
-        upstreamBudget: 2,
-        lift: { candidate, _, parent in
-            EncoderInput(
-                transformation: parent.transformation,
-                baseSequence: candidate,
-                tree: parent.tree,
-                graph: parent.graph,
-                warmStartRecords: [:]
-            )
-        }
+        makeProposals: rejectedLeafProposals,
+        policy: CompositionPolicy(stageBudget: 2),
+        lift: liftLeafProposal,
+        downstreamFactory: binaryLeafStage
     )
 }
 
@@ -659,18 +781,13 @@ private func stageProbes(probesPerStageTurn: Int?) throws -> [(stage: UInt64, ca
     let scope = try #require(singleLeafScope(value: 100))
     var composed = GraphComposedEncoder(
         name: .composed,
-        upstream: .binarySearch(GraphBinarySearchEncoder()),
-        upstreamScope: scope,
-        upstreamBudget: 3,
-        chainLimits: probesPerStageTurn.map { chainLimits(probesPerStageTurn: $0) },
-        downstreamBuilder: { candidate, _, _ in
-            guard let liftedValue = candidate.compactMap({ $0.value?.choice.bitPattern64 }).first,
-                  let liftedScope = singleLeafScope(value: liftedValue)
-            else {
-                return nil
-            }
-            return (.binarySearch(GraphBinarySearchEncoder()), liftedScope)
-        }
+        makeProposals: rejectedLeafProposals,
+        policy: CompositionPolicy(
+            stageBudget: 3,
+            chainLimits: probesPerStageTurn.map { chainLimits(probesPerStageTurn: $0) }
+        ),
+        lift: liftLeafProposal,
+        downstreamFactory: binaryLeafStage
     )
 
     composed.start(scope: scope)
@@ -801,31 +918,4 @@ private enum BoundValueCompositionFixtureError: Error {
 
 private final class ContinuationCounter {
     var value = 0
-}
-
-extension GraphComposedEncoder {
-    /// Creates a composition whose downstream encoder type is fixed while its scope is lifted per upstream probe.
-    init(
-        name: EncoderName,
-        upstream: EncoderDispatch,
-        upstreamScope: EncoderInput,
-        downstream: EncoderDispatch,
-        upstreamBudget: Int = 15,
-        totalProbeCap: Int = 0,
-        lift: @escaping (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
-    ) {
-        self.init(
-            name: name,
-            upstream: upstream,
-            upstreamScope: upstreamScope,
-            upstreamBudget: upstreamBudget,
-            totalProbeCap: totalProbeCap,
-            downstreamBuilder: { candidate, mutation, parent in
-                guard let scope = lift(candidate, mutation, parent) else {
-                    return nil
-                }
-                return (downstream, scope)
-            }
-        )
-    }
 }

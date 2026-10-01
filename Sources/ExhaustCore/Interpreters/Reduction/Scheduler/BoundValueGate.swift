@@ -59,6 +59,11 @@ struct BoundValueGate {
         dispatchedThisCycle.insert(fingerprint)
     }
 
+    /// Whether the bind's last classification or dispatch was unproductive, meaning its bind inner could not be lowered under any downstream assignment the search tried.
+    func isFruitless(_ fingerprint: UInt64) -> Bool {
+        fruitless.contains(fingerprint)
+    }
+
     mutating func markFruitless(_ fingerprint: UInt64) {
         fruitless.insert(fingerprint)
     }

@@ -53,6 +53,7 @@ enum GraphOperation {
             case .exchange(.redistribution): .redistribution
             case .exchange(.tandem): .lockstep
             case .exchange(.relation): .relationSearch
+            case .exchange(.boundExchange): .boundExchange
             case .permute: .siblingSwap
             case .reorder: .numericReorder
         }
@@ -61,7 +62,7 @@ enum GraphOperation {
     /// Whether this operation's encoder is built with the generator in hand at dispatch time, because its probes are lifted through a materialization. Such operations are skipped by the relax round, which has no generator to give them.
     var requiresGenerator: Bool {
         switch self {
-            case .minimize(.boundValue), .minimize(.bindPivot):
+            case .minimize(.boundValue), .minimize(.bindPivot), .exchange(.boundExchange):
                 true
             default:
                 false

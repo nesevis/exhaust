@@ -197,6 +197,32 @@ enum ExchangeScope {
 
     /// Joint descent along an inferred rational relation between stall-converged leaf pairs.
     case relation(RelationScope)
+
+    /// Sum-preserving exchange from a bind inner into a leaf whose range its bind determines, placed through a lift.
+    case boundExchange(BoundExchangeScope)
+}
+
+/// Scope for a sum-preserving exchange from a bind inner into a leaf its bind determines.
+///
+/// Redistribution assumes its two leaves have independent ranges. Here the sink lives in the bound subtree of the source's bind, so lowering the source can shrink the sink's range. ``BoundExchangeSearch`` lifts each exchanged candidate through the generator and keeps the sink's share of the delta only when it fits the lifted range.
+struct BoundExchangeScope {
+    /// The bind inner the exchange lowers. Dispatched only once it has stalled at its current value.
+    let sourceLeafNodeID: Int
+
+    /// The leaf that absorbs the delta: the bind inner of a bind further down the source's composable chain, or a leaf in the fixed-shape bound subtree at the end of that chain.
+    let sinkLeafNodeID: Int
+
+    /// Determines which bind-relative address survives a lift that shifts sequence positions.
+    let sinkLocation: SinkLocation
+}
+
+/// Distinguishes a bind's inner child from an offset inside its fixed-shape bound subtree. These addresses require different validation after lifting.
+enum SinkLocation: Equatable {
+    /// Tracks the bind's inner child even when preceding sequence positions shift.
+    case bindInner(bindNodeID: Int)
+
+    /// Tracks a leaf's offset only while the bind's bound range retains its length.
+    case boundLeaf(bindNodeID: Int)
 }
 
 /// Scope for redistribution along type-compatibility edges.

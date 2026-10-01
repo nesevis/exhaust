@@ -3,169 +3,20 @@
 //  Exhaust
 //
 
-// MARK: - Graph Binary Search Encoder
-
-/// Pure binary search over a single integer leaf in bit-pattern space, intended as the upstream slot of a ``GraphComposedEncoder``.
-///
-/// Operates on a one-leaf ``ValueMinimizationScope`` and emits a sequence of midpoint probes between the leaf's current bit pattern and its reduction target. On rejection, narrows the lower bound (`lo = lastProbe + 1`). On acceptance, narrows the upper bound (`hi = lastProbe`). Converges to the smallest accepted value, or to the original current value if every probe is rejected.
-///
-/// ## Why not ``GraphValueEncoder``?
-///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialization plus a full downstream bound subtree search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
-///
-/// ## Lifecycle
-///
-/// 1. ``start(scope:)`` extracts the single leaf from the scope's ``ValueMinimizationScope``, reads its current and target bit patterns, and initializes a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
-/// 2. ``nextProbe(into:lastAccepted:)`` returns midpoint candidates until convergence. Each candidate writes the next bit pattern into the caller's inout buffer; the mutation is `.leafValues([LeafChange])` with `mayReshape: false` so the enclosing ``GraphComposedEncoder/wrap(downstreamMutation:candidate:upstreamProbe:)`` can flip the flag to `true` when wrapping the downstream probe.
-///
-/// - SeeAlso: ``GraphComposedEncoder``, ``BinarySearchStepper``
-struct GraphBinarySearchEncoder: GraphEncoder {
-    let name: EncoderName = .valueSearch
-
-    private var leafNodeID: Int = -1
-    private var sequenceIndex: Int = -1
-    private var typeTag: TypeTag = .uint
-    private var validRange: ClosedRange<UInt64>?
-    private var isRangeExplicit: Bool = false
-    private var stepper: BinarySearchStepper?
-    private var baseSequence: ChoiceSequence = .init([])
-    private var needsFirstProbe = true
-
-    mutating func start(scope: EncoderInput) {
-        leafNodeID = -1
-        sequenceIndex = -1
-        stepper = nil
-        baseSequence = scope.baseSequence
-        needsFirstProbe = true
-
-        guard case let .minimize(.valueLeaves(integerScope)) = scope.transformation.operation,
-              let entry = integerScope.leaves.first
-        else { return }
-        let graph = scope.graph
-        guard entry.nodeID < graph.nodes.count,
-              case let .chooseBits(metadata) = graph.nodes[entry.nodeID].kind,
-              let range = graph.nodes[entry.nodeID].positionRange,
-              range.lowerBound < scope.baseSequence.count,
-              scope.baseSequence[range.lowerBound].value != nil
-        else { return }
-
-        let currentBitPattern = metadata.value.bitPattern64
-        let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
-        guard currentBitPattern != targetBitPattern else { return }
-
-        leafNodeID = entry.nodeID
-        sequenceIndex = range.lowerBound
-        typeTag = metadata.typeTag
-        validRange = metadata.validRange
-        isRangeExplicit = metadata.isRangeExplicit
-        if currentBitPattern > targetBitPattern {
-            stepper = BinarySearchStepper(lo: targetBitPattern, hi: currentBitPattern, direction: .findSmallest)
-        } else {
-            stepper = BinarySearchStepper(lo: currentBitPattern, hi: targetBitPattern, direction: .findLargest)
-        }
-    }
-
-    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
-        guard leafNodeID >= 0 else { return nil }
-
-        let nextBitPattern: UInt64?
-        if needsFirstProbe {
-            needsFirstProbe = false
-            nextBitPattern = stepper?.start()
-        } else {
-            nextBitPattern = stepper?.advance(lastAccepted: lastAccepted)
-        }
-        guard let bitPattern = nextBitPattern else { return nil }
-
-        let newChoice = ChoiceValue(
-            typeTag.makeConvertible(bitPattern64: bitPattern),
-            tag: typeTag
-        )
-        candidate = baseSequence
-        candidate[sequenceIndex] = .value(.init(
-            choice: newChoice,
-            validRange: validRange,
-            isRangeExplicit: isRangeExplicit
-        ))
-
-        let change = LeafChange(
-            leafNodeID: leafNodeID,
-            newValue: newChoice,
-            mayReshape: false
-        )
-        return .leafValues([change])
-    }
-}
-
-// MARK: - Graph Bound Value Covering Encoder
-
-/// Adapts ``BoundValueCoveringEncoder`` (a ``ComposableEncoder``) to the ``GraphEncoder`` protocol so it can be used as the downstream of a ``GraphComposedEncoder``.
-///
-/// The downstream slot of a bound value composition needs to *discover* failures in the lifted bound subtree, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
-///
-/// ``BoundValueCoveringEncoder`` enumerates the entire bound value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
-///
-/// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the inner encoder is started on the scope's `baseSequence` at exactly the leaves' positions. Entries between them, such as a nested bind's controller the scope leaves out, stay fixed.
-struct GraphBoundValueCoveringEncoder: GraphEncoder {
-    let name: EncoderName = .boundValueSearch
-
-    private var inner = BoundValueCoveringEncoder()
-    private var leafEntries: [LeafEntry] = []
-    private var hasInner = false
-
-    mutating func start(scope: EncoderInput) {
-        leafEntries = []
-        hasInner = false
-
-        guard case let .minimize(.valueLeaves(integerScope)) = scope.transformation.operation else {
-            return
-        }
-        let graph = scope.graph
-        let sequence = scope.baseSequence
-
-        var positions: [Int] = []
-        var validEntries: [LeafEntry] = []
-        for entry in integerScope.leaves {
-            guard entry.nodeID < graph.nodes.count,
-                  let range = graph.nodes[entry.nodeID].positionRange,
-                  range.lowerBound < sequence.count,
-                  sequence[range.lowerBound].value != nil
-            else { continue }
-            positions.append(range.lowerBound)
-            validEntries.append(entry)
-        }
-        guard validEntries.isEmpty == false else { return }
-
-        leafEntries = validEntries
-        // Ascending, so covering rows assign values in sequence order.
-        inner.start(sequence: sequence, positions: positions.sorted())
-        hasInner = true
-    }
-
-    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
-        guard hasInner else { return nil }
-        guard let built = inner.nextProbe(lastAccepted: lastAccepted) else { return nil }
-        // The composition's ``GraphComposedEncoder/wrap(downstreamProbe:upstreamProbe:)``
-        // replaces this mutation with the upstream's reshape mutation, so we report an empty leafValues here as a placeholder — the candidate is what matters.
-        candidate = built
-        return .leafValues([])
-    }
-}
-
 // MARK: - Graph Composed Encoder
 
-/// Composes two ``GraphEncoder``s through a builder that translates each upstream probe into a downstream encoder and ``EncoderInput``.
+/// Lifts proposals and schedules operation-specific searches built from each freshly lifted result.
 ///
-/// The upstream and downstream encoders operate on separate scopes. The upstream scope is fixed at construction time; the downstream builder produces a fresh encoder and scope for each upstream probe. Returning an encoder as well as its scope lets one composition place another composition downstream. When the scheduler calls ``start(scope:)``, the composition stores that scope as the parent context for the builder but does not forward it to the upstream encoder.
+/// Proposal generation never receives acceptance feedback. The factory validates each lift before constructing its downstream encoder and scope; a nested composition receives the lifted graph and its operation's chain context. The engine owns lift attempts, constructed-stage counts, probe caps, and active and suspended searches.
 ///
 /// ## Iteration Semantics
 ///
-/// - Outer loop: pull upstream probes via ``GraphEncoder/nextProbe(into:lastAccepted:)``.
-/// - For each upstream probe, call the downstream builder to create an encoder and scope. Together they form one downstream stage.
-/// - Inner loop: pull the active stage's probes; emit each one via ``wrap(downstreamMutation:candidate:upstreamProbe:)``.
+/// - Outer loop: pull proposals from ``LiftProposalSource``.
+/// - For each proposal, attempt a lift and call the downstream factory. A constructed encoder and scope form one downstream stage.
+/// - Inner loop: pull the active stage's probes; emit each one via ``wrap(upstreamProbe:)``.
 /// - When the active stage has used its turn, suspend it and start the next upstream probe's stage. Once upstream is exhausted or over budget, resume suspended stages in round-robin order, one turn each. Without a turn limit, each stage runs to exhaustion before the next upstream probe is pulled.
 ///
-/// Every stage receives rejection feedback: an accepted probe triggers ``refreshState(graph:sequence:)``, which aborts the pass.
+/// Every stage receives rejection feedback. The operation's acceptance policy either refreshes to idle or applies the upstream mutation and ends the session when it requires a rebuild.
 ///
 /// ## Mutation Reporting
 ///
@@ -173,16 +24,20 @@ struct GraphBoundValueCoveringEncoder: GraphEncoder {
 ///
 /// ## Convergence
 ///
-/// Only the upstream encoder's convergence records are exposed to the scheduler. The downstream encoder cold-starts on each upstream probe via ``GraphEncoder/start(scope:)``, so any convergence it accumulates is downstream-local and not transferable to the live graph.
+/// Proposals receive no acceptance feedback and expose no convergence records. Downstream convergence is local to the lifted graph and cannot be transferred to the live graph.
 ///
 struct GraphComposedEncoder: StatefulGraphEncoder {
     let name: EncoderName
 
-    typealias DownstreamBuilder = (
-        ChoiceSequence,
-        EncoderProbe,
-        EncoderInput
-    ) -> (encoder: EncoderDispatch, scope: EncoderInput)?
+    typealias Lift = (_ prefix: ChoiceSequence, _ fallbackTree: ChoiceTree) -> ChoiceTree?
+    typealias ProposalSourceFactory = (_ scope: EncoderInput) -> LiftProposalSource?
+    typealias PreparedSearch = (source: LiftProposalSource, downstreamFactory: DownstreamFactory)
+    typealias ProposalFactory = (_ scope: EncoderInput) -> PreparedSearch?
+    typealias DownstreamFactory = (
+        _ proposal: LiftProposal,
+        _ lifted: LiftResult,
+        _ parent: EncoderInput
+    ) -> DownstreamBuild
 
     private struct DownstreamStage {
         var encoder: EncoderDispatch
@@ -190,62 +45,79 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         var probesRemainingInTurn: Int
     }
 
-    private var upstream: EncoderDispatch
-    private let buildDownstream: DownstreamBuilder
-    private let upstreamBudget: Int
-    private let totalProbeCap: Int
-    private let chainLimits: NestedChainLimits?
+    private var proposals: LiftProposalSource?
+    private let makeProposals: ProposalFactory
+    private let liftProposal: Lift
+    private var buildDownstream: DownstreamFactory?
+    private let policy: CompositionPolicy
+    private let recordLiftAttempt: (() -> Void)?
+    private let recordBuild: ((DownstreamBuild) -> Void)?
 
     private var parentScope: EncoderInput?
     private var activeStage: DownstreamStage?
     private var suspendedStages: [DownstreamStage] = []
     private var upstreamExhausted = false
-    private var probesEmitted = 0
 
-    /// Upstream probes that produced a valid lift during the current pass. Each one paid a generator materialization plus a downstream search, so this is the composition's expensive axis. Read by the pass report for diagnostics; deliberately not cleared by ``refreshState(graph:sequence:)`` so accepting passes report their true lift spend.
-    private(set) var upstreamProbesUsed = 0
+    private(set) var ledger = LiftLedger()
 
-    /// Builder calls at this level in the current pass, including those that returned nil. Enforces ``NestedChainLimits/maxBuildsPerStart``.
-    private var downstreamBuilds = 0
+    var reportedConstructedStages: Int? {
+        policy.reportsConstructedStages ? ledger.constructedStages : nil
+    }
+
+    var liftMaterializations: (site: MaterializationSite, count: Int)? {
+        policy.liftSite.map { (site: $0, count: ledger.attempts) }
+    }
+
+    var requiresExactDecoder: Bool {
+        policy.requiresExactDecoder
+    }
+
+    var acceptanceHandling: AcceptanceHandling {
+        policy.acceptanceHandling
+    }
 
     /// Probes a stage emits before the next stage takes over. Unlimited outside a nested chain, so each stage runs to exhaustion.
     private var probesPerStageTurn: Int {
-        chainLimits?.probesPerStageTurn ?? .max
+        policy.chainLimits?.probesPerStageTurn ?? .max
     }
 
-    /// Creates a composition and starts the upstream encoder on `upstreamScope`.
-    ///
-    /// - Parameters:
-    ///   - name: Encoder name reported to the scheduler for stats and logging.
-    ///   - upstream: Encoder driving the outer iteration. Started immediately on `upstreamScope`.
-    ///   - upstreamScope: The scope the upstream encoder searches over. Fixed for the lifetime of this composition.
-    ///   - downstreamBuilder: Builds the encoder and scope that search one lifted upstream candidate. Returning another ``GraphComposedEncoder`` recursively searches a nested dependency.
-    ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one downstream build plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
-    ///   - totalProbeCap: Maximum probes the composition emits per ``start(scope:)`` call, across all lifts. Zero means uncapped. Intended for a bind fingerprint's first dispatch of the run, where a fruitless multi-leaf covering enumeration would otherwise run to exhaustion before the gate can blacklist the bind.
-    ///   - chainLimits: Stage turns and build limits for a composition in a chain of nested compositions. `nil` runs each stage to exhaustion and leaves builds bounded only by `upstreamBudget`.
+    /// Initializes proposals from each dispatched scope. Lift-result construction stays in the engine; operation-specific factories receive the complete lifted tree and sequence. Optional accounting callbacks preserve bound value's run-wide records without giving other operations its construction context.
     init(
         name: EncoderName,
-        upstream: EncoderDispatch,
-        upstreamScope: EncoderInput,
-        upstreamBudget: Int = 15,
-        totalProbeCap: Int = 0,
-        chainLimits: NestedChainLimits? = nil,
-        downstreamBuilder: @escaping DownstreamBuilder
+        makeProposals: @escaping ProposalFactory,
+        policy: CompositionPolicy = CompositionPolicy(),
+        lift: @escaping Lift,
+        recordLiftAttempt: (() -> Void)? = nil,
+        recordBuild: ((DownstreamBuild) -> Void)? = nil
     ) {
         self.name = name
-        self.upstream = upstream
-        buildDownstream = downstreamBuilder
-        self.upstreamBudget = upstreamBudget
-        self.totalProbeCap = totalProbeCap
-        self.chainLimits = chainLimits
-        self.upstream.start(scope: upstreamScope)
+        self.makeProposals = makeProposals
+        self.policy = policy
+        liftProposal = lift
+        self.recordLiftAttempt = recordLiftAttempt
+        self.recordBuild = recordBuild
     }
 
-    /// Convergence records from the upstream encoder.
-    ///
-    /// The downstream encoder's records are scoped to the lifted graph and meaningless on the live graph after acceptance — they are deliberately not exposed.
-    var convergenceRecords: [Int: ConvergedOrigin] {
-        upstream.convergenceRecords
+    /// Uses a fixed downstream factory when proposal initialization does not need to parse an operation-specific scope.
+    init(
+        name: EncoderName,
+        makeProposals: @escaping ProposalSourceFactory,
+        policy: CompositionPolicy = CompositionPolicy(),
+        lift: @escaping Lift,
+        recordLiftAttempt: (() -> Void)? = nil,
+        recordBuild: ((DownstreamBuild) -> Void)? = nil,
+        downstreamFactory: @escaping DownstreamFactory
+    ) {
+        self.init(
+            name: name,
+            makeProposals: { scope in
+                makeProposals(scope).map { (source: $0, downstreamFactory: downstreamFactory) }
+            },
+            policy: policy,
+            lift: lift,
+            recordLiftAttempt: recordLiftAttempt,
+            recordBuild: recordBuild
+        )
     }
 
     mutating func start(scope: EncoderInput) {
@@ -253,13 +125,14 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         activeStage = nil
         suspendedStages = []
         upstreamExhausted = false
-        upstreamProbesUsed = 0
-        downstreamBuilds = 0
-        probesEmitted = 0
+        ledger = LiftLedger()
+        let prepared = makeProposals(scope)
+        proposals = prepared?.source
+        buildDownstream = prepared?.downstreamFactory
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted _: Bool) -> EncoderProbe? {
-        if totalProbeCap > 0, probesEmitted >= totalProbeCap {
+        if policy.totalProbeCap > 0, ledger.emittedProbes >= policy.totalProbeCap {
             return nil
         }
         guard let parent = parentScope else {
@@ -274,10 +147,10 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
                 return nil
             }
             activeStage = nil
-            guard let downstreamMutation = stage.encoder.nextProbe(
+            guard stage.encoder.nextProbe(
                 into: &candidate,
                 lastAccepted: false
-            ) else {
+            ) != nil else {
                 continue
             }
 
@@ -287,12 +160,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
             } else {
                 activeStage = stage
             }
-            probesEmitted += 1
-            return wrap(
-                downstreamMutation: downstreamMutation,
-                candidate: candidate,
-                upstreamProbe: stage.upstreamProbe
-            )
+            ledger.emittedProbes += 1
+            return wrap(upstreamProbe: stage.upstreamProbe)
         }
     }
 
@@ -312,33 +181,42 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         return resumed
     }
 
-    /// Advances upstream until the builder produces a downstream stage. `upstreamBudget` caps upstream probes that contributed to a valid downstream stage, so failed builds do not count against it. The chain limits count every builder call.
+    /// Advances proposals until the factory constructs a stage. The stage budget includes empty searches but not failed builds; optional chain limits count every attempted lift.
     private mutating func pullUpstreamStage(
         candidate: ChoiceSequence,
         parent: EncoderInput
     ) -> DownstreamStage? {
+        guard let buildDownstream else {
+            return nil
+        }
         var upstreamCandidate = candidate
-        while upstreamExhausted == false, upstreamProbesUsed < upstreamBudget {
-            guard let upstreamMutation = upstream.nextProbe(
-                into: &upstreamCandidate,
-                lastAccepted: false
-            ) else {
+        while upstreamExhausted == false, ledger.constructedStages < (policy.stageBudget ?? .max) {
+            guard let proposal = proposals?.next(into: &upstreamCandidate) else {
                 upstreamExhausted = true
                 return nil
             }
-            guard chainLimits?.consumeBuild(afterBuildsThisStart: downstreamBuilds) ?? true else {
+            guard policy.chainLimits?.consumeBuild(afterBuildsThisStart: ledger.attempts) ?? true else {
                 upstreamExhausted = true
                 return nil
             }
-            downstreamBuilds += 1
-            guard var built = buildDownstream(upstreamCandidate, upstreamMutation, parent) else {
+            ledger.attempts += 1
+            recordLiftAttempt?()
+            let built: DownstreamBuild = switch liftProposal(proposal.prefix, parent.tree) {
+                case let tree?:
+                    buildDownstream(proposal, LiftResult(tree: tree, sequence: ChoiceSequence(tree)), parent)
+                case nil:
+                    .failed(.materializationFailed)
+            }
+            recordBuild?(built)
+            guard case let .stage(encoder, scope) = built else {
                 continue
             }
-            upstreamProbesUsed += 1
-            built.encoder.start(scope: built.scope)
+            ledger.constructedStages += 1
+            var downstream = encoder
+            downstream.start(scope: scope)
             return DownstreamStage(
-                encoder: built.encoder,
-                upstreamProbe: upstreamMutation,
+                encoder: downstream,
+                upstreamProbe: proposal.mutation,
                 probesRemainingInTurn: probesPerStageTurn
             )
         }
@@ -349,7 +227,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     ///
     /// The composition caches the pre-dispatch scope, the in-flight upstream probe, and the downstream stages. After any accepted probe triggers a reshape or full rebuild, all three are stale — the upstream binary search was calibrated to the old sequence, the lifted downstream scopes were built from the old tree, and continuing would emit probes that may not shortlex-precede the new live sequence. Resetting to idle aborts the current pass; the scheduler re-dispatches a fresh composition next cycle.
     ///
-    /// ``upstreamProbesUsed`` is intentionally left intact: with `parentScope` nil the budget loop is unreachable, so the counter is dead for control flow, and clearing it would erase the lift spend from the pass report of exactly the accepting passes.
+    /// The ledger remains intact for pass reporting. With `parentScope` nil, its counters are unreachable from the budget loop.
     mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
         parentScope = nil
         activeStage = nil
@@ -359,14 +237,8 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     /// Replaces a downstream probe's mutation with the upstream's mutation, lifted to set ``LeafChange/mayReshape`` to `true`.
     ///
     /// The candidate sequence is already in the caller's inout buffer; the mutation is what the live graph applies on accept (one upstream leaf change with ``LeafChange/mayReshape`` set to `true`, triggering a full graph rebuild).
-    private func wrap(
-        downstreamMutation _: EncoderProbe,
-        candidate _: ChoiceSequence,
-        upstreamProbe: EncoderProbe
-    ) -> EncoderProbe {
+    private func wrap(upstreamProbe: EncoderProbe) -> EncoderProbe {
         guard case let .leafValues(upstreamChanges) = upstreamProbe else {
-            // Non-leafValues upstream mutations are not the intended use of this primitive.
-            // Pass the upstream mutation through defensively rather than fabricating one.
             return upstreamProbe
         }
         let reshapeChanges = upstreamChanges.map { change in

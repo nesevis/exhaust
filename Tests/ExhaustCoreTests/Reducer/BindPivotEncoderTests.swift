@@ -89,7 +89,7 @@ struct BindPivotEncoderTests {
     @Test("A lift that fails produces no probes")
     func failedLiftIsInert() throws {
         let fixture = try nestedFixture()
-        var encoder = GraphBindPivotEncoder(lift: { _, _ in nil })
+        var encoder = BindPivotSearch.makeEncoder(lift: { _, _ in nil })
         encoder.start(scope: fixture.scope)
 
         var buffer = fixture.scope.baseSequence
@@ -101,7 +101,7 @@ struct BindPivotEncoderTests {
         let fixture = try nestedFixture()
         let longer = try generate(Gen.arrayOf(Gen.choose(in: UInt64(0) ... 5), within: 40 ... 40), seed: 1).tree
         try #require(ChoiceSequence.flatten(longer).count > fixture.scope.baseSequence.count)
-        var encoder = GraphBindPivotEncoder(lift: { _, _ in longer })
+        var encoder = BindPivotSearch.makeEncoder(lift: { _, _ in longer })
         encoder.start(scope: fixture.scope)
 
         var buffer = fixture.scope.baseSequence
@@ -113,7 +113,7 @@ struct BindPivotEncoderTests {
     func transplantSeedsAreLiftedInOrder() throws {
         let fixture = try nestedFixture()
         let liftCount = UnsafeSendableBox(0)
-        var encoder = GraphBindPivotEncoder(lift: { candidate, fallbackTree in
+        var encoder = BindPivotSearch.makeEncoder(lift: { candidate, fallbackTree in
             liftCount.value += 1
             guard case let .success(_, tree, _) = Materializer.materializeAny(
                 nestedGen.gen.erase(),

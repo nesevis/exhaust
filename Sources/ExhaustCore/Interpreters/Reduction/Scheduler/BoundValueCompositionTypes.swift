@@ -95,33 +95,40 @@ struct LiftedBind {
 /// The first step of a downstream build: a located lift, or the outcome that ended the build.
 enum BoundValueLift {
     case lifted(LiftedBind)
-    case failed(BoundValueBuildOutcome)
-}
-
-/// How one downstream build ended. Every build records exactly one outcome; only ``BoundValueBuildOutcome/nestedStage`` and ``BoundValueBuildOutcome/terminalSearch`` carry a downstream.
-struct BoundValueBuild {
-    let outcome: BoundValueBuildOutcome
-    let downstream: (encoder: EncoderDispatch, scope: EncoderInput)?
-
-    init(
-        outcome: BoundValueBuildOutcome,
-        downstream: (encoder: EncoderDispatch, scope: EncoderInput)? = nil
-    ) {
-        self.outcome = outcome
-        self.downstream = downstream
-    }
+    case failed(DownstreamBuildFailure)
 }
 
 /// Counts downstream build outcomes across one reduction run, for ``ReductionStats/boundValueBuildOutcomes``. A class so every stage of every composition records into the machine's single instance.
 ///
-/// Every build materializes the generator once before it records its outcome, so ``total`` is the run's ``MaterializationSite/boundValueLift`` count. Builds in a pass cut short by the deadline are included.
+/// Attempts are recorded immediately before lifting, independently of completed build outcomes. ``total`` alone supplies the run's ``MaterializationSite/boundValueLift`` count; outcome entries describe the same work and are never added to it.
 final class BoundValueBuildTally {
     private(set) var counts: [BoundValueBuildRecord: Int] = [:]
     private(set) var total = 0
 
-    func record(_ stage: BoundValueStage, _ outcome: BoundValueBuildOutcome) {
-        counts[BoundValueBuildRecord(stage: stage, outcome: outcome), default: 0] += 1
+    /// Records spent work before the engine invokes its lift, including attempts that produce no downstream stage.
+    func recordAttempt() {
         total += 1
+    }
+
+    /// Records one completed build without counting another materialization. Nested compositions and terminal searches remain separate diagnostic outcomes.
+    func record(_ stage: BoundValueStage, build: DownstreamBuild) {
+        let outcome: BoundValueBuildOutcome = switch build {
+            case .stage(encoder: .composed, scope: _):
+                .nestedStage
+            case .stage:
+                .terminalSearch
+            case .failed(.materializationFailed):
+                .materializationFailed
+            case .failed(.liftedTooLong):
+                .liftedTooLong
+            case .failed(.bindNotFound):
+                .bindNotFound
+            case .failed(.noDownstreamLeaves):
+                .noDownstreamLeaves
+            case .failed(.sinkValueMismatch):
+                .sinkValueMismatch
+        }
+        counts[BoundValueBuildRecord(stage: stage, outcome: outcome), default: 0] += 1
     }
 }
 
