@@ -60,8 +60,12 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
 
     private(set) var ledger = LiftLedger()
 
-    var upstreamProbesUsed: Int {
-        ledger.constructedStages
+    var reportedConstructedStages: Int? {
+        policy.reportsConstructedStages ? ledger.constructedStages : nil
+    }
+
+    var liftMaterializations: (site: MaterializationSite, count: Int)? {
+        policy.liftSite.map { (site: $0, count: ledger.attempts) }
     }
 
     var requiresExactDecoder: Bool {

@@ -11,8 +11,8 @@ indirect enum EncoderDispatch {
     case depthCollapse(GraphDepthCollapseEncoder)
     case binarySearch(GraphBinarySearchEncoder)
     case boundValueCovering(GraphBoundValueCoveringEncoder)
+    case liftedStage(GraphLiftedStageEncoder)
     case composed(GraphComposedEncoder)
-    case bindPivot(GraphBindPivotEncoder)
     case boundExchange(GraphBoundExchangeEncoder)
 }
 
@@ -30,8 +30,9 @@ extension EncoderDispatch: GraphEncoder {
             case let .depthCollapse(encoder): encoder.name
             case let .binarySearch(encoder): encoder.name
             case let .boundValueCovering(encoder): encoder.name
+            case let .liftedStage(encoder):
+                encoder.name
             case let .composed(encoder): encoder.name
-            case let .bindPivot(encoder): encoder.name
             case let .boundExchange(encoder): encoder.name
         }
     }
@@ -71,12 +72,12 @@ extension EncoderDispatch: GraphEncoder {
             case var .boundValueCovering(encoder):
                 encoder.start(scope: scope)
                 self = .boundValueCovering(encoder)
+            case var .liftedStage(encoder):
+                encoder.start(scope: scope)
+                self = .liftedStage(encoder)
             case var .composed(encoder):
                 encoder.start(scope: scope)
                 self = .composed(encoder)
-            case var .bindPivot(encoder):
-                encoder.start(scope: scope)
-                self = .bindPivot(encoder)
             case var .boundExchange(encoder):
                 encoder.start(scope: scope)
                 self = .boundExchange(encoder)
@@ -129,13 +130,13 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .boundValueCovering(encoder)
                 return result
+            case var .liftedStage(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .liftedStage(encoder)
+                return result
             case var .composed(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .composed(encoder)
-                return result
-            case var .bindPivot(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
-                self = .bindPivot(encoder)
                 return result
             case var .boundExchange(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
@@ -157,8 +158,9 @@ extension EncoderDispatch: GraphEncoder {
             case let .depthCollapse(encoder): encoder.hadUnresolvedReplacement
             case let .binarySearch(encoder): encoder.hadUnresolvedReplacement
             case let .boundValueCovering(encoder): encoder.hadUnresolvedReplacement
+            case let .liftedStage(encoder):
+                encoder.hadUnresolvedReplacement
             case let .composed(encoder): encoder.hadUnresolvedReplacement
-            case let .bindPivot(encoder): encoder.hadUnresolvedReplacement
             case let .boundExchange(encoder): encoder.hadUnresolvedReplacement
         }
     }
@@ -176,8 +178,9 @@ extension EncoderDispatch: GraphEncoder {
             case let .depthCollapse(encoder): encoder.convergenceRecords
             case let .binarySearch(encoder): encoder.convergenceRecords
             case let .boundValueCovering(encoder): encoder.convergenceRecords
+            case let .liftedStage(encoder):
+                encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
-            case let .bindPivot(encoder): encoder.convergenceRecords
             case let .boundExchange(encoder): encoder.convergenceRecords
         }
     }
@@ -217,12 +220,12 @@ extension EncoderDispatch: GraphEncoder {
             case var .boundValueCovering(encoder):
                 encoder.flushPartialConvergence()
                 self = .boundValueCovering(encoder)
+            case var .liftedStage(encoder):
+                encoder.flushPartialConvergence()
+                self = .liftedStage(encoder)
             case var .composed(encoder):
                 encoder.flushPartialConvergence()
                 self = .composed(encoder)
-            case var .bindPivot(encoder):
-                encoder.flushPartialConvergence()
-                self = .bindPivot(encoder)
             case var .boundExchange(encoder):
                 encoder.flushPartialConvergence()
                 self = .boundExchange(encoder)
@@ -253,11 +256,11 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
-    /// Upstream probes that produced a valid lift in the current pass, for the ``GraphComposedEncoder`` and ``GraphBoundExchangeEncoder`` cases; nil for every other encoder.
+    /// Constructed stages for bound value and exchange pass reporting. Pivot seeds retain their separate lift-site accounting.
     var composedUpstreamProbesUsed: Int? {
         switch self {
             case let .composed(encoder):
-                encoder.upstreamProbesUsed
+                encoder.reportedConstructedStages
             case let .boundExchange(encoder):
                 encoder.keptLifts
             default:
@@ -268,8 +271,8 @@ extension EncoderDispatch: GraphEncoder {
     /// Generator materializations the encoder ran outside the probe decoder during the current pass, with the site they are reported under; nil for encoders that never materialize. Bound value lifts are counted run-wide by ``BoundValueBuildTally`` instead.
     var liftMaterializations: (site: MaterializationSite, count: Int)? {
         switch self {
-            case let .bindPivot(encoder):
-                (.bindPivotLift, encoder.liftsPerformed)
+            case let .composed(encoder):
+                encoder.liftMaterializations
             default:
                 nil
         }

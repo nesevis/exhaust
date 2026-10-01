@@ -245,7 +245,7 @@ enum MinimizationQuery {
         } else {
             rows = BoundValueCoveringEncoder.coveringBudget
         }
-        let donors = GraphBindPivotEncoder.transplantDonors(boundChildID: boundChildID, boundRange: boundRange, graph: graph)
+        let donors = BindPivotSearch.transplantDonors(boundChildID: boundChildID, boundRange: boundRange, graph: graph)
         let seeds = 1 + donors.count
         return seeds * (1 + rows)
     }

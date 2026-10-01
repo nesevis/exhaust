@@ -251,7 +251,7 @@ struct GraphValueEncoder: GraphEncoder {
                 assertionFailure("depthCollapse scopes must route through GraphDepthCollapseEncoder, not GraphValueEncoder")
                 mode = .idle
             case .bindPivot:
-                assertionFailure("bindPivot scopes must route through GraphBindPivotEncoder, not GraphValueEncoder")
+                assertionFailure("bindPivot scopes must route through BindPivotSearch, not GraphValueEncoder")
                 mode = .idle
             case let .floatLeaves(floatScope):
                 startFloat(scope: floatScope, sequence: sequence, graph: graph)

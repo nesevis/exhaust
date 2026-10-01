@@ -82,6 +82,73 @@ struct GraphComposedEncoderTests {
         #expect(starts == [first.baseSequence, second.baseSequence])
     }
 
+    @Test("The engine constructs the lifted sequence from the returned tree, not the proposal prefix")
+    func liftedResultComesFromTree() throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        let tree = ChoiceTree.uint64(7, in: 0 ... 1000)
+        let expected = ChoiceSequence(tree)
+        var builds = 0
+        var encoder = GraphComposedEncoder(
+            name: .composed,
+            makeProposals: { scope in
+                .seeds(SeedProposalCursor(seeds: [scope.baseSequence], mutation: .leafValues([])))
+            },
+            lift: { prefix, fallbackTree in
+                #expect(prefix == scope.baseSequence)
+                #expect(ChoiceSequence(fallbackTree) == scope.baseSequence)
+                return tree
+            },
+            downstreamFactory: { proposal, lifted, parent in
+                builds += 1
+                #expect(lifted.sequence == expected)
+                #expect(ChoiceSequence(lifted.tree) == expected)
+                return .stage(
+                    encoder: .liftedStage(GraphLiftedStageEncoder(name: .composed, mutation: proposal.mutation)),
+                    scope: EncoderInput(
+                        transformation: parent.transformation,
+                        baseSequence: lifted.sequence,
+                        tree: lifted.tree,
+                        graph: ChoiceGraph.build(from: lifted.tree),
+                        warmStartRecords: [:]
+                    )
+                )
+            }
+        )
+        encoder.start(scope: scope)
+        var buffer = scope.baseSequence
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) != nil)
+        #expect(buffer == expected)
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
+        #expect(builds == 1)
+        #expect(encoder.ledger.attempts == 1)
+        #expect(encoder.ledger.constructedStages == 1)
+    }
+
+    @Test("Accounting follows policy independently of the stats label", arguments: [
+        EncoderName.composed, .bindPivot, .boundExchange, .valueSearch,
+    ], [true, false])
+    func accountingUsesPolicy(name: EncoderName, reportsStages: Bool) throws {
+        let scope = try #require(singleLeafScope(value: 100))
+        var encoder = GraphComposedEncoder(
+            name: name,
+            makeProposals: rejectedLeafProposals,
+            policy: CompositionPolicy(
+                stageBudget: 1,
+                liftSite: reportsStages ? .bindPivotLift : nil,
+                reportsConstructedStages: reportsStages
+            ),
+            lift: liftLeafProposal,
+            downstreamFactory: binaryLeafStage
+        )
+        encoder.start(scope: scope)
+        #expect(drainCandidates(of: &encoder, sequence: scope.baseSequence).isEmpty == false)
+        let dispatch = EncoderDispatch.composed(encoder)
+        #expect(dispatch.name == name)
+        #expect(dispatch.composedUpstreamProbesUsed == (reportsStages ? 1 : nil))
+        #expect(dispatch.liftMaterializations?.site == (reportsStages ? .bindPivotLift : nil))
+        #expect(dispatch.liftMaterializations?.count == (reportsStages ? 1 : nil))
+    }
+
     @Test("Each start captures its parsed scope in the downstream factory")
     func downstreamFactoryFollowsEachStart() throws {
         let first = try #require(singleLeafScope(value: 100))

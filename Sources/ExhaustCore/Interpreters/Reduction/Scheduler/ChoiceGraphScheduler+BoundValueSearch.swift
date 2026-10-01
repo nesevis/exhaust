@@ -92,26 +92,6 @@ extension ChoiceGraphScheduler {
         ))
     }
 
-    /// Builds a ``GraphBindPivotEncoder`` whose lift materializes through `gen` in guided mode.
-    ///
-    /// The encoder reads the bind, the pick, and the target branch from the dispatched scope on ``GraphEncoder/start(scope:)``; only the generator has to be captured here. Guided mode is what carries the previous bound subtree's leaf values across the pivot wherever their ranges still admit them, so the covering search starts from the closest assignment the generator can reproduce.
-    static func makeBindPivotEncoder(gen: AnyGenerator) -> EncoderDispatch {
-        .bindPivot(GraphBindPivotEncoder(lift: { candidate, fallbackTree in
-            guard case let .success(_, freshTree, _) = Materializer.materializeAny(
-                gen,
-                context: .init(
-                    prefix: candidate,
-                    mode: .guided(seed: 0, fallbackTree: fallbackTree),
-                    fallbackTree: fallbackTree,
-                    materializePicks: true
-                )
-            ) else {
-                return nil
-            }
-            return freshTree
-        }))
-    }
-
     /// Creates one composition stage. A stage with one composable nested bind builds another stage downstream; otherwise it terminates in value covering.
     private static func makeBoundValueCompositionEncoder(
         bindNodeID: Int,

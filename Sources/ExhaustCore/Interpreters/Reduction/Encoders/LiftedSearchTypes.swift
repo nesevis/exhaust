@@ -24,26 +24,34 @@ enum DownstreamBuildFailure {
     case noDownstreamLeaves
 }
 
-/// Fixes decoder and acceptance contracts independently of stage scheduling. The optional build limits belong only to bound-value chains.
+/// Fixes operation contracts and accounting independently of the stats label. The optional build limits belong only to bound-value chains.
 struct CompositionPolicy {
     let stageBudget: Int?
     let totalProbeCap: Int
     let chainLimits: NestedChainLimits?
     let requiresExactDecoder: Bool
     let acceptanceHandling: AcceptanceHandling
+    /// Counts attempted lifts at this site; nil when a run-wide tally owns materialization accounting.
+    let liftSite: MaterializationSite?
+    /// Reports constructed stages as upstream work, independently of the encoder's stats label.
+    let reportsConstructedStages: Bool
 
     init(
         stageBudget: Int? = 15,
         totalProbeCap: Int = 0,
         chainLimits: NestedChainLimits? = nil,
         requiresExactDecoder: Bool = true,
-        acceptanceHandling: AcceptanceHandling = .refreshAndIdle
+        acceptanceHandling: AcceptanceHandling = .refreshAndIdle,
+        liftSite: MaterializationSite? = nil,
+        reportsConstructedStages: Bool = true
     ) {
         self.stageBudget = stageBudget
         self.totalProbeCap = totalProbeCap
         self.chainLimits = chainLimits
         self.requiresExactDecoder = requiresExactDecoder
         self.acceptanceHandling = acceptanceHandling
+        self.liftSite = liftSite
+        self.reportsConstructedStages = reportsConstructedStages
     }
 }
 
