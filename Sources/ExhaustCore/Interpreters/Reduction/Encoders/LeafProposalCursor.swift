@@ -5,6 +5,7 @@ struct LeafProposalCursor {
     private let typeTag: TypeTag
     private let validRange: ClosedRange<UInt64>?
     private let isRangeExplicit: Bool
+    private let mayReshape: Bool
     private let baseSequence: ChoiceSequence
     private let candidates: [UInt64]
     private var candidateIndex = 0
@@ -13,7 +14,8 @@ struct LeafProposalCursor {
     init?(
         scope: EncoderInput,
         leafNodeID: Int,
-        candidates: [UInt64]
+        candidates: [UInt64],
+        mayReshape: Bool = false
     ) {
         guard scope.graph.nodes.indices.contains(leafNodeID),
               case let .chooseBits(metadata) = scope.graph.nodes[leafNodeID].kind,
@@ -28,6 +30,7 @@ struct LeafProposalCursor {
         typeTag = metadata.typeTag
         validRange = metadata.validRange
         isRangeExplicit = metadata.isRangeExplicit
+        self.mayReshape = mayReshape
         baseSequence = scope.baseSequence
         self.candidates = candidates
     }
@@ -48,7 +51,7 @@ struct LeafProposalCursor {
         ))
         return LiftProposal(
             prefix: candidate,
-            mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: false)])
+            mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)])
         )
     }
 }

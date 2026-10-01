@@ -144,7 +144,7 @@ enum ExchangeQuery {
                   case let .bind(metadata) = graph.nodes[bindNodeID].kind
             else { continue }
 
-            var sinks: [(leafNodeID: Int, bindNodeID: Int, isBindInner: Bool)] = []
+            var sinks: [(leafNodeID: Int, location: SinkLocation)] = []
             var seenBindFingerprints: Set<UInt64> = [metadata.fingerprint]
             var current = bindNodeID
             while let nested = graph.composableNestedBind(
@@ -154,11 +154,11 @@ enum ExchangeQuery {
                 seenBindFingerprints.insert(nested.metadata.fingerprint)
                 current = nested.nodeID
                 for bindInnerID in bindInnersByBind[nested.nodeID] ?? [] {
-                    sinks.append((bindInnerID, nested.nodeID, true))
+                    sinks.append((bindInnerID, .bindInner(bindNodeID: nested.nodeID)))
                 }
             }
             for leafID in fixedShapeBoundLeaves(of: current, graph: graph) {
-                sinks.append((leafID, current, false))
+                sinks.append((leafID, .boundLeaf(bindNodeID: current)))
             }
 
             for sourceID in sourceIDs {
@@ -171,8 +171,7 @@ enum ExchangeQuery {
                     scopes.append(BoundExchangeScope(
                         sourceLeafNodeID: sourceID,
                         sinkLeafNodeID: sink.leafNodeID,
-                        sinkBindNodeID: sink.bindNodeID,
-                        sinkIsBindInner: sink.isBindInner
+                        sinkLocation: sink.location
                     ))
                 }
             }

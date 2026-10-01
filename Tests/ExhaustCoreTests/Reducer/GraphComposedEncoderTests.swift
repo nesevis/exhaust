@@ -186,6 +186,7 @@ struct GraphComposedEncoderTests {
             (.liftedTooLong, .liftedTooLong),
             (.bindNotFound, .bindNotFound),
             (.noDownstreamLeaves, .noDownstreamLeaves),
+            (.sinkValueMismatch, .sinkValueMismatch),
         ]
         let tally = BoundValueBuildTally()
         for (failure, outcome) in failures {

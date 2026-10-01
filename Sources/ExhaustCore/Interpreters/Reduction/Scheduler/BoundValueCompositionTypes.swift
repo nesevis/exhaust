@@ -125,6 +125,8 @@ final class BoundValueBuildTally {
                 .bindNotFound
             case .failed(.noDownstreamLeaves):
                 .noDownstreamLeaves
+            case .failed(.sinkValueMismatch):
+                .sinkValueMismatch
         }
         counts[BoundValueBuildRecord(stage: stage, outcome: outcome), default: 0] += 1
     }

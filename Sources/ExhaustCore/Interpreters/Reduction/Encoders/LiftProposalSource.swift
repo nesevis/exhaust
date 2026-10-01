@@ -1,6 +1,7 @@
 /// Iterates proposals without acceptance feedback. Indirect cases keep operation-specific cursor payloads out of the composition's per-probe copies.
 indirect enum LiftProposalSource {
     case leaf(LeafProposalCursor)
+    case exchange(BoundExchangeProposalCursor)
     case seeds(SeedProposalCursor)
 
     mutating func next(into candidate: inout ChoiceSequence) -> LiftProposal? {
@@ -8,6 +9,10 @@ indirect enum LiftProposalSource {
             case var .leaf(cursor):
                 let proposal = cursor.next(into: &candidate)
                 self = .leaf(cursor)
+                return proposal
+            case var .exchange(cursor):
+                let proposal = cursor.next(into: &candidate)
+                self = .exchange(cursor)
                 return proposal
             case var .seeds(cursor):
                 let proposal = cursor.next(into: &candidate)

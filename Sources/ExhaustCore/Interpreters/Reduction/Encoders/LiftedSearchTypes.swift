@@ -22,6 +22,7 @@ enum DownstreamBuildFailure {
     case liftedTooLong
     case bindNotFound
     case noDownstreamLeaves
+    case sinkValueMismatch
 }
 
 /// Fixes operation contracts and accounting independently of the stats label. The optional build limits belong only to bound-value chains.

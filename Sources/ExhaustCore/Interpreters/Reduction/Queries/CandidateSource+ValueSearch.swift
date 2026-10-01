@@ -105,7 +105,7 @@ extension CandidateSourceBuilder {
                         ? metadata.value.bitPattern64 - target
                         : target - metadata.value.bitPattern64
                     sourceDistance = Int(min(distance, UInt64(Int.max)))
-                    estimatedCost = GraphBoundExchangeEncoder.keptLiftBudget
+                    estimatedCost = BoundExchangeSearch.keptExchangeLiftBudget
                 case let .relation(relationScope):
                     // Zero magnitude ranks relation search below redistribution and tandem: it is the last-resort joint move for pairs where every cheaper encoder has already stalled.
                     sourceDistance = 0

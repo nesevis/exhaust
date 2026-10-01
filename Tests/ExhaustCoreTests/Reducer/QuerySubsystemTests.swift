@@ -263,8 +263,18 @@ struct ExchangeQueryTests {
         let exchangesFromOuter = exchanges.filter { $0.sourceLeafNodeID == outerBindInner }
         #expect(exchangesFromOuter.isEmpty == (exchangesAcrossBinds == false))
         if exchangesAcrossBinds {
-            #expect(exchangesFromOuter.contains { $0.sinkLeafNodeID == innerBindInner && $0.sinkIsBindInner })
-            #expect(exchangesFromOuter.contains { $0.sinkLeafNodeID == terminalLeaf && $0.sinkIsBindInner == false })
+            #expect(exchangesFromOuter.contains {
+                guard case .bindInner = $0.sinkLocation else {
+                    return false
+                }
+                return $0.sinkLeafNodeID == innerBindInner
+            })
+            #expect(exchangesFromOuter.contains {
+                guard case .boundLeaf = $0.sinkLocation else {
+                    return false
+                }
+                return $0.sinkLeafNodeID == terminalLeaf
+            })
         }
         #expect(exchanges.contains { $0.sourceLeafNodeID == innerBindInner && $0.sinkLeafNodeID == terminalLeaf })
     }

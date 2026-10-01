@@ -13,7 +13,6 @@ indirect enum EncoderDispatch {
     case boundValueCovering(GraphBoundValueCoveringEncoder)
     case liftedStage(GraphLiftedStageEncoder)
     case composed(GraphComposedEncoder)
-    case boundExchange(GraphBoundExchangeEncoder)
 }
 
 extension EncoderDispatch: GraphEncoder {
@@ -33,7 +32,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .liftedStage(encoder):
                 encoder.name
             case let .composed(encoder): encoder.name
-            case let .boundExchange(encoder): encoder.name
         }
     }
 
@@ -78,9 +76,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .composed(encoder):
                 encoder.start(scope: scope)
                 self = .composed(encoder)
-            case var .boundExchange(encoder):
-                encoder.start(scope: scope)
-                self = .boundExchange(encoder)
         }
     }
 
@@ -138,10 +133,6 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .composed(encoder)
                 return result
-            case var .boundExchange(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
-                self = .boundExchange(encoder)
-                return result
         }
     }
 
@@ -161,7 +152,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .liftedStage(encoder):
                 encoder.hadUnresolvedReplacement
             case let .composed(encoder): encoder.hadUnresolvedReplacement
-            case let .boundExchange(encoder): encoder.hadUnresolvedReplacement
         }
     }
 
@@ -181,7 +171,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .liftedStage(encoder):
                 encoder.convergenceRecords
             case let .composed(encoder): encoder.convergenceRecords
-            case let .boundExchange(encoder): encoder.convergenceRecords
         }
     }
 
@@ -226,9 +215,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .composed(encoder):
                 encoder.flushPartialConvergence()
                 self = .composed(encoder)
-            case var .boundExchange(encoder):
-                encoder.flushPartialConvergence()
-                self = .boundExchange(encoder)
         }
     }
 
@@ -237,8 +223,6 @@ extension EncoderDispatch: GraphEncoder {
         switch self {
             case let .composed(encoder):
                 encoder.requiresExactDecoder
-            case .boundExchange:
-                true
             default:
                 false
         }
@@ -249,8 +233,6 @@ extension EncoderDispatch: GraphEncoder {
         switch self {
             case let .composed(encoder):
                 encoder.acceptanceHandling
-            case .boundExchange:
-                .refreshAndIdle
             default:
                 .applyMutation
         }
@@ -261,8 +243,6 @@ extension EncoderDispatch: GraphEncoder {
         switch self {
             case let .composed(encoder):
                 encoder.reportedConstructedStages
-            case let .boundExchange(encoder):
-                encoder.keptLifts
             default:
                 nil
         }
@@ -284,9 +264,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .composed(encoder):
                 encoder.refreshState(graph: graph, sequence: sequence)
                 self = .composed(encoder)
-            case var .boundExchange(encoder):
-                encoder.refreshState(graph: graph, sequence: sequence)
-                self = .boundExchange(encoder)
             default:
                 break
         }

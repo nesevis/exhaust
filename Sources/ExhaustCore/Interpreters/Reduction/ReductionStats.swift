@@ -96,6 +96,8 @@ package enum MaterializationSite: String, Sendable, CaseIterable {
     case boundValueLift
     /// Lifting a bind pivot seed.
     case bindPivotLift
+    /// Lifting a joint source-sink proposal, including lifts that do not preserve the sink.
+    case boundExchangeLift
 }
 
 /// How one downstream build in a bound value composition ended. Every outcome follows one generator materialization of the lifted candidate.
@@ -112,6 +114,8 @@ package enum BoundValueBuildOutcome: String, Sendable, CaseIterable {
     case noDownstreamLeaves
     /// The lift built a terminal value search.
     case terminalSearch
+    /// An exchange lift changed the sink value; bound-value factories never produce this outcome. Retained to keep the shared-failure diagnostic mapping total.
+    case sinkValueMismatch
 }
 
 /// One downstream build, keyed by the chain stage that ran it.
