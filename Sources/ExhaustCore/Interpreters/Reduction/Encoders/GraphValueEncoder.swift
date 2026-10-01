@@ -54,6 +54,8 @@ struct GraphValueEncoder: GraphEncoder {
         let targetBitPattern: UInt64
         let typeTag: TypeTag
         let mayReshape: Bool
+        /// Simpler forms of the leaf's character, or nil when the leaf is not a character.
+        let characterSimplifications: CharacterSimplifications?
     }
 
     // MARK: - Integer State
@@ -83,6 +85,9 @@ struct GraphValueEncoder: GraphEncoder {
         var semanticSimplestProbed: Bool = false
         /// Per-leaf-zero pre-round state, active during the ``IntegerPhase/perLeafZero`` phase.
         var perLeafZero: PerLeafZeroState?
+        /// Character simplification candidates for the current leaf, ascending, or nil when inactive. Set after binary search converges on a character leaf without setting up a linear scan.
+        var simplificationValues: ArraySlice<UInt64>?
+        var simplificationIndex = 0
     }
 
     /// State for the cross-zero phase of per-leaf minimization.

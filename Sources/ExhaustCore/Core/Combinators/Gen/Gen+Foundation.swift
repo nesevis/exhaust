@@ -347,7 +347,10 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
         max: UInt64(srs.scalarCount - 1),
         tag: .character,
         isRangeExplicit: true,
-        typeTagPayload: .character(problematicIndices: srs.problematicIndices)
+        typeTagPayload: .character(
+            problematicIndices: srs.problematicIndices,
+            simplifications: srs.simplifications
+        )
     )
     let indexGen = Generator<UInt64>.impure(operation: operation) { result in
         try .pure(chooseBitsBitPattern(result))

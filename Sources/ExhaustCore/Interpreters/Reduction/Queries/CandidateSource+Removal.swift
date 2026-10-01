@@ -352,7 +352,9 @@ struct BatchRemovalSource {
     }
 
     private var nextInteriorSeedPriority: DispatchPriority? {
-        guard interiorIndex < interiorSeeds.count else { return nil }
+        guard interiorIndex < interiorSeeds.count else {
+            return nil
+        }
         return Self.interiorSeedPriority(firstElementYield: interiorSeeds[interiorIndex].firstElementYield)
     }
 

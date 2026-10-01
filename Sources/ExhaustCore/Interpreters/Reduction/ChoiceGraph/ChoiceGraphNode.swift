@@ -146,6 +146,17 @@ package struct ChooseBitsMetadata: Sendable {
 
     /// Current value from the ``ChoiceSequence``.
     package let value: ChoiceValue
+
+    /// The generator's payload, carried over from ``ChoiceMetadata``. Nil for tags without one.
+    package let typeTagPayload: TypeTagPayload?
+
+    /// Simpler forms of this leaf's characters in index space, or nil when the leaf is not a character.
+    package var characterSimplifications: CharacterSimplifications? {
+        guard case let .character(_, simplifications) = typeTagPayload else {
+            return nil
+        }
+        return simplifications
+    }
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.

@@ -43,7 +43,9 @@ struct GraphWindowRemovalEncoder: GraphEncoder {
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
-        guard var current = state else { return nil }
+        guard var current = state else {
+            return nil
+        }
 
         var proposal: Int? = current.awaitingFeedback
             ? current.stepper.advance(lastAccepted: lastAccepted)

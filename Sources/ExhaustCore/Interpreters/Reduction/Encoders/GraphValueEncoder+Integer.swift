@@ -33,7 +33,8 @@ extension GraphValueEncoder {
                     currentBitPattern: current,
                     targetBitPattern: target,
                     typeTag: metadata.typeTag,
-                    mayReshape: entry.mayReshapeOnAcceptance
+                    mayReshape: entry.mayReshapeOnAcceptance,
+                    characterSimplifications: metadata.characterSimplifications
                 ))
             }
         }
@@ -340,6 +341,20 @@ extension GraphValueEncoder {
                 continue
             }
 
+            // Character simplification phase (set up by binary search convergence on a character leaf).
+            if state.simplificationValues != nil {
+                if let candidate = nextSimplificationProbe(
+                    state: &state,
+                    lastAccepted: lastAccepted
+                ) {
+                    return candidate
+                }
+                state.simplificationValues = nil
+                state.leafIndex += 1
+                state.semanticSimplestProbed = false
+                continue
+            }
+
             // Linear scan phase (set up by binary search on non-monotone gap).
             if state.scanValues != nil {
                 if let candidate = nextLinearScanProbe(
@@ -395,8 +410,8 @@ extension GraphValueEncoder {
                 return candidate
             }
 
-            // Binary search converged. If scan was set up, loop back to drain it.
-            if state.scanValues != nil {
+            // Binary search converged. If scan or simplification was set up, loop back to drain it.
+            if state.scanValues != nil || state.simplificationValues != nil {
                 continue
             }
 
@@ -545,6 +560,17 @@ extension GraphValueEncoder {
                 )
             }
         }
+        // A linear scan already covers every index below the converged value, so simplification candidates are only needed without one.
+        if state.scanValues == nil,
+           let simplifications = leaf.characterSimplifications,
+           let currentBitPattern = state.sequence[leaf.sequenceIndex].value?.choice.bitPattern64
+        {
+            let candidates = simplifications.simplerIndices(than: currentBitPattern)
+            if candidates.isEmpty == false {
+                state.simplificationValues = candidates
+                state.simplificationIndex = 0
+            }
+        }
         state.stepper = nil
         return nil
     }
@@ -583,6 +609,49 @@ extension GraphValueEncoder {
         candidate[leaf.sequenceIndex] = newEntry
         state.lastEmittedCandidate = candidate
         return candidate
+    }
+
+    // MARK: - Character Simplification
+
+    /// Proposes simpler forms of the current leaf's character, such as `A` for `å`, which binary search cannot reach because the property usually fails only at those exact characters.
+    ///
+    /// Candidates ascend, so the first acceptance is the simplest reachable form and ends the phase. The convergence record keeps its binary search configuration with the accepted index as its bound, so a warm start on the next pass does not search again.
+    mutating func nextSimplificationProbe(
+        state: inout IntegerState,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        let leaf = state.leafPositions[state.leafIndex]
+        guard let candidates = state.simplificationValues else {
+            return nil
+        }
+
+        if lastAccepted, state.simplificationIndex > 0 {
+            let acceptedValue = candidates[candidates.startIndex + state.simplificationIndex - 1]
+            if let record = convergenceStore[leaf.nodeID] {
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                    bound: acceptedValue,
+                    signal: record.signal,
+                    configuration: record.configuration,
+                    cycle: record.cycle
+                )
+            }
+            return nil
+        }
+
+        let currentEntry = state.sequence[leaf.sequenceIndex]
+        while state.simplificationIndex < candidates.count {
+            let probeValue = candidates[candidates.startIndex + state.simplificationIndex]
+            state.simplificationIndex += 1
+            let newEntry = currentEntry.withBitPattern(probeValue)
+            guard newEntry.shortLexCompare(currentEntry) == .lt else {
+                continue
+            }
+            var candidate = state.sequence
+            candidate[leaf.sequenceIndex] = newEntry
+            state.lastEmittedCandidate = candidate
+            return candidate
+        }
+        return nil
     }
 
     /// Records the final convergence from a completed linear scan.

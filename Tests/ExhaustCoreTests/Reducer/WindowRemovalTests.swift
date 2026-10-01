@@ -12,14 +12,8 @@ struct WindowRemovalTests {
         while let transformation = source.next(lastAccepted: false) {
             operations.append(transformation.operation)
         }
-        let windows = operations.compactMap { operation -> WindowRemovalScope? in
-            guard case let .remove(.window(scope)) = operation else { return nil }
-            return scope
-        }
-        let firstWindowIndex = try #require(operations.firstIndex { operation in
-            if case .remove(.window) = operation { return true }
-            return false
-        })
+        let windows = operations.compactMap(windowScope(of:))
+        let firstWindowIndex = try #require(operations.firstIndex { windowScope(of: $0) != nil })
 
         #expect(operations[firstWindowIndex...].count == windows.count)
         #expect(windows.map(\.elementNodeIDs) == [
@@ -32,7 +26,9 @@ struct WindowRemovalTests {
     @Test("An accepted window keeps growing until removing more would make the property pass")
     func windowGrowsAcrossAcceptances() throws {
         var fixture = try WindowFixture(values: [1, 2, 2, 2, 2, 2, 2, 1]) { value in
-            guard let array = value as? [UInt64] else { return true }
+            guard let array = value as? [UInt64] else {
+                return true
+            }
             return (array.first == 1 && array.last == 1) == false
         }
         let report = try fixture.runWindow(startingAt: 4)
@@ -55,6 +51,13 @@ struct WindowRemovalTests {
 
 // MARK: - Fixtures
 
+private func windowScope(of operation: GraphOperation) -> WindowRemovalScope? {
+    guard case let .remove(.window(scope)) = operation else {
+        return nil
+    }
+    return scope
+}
+
 private struct WindowFixture {
     var state: WindowSessionState
     let graph: ChoiceGraph
@@ -66,8 +69,10 @@ private struct WindowFixture {
         let tree = try #require(try Interpreters.reflect(generator, with: values))
         let graph = ChoiceGraph.build(from: tree)
         let sequenceNodeID = try #require(graph.liveNodeIDs.first { nodeID in
-            if case .sequence = graph.nodes[nodeID].kind { return true }
-            return false
+            guard case .sequence = graph.nodes[nodeID].kind else {
+                return false
+            }
+            return true
         })
         self.graph = graph
         self.sequenceNodeID = sequenceNodeID

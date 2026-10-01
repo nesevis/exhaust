@@ -85,7 +85,8 @@ struct ChoiceGraphBuilder {
                         typeTag: value.tag,
                         validRange: metadata.validRange,
                         isRangeExplicit: metadata.isRangeExplicit,
-                        value: value
+                        value: value,
+                        typeTagPayload: metadata.typeTagPayload
                     )),
                     positionRange: isActive ? (offset ... offset) : nil,
                     children: [],

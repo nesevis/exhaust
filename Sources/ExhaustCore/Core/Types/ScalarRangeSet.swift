@@ -44,6 +44,9 @@ package struct ScalarRangeSet: @unchecked Sendable {
     /// Pre-computed flat indices for ``ProblematicValues/interestingCharacterScalars`` that are present in this range set. Passed to ``TypeTag/character(problematicIndices:)`` so problematic-value analysis receives correct index-space values.
     public let problematicIndices: [UInt64]
 
+    /// Simpler forms of each character in this set, in index space. Passed to ``TypeTagPayload/character(problematicIndices:simplifications:)`` so the value encoder can propose them once binary search on a character leaf converges.
+    package let simplifications: CharacterSimplifications
+
     /// Creates a ``ScalarRangeSet`` from a `ExhaustRangeSet<UInt32>`, optionally pinning index zero to `bottomCodepoint` so the reducer converges toward that scalar.
     public init(_ rangeSet: ExhaustRangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
         precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty ExhaustRangeSet")
@@ -108,6 +111,22 @@ package struct ScalarRangeSet: @unchecked Sendable {
         searchHints = hints
         self.rangesArray = rangesArray
         self.problematicIndices = problematicIndices
+        simplifications = CharacterSimplifications(
+            contains: { scalar in
+                scalar == bottomCodepoint || rangeSet.contains(scalar.value)
+            },
+            index: { scalar in
+                guard scalar != bottomCodepoint else {
+                    return 0
+                }
+                let rangeIndex = Self.naturalIndex(
+                    of: scalar.value,
+                    ranges: rangesArray,
+                    cumulativeCounts: cumulative
+                )
+                return bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex
+            }
+        )
     }
 
     /// Maps a flat index in `0..<scalarCount` to the corresponding `Unicode.Scalar`.
