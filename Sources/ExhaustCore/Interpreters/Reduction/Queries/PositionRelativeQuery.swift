@@ -1,8 +1,8 @@
-/// Adds field-specific tandem hypotheses within repeated sequence elements without requiring whole-element equality.
+/// Adds field-specific tandem hypotheses within repeated sequence elements and zipped fields at recurring pick sites without requiring whole-element equality.
 ///
-/// The nearest sequence owns each role. Nested sequences remain separate, and pick/bind fingerprints distinguish generator sites that share a positional path. Correspondence supplies a candidate, not evidence that the property treats the fields alike.
+/// The nearest sequence owns each role. Outside sequences, the nearest pick site owns zipped fields, with its fingerprint identifying recurring generator sites and its selected branch retained in the relative path. Correspondence supplies a candidate, not evidence that the property treats the fields alike.
 enum PositionRelativeQuery {
-    /// Ignores element ordinals while retaining internal paths, generator contexts, and leaf domains.
+    /// Ignores sequence element ordinals or paths above recurring pick sites while retaining field paths, generator contexts, and leaf domains.
     static func build(graph: ChoiceGraph) -> [QueryHelpers.LeafGroup] {
         var groups: [Role: [Int]] = [:]
         for nodeID in graph.leafNodes {
@@ -20,7 +20,7 @@ enum PositionRelativeQuery {
         .sorted { $0.position(in: graph) < $1.position(in: graph) }
     }
 
-    /// Stops at the nearest sequence so equal offsets in unrelated collections never imply a shared field role.
+    /// Gives sequences precedence over recurring picks so nested collections never borrow field correspondence from an enclosing generator site.
     private static func role(for nodeID: Int, graph: ChoiceGraph) -> Role? {
         let leaf = graph.nodes[nodeID]
         guard leaf.scopeAnnotation.isDepthControl == false,
@@ -30,6 +30,8 @@ enum PositionRelativeQuery {
             return nil
         }
         var contexts: [Context] = []
+        var nearestPickRole: Role?
+        var hasVisitedPick = false
         var parentID = leaf.parent
         while let currentID = parentID {
             let parent = graph.nodes[currentID]
@@ -39,16 +41,24 @@ enum PositionRelativeQuery {
                         return nil
                     }
                     return Role(
-                        sequenceNodeID: currentID,
+                        owner: .sequence(nodeID: currentID),
                         path: Array(leaf.choicePath.dropFirst(parent.choicePath.count + 1)),
                         contexts: contexts,
-                        typeTag: metadata.typeTag,
-                        validRange: metadata.validRange,
-                        isRangeExplicit: metadata.isRangeExplicit,
-                        payload: metadata.typeTagPayload
+                        metadata: metadata
                     )
-                case let .pick(metadata):
-                    contexts.append(.pick(fingerprint: metadata.fingerprint))
+                case let .pick(pickMetadata):
+                    if hasVisitedPick == false {
+                        hasVisitedPick = true
+                        if contexts.contains(.zip) {
+                            nearestPickRole = Role(
+                                owner: .pick(fingerprint: pickMetadata.fingerprint),
+                                path: Array(leaf.choicePath.dropFirst(parent.choicePath.count)),
+                                contexts: contexts,
+                                metadata: metadata
+                            )
+                        }
+                    }
+                    contexts.append(.pick(fingerprint: pickMetadata.fingerprint))
                 case let .bind(metadata):
                     contexts.append(.bind(fingerprint: metadata.fingerprint))
                 case .zip:
@@ -58,18 +68,34 @@ enum PositionRelativeQuery {
             }
             parentID = parent.parent
         }
-        return nil
+        return nearestPickRole
     }
 
     /// Omits current values so a field remains a role even when other fields or occurrences differ.
     private struct Role: Hashable {
-        let sequenceNodeID: Int
+        let owner: Owner
         let path: ChoicePath
         let contexts: [Context]
         let typeTag: TypeTag
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
         let payload: TypeTagPayload?
+
+        init(owner: Owner, path: ChoicePath, contexts: [Context], metadata: ChooseBitsMetadata) {
+            self.owner = owner
+            self.path = path
+            self.contexts = contexts
+            typeTag = metadata.typeTag
+            validRange = metadata.validRange
+            isRangeExplicit = metadata.isRangeExplicit
+            payload = metadata.typeTagPayload
+        }
+    }
+
+    /// Keeps collection instances separate while allowing a pick site's generator identity to recur at different tree positions.
+    private enum Owner: Hashable {
+        case sequence(nodeID: Int)
+        case pick(fingerprint: UInt64)
     }
 
     /// Supplements positional paths with generator fingerprints and zip context, since resize wrappers also emit group-child steps without a zip node.
