@@ -100,7 +100,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(report.cycles == 5)
         #expect(report.encoderProbes[EncoderName.laneCollapse.rawValue] == 9)
         #expect(report.encoderProbesAccepted[EncoderName.laneCollapse.rawValue] == 0)
-        #expect(report.encoderProbes[EncoderName.deletion.rawValue] == 11)
+        #expect(report.encoderProbes[EncoderName.deletion.rawValue] == 14)
         #expect(report.encoderProbesAccepted[EncoderName.deletion.rawValue] == 1)
     }
 

@@ -6,6 +6,7 @@ indirect enum EncoderDispatch {
     case lockstep(GraphLockstepEncoder)
     case relation(GraphRelationEncoder)
     case swap(GraphSwapEncoder)
+    case windowRemoval(GraphWindowRemovalEncoder)
     case reorder(GraphReorderEncoder)
     case laneCollapse(GraphLaneCollapseEncoder)
     case depthCollapse(GraphDepthCollapseEncoder)
@@ -24,6 +25,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .lockstep(encoder): encoder.name
             case let .relation(encoder): encoder.name
             case let .swap(encoder): encoder.name
+            case let .windowRemoval(encoder): encoder.name
             case let .reorder(encoder): encoder.name
             case let .laneCollapse(encoder): encoder.name
             case let .depthCollapse(encoder): encoder.name
@@ -55,6 +57,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .swap(encoder):
                 encoder.start(scope: scope)
                 self = .swap(encoder)
+            case var .windowRemoval(encoder):
+                encoder.start(scope: scope)
+                self = .windowRemoval(encoder)
             case var .reorder(encoder):
                 encoder.start(scope: scope)
                 self = .reorder(encoder)
@@ -105,6 +110,10 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .swap(encoder)
                 return result
+            case var .windowRemoval(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .windowRemoval(encoder)
+                return result
             case var .reorder(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .reorder(encoder)
@@ -144,6 +153,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .lockstep(encoder): encoder.hadUnresolvedReplacement
             case let .relation(encoder): encoder.hadUnresolvedReplacement
             case let .swap(encoder): encoder.hadUnresolvedReplacement
+            case let .windowRemoval(encoder): encoder.hadUnresolvedReplacement
             case let .reorder(encoder): encoder.hadUnresolvedReplacement
             case let .laneCollapse(encoder): encoder.hadUnresolvedReplacement
             case let .depthCollapse(encoder): encoder.hadUnresolvedReplacement
@@ -163,6 +173,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .lockstep(encoder): encoder.convergenceRecords
             case let .relation(encoder): encoder.convergenceRecords
             case let .swap(encoder): encoder.convergenceRecords
+            case let .windowRemoval(encoder): encoder.convergenceRecords
             case let .reorder(encoder): encoder.convergenceRecords
             case let .laneCollapse(encoder): encoder.convergenceRecords
             case let .depthCollapse(encoder): encoder.convergenceRecords
@@ -194,6 +205,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .swap(encoder):
                 encoder.flushPartialConvergence()
                 self = .swap(encoder)
+            case var .windowRemoval(encoder):
+                encoder.flushPartialConvergence()
+                self = .windowRemoval(encoder)
             case var .reorder(encoder):
                 encoder.flushPartialConvergence()
                 self = .reorder(encoder)
@@ -228,13 +242,22 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
-    /// Discards lifted searches after acceptance without applying their mutations to the dispatched graph. Other encoders retain mutation application and finish when it requires a rebuild.
     var acceptanceHandling: AcceptanceHandling {
         switch self {
-            case let .composed(encoder):
-                encoder.acceptanceHandling
-            default:
-                .applyMutation
+            case let .structural(encoder): encoder.acceptanceHandling
+            case let .value(encoder): encoder.acceptanceHandling
+            case let .redistribution(encoder): encoder.acceptanceHandling
+            case let .lockstep(encoder): encoder.acceptanceHandling
+            case let .relation(encoder): encoder.acceptanceHandling
+            case let .swap(encoder): encoder.acceptanceHandling
+            case let .windowRemoval(encoder): encoder.acceptanceHandling
+            case let .reorder(encoder): encoder.acceptanceHandling
+            case let .laneCollapse(encoder): encoder.acceptanceHandling
+            case let .depthCollapse(encoder): encoder.acceptanceHandling
+            case let .binarySearch(encoder): encoder.acceptanceHandling
+            case let .boundValueCovering(encoder): encoder.acceptanceHandling
+            case let .liftedStage(encoder): encoder.acceptanceHandling
+            case let .composed(encoder): encoder.acceptanceHandling
         }
     }
 
@@ -264,6 +287,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .composed(encoder):
                 encoder.refreshState(graph: graph, sequence: sequence)
                 self = .composed(encoder)
+            case var .swap(encoder):
+                encoder.refreshState(graph: graph, sequence: sequence)
+                self = .swap(encoder)
             default:
                 break
         }

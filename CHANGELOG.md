@@ -6,6 +6,17 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-10-02
+
+### Changed
+
+- Counterexample characters now reduce to simpler forms of the same letter, such as `å` to `A` or `ｆ` to `F`, when the property does not depend on case, accents, or width. This covers Latin, Greek, Cyrillic, ligatures, fullwidth forms, and mathematical letters.
+- Reduction now removes runs of elements from the middle of collections, not only from their start or end.
+
+### Fixed
+
+- Reduction now moves a value across several same-shaped siblings, such as the elements of a tuple, instead of stopping after the first swap.
+
 ## [1.5.3] - 2026-10-01
 
 ### Changed
@@ -210,7 +221,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.3...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.4...HEAD
+[1.5.4]: https://github.com/nesevis/exhaust/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/nesevis/exhaust/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/nesevis/exhaust/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/nesevis/exhaust/compare/v1.5.0...v1.5.1

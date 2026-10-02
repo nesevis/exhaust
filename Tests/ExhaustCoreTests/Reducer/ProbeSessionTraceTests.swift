@@ -262,7 +262,7 @@ struct ProbeSessionTraceTests {
             graph: graph,
             warmStartRecords: [:]
         )
-        var state = TraceState(
+        var state = ProbeSessionFixtureState(
             sequence: sequence,
             tree: tree,
             output: UInt64(5),
@@ -435,21 +435,8 @@ private func reshapeSelection(_ probeID: Int) -> ProbeTraceRecorder.Event {
     .decoderSelected(probeID, preferExact: true, materializePicks: true)
 }
 
-private struct TraceState: ProbeSessionState {
-    var sequence: ChoiceSequence
-    var tree: ChoiceTree
-    var output: Any = UInt64(1)
-    var graph: ChoiceGraph
-    var gen: AnyGenerator
-    let property: (Any) -> Bool
-    let probeWrapper: ProbeWrapper? = nil
-    var rejectCache: Set<UInt64> = []
-    let collectStats = true
-    let isInstrumented = false
-}
-
 private struct PivotFixture {
-    var state: TraceState
+    var state: ProbeSessionFixtureState
     let scope: EncoderInput
     let pickNodeID: Int
     let liftedChoices: [ChoiceSequenceValue]
@@ -508,7 +495,7 @@ private func pivotFixture() throws -> PivotFixture {
         warmStartRecords: [:]
     )
     return PivotFixture(
-        state: TraceState(
+        state: ProbeSessionFixtureState(
             sequence: sequence,
             tree: tree,
             output: (UInt64(1), UInt64(0)),
@@ -536,7 +523,7 @@ private enum PivotFixtureError: Error {
 }
 
 private struct Fixture {
-    var state: TraceState
+    var state: ProbeSessionFixtureState
     let scope: EncoderInput
 
     init(value: UInt64 = 1, property: @escaping (Any) -> Bool) throws {
@@ -561,7 +548,14 @@ private struct Fixture {
             graph: graph,
             warmStartRecords: [:]
         )
-        state = TraceState(sequence: sequence, tree: tree, graph: graph, gen: generator.erase(), property: property)
+        state = ProbeSessionFixtureState(
+            sequence: sequence,
+            tree: tree,
+            output: UInt64(1),
+            graph: graph,
+            gen: generator.erase(),
+            property: property
+        )
     }
 
     func session(recorder: ProbeTraceRecorder? = nil) -> ProbeSession {

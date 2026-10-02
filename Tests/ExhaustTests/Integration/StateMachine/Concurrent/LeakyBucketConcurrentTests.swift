@@ -46,7 +46,7 @@ struct LeakyBucketConcurrentTests {
         #expect(report.cycles == 5)
         #expect(report.encoderProbes[EncoderName.laneCollapse.rawValue] == 7)
         #expect(report.encoderProbesAccepted[EncoderName.laneCollapse.rawValue] == 1)
-        #expect(report.encoderProbes[EncoderName.deletion.rawValue] == 10)
+        #expect(report.encoderProbes[EncoderName.deletion.rawValue] == 13)
         #expect(report.encoderProbesAccepted[EncoderName.deletion.rawValue] == 1)
     }
 

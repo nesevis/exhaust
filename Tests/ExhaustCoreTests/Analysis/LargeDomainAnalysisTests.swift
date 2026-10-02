@@ -762,7 +762,10 @@ struct CharacterProblematicIndicesTests {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
         let tag = TypeTag.character
-        let payload = TypeTagPayload.character(problematicIndices: srs.problematicIndices)
+        let payload = TypeTagPayload.character(
+            problematicIndices: srs.problematicIndices,
+            simplifications: .empty
+        )
         let max = UInt64(srs.scalarCount - 1)
 
         let operation = ReflectiveOperation.chooseBits(

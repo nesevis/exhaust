@@ -13,7 +13,7 @@ extension GraphStructuralEncoder {
     ) -> ProjectedMutation? {
         switch scope {
             case let .elements(elementScope):
-                guard let built = buildElementCandidate(scope: elementScope, sequence: sequence, graph: graph) else {
+                guard let built = Self.buildElementCandidate(scope: elementScope, sequence: sequence, graph: graph) else {
                     return nil
                 }
                 candidate = built
@@ -35,11 +35,15 @@ extension GraphStructuralEncoder {
             case .coveringAligned:
                 // Covering aligned removal is handled by the multi-shot path in ``GraphStructuralEncoder/nextCoveringAlignedProbe(into:)``.
                 return nil
+
+            case .window:
+                // Window removal is handled by ``GraphWindowRemovalEncoder``.
+                return nil
         }
     }
 
     /// Removes the specified elements across one or more parent sequences. Iterates each target, resolves element extents via the parent sequence's stored child position ranges, and removes them atomically.
-    private func buildElementCandidate(
+    static func buildElementCandidate(
         scope: ElementRemovalScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
@@ -61,7 +65,7 @@ extension GraphStructuralEncoder {
     }
 
     /// Returns the full extent for an element child of a sequence node, including transparent wrapper markers.
-    private func elementExtent(
+    private static func elementExtent(
         for elementNodeID: Int,
         inSequence sequenceNodeID: Int,
         graph: ChoiceGraph
@@ -134,7 +138,7 @@ extension GraphStructuralEncoder {
                 maxElementYield: state.scope.maxElementYield
             )
 
-            guard let built = buildElementCandidate(
+            guard let built = Self.buildElementCandidate(
                 scope: elementScope,
                 sequence: state.baseSequence,
                 graph: state.graph

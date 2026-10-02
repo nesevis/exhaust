@@ -153,7 +153,7 @@ package enum ProblematicValues {
             case .bits:
                 [min, max]
             case .character:
-                if case let .character(problematicIndices) = payload {
+                if case let .character(problematicIndices, _) = payload {
                     problematicIndices
                 } else {
                     [min, max]

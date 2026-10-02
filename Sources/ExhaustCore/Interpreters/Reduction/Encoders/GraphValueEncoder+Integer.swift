@@ -33,7 +33,8 @@ extension GraphValueEncoder {
                     currentBitPattern: current,
                     targetBitPattern: target,
                     typeTag: metadata.typeTag,
-                    mayReshape: entry.mayReshapeOnAcceptance
+                    mayReshape: entry.mayReshapeOnAcceptance,
+                    characterSimplifications: metadata.characterSimplifications
                 ))
             }
         }
@@ -50,9 +51,7 @@ extension GraphValueEncoder {
             warmStartRecords: warmStarts,
             lastEmittedCandidate: nil,
             batchRejected: false,
-            scanValues: nil,
-            scanIndex: 0,
-            scanBestAccepted: nil,
+            candidateList: nil,
             crossZero: nil,
             bisection: nil
         ))
@@ -310,7 +309,7 @@ extension GraphValueEncoder {
 
     // MARK: - Per-Leaf Orchestrator
 
-    /// Orchestrates per-leaf reduction by iterating over leaf nodes in sequence. For each leaf, emits a direct shot at the reduction target, then drives bit-pattern binary search, then optionally runs a linear scan over any non-monotone gap, and finally enters the cross-zero phase for signed types. Returns nil when all leaves have been processed.
+    /// Orchestrates per-leaf reduction by iterating over leaf nodes in sequence. For each leaf, emits a direct shot at the reduction target, then drives bit-pattern binary search, then optionally probes a candidate list (a linear scan over any non-monotone gap, or simpler forms of a character), and finally enters the cross-zero phase for signed types. Returns nil when all leaves have been processed.
     mutating func nextPerLeafProbe(
         state: inout IntegerState,
         lastAccepted: Bool
@@ -340,18 +339,17 @@ extension GraphValueEncoder {
                 continue
             }
 
-            // Linear scan phase (set up by binary search on non-monotone gap).
-            if state.scanValues != nil {
-                if let candidate = nextLinearScanProbe(
+            // Candidate list phase (set up by binary search convergence on a non-monotone gap or a character leaf).
+            if let source = state.candidateList?.source {
+                if let candidate = nextCandidateListProbe(
                     state: &state,
                     lastAccepted: lastAccepted
                 ) {
                     return candidate
                 }
-                // Scan exhausted — record convergence, then try cross-zero before advancing to the next leaf. Linear scan probes only
-                // `[targetBitPattern, bestAccepted)` which for signed types is one side of zero; cross-zero walks shortlex keys from 0 upward and reaches values on the opposite side that linear scan cannot. They are complementary.
-                finishLinearScan(state: &state)
-                if tryEnterCrossZero(state: &state) {
+                finishCandidateList(state: &state)
+                // A gap scan probes only `[targetBitPattern, bestAccepted)`, which for signed types is one side of zero; cross-zero walks shortlex keys from 0 upward and reaches values on the opposite side that the scan cannot. They are complementary.
+                if source == .gapScan, tryEnterCrossZero(state: &state) {
                     continue
                 }
                 state.leafIndex += 1
@@ -395,8 +393,8 @@ extension GraphValueEncoder {
                 return candidate
             }
 
-            // Binary search converged. If scan was set up, loop back to drain it.
-            if state.scanValues != nil {
+            // Binary search converged. If a candidate list was set up, loop back to drain it.
+            if state.candidateList != nil {
                 continue
             }
 
@@ -526,16 +524,10 @@ extension GraphValueEncoder {
                 // Set up inline linear scan of [targetBitPattern, bestAccepted).
                 let scanLo = min(leaf.targetBitPattern, bestAccepted)
                 let scanHi = max(leaf.targetBitPattern, bestAccepted)
-                var values: [UInt64] = []
-                values.reserveCapacity(Int(remaining))
-                var current = scanLo
-                while current < scanHi {
-                    values.append(current)
-                    current += 1
-                }
-                state.scanValues = values
-                state.scanIndex = 0
-                state.scanBestAccepted = nil
+                state.candidateList = CandidateListState(
+                    source: .gapScan,
+                    candidates: ArraySlice(scanLo ..< scanHi)
+                )
             } else {
                 convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
@@ -545,62 +537,95 @@ extension GraphValueEncoder {
                 )
             }
         }
+        // A linear scan already covers every index below the converged value, so simplification candidates are only needed without one.
+        if state.candidateList == nil,
+           let simplifications = leaf.characterSimplifications,
+           let currentBitPattern = state.sequence[leaf.sequenceIndex].value?.choice.bitPattern64
+        {
+            let candidates = simplifications.simplerIndices(than: currentBitPattern)
+            if candidates.isEmpty == false {
+                state.candidateList = CandidateListState(
+                    source: .characterSimplification,
+                    candidates: candidates
+                )
+            }
+        }
         state.stepper = nil
         return nil
     }
 
-    // MARK: - Linear Scan Recovery
+    // MARK: - Candidate List
 
-    /// Scans values in the non-monotone gap to find a lower floor than binary search achieved.
-    mutating func nextLinearScanProbe(
+    /// Probes the current leaf's candidate list in ascending order, skipping candidates that do not shortlex-precede the current entry.
+    ///
+    /// Returns nil when the list is exhausted, or after the first acceptance when ``CandidateListSource/endsOnFirstAcceptance`` holds.
+    func nextCandidateListProbe(
         state: inout IntegerState,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
+        guard var list = state.candidateList else {
+            return nil
+        }
         let leaf = state.leafPositions[state.leafIndex]
 
-        // Track acceptance of previous scan probe.
-        if lastAccepted, state.scanIndex > 0 {
-            let acceptedValue = state.scanValues![state.scanIndex - 1]
-            if state.scanBestAccepted == nil || acceptedValue < state.scanBestAccepted! {
-                state.scanBestAccepted = acceptedValue
+        if lastAccepted, list.nextIndex > list.candidates.startIndex {
+            let acceptedValue = list.candidates[list.nextIndex - 1]
+            list.bestAccepted = min(list.bestAccepted ?? acceptedValue, acceptedValue)
+            if list.source.endsOnFirstAcceptance {
+                state.candidateList = list
+                return nil
             }
         }
 
-        guard let scanValues = state.scanValues else { return nil }
-        guard state.scanIndex < scanValues.count else { return nil }
-
-        let probeValue = scanValues[state.scanIndex]
-        state.scanIndex += 1
-
         let currentEntry = state.sequence[leaf.sequenceIndex]
-        let newEntry = currentEntry.withBitPattern(probeValue)
-
-        guard newEntry.shortLexCompare(currentEntry) == .lt else {
-            return nextLinearScanProbe(state: &state, lastAccepted: false)
+        while list.nextIndex < list.candidates.endIndex {
+            let probeValue = list.candidates[list.nextIndex]
+            list.nextIndex += 1
+            let newEntry = currentEntry.withBitPattern(probeValue)
+            guard newEntry.shortLexCompare(currentEntry) == .lt else {
+                continue
+            }
+            var candidate = state.sequence
+            candidate[leaf.sequenceIndex] = newEntry
+            state.lastEmittedCandidate = candidate
+            state.candidateList = list
+            return candidate
         }
-
-        var candidate = state.sequence
-        candidate[leaf.sequenceIndex] = newEntry
-        state.lastEmittedCandidate = candidate
-        return candidate
+        state.candidateList = list
+        return nil
     }
 
-    /// Records the final convergence from a completed linear scan.
-    mutating func finishLinearScan(state: inout IntegerState) {
+    /// Records the convergence of a finished candidate list and clears it.
+    mutating func finishCandidateList(state: inout IntegerState) {
+        guard let list = state.candidateList else {
+            return
+        }
+        state.candidateList = nil
         let leaf = state.leafPositions[state.leafIndex]
-        let foundLowerFloor = state.scanBestAccepted != nil
-        let bound = state.scanBestAccepted
-            ?? convergenceStore[leaf.nodeID]?.bound
-            ?? leaf.targetBitPattern
-        convergenceStore[leaf.nodeID] = ConvergedOrigin(
-            bound: bound,
-            signal: .scanComplete(foundLowerFloor: foundLowerFloor),
-            configuration: .linearScan,
-            cycle: 0
-        )
-        state.scanValues = nil
-        state.scanIndex = 0
-        state.scanBestAccepted = nil
+        switch list.source {
+            case .gapScan:
+                let bound = list.bestAccepted
+                    ?? convergenceStore[leaf.nodeID]?.bound
+                    ?? leaf.targetBitPattern
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                    bound: bound,
+                    signal: .scanComplete(foundLowerFloor: list.bestAccepted != nil),
+                    configuration: .linearScan,
+                    cycle: 0
+                )
+            case .characterSimplification:
+                guard let bestAccepted = list.bestAccepted,
+                      let record = convergenceStore[leaf.nodeID]
+                else {
+                    return
+                }
+                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                    bound: bestAccepted,
+                    signal: record.signal,
+                    configuration: record.configuration,
+                    cycle: record.cycle
+                )
+        }
     }
 
     // MARK: - Cross-Zero Phase

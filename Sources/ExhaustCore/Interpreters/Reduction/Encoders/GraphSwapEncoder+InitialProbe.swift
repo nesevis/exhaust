@@ -44,11 +44,14 @@ extension GraphSwapEncoder {
                 extensionState = ExtensionState(
                     parentNodeID: parentNodeID,
                     slots: slots,
-                    runningSequence: built,
-                    contentSlotIndex: slotIndex + 1,
-                    acceptedSlotIndex: slotIndex + 1,
+                    runningSequence: sequence,
+                    contentSlotIndex: slotIndex,
                     step: 1,
-                    bisectHi: nil
+                    bisectHi: nil,
+                    pending: PendingSwap(
+                        targetSlotIndex: slotIndex + 1,
+                        sequence: built
+                    )
                 )
             }
 
@@ -74,63 +77,51 @@ extension GraphSwapEncoder {
     /// 2. On success: update the running sequence, double the step, try again.
     /// 3. On failure: bisect between the last accepted position and the failed target.
     /// 4. When the bisection converges (no untried midpoint), terminate.
+    ///
+    /// The first call carries feedback for the initial swap, which is the first outstanding probe. Probes are built from ``ExtensionState/runningSequence``, which advances only when a probe is accepted.
     mutating func nextExtensionProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
-        guard var state = extensionState else { return nil }
+        guard var state = extensionState,
+              let pending = state.pending
+        else {
+            extensionState = nil
+            return nil
+        }
+        state.pending = nil
+        let isBisecting = state.bisectHi != nil
 
-        if state.awaitingInitialFeedback {
-            state.awaitingInitialFeedback = false
-            if lastAccepted == false {
-                extensionState = nil
-                return nil
-            }
-            // Initial swap accepted — state is already at the correct position.
-            // Skip the advancement block and fall through to the doubling phase.
-        } else if lastAccepted == false {
-            // Previous extension probe rejected.
-            if state.bisectHi != nil {
-                let result = bisectExtension(into: &candidate, state: &state)
-                extensionState = result == nil ? nil : state
-                return result
-            }
-            if state.step <= 1 {
-                extensionState = nil
-                return nil
-            }
-            // Switch from doubling to bisecting.
-            let failedTarget = min(state.contentSlotIndex + state.step, state.slots.count - 1)
-            state.bisectHi = failedTarget
-            let result = bisectExtension(into: &candidate, state: &state)
-            extensionState = result == nil ? nil : state
-            return result
+        if lastAccepted {
+            state.commit(pending)
         } else {
-            // Extension probe accepted. Update state and push further.
-            let targetSlotIndex = state.bisectHi != nil
-                ? (state.acceptedSlotIndex + (state.bisectHi! - state.acceptedSlotIndex) / 2)
-                : min(state.contentSlotIndex + state.step, state.slots.count - 1)
-
-            state.acceptedSlotIndex = targetSlotIndex
-            state.contentSlotIndex = targetSlotIndex
-
-            if state.bisectHi != nil {
-                let result = bisectExtension(into: &candidate, state: &state)
-                extensionState = result == nil ? nil : state
-                return result
+            guard isBisecting || state.step > 1 else {
+                // The initial swap was rejected.
+                extensionState = nil
+                return nil
             }
+            // A rejected doubling probe starts bisection below it; a rejected bisection probe narrows it.
+            state.bisectHi = pending.targetSlotIndex
         }
 
-        // Doubling phase: double the step and try the next target.
+        let result = switch (lastAccepted, isBisecting) {
+            case (true, false):
+                nextDoublingProbe(into: &candidate, state: &state)
+            case (true, true), (false, _):
+                bisectExtension(into: &candidate, state: &state)
+        }
+        extensionState = result == nil ? nil : state
+        return result
+    }
+
+    /// Doubles the step and tries the next target, falling back to bisection when the target overshoots or does not improve shortlex.
+    private func nextDoublingProbe(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> EncoderProbe? {
         state.step *= 2
         let nextTarget = state.contentSlotIndex + state.step
         guard nextTarget < state.slots.count else {
             // Doubling overshot — switch to bisecting between current position and end.
-            if state.contentSlotIndex + 1 < state.slots.count {
-                state.bisectHi = state.slots.count - 1
-                let result = bisectExtension(into: &candidate, state: &state)
-                extensionState = result == nil ? nil : state
-                return result
+            guard state.contentSlotIndex + 1 < state.slots.count else {
+                return nil
             }
-            extensionState = nil
-            return nil
+            state.bisectHi = state.slots.count - 1
+            return bisectExtension(into: &candidate, state: &state)
         }
 
         let built = state.runningSequence.swappingSpans(
@@ -139,32 +130,23 @@ extension GraphSwapEncoder {
         )
         guard built.shortLexPrecedes(state.runningSequence) else {
             // Swap doesn't improve shortlex — treat as rejection.
-            if state.contentSlotIndex + 1 < nextTarget {
-                state.bisectHi = nextTarget
-                let result = bisectExtension(into: &candidate, state: &state)
-                extensionState = result == nil ? nil : state
-                return result
+            guard state.contentSlotIndex + 1 < nextTarget else {
+                return nil
             }
-            extensionState = nil
-            return nil
+            state.bisectHi = nextTarget
+            return bisectExtension(into: &candidate, state: &state)
         }
 
-        state.runningSequence = built
-        extensionState = state
-
-        candidate = built
-        return .siblingsSwapped(
-            parentNodeID: state.parentNodeID,
-            lhs: state.slots[state.contentSlotIndex].nodeID,
-            rhs: state.slots[nextTarget].nodeID
-        )
+        return emit(built, target: nextTarget, into: &candidate, state: &state)
     }
 
     /// Bisects between the last accepted slot and the rejected boundary.
-    private mutating func bisectExtension(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> EncoderProbe? {
-        guard let highBound = state.bisectHi else { return nil }
+    private func bisectExtension(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> EncoderProbe? {
+        guard let highBound = state.bisectHi else {
+            return nil
+        }
 
-        let lowBound = state.acceptedSlotIndex
+        let lowBound = state.contentSlotIndex
         guard lowBound + 1 < highBound else {
             return nil
         }
@@ -179,13 +161,25 @@ extension GraphSwapEncoder {
             return bisectExtension(into: &candidate, state: &state)
         }
 
-        state.runningSequence = built
+        return emit(built, target: mid, into: &candidate, state: &state)
+    }
 
+    /// Records `built` as the outstanding probe without advancing the base.
+    private func emit(
+        _ built: ChoiceSequence,
+        target: Int,
+        into candidate: inout ChoiceSequence,
+        state: inout ExtensionState
+    ) -> EncoderProbe {
+        state.pending = PendingSwap(
+            targetSlotIndex: target,
+            sequence: built
+        )
         candidate = built
         return .siblingsSwapped(
             parentNodeID: state.parentNodeID,
             lhs: state.slots[state.contentSlotIndex].nodeID,
-            rhs: state.slots[mid].nodeID
+            rhs: state.slots[target].nodeID
         )
     }
 }
