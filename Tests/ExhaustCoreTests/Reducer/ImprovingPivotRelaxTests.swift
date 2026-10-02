@@ -37,8 +37,8 @@ struct ImprovingPivotRelaxTests {
     @Test("Every leaf fill flattens to the same length", arguments: PivotLeafFill.allCases)
     func fillsKeepLength(fill: PivotLeafFill) throws {
         let (_, tree) = try laterArmCounterexample(threshold: 1, seed: 3, materializePicks: true)
-        let minimal = ChoiceSequence.flatten(PivotLeafFill.reductionTarget.apply(to: tree))
-        #expect(ChoiceSequence.flatten(fill.apply(to: tree)).count == minimal.count)
+        let minimal = ChoiceSequence.flatten(PivotLeafFill.reductionTarget.seed(for: tree))
+        #expect(ChoiceSequence.flatten(fill.seed(for: tree)).count == minimal.count)
     }
 
     @Test("The farthest fill moves a leaf to the bound opposite its reduction target")

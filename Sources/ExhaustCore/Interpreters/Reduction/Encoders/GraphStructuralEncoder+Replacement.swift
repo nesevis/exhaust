@@ -92,7 +92,7 @@ extension GraphStructuralEncoder {
         )
     }
 
-    /// The sequence with the pick's span replaced by the target branch's content, its leaves set by `fill`. The fill cannot change whether the candidate precedes `sequence`: length is unchanged and the first difference is the branch entry. Nil when the pick, its range, or the target branch cannot be resolved. No ordering gate: callers decide whether the candidate has to precede `sequence` on its own or after a lift.
+    /// Replaces the pick's span with the target branch's filled content. Fill choice preserves length but can change precedence at equal lengths, where leaf values compare before structure. No ordering gate: callers decide whether the candidate must precede `sequence` on its own or after a lift.
     static func branchPivotCandidate(
         pickNodeID: Int,
         targetBranchID: UInt64,
@@ -100,7 +100,9 @@ extension GraphStructuralEncoder {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
-        guard pickNodeID < graph.nodes.count else { return nil }
+        guard pickNodeID < graph.nodes.count else {
+            return nil
+        }
         guard case let .pick(pickMetadata) = graph.nodes[pickNodeID].kind else {
             return nil
         }
@@ -108,36 +110,146 @@ extension GraphStructuralEncoder {
             return nil
         }
         let elements = pickMetadata.branchElements
-        guard pickMetadata.selectedChildIndex < elements.count else { return nil }
+        guard pickMetadata.selectedChildIndex < elements.count else {
+            return nil
+        }
 
         guard let targetElementIndex = elements.firstIndex(where: { element in
             switch element {
-                case let .branch(b):
-                    b.id == targetBranchID
+                case let .branch(branch):
+                    branch.id == targetBranchID
                 default:
                     false
             }
-        }) else { return nil }
+        }) else {
+            return nil
+        }
 
-        let filledTarget = fill.apply(to: elements[targetElementIndex])
-        let targetContent = ChoiceSequence.flatten(filledTarget.selecting())
+        let filledTarget = fill.seed(for: elements[targetElementIndex])
+        var targetContent = ChoiceSequence.flatten(filledTarget.selecting())
+        if case .transplanted = fill {
+            guard targetBranchID != pickMetadata.selectedID,
+                  transplantPivotContent(
+                      &targetContent,
+                      targetTree: filledTarget,
+                      pickNodeID: pickNodeID,
+                      pickMetadata: pickMetadata,
+                      graph: graph
+                  )
+            else {
+                return nil
+            }
+        }
+        return pivotSplice(
+            targetBranchID: targetBranchID,
+            content: targetContent,
+            pickRange: pickRange,
+            pickMetadata: pickMetadata,
+            sequence: sequence
+        )
+    }
 
+    /// Keeps pick framing in one place so context-dependent fills address only the arm's own flattened positions.
+    private static func pivotSplice(
+        targetBranchID: UInt64,
+        content: ChoiceSequence,
+        pickRange: ClosedRange<Int>,
+        pickMetadata: PickMetadata,
+        sequence: ChoiceSequence
+    ) -> ChoiceSequence {
         var replacement: [ChoiceSequenceValue] = []
-        replacement.reserveCapacity(targetContent.count + 3)
+        replacement.reserveCapacity(content.count + 3)
         replacement.append(.group(true))
         replacement.append(.branch(.init(
             id: targetBranchID,
             branchCount: pickMetadata.branchCount,
             fingerprint: pickMetadata.fingerprint
         )))
-        for index in 0 ..< targetContent.count {
-            replacement.append(targetContent[index])
+        for index in 0 ..< content.count {
+            replacement.append(content[index])
         }
         replacement.append(.group(false))
 
         var candidate = sequence
         candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
         return candidate
+    }
+
+    /// Copies current fixed-shape fields into the minimal target seed, preserving target-domain metadata and leaving unmatched fields minimized.
+    private static func transplantPivotContent(
+        _ content: inout ChoiceSequence,
+        targetTree: ChoiceTree,
+        pickNodeID: Int,
+        pickMetadata: PickMetadata,
+        graph: ChoiceGraph
+    ) -> Bool {
+        guard pickMetadata.selectedChildIndex < graph.nodes[pickNodeID].children.count,
+              let sourceLeaves = fixedShapePivotLeaves(
+                  under: graph.nodes[pickNodeID].children[pickMetadata.selectedChildIndex],
+                  graph: graph
+              )
+        else {
+            return false
+        }
+        let targetGraph = ChoiceGraph.build(from: targetTree)
+        guard let targetLeaves = fixedShapePivotLeaves(under: 0, graph: targetGraph) else {
+            return false
+        }
+        let pathPrefixCount = graph.nodes[pickNodeID].choicePath.count + 1
+        var sourcesByPath: [ChoicePath: ChooseBitsMetadata] = [:]
+        for nodeID in sourceLeaves {
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+                continue
+            }
+            let path = Array(graph.nodes[nodeID].choicePath.dropFirst(pathPrefixCount))
+            sourcesByPath[path] = metadata
+        }
+        var hasChangedFill = false
+        for nodeID in targetLeaves {
+            let node = targetGraph.nodes[nodeID]
+            guard case let .chooseBits(targetMetadata) = node.kind,
+                  let source = sourcesByPath[node.choicePath],
+                  source.typeTag == targetMetadata.typeTag,
+                  source.typeTagPayload == targetMetadata.typeTagPayload,
+                  (targetMetadata.validRange ?? targetMetadata.typeTag.bitPatternRange).contains(source.value.bitPattern64),
+                  source.value != targetMetadata.value,
+                  let position = node.positionRange?.lowerBound
+            else {
+                continue
+            }
+            content[position] = .value(.init(
+                choice: source.value,
+                validRange: targetMetadata.validRange,
+                isRangeExplicit: targetMetadata.isRangeExplicit
+            ))
+            hasChangedFill = true
+        }
+        return hasChangedFill
+    }
+
+    /// Excludes dynamic contexts rather than assuming their recorded shape survives a copied value. Fixed-shape leaf paths are unique, and traversal order does not affect matching.
+    private static func fixedShapePivotLeaves(under rootNodeID: Int, graph: ChoiceGraph) -> [Int]? {
+        var leaves: [Int] = []
+        var stack = [rootNodeID]
+        while let nodeID = stack.popLast() {
+            let node = graph.nodes[nodeID]
+            switch node.kind {
+                case .chooseBits:
+                    guard node.scopeAnnotation.isDepthControl == false,
+                          node.scopeAnnotation.isLaneControl == false
+                    else {
+                        return nil
+                    }
+                    leaves.append(nodeID)
+                case .zip:
+                    stack.append(contentsOf: node.children)
+                case .just:
+                    break
+                case .pick, .bind, .sequence:
+                    return nil
+            }
+        }
+        return leaves
     }
 
     /// Replaces the ancestor's range with the descendant's content.
@@ -474,10 +586,13 @@ enum PivotLeafFill: CaseIterable {
     case recorded
     /// Every ranged leaf at the bound farthest from its reduction target, for a threshold a sample can miss.
     case farthestFromTarget
+    /// Copies compatible current fields into a minimal seed. Dynamic subtrees are excluded, and the property decides whether the copied inputs preserve failure.
+    case transplanted
 
-    func apply(to branch: ChoiceTree) -> ChoiceTree {
+    /// Prepares the arm's seed; the transplanted fill additionally needs current graph values before splicing.
+    func seed(for branch: ChoiceTree) -> ChoiceTree {
         switch self {
-            case .reductionTarget:
+            case .reductionTarget, .transplanted:
                 branch.minimizingLeaves
             case .recorded:
                 branch
