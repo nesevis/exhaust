@@ -200,7 +200,7 @@ struct BatchRemovalSource {
     private var triedTail: Bool
     private var exhausted: Bool
     private var cachedPriority: DispatchPriority?
-    private let interiorSeeds: [(scope: WindowRemovalScope, firstElementYield: Int)]
+    private let interiorSeeds: [GraphTransformation]
     private var interiorIndex = 0
 
     init(sequenceNodeID: Int, graph: ChoiceGraph) {
@@ -225,18 +225,24 @@ struct BatchRemovalSource {
         }
         elementList.sort { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
 
-        var seeds: [(scope: WindowRemovalScope, firstElementYield: Int)] = []
+        var seeds: [GraphTransformation] = []
         var seedOffset = elementList.count / 2
         while seedOffset > 0 {
             let capacity = min(deletable, elementList.count - seedOffset)
             if capacity >= 2 {
                 let window = elementList[seedOffset ..< seedOffset + capacity]
-                seeds.append((
-                    scope: WindowRemovalScope(
+                seeds.append(GraphTransformation(
+                    operation: .remove(.window(WindowRemovalScope(
                         sequenceNodeID: sequenceNodeID,
                         elementNodeIDs: window.map(\.nodeID)
-                    ),
-                    firstElementYield: elementList[seedOffset].positionRange.count
+                    ))),
+                    // The seed's first probe removes one element, so its priority reflects that element's yield rather than the window's capacity.
+                    priority: DispatchPriority(
+                        structuralBenefit: elementList[seedOffset].positionRange.count,
+                        valueBenefit: 0,
+                        reductionMagnitude: 0,
+                        estimatedCost: 1
+                    )
                 ))
             }
             seedOffset /= 2
@@ -329,33 +335,19 @@ struct BatchRemovalSource {
             cachedPriority = nil
             return nil
         }
-        let seed = interiorSeeds[interiorIndex]
+        let transformation = interiorSeeds[interiorIndex]
         interiorIndex += 1
-        let transformation = GraphTransformation(
-            operation: .remove(.window(seed.scope)),
-            priority: Self.interiorSeedPriority(firstElementYield: seed.firstElementYield)
-        )
         recomputePriority()
         return transformation
     }
 
     private enum RemovalAnchor { case head, tail }
 
-    /// The seed's first probe removes one element, so its priority reflects that element's yield rather than the window's capacity.
-    private static func interiorSeedPriority(firstElementYield: Int) -> DispatchPriority {
-        DispatchPriority(
-            structuralBenefit: firstElementYield,
-            valueBenefit: 0,
-            reductionMagnitude: 0,
-            estimatedCost: 1
-        )
-    }
-
     private var nextInteriorSeedPriority: DispatchPriority? {
         guard interiorIndex < interiorSeeds.count else {
             return nil
         }
-        return Self.interiorSeedPriority(firstElementYield: interiorSeeds[interiorIndex].firstElementYield)
+        return interiorSeeds[interiorIndex].priority
     }
 
     private mutating func recomputePriority() {

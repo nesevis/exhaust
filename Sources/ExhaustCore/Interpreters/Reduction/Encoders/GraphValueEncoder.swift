@@ -72,11 +72,8 @@ struct GraphValueEncoder: GraphEncoder {
         var lastEmittedCandidate: ChoiceSequence?
         /// Whether the batch-zero probe was rejected. When true and a leaf individually converges at its target, the convergence signal is `zeroingDependency` instead of `monotoneConvergence`.
         var batchRejected: Bool
-        /// Linear scan values for non-monotone gap recovery, or nil when inactive.
-        var scanValues: [UInt64]?
-        var scanIndex: Int
-        /// Best accepted value during the linear scan phase.
-        var scanBestAccepted: UInt64?
+        /// Candidates that binary search cannot reach for the current leaf, or nil when inactive. Set when binary search converges.
+        var candidateList: CandidateListState?
         /// Cross-zero phase state for the current leaf, or nil when inactive. Set after binary search (and any linear scan recovery) converges on a signed-type leaf whose current shortlex key permits crossing zero.
         var crossZero: CrossZeroState?
         /// Batch bisection state, active during the ``IntegerPhase/batchBisect`` phase.
@@ -85,9 +82,41 @@ struct GraphValueEncoder: GraphEncoder {
         var semanticSimplestProbed: Bool = false
         /// Per-leaf-zero pre-round state, active during the ``IntegerPhase/perLeafZero`` phase.
         var perLeafZero: PerLeafZeroState?
-        /// Character simplification candidates for the current leaf, ascending, or nil when inactive. Set after binary search converges on a character leaf without setting up a linear scan.
-        var simplificationValues: ArraySlice<UInt64>?
-        var simplificationIndex = 0
+    }
+
+    /// Where the candidates came from, which decides when the list ends and how its convergence is recorded.
+    enum CandidateListSource: Equatable {
+        /// Every bit pattern in a non-monotone gap of at most ``GraphValueEncoder/linearScanThreshold`` below the converged bound. Scanning continues past acceptances, and exhaustion records a `.scanComplete` convergence before trying cross-zero.
+        case gapScan
+        /// Simpler forms of a character leaf's current character, from ``CharacterSimplifications``. Ascending order makes the first acceptance the simplest reachable form, so it ends the list. The accepted index replaces the bound of the binary search record, so a warm start on the next pass does not search again.
+        case characterSimplification
+
+        var endsOnFirstAcceptance: Bool {
+            switch self {
+                case .gapScan:
+                    false
+                case .characterSimplification:
+                    true
+            }
+        }
+    }
+
+    /// Bit patterns below the converged bound that binary search cannot reach, probed one at a time in ascending order.
+    ///
+    /// Candidates that do not shortlex-precede the current entry are skipped without a probe. ``bestAccepted`` is the lowest accepted candidate, which the finish step records as the leaf's convergence bound.
+    struct CandidateListState {
+        let source: CandidateListSource
+        let candidates: ArraySlice<UInt64>
+        /// Index into ``candidates`` of the next candidate to consider. The candidate before it is the outstanding probe once any probe has been emitted.
+        var nextIndex: Int
+        var bestAccepted: UInt64?
+
+        init(source: CandidateListSource, candidates: ArraySlice<UInt64>) {
+            self.source = source
+            self.candidates = candidates
+            nextIndex = candidates.startIndex
+            bestAccepted = nil
+        }
     }
 
     /// State for the cross-zero phase of per-leaf minimization.

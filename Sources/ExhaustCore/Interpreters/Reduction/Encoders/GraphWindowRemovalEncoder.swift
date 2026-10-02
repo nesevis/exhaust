@@ -9,9 +9,12 @@
 ///
 /// Probe lengths follow the stepper: one through four, then doubling, then binary search between the longest accepted length and the shortest rejected one. A length beyond the window's capacity counts as a rejection without being probed.
 ///
-/// The session continues past acceptances because ``EncoderDispatch`` reports ``AcceptanceHandling/refreshAndIdle`` for this encoder. Each probe removes a prefix of ``WindowRemovalScope/elementNodeIDs`` from the dispatch-time base sequence, and accepted lengths only increase, so every probe after an acceptance removes a superset of what was committed. The reported mutation is never applied to the live graph; the session's rebuild picks up the final state.
+/// Each probe removes a prefix of ``WindowRemovalScope/elementNodeIDs`` from the dispatch-time base sequence, and accepted lengths only increase, so every probe after an acceptance removes a superset of what was committed. The reported mutation is never applied to the live graph; the session's rebuild picks up the final state.
 struct GraphWindowRemovalEncoder: GraphEncoder {
     let name: EncoderName = .deletion
+
+    /// The stepper keeps growing the window after an accepted length, so the session must survive acceptance. Probes are built from the dispatch-time base, which stays valid after acceptance, so nothing needs refreshing.
+    let acceptanceHandling: AcceptanceHandling = .refreshAndIdle
 
     // MARK: - State
 

@@ -159,27 +159,17 @@ extension GraphOperation {
         switch self {
             case let .remove(.elements(scope)):
                 return scope.targets.allSatisfy { target in
-                    guard target.sequenceNodeID < graph.nodes.count else { return false }
-                    guard case let .sequence(metadata) = graph.nodes[target.sequenceNodeID].kind else { return false }
-                    return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+                    Self.sequenceCanShrink(target.sequenceNodeID, in: graph)
                 }
             case let .remove(.subtree(nodeID, _)):
                 return nodeID < graph.nodes.count
                     && graph.nodes[nodeID].positionRange != nil
             case let .remove(.coveringAligned(scope)):
                 return scope.siblings.allSatisfy { sibling in
-                    guard sibling.sequenceNodeID < graph.nodes.count else { return false }
-                    guard case let .sequence(metadata) = graph.nodes[sibling.sequenceNodeID].kind else { return false }
-                    return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+                    Self.sequenceCanShrink(sibling.sequenceNodeID, in: graph)
                 }
             case let .remove(.window(scope)):
-                guard scope.sequenceNodeID < graph.nodes.count else {
-                    return false
-                }
-                guard case let .sequence(metadata) = graph.nodes[scope.sequenceNodeID].kind else {
-                    return false
-                }
-                return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+                return Self.sequenceCanShrink(scope.sequenceNodeID, in: graph)
             case let .replace(.selfSimilar(targetNodeID, donorNodeID, _)):
                 return targetNodeID < graph.nodes.count
                     && graph.nodes[targetNodeID].positionRange != nil
@@ -197,14 +187,9 @@ extension GraphOperation {
                 return scope.parentNodeID < graph.nodes.count
                     && graph.nodes[scope.parentNodeID].positionRange != nil
             case let .migrate(scope):
-                if let parentSeqID = scope.sourceParentSequenceNodeID {
-                    guard parentSeqID < graph.nodes.count else { return false }
-                    guard case let .sequence(metadata) = graph.nodes[parentSeqID].kind else { return false }
-                    guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
-                } else {
-                    guard scope.sourceSequenceNodeID < graph.nodes.count else { return false }
-                    guard case let .sequence(metadata) = graph.nodes[scope.sourceSequenceNodeID].kind else { return false }
-                    guard UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0) else { return false }
+                let donorSequenceNodeID = scope.sourceParentSequenceNodeID ?? scope.sourceSequenceNodeID
+                guard Self.sequenceCanShrink(donorSequenceNodeID, in: graph) else {
+                    return false
                 }
                 return scope.receiverSequenceNodeID < graph.nodes.count
                     && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
@@ -216,6 +201,16 @@ extension GraphOperation {
             case .minimize, .exchange, .reorder:
                 return true
         }
+    }
+
+    /// Whether the node is a sequence that still holds more elements than its minimum length.
+    private static func sequenceCanShrink(_ sequenceNodeID: Int, in graph: ChoiceGraph) -> Bool {
+        guard sequenceNodeID < graph.nodes.count,
+              case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind
+        else {
+            return false
+        }
+        return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
     }
 }
 

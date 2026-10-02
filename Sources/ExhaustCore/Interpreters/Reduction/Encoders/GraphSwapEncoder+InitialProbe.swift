@@ -46,11 +46,12 @@ extension GraphSwapEncoder {
                     slots: slots,
                     runningSequence: sequence,
                     contentSlotIndex: slotIndex,
-                    acceptedSlotIndex: slotIndex,
                     step: 1,
                     bisectHi: nil,
-                    pendingTargetSlotIndex: slotIndex + 1,
-                    pendingSequence: built
+                    pending: PendingSwap(
+                        targetSlotIndex: slotIndex + 1,
+                        sequence: built
+                    )
                 )
             }
 
@@ -80,25 +81,24 @@ extension GraphSwapEncoder {
     /// The first call carries feedback for the initial swap, which is the first outstanding probe. Probes are built from ``ExtensionState/runningSequence``, which advances only when a probe is accepted.
     mutating func nextExtensionProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
         guard var state = extensionState,
-              let target = state.pendingTargetSlotIndex
+              let pending = state.pending
         else {
             extensionState = nil
             return nil
         }
-        state.pendingTargetSlotIndex = nil
+        state.pending = nil
         let isBisecting = state.bisectHi != nil
 
         if lastAccepted {
-            state.commitPendingSwap(to: target)
+            state.commit(pending)
         } else {
-            state.pendingSequence = nil
             guard isBisecting || state.step > 1 else {
                 // The initial swap was rejected.
                 extensionState = nil
                 return nil
             }
             // A rejected doubling probe starts bisection below it; a rejected bisection probe narrows it.
-            state.bisectHi = target
+            state.bisectHi = pending.targetSlotIndex
         }
 
         let result = switch (lastAccepted, isBisecting) {
@@ -146,7 +146,7 @@ extension GraphSwapEncoder {
             return nil
         }
 
-        let lowBound = state.acceptedSlotIndex
+        let lowBound = state.contentSlotIndex
         guard lowBound + 1 < highBound else {
             return nil
         }
@@ -171,8 +171,10 @@ extension GraphSwapEncoder {
         into candidate: inout ChoiceSequence,
         state: inout ExtensionState
     ) -> EncoderProbe {
-        state.pendingTargetSlotIndex = target
-        state.pendingSequence = built
+        state.pending = PendingSwap(
+            targetSlotIndex: target,
+            sequence: built
+        )
         candidate = built
         return .siblingsSwapped(
             parentNodeID: state.parentNodeID,

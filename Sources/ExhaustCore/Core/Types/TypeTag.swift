@@ -58,7 +58,7 @@ package indirect enum TypeTagPayload: Hashable, Sendable {
     /// The date generator's grid. Used by ``ProblematicValues`` to convert calendar-meaningful instants (month/year boundaries, DST transitions) into step indices with the same forward map generation uses.
     case date(grid: DateGrid)
     /// Pre-computed problematic character indices and simpler forms of each character. `problematicIndices` corresponds to ``ProblematicValues/interestingCharacterScalars`` in flat array index space, clamped to the valid range during construction. `simplifications` is read by the reducer's value encoder.
-    case character(problematicIndices: [UInt64], simplifications: CharacterSimplifications = .empty)
+    case character(problematicIndices: [UInt64], simplifications: CharacterSimplifications)
 }
 
 package extension TypeTag {

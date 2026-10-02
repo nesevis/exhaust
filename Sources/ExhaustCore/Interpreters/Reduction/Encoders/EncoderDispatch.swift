@@ -242,15 +242,22 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
-    /// Discards lifted searches after acceptance without applying their mutations to the dispatched graph. Window removal and sibling swap also skip mutation application so their sessions survive acceptance: the window removal stepper keeps growing the window, and the swap extension keeps pushing content rightward. Other encoders retain mutation application and finish when it requires a rebuild.
     var acceptanceHandling: AcceptanceHandling {
         switch self {
-            case let .composed(encoder):
-                encoder.acceptanceHandling
-            case .windowRemoval, .swap:
-                .refreshAndIdle
-            default:
-                .applyMutation
+            case let .structural(encoder): encoder.acceptanceHandling
+            case let .value(encoder): encoder.acceptanceHandling
+            case let .redistribution(encoder): encoder.acceptanceHandling
+            case let .lockstep(encoder): encoder.acceptanceHandling
+            case let .relation(encoder): encoder.acceptanceHandling
+            case let .swap(encoder): encoder.acceptanceHandling
+            case let .windowRemoval(encoder): encoder.acceptanceHandling
+            case let .reorder(encoder): encoder.acceptanceHandling
+            case let .laneCollapse(encoder): encoder.acceptanceHandling
+            case let .depthCollapse(encoder): encoder.acceptanceHandling
+            case let .binarySearch(encoder): encoder.acceptanceHandling
+            case let .boundValueCovering(encoder): encoder.acceptanceHandling
+            case let .liftedStage(encoder): encoder.acceptanceHandling
+            case let .composed(encoder): encoder.acceptanceHandling
         }
     }
 

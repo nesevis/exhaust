@@ -59,7 +59,7 @@ private func windowScope(of operation: GraphOperation) -> WindowRemovalScope? {
 }
 
 private struct WindowFixture {
-    var state: WindowSessionState
+    var state: ProbeSessionFixtureState
     let graph: ChoiceGraph
     let sequenceNodeID: Int
     let elementNodeIDs: [Int]
@@ -79,7 +79,7 @@ private struct WindowFixture {
         elementNodeIDs = graph.nodes[sequenceNodeID].children.sorted { lhs, rhs in
             (graph.nodes[lhs].positionRange?.lowerBound ?? 0) < (graph.nodes[rhs].positionRange?.lowerBound ?? 0)
         }
-        state = WindowSessionState(
+        state = ProbeSessionFixtureState(
             sequence: ChoiceSequence(tree),
             tree: tree,
             output: values,
@@ -96,41 +96,15 @@ private struct WindowFixture {
                 sequenceNodeID: sequenceNodeID,
                 elementNodeIDs: Array(elementNodeIDs[offset...])
             ))),
-            priority: DispatchPriority(
-                structuralBenefit: 0,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: 1
-            )
+            priority: .zeroBenefit
         )
-        var encoder = ChoiceGraphScheduler.selectEncoder(for: transformation.operation, gen: state.gen)
-        encoder.start(scope: EncoderInput(
+        var session = state.makeSession(for: EncoderInput(
             transformation: transformation,
             baseSequence: state.sequence,
             tree: state.tree,
             graph: graph,
             warmStartRecords: [:]
         ))
-        var session = ProbeSession(
-            encoder: encoder,
-            transformation: transformation,
-            boundValueFingerprint: nil,
-            baseSequence: state.sequence,
-            hasBind: false
-        )
         return try session.runToCompletion(state: &state)
     }
-}
-
-private struct WindowSessionState: ProbeSessionState {
-    var sequence: ChoiceSequence
-    var tree: ChoiceTree
-    var output: Any
-    var graph: ChoiceGraph
-    var gen: AnyGenerator
-    let property: (Any) -> Bool
-    let probeWrapper: ProbeWrapper? = nil
-    var rejectCache: Set<UInt64> = []
-    let collectStats = true
-    let isInstrumented = false
 }

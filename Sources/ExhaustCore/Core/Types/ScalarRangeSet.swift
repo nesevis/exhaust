@@ -70,12 +70,12 @@ package struct ScalarRangeSet: @unchecked Sendable {
                 guard rangeSet.contains(candidate) else {
                     return nil
                 }
-                let rangeIndex = Self.naturalIndex(
+                return UInt64(Self.flatIndex(
                     of: candidate,
+                    bottomCodepoint: bottomCodepoint,
                     ranges: rangesArray,
                     cumulativeCounts: cumulative
-                )
-                return UInt64(bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex)
+                ))
             }
         // The bottom codepoint was removed from the range set above, so an interesting bottom scalar is reachable only through its reserved index.
         if let bottom = bottomCodepoint,
@@ -116,15 +116,12 @@ package struct ScalarRangeSet: @unchecked Sendable {
                 scalar == bottomCodepoint || rangeSet.contains(scalar.value)
             },
             index: { scalar in
-                guard scalar != bottomCodepoint else {
-                    return 0
-                }
-                let rangeIndex = Self.naturalIndex(
+                Self.flatIndex(
                     of: scalar.value,
+                    bottomCodepoint: bottomCodepoint,
                     ranges: rangesArray,
                     cumulativeCounts: cumulative
                 )
-                return bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex
             }
         )
     }
@@ -151,15 +148,12 @@ package struct ScalarRangeSet: @unchecked Sendable {
     /// Maps a scalar back to its flat index in `0..<scalarCount`.
     /// Uses binary search over the cached ranges for O(log n) lookup.
     public func index(of scalar: Unicode.Scalar) -> Int {
-        if let bottom = bottomCodepoint, scalar == bottom {
-            return 0
-        }
-        let rangeIndex = Self.naturalIndex(
+        Self.flatIndex(
             of: scalar.value,
+            bottomCodepoint: bottomCodepoint,
             ranges: rangesArray,
             cumulativeCounts: cumulativeCounts
         )
-        return bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex
     }
 
     // MARK: - Internal Lookup
@@ -189,6 +183,24 @@ package struct ScalarRangeSet: @unchecked Sendable {
             }
         }
         return lo
+    }
+
+    /// Finds the flat index of a scalar value: zero for the bottom codepoint, otherwise its range-relative index shifted past the reserved zero when a bottom codepoint exists. Static so the initializer can map scalars before every stored property is set.
+    private static func flatIndex(
+        of value: UInt32,
+        bottomCodepoint: Unicode.Scalar?,
+        ranges: [Range<UInt32>],
+        cumulativeCounts: [Int]
+    ) -> Int {
+        if let bottom = bottomCodepoint, value == bottom.value {
+            return 0
+        }
+        let rangeIndex = naturalIndex(
+            of: value,
+            ranges: ranges,
+            cumulativeCounts: cumulativeCounts
+        )
+        return bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex
     }
 
     /// Finds the range-relative index of a scalar value. Precondition-fails if the scalar is not in the range set.

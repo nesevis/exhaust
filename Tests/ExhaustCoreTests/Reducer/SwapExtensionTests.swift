@@ -3,6 +3,20 @@ import Testing
 
 @Suite("Sibling swap extension")
 struct SwapExtensionTests {
+    @Test("An accepted sibling swap continues into its adaptive extension")
+    func swapExtensionRunsAfterAcceptance() throws {
+        var fixture = try SwapFixture(
+            generator: fourValues(),
+            value: (UInt64(3), UInt64(0), UInt64(0), UInt64(0))
+        ) { _ in false }
+        let pushedTree = try #require(try Interpreters.reflect(fourValues(), with: (UInt64(0), UInt64(0), UInt64(0), UInt64(3))))
+        let report = try fixture.run()
+
+        try #require(report.anyAccepted)
+        #expect(report.probeCount > 1)
+        #expect(fixture.state.sequence == ChoiceSequence(pushedTree))
+    }
+
     @Test("A rejected doubling probe bisects from the last accepted sequence, not the rejected one")
     func bisectionBuildsFromAcceptedSequence() throws {
         // Fails while the 3 sits at index 2 or lower, so doubling to index 3 is rejected and bisection lands on index 2.
@@ -81,7 +95,7 @@ private func fourValues() -> Generator<(UInt64, UInt64, UInt64, UInt64)> {
 }
 
 private struct SwapFixture {
-    var state: SwapSessionState
+    var state: ProbeSessionFixtureState
     let scope: EncoderInput
     private(set) var sessionFinished = false
 
@@ -103,19 +117,14 @@ private struct SwapFixture {
         scope = EncoderInput(
             transformation: GraphTransformation(
                 operation: .permute(permutation),
-                priority: DispatchPriority(
-                    structuralBenefit: 0,
-                    valueBenefit: 0,
-                    reductionMagnitude: 0,
-                    estimatedCost: 1
-                )
+                priority: .zeroBenefit
             ),
             baseSequence: ChoiceSequence(tree),
             tree: tree,
             graph: graph,
             warmStartRecords: [:]
         )
-        state = SwapSessionState(
+        state = ProbeSessionFixtureState(
             sequence: ChoiceSequence(tree),
             tree: tree,
             output: value,
@@ -127,32 +136,11 @@ private struct SwapFixture {
 
     /// Runs one probe session for the sibling swap encoder, starting with its initial swap. Stops after 100 encode and decode steps, far more than any of these four-slot sessions need, and records whether the session finished on its own.
     mutating func run() throws -> PassReport {
-        var encoder = ChoiceGraphScheduler.selectEncoder(for: scope.transformation.operation, gen: state.gen)
-        encoder.start(scope: scope)
-        var session = ProbeSession(
-            encoder: encoder,
-            transformation: scope.transformation,
-            boundValueFingerprint: nil,
-            baseSequence: state.sequence,
-            hasBind: false
-        )
+        var session = state.makeSession(for: scope)
         for _ in 0 ..< 100 where session.phase != .finished {
             _ = try session.step(state: &state)
         }
         sessionFinished = session.phase == .finished
         return session.report()
     }
-}
-
-private struct SwapSessionState: ProbeSessionState {
-    var sequence: ChoiceSequence
-    var tree: ChoiceTree
-    var output: Any
-    var graph: ChoiceGraph
-    var gen: AnyGenerator
-    let property: (Any) -> Bool
-    let probeWrapper: ProbeWrapper? = nil
-    var rejectCache: Set<UInt64> = []
-    let collectStats = true
-    let isInstrumented = false
 }

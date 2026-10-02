@@ -25,7 +25,7 @@ package struct CharacterSimplifications: Sendable {
     /// Candidate indices for every source, concatenated. Each source's run is sorted ascending.
     private let candidates: [UInt64]
 
-    /// A table with no entries, for character generators built before the range set is known.
+    /// A table with no entries, for payloads whose leaves should never be simplified.
     @usableFromInline
     package static let empty = CharacterSimplifications(sources: [], candidateOffsets: [0], candidates: [])
 

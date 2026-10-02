@@ -15,6 +15,9 @@
 struct GraphSwapEncoder: GraphEncoder {
     let name: EncoderName = .siblingSwap
 
+    /// The extension keeps pushing content rightward after an accepted swap, so the session must survive acceptance. ``refreshState(graph:sequence:)`` adopts the committed sequence as the base for the next extension probe.
+    let acceptanceHandling: AcceptanceHandling = .refreshAndIdle
+
     // MARK: - State
 
     /// The initial mutation built at ``start(scope:)``. Consumed on the first ``nextProbe(into:lastAccepted:)`` call.
@@ -26,6 +29,13 @@ struct GraphSwapEncoder: GraphEncoder {
     /// Adaptive extension state. Non-nil when the initial probe targeted a group of three or more and extension is viable. Set at ``start(scope:)`` alongside the initial probe.
     var extensionState: ExtensionState?
 
+    /// A swap that has been emitted but not yet accepted or rejected.
+    struct PendingSwap {
+        let targetSlotIndex: Int
+        /// Becomes ``ExtensionState/runningSequence`` only when the probe is accepted.
+        var sequence: ChoiceSequence
+    }
+
     /// Mutable state for the adaptive rightward extension.
     struct ExtensionState {
         let parentNodeID: Int
@@ -33,24 +43,18 @@ struct GraphSwapEncoder: GraphEncoder {
         var slots: [(nodeID: Int, range: ClosedRange<Int>)]
         /// The sequence as it was after the last accepted swap. Used as the base for building the next extension candidate.
         var runningSequence: ChoiceSequence
-        /// Index into ``slots`` of the slot currently holding the content being pushed rightward.
+        /// Index into ``slots`` of the slot currently holding the content being pushed rightward. Content only moves on acceptance, so this is also the farthest accepted slot.
         var contentSlotIndex: Int
-        /// The farthest slot index that was accepted (content successfully moved there).
-        var acceptedSlotIndex: Int
         /// Adaptive step size: doubles on success, triggers bisection on failure.
         var step: Int
-        /// When non-nil, the encoder is bisecting between ``acceptedSlotIndex`` and ``bisectHi`` (rejected).
+        /// When non-nil, the encoder is bisecting between ``contentSlotIndex`` and ``bisectHi`` (rejected).
         var bisectHi: Int?
-        /// Target slot of the emitted probe awaiting feedback, or nil when no probe is outstanding. The initial swap is the first outstanding probe.
-        var pendingTargetSlotIndex: Int?
-        /// The candidate for the outstanding probe. Becomes ``runningSequence`` only when the probe is accepted.
-        var pendingSequence: ChoiceSequence?
+        /// The emitted probe awaiting feedback, or nil when no probe is outstanding. The initial swap is the first outstanding probe.
+        var pending: PendingSwap?
 
-        /// Adopts the outstanding probe as the new base, moving the content to `target` and recomputing slot ranges for the swapped widths.
-        mutating func commitPendingSwap(to target: Int) {
-            guard let pendingSequence else {
-                return
-            }
+        /// Adopts an accepted probe as the new base, moving the content to its target and recomputing slot ranges for the swapped widths.
+        mutating func commit(_ accepted: PendingSwap) {
+            let target = accepted.targetSlotIndex
             let lower = min(contentSlotIndex, target)
             let upper = max(contentSlotIndex, target)
             let lowerSlot = slots[lower]
@@ -71,10 +75,8 @@ struct GraphSwapEncoder: GraphEncoder {
                 range: upperStart ... upperStart + lowerSlot.range.count - 1
             )
 
-            runningSequence = pendingSequence
-            self.pendingSequence = nil
+            runningSequence = accepted.sequence
             contentSlotIndex = target
-            acceptedSlotIndex = target
         }
     }
 
@@ -102,15 +104,17 @@ struct GraphSwapEncoder: GraphEncoder {
     }
 
     /// Adopts the decoded sequence for the outstanding probe so the next extension probe builds on what was committed. A decoded sequence of a different length invalidates the slot ranges, so the extension ends.
+    ///
+    /// A same-length decode is assumed to keep sibling widths. If a bind redistributes entries anyway, later probes misalign and cost rejected probes, but the decoder's shortlex gate still admits only genuine reductions.
     mutating func refreshState(graph _: ChoiceGraph, sequence: ChoiceSequence) {
         guard var state = extensionState else {
             return
         }
-        guard state.pendingSequence?.count == sequence.count else {
+        guard state.pending?.sequence.count == sequence.count else {
             extensionState = nil
             return
         }
-        state.pendingSequence = sequence
+        state.pending?.sequence = sequence
         extensionState = state
     }
 

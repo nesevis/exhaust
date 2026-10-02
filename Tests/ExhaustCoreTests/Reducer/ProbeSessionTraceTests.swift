@@ -194,56 +194,6 @@ struct ProbeSessionTraceTests {
         #expect(recorder.events.count == 4)
     }
 
-    @Test("An accepted sibling swap continues into its adaptive extension")
-    func swapExtensionRunsAfterAcceptance() throws {
-        let generator = Gen.zip(
-            Gen.choose(in: UInt64(0) ... 3),
-            Gen.choose(in: UInt64(0) ... 3),
-            Gen.choose(in: UInt64(0) ... 3),
-            Gen.choose(in: UInt64(0) ... 3)
-        )
-        let tree = try #require(try Interpreters.reflect(generator, with: (UInt64(3), UInt64(0), UInt64(0), UInt64(0))))
-        let pushedTree = try #require(try Interpreters.reflect(generator, with: (UInt64(0), UInt64(0), UInt64(0), UInt64(3))))
-        let graph = ChoiceGraph.build(from: tree)
-        let permutation = try #require(PermutationQuery.build(graph: graph).first)
-        let scope = EncoderInput(
-            transformation: GraphTransformation(
-                operation: .permute(permutation),
-                priority: DispatchPriority(
-                    structuralBenefit: 0,
-                    valueBenefit: 0,
-                    reductionMagnitude: 0,
-                    estimatedCost: 1
-                )
-            ),
-            baseSequence: ChoiceSequence(tree),
-            tree: tree,
-            graph: graph,
-            warmStartRecords: [:]
-        )
-        var state = TraceState(
-            sequence: ChoiceSequence(tree),
-            tree: tree,
-            graph: graph,
-            gen: generator.erase(),
-            property: { _ in false }
-        )
-        var encoder = EncoderDispatch.swap(GraphSwapEncoder())
-        encoder.start(scope: scope)
-        var session = ProbeSession(
-            encoder: encoder,
-            transformation: scope.transformation,
-            boundValueFingerprint: nil,
-            baseSequence: state.sequence,
-            hasBind: false
-        )
-        let report = try session.runToCompletion(state: &state)
-
-        try #require(report.anyAccepted)
-        #expect(report.probeCount > 1)
-        #expect(state.sequence == ChoiceSequence(pushedTree))
-    }
-
     @Test("A guided property failure with no admitted reduction has no decoded-choice event")
     func guidedAdmissionRejection() throws {
         var fixture = try pivotFixture()
@@ -312,7 +262,7 @@ struct ProbeSessionTraceTests {
             graph: graph,
             warmStartRecords: [:]
         )
-        var state = TraceState(
+        var state = ProbeSessionFixtureState(
             sequence: sequence,
             tree: tree,
             output: UInt64(5),
@@ -485,21 +435,8 @@ private func reshapeSelection(_ probeID: Int) -> ProbeTraceRecorder.Event {
     .decoderSelected(probeID, preferExact: true, materializePicks: true)
 }
 
-private struct TraceState: ProbeSessionState {
-    var sequence: ChoiceSequence
-    var tree: ChoiceTree
-    var output: Any = UInt64(1)
-    var graph: ChoiceGraph
-    var gen: AnyGenerator
-    let property: (Any) -> Bool
-    let probeWrapper: ProbeWrapper? = nil
-    var rejectCache: Set<UInt64> = []
-    let collectStats = true
-    let isInstrumented = false
-}
-
 private struct PivotFixture {
-    var state: TraceState
+    var state: ProbeSessionFixtureState
     let scope: EncoderInput
     let pickNodeID: Int
     let liftedChoices: [ChoiceSequenceValue]
@@ -558,7 +495,7 @@ private func pivotFixture() throws -> PivotFixture {
         warmStartRecords: [:]
     )
     return PivotFixture(
-        state: TraceState(
+        state: ProbeSessionFixtureState(
             sequence: sequence,
             tree: tree,
             output: (UInt64(1), UInt64(0)),
@@ -586,7 +523,7 @@ private enum PivotFixtureError: Error {
 }
 
 private struct Fixture {
-    var state: TraceState
+    var state: ProbeSessionFixtureState
     let scope: EncoderInput
 
     init(value: UInt64 = 1, property: @escaping (Any) -> Bool) throws {
@@ -611,7 +548,14 @@ private struct Fixture {
             graph: graph,
             warmStartRecords: [:]
         )
-        state = TraceState(sequence: sequence, tree: tree, graph: graph, gen: generator.erase(), property: property)
+        state = ProbeSessionFixtureState(
+            sequence: sequence,
+            tree: tree,
+            output: UInt64(1),
+            graph: graph,
+            gen: generator.erase(),
+            property: property
+        )
     }
 
     func session(recorder: ProbeTraceRecorder? = nil) -> ProbeSession {

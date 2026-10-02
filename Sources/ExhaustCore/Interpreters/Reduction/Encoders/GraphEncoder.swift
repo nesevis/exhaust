@@ -60,6 +60,11 @@ protocol GraphEncoder {
     ///
     /// The scheduler calls this before harvesting ``convergenceRecords`` so that the stepper's best-accepted bound survives the graph rebuild and narrows the search range on the next dispatch via warm start.
     mutating func flushPartialConvergence()
+
+    /// How ``ProbeSession`` updates the live graph after an accepted probe.
+    ///
+    /// ``AcceptanceHandling/applyMutation`` ends the session whenever the mutation requires a full rebuild. An encoder whose search must continue past acceptances returns ``AcceptanceHandling/refreshAndIdle`` and keeps whatever state its ``StatefulGraphEncoder/refreshState(graph:sequence:)`` leaves valid. Defaults to ``AcceptanceHandling/applyMutation``.
+    var acceptanceHandling: AcceptanceHandling { get }
 }
 
 /// An encoder whose probe candidates are post-lift sequences with a bound subtree that differs from ``EncoderInput/tree``.
@@ -95,5 +100,10 @@ extension GraphEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
+    }
+
+    /// Default: apply the mutation to the live graph.
+    var acceptanceHandling: AcceptanceHandling {
+        .applyMutation
     }
 }
