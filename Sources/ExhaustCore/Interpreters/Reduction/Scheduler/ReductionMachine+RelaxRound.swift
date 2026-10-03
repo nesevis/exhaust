@@ -269,7 +269,7 @@ extension ReductionMachine {
         }
     }
 
-    /// Non-minimal fills of every pivot that precedes `sequence`, shortest first. Precedence is independent of the fill, so the first fill decides for the scope.
+    /// Non-minimal fills that precede `sequence`, shortest first. Length decides once per scope when it differs; equal-length candidates need per-fill checks because their leaf values can change precedence.
     private static func buildImprovingPivotCandidates(
         sequence: ChoiceSequence,
         graph: ChoiceGraph
@@ -279,17 +279,36 @@ extension ReductionMachine {
             guard case let .branchPivot(pickNodeID, targetBranchID) = scope else {
                 continue
             }
-            for fill in [PivotLeafFill.recorded, .farthestFromTarget] {
-                guard let candidate = GraphStructuralEncoder.branchPivotCandidate(
+            guard let recorded = GraphStructuralEncoder.branchPivotCandidate(
+                pickNodeID: pickNodeID,
+                targetBranchID: targetBranchID,
+                fill: .recorded,
+                sequence: sequence,
+                graph: graph
+            ), recorded.count <= sequence.count else {
+                continue
+            }
+            let isShorter = recorded.count < sequence.count
+            if isShorter || recorded.shortLexPrecedes(sequence) {
+                candidates.append(recorded)
+                if let farthest = GraphStructuralEncoder.branchPivotCandidate(
                     pickNodeID: pickNodeID,
                     targetBranchID: targetBranchID,
-                    fill: fill,
+                    fill: .farthestFromTarget,
                     sequence: sequence,
                     graph: graph
-                ), candidate.shortLexPrecedes(sequence) else {
-                    break
+                ), isShorter || farthest.shortLexPrecedes(sequence) {
+                    candidates.append(farthest)
                 }
-                candidates.append(candidate)
+            }
+            if let transplanted = GraphStructuralEncoder.branchPivotCandidate(
+                pickNodeID: pickNodeID,
+                targetBranchID: targetBranchID,
+                fill: .transplanted,
+                sequence: sequence,
+                graph: graph
+            ), isShorter || transplanted.shortLexPrecedes(sequence) {
+                candidates.append(transplanted)
             }
         }
         candidates.sort { $0.count < $1.count }

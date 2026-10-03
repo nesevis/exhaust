@@ -31,14 +31,8 @@ enum ExchangeQuery {
                 continue
             }
 
-            let targetA = metadataA.value.reductionTarget(in: metadataA.validRange)
-            let targetB = metadataB.value.reductionTarget(in: metadataB.validRange)
-            let distanceA = metadataA.value.bitPattern64 > targetA
-                ? metadataA.value.bitPattern64 - targetA
-                : targetA - metadataA.value.bitPattern64
-            let distanceB = metadataB.value.bitPattern64 > targetB
-                ? metadataB.value.bitPattern64 - targetB
-                : targetB - metadataB.value.bitPattern64
+            let distanceA = QueryHelpers.reductionDistance(metadataA)
+            let distanceB = QueryHelpers.reductionDistance(metadataB)
 
             guard distanceA > 0 || distanceB > 0 else { continue }
 
@@ -66,35 +60,9 @@ enum ExchangeQuery {
             scopes.append(.redistribution(RedistributionScope(pairs: pairs)))
         }
 
-        var leafGroups: [TypeTag: [Int]] = [:]
-        for nodeID in graph.liveNodeIDs {
-            let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl { continue }
-            leafGroups[metadata.typeTag, default: []].append(nodeID)
-        }
-
-        var tandemGroups: [TandemGroup] = []
-        for (tag, nodeIdentifiers) in leafGroups where nodeIdentifiers.count >= 2 {
-            let entries = nodeIdentifiers.map { leafEntry(for: $0, graph: graph) }
-            tandemGroups.append(TandemGroup(leaves: entries, typeTag: tag))
-            for matchingNodeIdentifiers in equalValueSubgroups(of: nodeIdentifiers, graph: graph) {
-                let matchingEntries = matchingNodeIdentifiers.map { leafEntry(for: $0, graph: graph) }
-                tandemGroups.append(TandemGroup(leaves: matchingEntries, typeTag: tag))
-            }
-        }
-
-        // Dictionary iteration order varies with the per-process hash seed. The broader type group precedes an equal-value subgroup at the same position so the existing search order remains first.
-        tandemGroups.sort { groupA, groupB in
-            let positionA = graph.nodes[groupA.leaves[0].nodeID].positionRange?.lowerBound ?? 0
-            let positionB = graph.nodes[groupB.leaves[0].nodeID].positionRange?.lowerBound ?? 0
-            if positionA != positionB {
-                return positionA < positionB
-            }
-            return groupA.leaves.count > groupB.leaves.count
-        }
-        if tandemGroups.isEmpty == false {
-            scopes.append(.tandem(TandemScope(groups: tandemGroups)))
+        let groups = tandemGroups(graph: graph)
+        if groups.isEmpty == false {
+            scopes.append(.tandem(TandemScope(groups: groups)))
         }
 
         if let relationScope = RelationQuery.build(graph: graph) {
@@ -107,6 +75,50 @@ enum ExchangeQuery {
     }
 
     // MARK: - Private Helpers
+
+    /// Prepends field roles only when broad search does not already cover the same leaves, preserving the broad group's existing position.
+    private static func tandemGroups(graph: ChoiceGraph) -> [TandemGroup] {
+        let broadGroups = typeAndEqualValueGroups(graph: graph)
+        // Node lists use ascending IDs: broad groups inherit liveNodeIDs order, and role groups explicitly sort their IDs.
+        let broadKeys = Set(broadGroups.map(\.nodeIDs))
+        let roleGroups = PositionRelativeQuery.build(graph: graph).filter { broadKeys.contains($0.nodeIDs) == false }
+        return (roleGroups + broadGroups).map { group in
+            TandemGroup(
+                leaves: group.nodeIDs.map { leafEntry(for: $0, graph: graph) },
+                typeTag: group.typeTag
+            )
+        }
+    }
+
+    /// Orders broad type groups and equal-value subgroups by position, keeping the broader group first when their positions coincide.
+    private static func typeAndEqualValueGroups(graph: ChoiceGraph) -> [QueryHelpers.LeafGroup] {
+        var leafGroups: [TypeTag: [Int]] = [:]
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind else { continue }
+            if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl { continue }
+            leafGroups[metadata.typeTag, default: []].append(nodeID)
+        }
+
+        var groups: [QueryHelpers.LeafGroup] = []
+        for (tag, nodeIdentifiers) in leafGroups where nodeIdentifiers.count >= 2 {
+            groups.append(QueryHelpers.LeafGroup(typeTag: tag, nodeIDs: nodeIdentifiers))
+            for matchingNodeIdentifiers in equalValueSubgroups(of: nodeIdentifiers, graph: graph) {
+                groups.append(QueryHelpers.LeafGroup(typeTag: tag, nodeIDs: matchingNodeIdentifiers))
+            }
+        }
+
+        // Dictionary iteration order varies with the per-process hash seed. The broader type group precedes an equal-value subgroup at the same position so the existing search order remains first.
+        groups.sort { groupA, groupB in
+            let positionA = groupA.position(in: graph)
+            let positionB = groupB.position(in: graph)
+            if positionA != positionB {
+                return positionA < positionB
+            }
+            return groupA.nodeIDs.count > groupB.nodeIDs.count
+        }
+        return groups
+    }
 
     private static func leafEntry(for nodeID: Int, graph: ChoiceGraph) -> LeafEntry {
         let annotation = graph.nodes[nodeID].scopeAnnotation
@@ -139,7 +151,7 @@ enum ExchangeQuery {
 
         var scopes: [BoundExchangeScope] = []
         for bindNodeID in bindInnersByBind.keys.sorted() {
-            let sourceIDs = (bindInnersByBind[bindNodeID] ?? []).filter { isOffTarget($0, graph: graph) }
+            let sourceIDs = (bindInnersByBind[bindNodeID] ?? []).filter { QueryHelpers.isOffTarget($0, graph: graph) }
             guard sourceIDs.isEmpty == false,
                   case let .bind(metadata) = graph.nodes[bindNodeID].kind
             else { continue }
@@ -177,12 +189,6 @@ enum ExchangeQuery {
             }
         }
         return scopes
-    }
-
-    /// Whether the leaf sits away from its reduction target, so it has magnitude to give up.
-    private static func isOffTarget(_ nodeID: Int, graph: ChoiceGraph) -> Bool {
-        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return false }
-        return metadata.value.bitPattern64 != metadata.value.reductionTarget(in: metadata.validRange)
     }
 
     /// Returns the value leaves of a bind's bound subtree when that subtree has a fixed shape: no binds, picks, or sequences, so a lift keeps each leaf at the same offset in the bound range, and the sinks stay a handful of scalars rather than every element of a payload.
@@ -293,10 +299,7 @@ enum ExchangeQuery {
         for childID in childIDs {
             guard case let .chooseBits(metadata) = graph.nodes[childID].kind else { continue }
             guard let range = graph.nodes[childID].positionRange else { continue }
-            let target = metadata.value.reductionTarget(in: metadata.validRange)
-            let distance = metadata.value.bitPattern64 > target
-                ? metadata.value.bitPattern64 - target
-                : target - metadata.value.bitPattern64
+            let distance = QueryHelpers.reductionDistance(metadata)
             leaves.append((nodeID: childID, position: range.lowerBound, distance: distance))
         }
         guard leaves.count >= 2 else { return [] }
@@ -332,10 +335,7 @@ enum ExchangeQuery {
         for childID in sourceChildIDs {
             guard case let .chooseBits(metadata) = graph.nodes[childID].kind else { continue }
             guard graph.nodes[childID].positionRange != nil else { continue }
-            let target = metadata.value.reductionTarget(in: metadata.validRange)
-            let distance = metadata.value.bitPattern64 > target
-                ? metadata.value.bitPattern64 - target
-                : target - metadata.value.bitPattern64
+            let distance = QueryHelpers.reductionDistance(metadata)
             guard distance > 0 else { continue }
             sources.append((nodeID: childID, distance: distance))
         }

@@ -73,10 +73,11 @@ package extension ChoiceTree {
                     choice: b.choice.mappingLeaves(transform),
                     isSelected: b.isSelected
                 )
-            case let .group(children, isOpaque, _):
+            case let .group(children, isOpaque, isZip):
                 return .group(
                     children.map { $0.mappingLeaves(transform) },
-                    isOpaque: isOpaque
+                    isOpaque: isOpaque,
+                    isZip: isZip
                 )
             case let .resize(newSize, choices):
                 return .resize(
