@@ -118,6 +118,31 @@ struct BoundValueGateTests {
         #expect(gate.decayedBudget(fingerprint: fingerprint) == 1)
     }
 
+    @Test("Invalidating search history restores every bind's full budget and keeps them non-first", arguments: 0 ... 5)
+    func invalidationRestoresBudgets(stalls: Int) {
+        let baseBudget = Self.tuning.boundValueBaseBudget
+        var gate = BoundValueGate(baseBudget: baseBudget)
+        let fingerprints: [UInt64] = [0x6666, 0x7777]
+        for fingerprint in fingerprints {
+            gate.recordOutcome(fingerprint: fingerprint, accepted: true)
+            for _ in 0 ..< stalls {
+                gate.recordOutcome(fingerprint: fingerprint, accepted: false)
+            }
+        }
+        gate.markDispatched(0x6666)
+
+        gate.invalidateSearchHistory()
+
+        for fingerprint in fingerprints {
+            #expect(gate.decayedBudget(fingerprint: fingerprint) == baseBudget)
+            #expect(gate.isFruitless(fingerprint) == false)
+            #expect(gate.isFirstDispatch(fingerprint: fingerprint) == false)
+        }
+        #expect(gate.isFirstDispatch(fingerprint: 0x8888))
+        #expect(gate.shouldDispatch(fingerprint: 0x6666, anyAcceptedThisCycle: false) == .skip)
+        #expect(gate.shouldDispatch(fingerprint: 0x7777, anyAcceptedThisCycle: false) == .classifyFirst)
+    }
+
     // MARK: - First Dispatch
 
     @Test("isFirstDispatch is true only before any recorded outcome")

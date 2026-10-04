@@ -13,7 +13,7 @@
 ///
 /// 1. **Per-cycle dedup**: after the first dispatch for a given bind within a cycle, subsequent dispatches are skipped.
 /// 2. **Acceptance deferral**: bound value dispatches are skipped when any encoder has already accepted a probe this cycle.
-/// 3. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds until ``clearFruitless()``.
+/// 3. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds until ``clearFruitless()`` or ``invalidateSearchHistory()``.
 struct BoundValueGate {
     enum Decision {
         /// Proceeds with bound-value search for this scope.
@@ -71,6 +71,14 @@ struct BoundValueGate {
     /// Clears fruitless verdicts after an accepted restructuring, which can make a lift productive: lowering a nested bind's inner can open a failure to the outer bind. Stall counts, and so budget decay, are kept.
     mutating func clearFruitless() {
         fruitless.removeAll(keepingCapacity: true)
+    }
+
+    /// Restores every bind's full search budget and clears fruitless verdicts, for acceptances that can change any bind's productivity. Recorded binds stay recorded, so they remain non-first dispatches, and per-cycle dispatch tracking is kept.
+    mutating func invalidateSearchHistory() {
+        fruitless.removeAll(keepingCapacity: true)
+        for fingerprint in stallCount.keys {
+            stallCount[fingerprint] = 0
+        }
     }
 
     /// True when no dispatch outcome has ever been recorded for the fingerprint in this run. First dispatches are the classification-cost population: they probe a bind whose productivity is unknown, so the scheduler may cap their spend without touching post-acceptance dispatches (an acceptance records an outcome, making later dispatches non-first).

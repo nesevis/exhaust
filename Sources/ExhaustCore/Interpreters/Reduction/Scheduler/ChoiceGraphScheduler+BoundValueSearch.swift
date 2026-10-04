@@ -142,7 +142,8 @@ extension ChoiceGraphScheduler {
                 guard let tree = Materializer.guidedLift(
                     generator: generator,
                     prefix: candidate,
-                    fallbackTree: fallbackTree
+                    fallbackTree: fallbackTree,
+                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
                 ) else {
                     let proposed = controllerBitPattern(in: candidate, at: controllerSequenceIndex)
                     Self.logReducer("bound_value_lift_failed", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
@@ -213,7 +214,8 @@ extension ChoiceGraphScheduler {
             parent: parent,
             bindNodeID: bindNodeID,
             stage: stage,
-            chain: chain
+            chain: chain,
+            controllerTopologyOnly: stage.canRecurseIntoNestedBind
         ) {
             case let .lifted(liftedBind):
                 lifted = liftedBind
@@ -248,7 +250,8 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         bindNodeID: Int,
         stage: BoundValueStage,
-        chain: BoundValueChain
+        chain: BoundValueChain,
+        controllerTopologyOnly: Bool
     ) -> BoundValueLift {
         let freshTree = liftResult.tree
         let liftedSequence = liftResult.sequence
@@ -258,7 +261,9 @@ extension ChoiceGraphScheduler {
         {
             return .failed(.liftedTooLong)
         }
-        let liftedGraph = ChoiceGraph.build(from: freshTree)
+        let liftedGraph = controllerTopologyOnly
+            ? ChoiceGraphBuilder.buildControllerTopology(from: freshTree)
+            : ChoiceGraph.build(from: freshTree)
 
         guard bindNodeID < parent.graph.nodes.count,
               case let .bind(sourceMetadata) = parent.graph.nodes[bindNodeID].kind,
@@ -280,7 +285,8 @@ extension ChoiceGraphScheduler {
             tree: freshTree,
             graph: liftedGraph,
             bindNodeID: liftedBindNodeID,
-            boundRange: boundRange
+            boundRange: boundRange,
+            isControllerTopology: controllerTopologyOnly
         ))
     }
 
@@ -322,7 +328,7 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         chain: BoundValueChain
     ) -> DownstreamBuild {
-        let liftedGraph = lifted.graph
+        let liftedGraph = lifted.terminalGraph()
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }
             if liftedGraph.nodes[leafID].scopeAnnotation.isDepthControl { return false }

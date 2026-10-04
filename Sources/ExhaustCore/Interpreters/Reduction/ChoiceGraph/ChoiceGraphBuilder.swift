@@ -17,6 +17,8 @@ struct ChoiceGraphBuilder {
     var containmentEdges: [ContainmentEdge] = []
     var dependencyEdges: [DependencyEdge] = []
     var nextNodeID = 0
+    /// Intermediate bind scopes need controller topology and offsets, not scalar array leaves. Such graphs must never drive terminal value searches.
+    var omittingScalarSequenceElements = false
 
     /// Tracks the outermost enclosing bind's node ID for nodes inside a bind's inner subtree. Set when entering a bind's inner child; cleared when entering the bound child. Outermost-wins: once set, nested binds do not override.
     var enclosingBindNodeID: Int?
@@ -40,6 +42,17 @@ struct ChoiceGraphBuilder {
     ///
     /// - Parameter tree: The generator's compositional structure. Produced by the materializer with `materializePicks` controlling whether inactive branches have full subtrees.
     static func build(from tree: ChoiceTree) -> ChoiceGraph {
+        build(from: tree, omittingScalarSequenceElements: false)
+    }
+
+    /// Builds controller topology for intermediate bind composition.
+    ///
+    /// Scalar arrays keep their complete spans but have no element nodes or child indexes, so the result answers bind lookup, span, and nested-bind questions only. It must not drive terminal searches or become the live reducer graph.
+    static func buildControllerTopology(from tree: ChoiceTree) -> ChoiceGraph {
+        build(from: tree, omittingScalarSequenceElements: true)
+    }
+
+    private static func build(from tree: ChoiceTree, omittingScalarSequenceElements: Bool) -> ChoiceGraph {
         if case .just = tree {
             return ChoiceGraph(
                 nodes: [],
@@ -52,7 +65,7 @@ struct ChoiceGraphBuilder {
                 dependencyAdjacency: []
             )
         }
-        var builder = ChoiceGraphBuilder()
+        var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
         return builder.assembleGraph()
     }
@@ -180,6 +193,21 @@ struct ChoiceGraphBuilder {
         )
         if let parent {
             containmentEdges.append(ContainmentEdge(source: parent, target: nodeID))
+        }
+
+        // Bare scalar elements cannot hide binds or picks. Preserve their full flattened span without allocating per-element nodes, paths, ranges, or lookup dictionaries.
+        if omittingScalarSequenceElements, elements.allSatisfy({ $0.isChoice }) {
+            let consumed = elements.count + 2
+            nodes[nodeID] = ChoiceGraphNode(
+                id: nodeID,
+                kind: nodes[nodeID].kind,
+                positionRange: isActive ? offset ... (offset + consumed - 1) : nil,
+                children: [],
+                parent: parent,
+                choicePath: path,
+                scopeAnnotation: ScopeAnnotation(bindRole: currentBindRole, controlKind: .standard)
+            )
+            return isActive ? consumed : 0
         }
 
         if isActive == false {

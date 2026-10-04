@@ -17,18 +17,42 @@ extension ChoiceGraphScheduler {
 
     /// Determines the decoder mode for a given probe mutation.
     ///
-    /// Pure function of the mutation type, the encoder's decoder requirement, and whether the sequence contains binds. Returns two flags:
-    /// - `preferExact`: true when the probe should use exact (non-guided) decoding.
-    /// - `materializePicks`: true when the probe changes the active branch path and the decoder must reconstruct all branch alternatives.
-    struct DecoderSelection {
-        let preferExact: Bool
-        let materializePicks: Bool
+    /// Pure function of the mutation type, the encoder's decoder requirement and admission, and whether the sequence contains binds. A non-standard admission forces exact decoding, because only the exact decoder can apply it. `materializePicks` is true when the probe changes the active branch path and the decoder must reconstruct all branch alternatives.
+    enum DecoderSelection {
+        case exact(materializePicks: Bool, admission: DecoderAdmission)
+        case guided(materializePicks: Bool)
+
+        var preferExact: Bool {
+            switch self {
+                case .exact:
+                    true
+                case .guided:
+                    false
+            }
+        }
+
+        var materializePicks: Bool {
+            switch self {
+                case let .exact(materializePicks, _), let .guided(materializePicks):
+                    materializePicks
+            }
+        }
+
+        func decoder(fallbackTree: ChoiceTree) -> SequenceDecoder {
+            switch self {
+                case let .exact(materializePicks, admission):
+                    .exact(materializePicks: materializePicks, admission: admission)
+                case let .guided(materializePicks):
+                    .guided(fallbackTree: fallbackTree, materializePicks: materializePicks)
+            }
+        }
     }
 
     static func selectDecoder(
         for mutation: ProjectedMutation,
         requiresExactDecoder: Bool,
-        hasBind: Bool
+        hasBind: Bool,
+        admission: DecoderAdmission = .standard
     ) -> DecoderSelection {
         let picksUnchanged = switch mutation {
             case let .leafValues(changes):
@@ -44,10 +68,10 @@ extension ChoiceGraphScheduler {
             default:
                 hasBind
         }
-        return DecoderSelection(
-            preferExact: requiresExactDecoder || probeCanReshape == false,
-            materializePicks: picksUnchanged == false
-        )
+        guard requiresExactDecoder || admission.inspectsDecodedHistory || probeCanReshape == false else {
+            return .guided(materializePicks: picksUnchanged == false)
+        }
+        return .exact(materializePicks: picksUnchanged == false, admission: admission)
     }
 
     /// Logs a `graph_probe_rejected` debug event for replacement probes rejected by the decoder.

@@ -60,6 +60,9 @@ package struct SchedulerTuning: Sendable {
     /// Maximum improving pivot probes per relax round. Separate from ``relaxMaterializationBudget`` so that spending it never changes which excursions a round reaches. Zero disables the phase.
     public var relaxImprovingProbeBudget: Int
 
+    /// Maximum atomic pair probes after ordinary reduction and structural relaxation stall. Passing probes use one flat materialization; a surviving failure also rebuilds the tree before acceptance. Zero disables pairwise numeric search.
+    public var pairwiseNumericProbeBudget: Int
+
     /// Half-width of the bit-pattern window used by bind classification endpoint probing. Unsigned tags probe `0 ... windowRadius`; signed tags probe `simplest ± windowRadius`.
     public var classificationWindowRadius: UInt64
 
@@ -76,6 +79,7 @@ package struct SchedulerTuning: Sendable {
         boundValueBaseBudget: Int = 15,
         relaxMaterializationBudget: Int = 10,
         relaxImprovingProbeBudget: Int = 2,
+        pairwiseNumericProbeBudget: Int = 512,
         classificationWindowRadius: UInt64 = 10000,
         composedFirstDispatchProbeCap: Int = 16,
         migrationDemotionThreshold: Int = 3
@@ -83,6 +87,7 @@ package struct SchedulerTuning: Sendable {
         self.boundValueBaseBudget = boundValueBaseBudget
         self.relaxMaterializationBudget = relaxMaterializationBudget
         self.relaxImprovingProbeBudget = relaxImprovingProbeBudget
+        self.pairwiseNumericProbeBudget = pairwiseNumericProbeBudget
         self.classificationWindowRadius = classificationWindowRadius
         self.composedFirstDispatchProbeCap = composedFirstDispatchProbeCap
         self.migrationDemotionThreshold = migrationDemotionThreshold

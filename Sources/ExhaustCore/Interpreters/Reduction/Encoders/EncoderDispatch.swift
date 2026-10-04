@@ -5,6 +5,7 @@ indirect enum EncoderDispatch {
     case redistribution(GraphRedistributionEncoder)
     case lockstep(GraphLockstepEncoder)
     case relation(GraphRelationEncoder)
+    case numericPair(NumericPairEncoder)
     case swap(GraphSwapEncoder)
     case windowRemoval(GraphWindowRemovalEncoder)
     case reorder(GraphReorderEncoder)
@@ -24,6 +25,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.name
             case let .lockstep(encoder): encoder.name
             case let .relation(encoder): encoder.name
+            case let .numericPair(encoder): encoder.name
             case let .swap(encoder): encoder.name
             case let .windowRemoval(encoder): encoder.name
             case let .reorder(encoder): encoder.name
@@ -54,6 +56,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .relation(encoder):
                 encoder.start(scope: scope)
                 self = .relation(encoder)
+            case var .numericPair(encoder):
+                encoder.start(scope: scope)
+                self = .numericPair(encoder)
             case var .swap(encoder):
                 encoder.start(scope: scope)
                 self = .swap(encoder)
@@ -106,6 +111,10 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .relation(encoder)
                 return result
+            case var .numericPair(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .numericPair(encoder)
+                return result
             case var .swap(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .swap(encoder)
@@ -152,6 +161,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.hadUnresolvedReplacement
             case let .lockstep(encoder): encoder.hadUnresolvedReplacement
             case let .relation(encoder): encoder.hadUnresolvedReplacement
+            case let .numericPair(encoder): encoder.hadUnresolvedReplacement
             case let .swap(encoder): encoder.hadUnresolvedReplacement
             case let .windowRemoval(encoder): encoder.hadUnresolvedReplacement
             case let .reorder(encoder): encoder.hadUnresolvedReplacement
@@ -172,6 +182,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.convergenceRecords
             case let .lockstep(encoder): encoder.convergenceRecords
             case let .relation(encoder): encoder.convergenceRecords
+            case let .numericPair(encoder): encoder.convergenceRecords
             case let .swap(encoder): encoder.convergenceRecords
             case let .windowRemoval(encoder): encoder.convergenceRecords
             case let .reorder(encoder): encoder.convergenceRecords
@@ -202,6 +213,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .relation(encoder):
                 encoder.flushPartialConvergence()
                 self = .relation(encoder)
+            case var .numericPair(encoder):
+                encoder.flushPartialConvergence()
+                self = .numericPair(encoder)
             case var .swap(encoder):
                 encoder.flushPartialConvergence()
                 self = .swap(encoder)
@@ -249,6 +263,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.acceptanceHandling
             case let .lockstep(encoder): encoder.acceptanceHandling
             case let .relation(encoder): encoder.acceptanceHandling
+            case let .numericPair(encoder): encoder.acceptanceHandling
             case let .swap(encoder): encoder.acceptanceHandling
             case let .windowRemoval(encoder): encoder.acceptanceHandling
             case let .reorder(encoder): encoder.acceptanceHandling
@@ -258,6 +273,26 @@ extension EncoderDispatch: GraphEncoder {
             case let .boundValueCovering(encoder): encoder.acceptanceHandling
             case let .liftedStage(encoder): encoder.acceptanceHandling
             case let .composed(encoder): encoder.acceptanceHandling
+        }
+    }
+
+    var admission: DecoderAdmission {
+        switch self {
+            case let .structural(encoder): encoder.admission
+            case let .value(encoder): encoder.admission
+            case let .redistribution(encoder): encoder.admission
+            case let .lockstep(encoder): encoder.admission
+            case let .relation(encoder): encoder.admission
+            case let .numericPair(encoder): encoder.admission
+            case let .swap(encoder): encoder.admission
+            case let .windowRemoval(encoder): encoder.admission
+            case let .reorder(encoder): encoder.admission
+            case let .laneCollapse(encoder): encoder.admission
+            case let .depthCollapse(encoder): encoder.admission
+            case let .binarySearch(encoder): encoder.admission
+            case let .boundValueCovering(encoder): encoder.admission
+            case let .liftedStage(encoder): encoder.admission
+            case let .composed(encoder): encoder.admission
         }
     }
 

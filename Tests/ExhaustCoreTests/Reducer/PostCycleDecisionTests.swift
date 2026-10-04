@@ -53,33 +53,56 @@ struct PostCycleDecisionTests {
         #expect(result.actions.contains(.relationPass) == false)
     }
 
-    // MARK: - Relax Round
+    // MARK: - Excursion
 
-    @Test("Relax round when stalled with replacement shortlex rejections")
-    func relaxWhenStalledWithShortlexRejection() {
+    @Test("Excursion on the terminal stall with replacement shortlex rejections")
+    func excursionOnTerminalStallWithShortlexRejection() {
         let result = Self.evaluate(
             anyAccepted: false,
-            hadUnresolvedReplacement: true
+            hadUnresolvedReplacement: true,
+            stallBudget: 1
         )
-        #expect(result.actions.contains(.relaxRound))
+        #expect(result.actions.contains(.excursion))
     }
 
-    @Test("No relax round when accepted")
-    func noRelaxWhenAccepted() {
+    @Test("No excursion before the terminal stall")
+    func noExcursionBeforeTerminalStall() {
+        let result = Self.evaluate(
+            anyAccepted: false,
+            hadUnresolvedReplacement: true,
+            allConverged: false,
+            stallBudget: 4
+        )
+        #expect(result.actions.contains(.excursion) == false)
+    }
+
+    @Test("Improving pivots run on any stalled cycle")
+    func improvingPivotsOnAnyStall() {
+        let result = Self.evaluate(
+            anyAccepted: false,
+            hasUnprobedImprovingPivot: true,
+            stallBudget: 4
+        )
+        #expect(result.actions.contains(.improvingPivots))
+        #expect(result.actions.contains(.excursion) == false)
+    }
+
+    @Test("No excursion when accepted")
+    func noExcursionWhenAccepted() {
         let result = Self.evaluate(
             anyAccepted: true,
             hadUnresolvedReplacement: true
         )
-        #expect(result.actions.contains(.relaxRound) == false)
+        #expect(result.actions.contains(.excursion) == false)
     }
 
-    @Test("No relax round without replacement shortlex rejections")
-    func noRelaxWithoutShortlexRejection() {
+    @Test("No excursion without replacement shortlex rejections")
+    func noExcursionWithoutShortlexRejection() {
         let result = Self.evaluate(
             anyAccepted: false,
             hadUnresolvedReplacement: false
         )
-        #expect(result.actions.contains(.relaxRound) == false)
+        #expect(result.actions.contains(.excursion) == false)
     }
 
     // MARK: - Stall Budget
@@ -129,7 +152,7 @@ struct PostCycleDecisionTests {
 
     // MARK: - Combined Scenarios
 
-    @Test("Full convergence stall: confirmation only, no relax")
+    @Test("Full convergence stall: confirmation only, no excursion")
     func fullConvergenceStall() {
         let result = Self.evaluate(
             anyAccepted: false,
@@ -137,10 +160,10 @@ struct PostCycleDecisionTests {
             structurallyImproved: false
         )
         #expect(result.actions.contains(.confirmConvergence))
-        #expect(result.actions.contains(.relaxRound) == false)
+        #expect(result.actions.contains(.excursion) == false)
     }
 
-    @Test("Stalled with shortlex rejection and convergence: confirmation and relax")
+    @Test("Stalled with shortlex rejection and convergence: confirmation and excursion")
     func stalledWithShortlexAndConvergence() {
         let result = Self.evaluate(
             anyAccepted: false,
@@ -149,7 +172,7 @@ struct PostCycleDecisionTests {
             structurallyImproved: false
         )
         #expect(result.actions.contains(.confirmConvergence))
-        #expect(result.actions.contains(.relaxRound))
+        #expect(result.actions.contains(.excursion))
     }
 
     @Test("Productive cycle: no special actions")
@@ -176,6 +199,40 @@ struct PostCycleDecisionTests {
         }
     }
 
+    @Test("Numeric fallback precedes the excursion and never triggers it")
+    func numericFallbackOrdering() {
+        let evaluation = ChoiceGraphScheduler.evaluatePostCycle(
+            outcome: .init(
+                anyAccepted: false,
+                hadUnresolvedReplacement: true,
+                hasUnprobedImprovingPivot: false,
+                allConverged: true,
+                improved: false,
+                structurallyImproved: false,
+                shouldAttemptNumericPairs: true
+            ),
+            stallBudget: 4,
+            maxStalls: 4,
+            deferBindInner: false
+        )
+        #expect(evaluation.actions == [.confirmConvergence, .relationPass, .pairwiseNumericPass, .excursion])
+        let numericOnly = ChoiceGraphScheduler.evaluatePostCycle(
+            outcome: .init(
+                anyAccepted: false,
+                hadUnresolvedReplacement: false,
+                hasUnprobedImprovingPivot: false,
+                allConverged: false,
+                improved: false,
+                structurallyImproved: false,
+                shouldAttemptNumericPairs: true
+            ),
+            stallBudget: 4,
+            maxStalls: 4,
+            deferBindInner: false
+        )
+        #expect(numericOnly.actions == [.pairwiseNumericPass])
+    }
+
     // MARK: - Helpers
 
     private static let maxStalls = 4
@@ -183,6 +240,7 @@ struct PostCycleDecisionTests {
     private static func evaluate(
         anyAccepted: Bool = false,
         hadUnresolvedReplacement: Bool = false,
+        hasUnprobedImprovingPivot: Bool = false,
         allConverged: Bool = false,
         improved: Bool = false,
         structurallyImproved: Bool = false,
@@ -193,9 +251,11 @@ struct PostCycleDecisionTests {
             outcome: .init(
                 anyAccepted: anyAccepted,
                 hadUnresolvedReplacement: hadUnresolvedReplacement,
+                hasUnprobedImprovingPivot: hasUnprobedImprovingPivot,
                 allConverged: allConverged,
                 improved: improved,
-                structurallyImproved: structurallyImproved
+                structurallyImproved: structurallyImproved,
+                shouldAttemptNumericPairs: false
             ),
             stallBudget: stallBudget,
             maxStalls: maxStalls,

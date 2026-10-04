@@ -74,8 +74,10 @@ package struct ReductionMachine: ProbeSessionState {
         case rebuilt(sequenceLength: Int, structurallyChanged: Bool)
 
         case convergenceConfirmed(anyStale: Bool)
-        case relaxRoundCompleted(improved: Bool)
+        case improvingPivotsCompleted(improved: Bool)
+        case excursionCompleted(improved: Bool)
         case relationPassCompleted(accepted: Bool)
+        case pairwiseNumericPassCompleted(accepted: Bool)
         case deferralReleased
 
         case reorderCompleted(accepted: Bool)
@@ -168,6 +170,8 @@ package struct ReductionMachine: ProbeSessionState {
     /// Consecutive migration passes that rejected every probe, across the whole run. Reset by any migration acceptance. When this reaches ``SchedulerTuning/migrationDemotionThreshold`` (and the threshold is nonzero), dispatch skips migration transformations for the rest of the run.
     var migrationConsecutiveRejects: Int = 0
     var sequenceBeforeCycle: ChoiceSequence = []
+
+    var exhaustedNumericPairScope: ExhaustedNumericPairScope?
 
     // MARK: - Coupling Attribution
 
@@ -321,7 +325,8 @@ package struct ReductionMachine: ProbeSessionState {
         cycles += 1
         convergence.resetForNewCycle()
         scopeRejectionCache.clearCoarse()
-        hadUnresolvedReplacement = false
+        // Latched across stalled cycles: the scope rejection cache can skip a replacement scope on the very stall that schedules the excursion.
+        hadUnresolvedReplacement = hadUnresolvedReplacement && sequence == sequenceBeforeCycle
         anyAccepted = false
         deferralReleasedThisCycle = false
         sequenceBeforeCycle = sequence
@@ -353,11 +358,13 @@ package struct ReductionMachine: ProbeSessionState {
         let evaluation = convergence.evaluatePostCycle(
             outcome: ChoiceGraphScheduler.CycleOutcome(
                 anyAccepted: anyAccepted,
+                hadUnresolvedReplacement: hadUnresolvedReplacement,
                 // The pivot's source is spent in the cycle that probed it, so no encoder sees it in the stalled cycle and the graph has to answer.
-                hadUnresolvedReplacement: hadUnresolvedReplacement || (anyAccepted == false && hasUnprobedImprovingPivot),
+                hasUnprobedImprovingPivot: anyAccepted == false && hasUnprobedImprovingPivot,
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
-                structurallyImproved: sequence.count < sequenceBeforeCycle.count
+                structurallyImproved: sequence.count < sequenceBeforeCycle.count,
+                shouldAttemptNumericPairs: anyAccepted == false && pendingNumericPairs() != nil
             )
         )
 
@@ -390,13 +397,24 @@ package struct ReductionMachine: ProbeSessionState {
             case .relationPass:
                 let accepted = try runRelationPass()
                 return .relationPassCompleted(accepted: accepted)
-            case .relaxRound:
-                let improved = try runRelaxRound()
+            case .improvingPivots:
+                let improved = try runImprovingPivotPass()
                 if improved {
-                    anyAccepted = true
-                    scopeRejectionCache.clear()
+                    recordPostCycleAcceptance()
                 }
-                return .relaxRoundCompleted(improved: improved)
+                return .improvingPivotsCompleted(improved: improved)
+            case .pairwiseNumericPass:
+                return try .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
+            case .excursion:
+                // Perturbing away from a counterexample that an earlier action just improved spends budget escaping a local minimum the run may not be in.
+                guard anyAccepted == false else {
+                    return .excursionCompleted(improved: false)
+                }
+                let improved = try runExcursion()
+                if improved {
+                    recordPostCycleAcceptance()
+                }
+                return .excursionCompleted(improved: improved)
             case .releaseDeferral:
                 // Only worth a cycle when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none, and the extra cycle would replay the structural sources for nothing.
                 deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
@@ -405,6 +423,23 @@ package struct ReductionMachine: ProbeSessionState {
                 ])
                 return .deferralReleased
         }
+    }
+
+    /// Records an acceptance made by a post-cycle pass: marks the cycle accepted, drops scope rejections recorded against the previous sequence, and restores the stall budget.
+    ///
+    /// The stall that scheduled the pass has already been spent, and the excursion only runs on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
+    mutating func recordPostCycleAcceptance() {
+        anyAccepted = true
+        scopeRejectionCache.clear()
+        convergence.stallBudget = convergence.maxStalls
+    }
+
+    /// Records an acceptance whose effect can reach beyond the edited leaves, because the property couples values the generator treats as independent. Every convergence floor, cached rejection, and bind search history is invalidated on top of ``recordPostCycleAcceptance()``.
+    mutating func invalidateAfterCoupledAcceptance() {
+        recordPostCycleAcceptance()
+        graph.convergenceStore.removeAll()
+        rejectCache.removeAll()
+        convergence.gate.invalidateSearchHistory()
     }
 
     // MARK: - Check Termination
@@ -496,6 +531,18 @@ package struct ReductionMachine: ProbeSessionState {
         return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
     }
 
+    /// Captures the deadline bounds rather than `self`, for passes that hold `self` `inout` while checking it.
+    func makeDeadlineCheck() -> () -> Bool {
+        let deadlineNanos = deadlineNanoseconds
+        let startNanos = startNanoseconds
+        return {
+            guard deadlineNanos > 0 else {
+                return false
+            }
+            return monotonicNanoseconds() - startNanos >= deadlineNanos
+        }
+    }
+
     func allValuesConverged() -> Bool {
         ChoiceGraphScheduler.allValuesConverged(in: sequence, graph: graph)
     }
@@ -561,57 +608,6 @@ package struct ReductionMachine: ProbeSessionState {
             total += Double(distance)
         }
         return total
-    }
-
-    /// Runs the relation encoder over stall-converged leaf pairs, returning true when any probe was accepted.
-    ///
-    /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
-    private mutating func runRelationPass() throws -> Bool {
-        if let enabled = enabledEncoders, enabled.contains(.relationSearch) == false {
-            return false
-        }
-        guard let relationScope = RelationQuery.build(graph: graph) else {
-            return false
-        }
-        let transformation = GraphTransformation(
-            operation: .exchange(.relation(relationScope)),
-            priority: DispatchPriority(
-                structuralBenefit: 0,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: relationScope.pairs.count * 8
-            )
-        )
-        let scope = EncoderInput(
-            transformation: transformation,
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
-            warmStartRecords: [:]
-        )
-        var encoder: EncoderDispatch = .relation(GraphRelationEncoder())
-        encoder.start(scope: scope)
-
-        let hasBind = sequence.contains { entry in
-            if case .bind = entry { return true }
-            return false
-        }
-        captureDispatchBaseline()
-        var session = ProbeSession(
-            encoder: encoder,
-            transformation: transformation,
-            boundValueFingerprint: nil,
-            baseSequence: sequence,
-            hasBind: hasBind
-        )
-        let report = try session.runToCompletion(state: &self)
-
-        _ = applyPassReport(report)
-
-        if isInstrumented, report.anyAccepted {
-            ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
-        }
-        return report.anyAccepted
     }
 
     /// Rebuilds the ``ChoiceGraph`` from the current tree, inheriting bind classifications and convergence records from the previous graph. Returns the diff so the caller can decide whether to rebuild structural or value-only sources.

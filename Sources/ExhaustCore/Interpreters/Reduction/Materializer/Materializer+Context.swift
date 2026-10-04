@@ -12,6 +12,7 @@ package extension Materializer.Context {
     ///   - skipTree: Disables tree allocation for value-only replay. Flat replay enables this automatically.
     ///   - collectDecodingReport: Allocates resolution diagnostics when true.
     ///   - shouldUseMaximumDepthForScreening: Pins guided structural depth controls to their size-feasible upper bounds; exact replay remains prefix-driven.
+    ///   - maximumSequenceCount: Terminal-lift ceiling used to reject scalar arrays whose minimum history already exceeds the complete candidate allowance.
     ///   - reseedRanges: Ordered, disjoint prefix spans to regenerate during guided replay.
     init(
         prefix: consuming ChoiceSequence,
@@ -22,7 +23,8 @@ package extension Materializer.Context {
         skipTree: Bool = false,
         collectDecodingReport: Bool = true,
         shouldUseMaximumDepthForScreening: Bool = false,
-        reseedRanges: [ClosedRange<Int>] = []
+        reseedRanges: [ClosedRange<Int>] = [],
+        maximumSequenceCount: Int? = nil
     ) {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -45,6 +47,7 @@ package extension Materializer.Context {
             mode: mode.internalMode,
             // Replay uses full-size ranges unless an enclosing resize overrides them.
             size: 100,
+            sequenceCeiling: SequenceCeiling(maximumCount: maximumSequenceCount),
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: materializePicks,
             shouldUseMaximumDepthForScreening: shouldUseMaximumDepthForScreening,

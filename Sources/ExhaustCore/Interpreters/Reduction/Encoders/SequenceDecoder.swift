@@ -34,9 +34,9 @@ enum SequenceDecodingOutcome {
 /// Materializes a candidate sequence and checks feasibility.
 ///
 /// Selected by ``ProbeSession``, shared by all encoders at a given depth. Implemented as a concrete enum to avoid heap allocation because decoder types carry associated data that exceeds Swift's three-word inline existential buffer.
-package enum SequenceDecoder {
+enum SequenceDecoder {
     /// Materializes in exact mode. Produces a fresh tree with current ``validRange`` and all branch alternatives. Rejects inner values that are out of range; clamps bound values.
-    case exact(materializePicks: Bool = false)
+    case exact(materializePicks: Bool = false, admission: DecoderAdmission = .standard)
 
     /// Materializes in guided mode. Produces a fresh tree with current ``validRange`` and all branch alternatives. Resolves values via prefix → fallback → PRNG, with cursor suspension at bind sites.
     case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
@@ -63,14 +63,15 @@ package enum SequenceDecoder {
         precomputedHash: UInt64? = nil
     ) throws -> SequenceDecodingOutcome {
         switch self {
-            case let .exact(materializePicks):
+            case let .exact(materializePicks, admission):
                 decodeExactAny(
                     candidate: consume candidate, gen: gen,
                     fallbackTree: tree,
                     originalSequence: originalSequence, property: property,
                     materializePicks: materializePicks,
                     filterObservations: &filterObservations,
-                    precomputedHash: precomputedHash
+                    precomputedHash: precomputedHash,
+                    admission: admission
                 )
 
             case let .guided(
@@ -96,59 +97,81 @@ package enum SequenceDecoder {
         candidate: consuming ChoiceSequence,
         gen: AnyGenerator,
         fallbackTree: ChoiceTree,
-        originalSequence _: ChoiceSequence,
+        originalSequence: ChoiceSequence,
         property: (Any) -> Bool,
         materializePicks: Bool,
         filterObservations: inout [UInt64: FilterObservation],
-        precomputedHash: UInt64? = nil
+        precomputedHash: UInt64? = nil,
+        admission: DecoderAdmission
     ) -> SequenceDecodingOutcome {
         let candidateForPhase2 = copy candidate
+        let phaseOneContext = Materializer.Context(
+            prefix: consume candidate,
+            mode: .exact, fallbackTree: fallbackTree,
+            materializePicks: false,
+            precomputedSeed: precomputedHash,
+            skipTree: true
+        )
 
-        switch Materializer.materializeAny(
-            gen, context: .init(
-                prefix: consume candidate,
-                mode: .exact, fallbackTree: fallbackTree,
-                materializePicks: false,
-                precomputedSeed: precomputedHash,
-                skipTree: true
-            )
-        ) {
-            case let .success(output, _, decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                guard property(output) == false else {
-                    return .propertyPassed(materializationAttempts: 1)
-                }
+        func rejected(_ decodingReport: DecodingReport?) -> SequenceDecodingOutcome {
+            mergeFilterObservations(from: decodingReport, into: &filterObservations)
+            return .materializationRejected(materializationAttempts: 1)
+        }
 
-                switch Materializer.materializeAny(
-                    gen, context: .init(
-                        prefix: candidateForPhase2,
-                        mode: .exact, fallbackTree: fallbackTree,
-                        materializePicks: materializePicks,
-                        precomputedSeed: precomputedHash
+        func evaluated(_ output: Any, _ decodingReport: DecodingReport?) -> SequenceDecodingOutcome {
+            mergeFilterObservations(from: decodingReport, into: &filterObservations)
+            guard property(output) == false else {
+                return .propertyPassed(materializationAttempts: 1)
+            }
+
+            switch Materializer.materializeAny(
+                gen, context: .init(
+                    prefix: candidateForPhase2,
+                    mode: .exact, fallbackTree: fallbackTree,
+                    materializePicks: materializePicks,
+                    precomputedSeed: precomputedHash
+                )
+            ) {
+                case let .success(_, freshTree, _):
+                    guard admission.admits(tree: freshTree) else {
+                        return .propertyFailed(reduction: nil, materializationAttempts: 2)
+                    }
+                    let freshSequence = ChoiceSequence(freshTree)
+                    return .propertyFailed(
+                        reduction: ReductionResult(
+                            sequence: freshSequence,
+                            tree: freshTree,
+                            output: output,
+                            evaluations: 1,
+                            decodingReport: nil
+                        ),
+                        materializationAttempts: 2
                     )
-                ) {
-                    case let .success(_, freshTree, _):
-                        let freshSequence = ChoiceSequence(freshTree)
-                        return .propertyFailed(
-                            reduction: ReductionResult(
-                                sequence: freshSequence,
-                                tree: freshTree,
-                                output: output,
-                                evaluations: 1,
-                                decodingReport: nil
-                            ),
-                            materializationAttempts: 2
-                        )
-                    case .rejected, .failed:
-                        return .propertyFailed(
-                            reduction: nil,
-                            materializationAttempts: 2
-                        )
-                }
+                case .rejected, .failed:
+                    return .propertyFailed(
+                        reduction: nil,
+                        materializationAttempts: 2
+                    )
+            }
+        }
 
+        // Building the flat history costs an allocation per probe, so only an admission that inspects it pays for it.
+        guard admission.inspectsDecodedHistory else {
+            switch Materializer.materializeAny(gen, context: phaseOneContext) {
+                case let .success(output, _, decodingReport):
+                    return evaluated(output, decodingReport)
+                case let .rejected(decodingReport), let .failed(decodingReport):
+                    return rejected(decodingReport)
+            }
+        }
+        switch Materializer.materializeAnyFlat(gen, context: phaseOneContext) {
+            case let .success(output, decoded, decodingReport):
+                guard admission.admits(decoded: decoded, candidate: candidateForPhase2, original: originalSequence) else {
+                    return rejected(decodingReport)
+                }
+                return evaluated(output, decodingReport)
             case let .rejected(decodingReport), let .failed(decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                return .materializationRejected(materializationAttempts: 1)
+                return rejected(decodingReport)
         }
     }
 

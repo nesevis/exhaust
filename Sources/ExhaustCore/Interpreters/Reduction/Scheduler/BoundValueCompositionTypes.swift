@@ -85,11 +85,22 @@ struct BoundValueChain {
 struct LiftedBind {
     let sequence: ChoiceSequence
     let tree: ChoiceTree
+    /// Controller topology only when ``isControllerTopology`` is true. See ``ChoiceGraphBuilder/buildControllerTopology(from:)``.
     let graph: ChoiceGraph
     /// The dispatched bind's node ID in ``graph``, which can differ from its ID in the parent graph.
     let bindNodeID: Int
     /// Sequence positions of the bind's bound subtree.
     let boundRange: ClosedRange<Int>
+    /// True for an intermediate stage's lift, whose graph omits scalar array elements.
+    let isControllerTopology: Bool
+
+    /// The complete lifted graph a terminal search needs. Bind identity and the bound range were already resolved, so a rebuild only restores omitted value leaves.
+    func terminalGraph() -> ChoiceGraph {
+        guard isControllerTopology else {
+            return graph
+        }
+        return ChoiceGraph.build(from: tree)
+    }
 }
 
 /// The first step of a downstream build: a located lift, or the outcome that ended the build.

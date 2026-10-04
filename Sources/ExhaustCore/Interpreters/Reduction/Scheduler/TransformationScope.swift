@@ -212,6 +212,9 @@ enum ExchangeScope {
     /// Joint descent along an inferred rational relation between stall-converged leaf pairs.
     case relation(RelationScope)
 
+    /// Bounded numeric fallback after structural relaxation has stalled.
+    case numericPairs([NumericPairQuery.Pair], probeBudget: Int)
+
     /// Sum-preserving exchange from a bind inner into a leaf whose range its bind determines, placed through a lift.
     case boundExchange(BoundExchangeScope)
 }

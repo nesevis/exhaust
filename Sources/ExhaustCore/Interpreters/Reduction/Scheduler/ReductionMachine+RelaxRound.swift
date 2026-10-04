@@ -6,25 +6,18 @@
 // MARK: - Structural Relax Round
 
 extension ReductionMachine {
-    /// Runs a relax round: improving pivot probes, then a structural excursion.
+    /// Probes improving pivots without a checkpoint, because every accepted probe already precedes the current sequence.
     ///
-    /// An accepted improving probe already precedes the current sequence, so it returns without a checkpoint. The excursion checkpoints, applies a shortlex-worsening perturbation, reduces from it, and commits only if the result beats the checkpoint.
+    /// - Returns: True if a pivot was accepted.
+    mutating func runImprovingPivotPass() throws -> Bool {
+        try runImprovingPivotProbes(deadlineCheck: makeDeadlineCheck())
+    }
+
+    /// Runs a structural excursion: checkpoints, applies a shortlex-worsening perturbation, reduces from it, and commits only if the result beats the checkpoint.
     ///
-    /// - Returns: True if the relax round produced a net improvement (committed).
-    mutating func runRelaxRound() throws -> Bool {
-        // Value-only deadline probe: `self` is passed `inout` below, so the closure captures the deadline bounds rather than `self`.
-        let deadlineNanos = deadlineNanoseconds
-        let startNanos = startNanoseconds
-        let deadlineCheck: () -> Bool = {
-            guard deadlineNanos > 0 else { return false }
-            return monotonicNanoseconds() - startNanos >= deadlineNanos
-        }
-
-        // Before the checkpoint, which an accepted improving probe does not need.
-        if try runImprovingPivotProbes(deadlineCheck: deadlineCheck) {
-            return true
-        }
-
+    /// - Returns: True if the excursion produced a net improvement (committed).
+    mutating func runExcursion() throws -> Bool {
+        let deadlineCheck = makeDeadlineCheck()
         let checkpointSequence = sequence
         let checkpointTree = tree
         let checkpointOutput = output
@@ -243,8 +236,6 @@ extension ReductionMachine {
                 stats.relaxImprovingAcceptances += 1
             }
             _ = rebuildAndUpdateGraph()
-            // The stalled cycle that led here already spent a stall. The accepted arm holds non-minimal content, so the run must not end before a cycle has minimized it.
-            convergence.stallBudget = convergence.maxStalls
             ChoiceGraphScheduler.logReducer("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "probes": "\(probesUsed)",
             ])

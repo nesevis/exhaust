@@ -421,6 +421,8 @@ package extension Materializer {
         var mode: InternalMode
         var size: UInt64
         var sizeOverride: UInt64?
+        /// A terminal lift's active-history ceiling. Unselected branches and speculative backtrack arms do not inherit it.
+        var sequenceCeiling = SequenceCeiling(maximumCount: nil)
         /// Tracks nesting depth inside reified bind's bound regions.
         /// Used in exact mode: `boundDepth > 0` → clamp; `boundDepth == 0` → reject.
         var boundDepth: Int = 0
