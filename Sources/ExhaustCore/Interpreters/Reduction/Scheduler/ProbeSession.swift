@@ -161,7 +161,8 @@ struct ProbeSession {
         let selection = ChoiceGraphScheduler.selectDecoder(
             for: mutation,
             requiresExactDecoder: encoder.requiresExactDecoder,
-            hasBind: hasBind
+            hasBind: hasBind,
+            admission: encoder.admission
         )
 
         if let pendingObservationID {
@@ -191,9 +192,7 @@ struct ProbeSession {
 
         let encoderName = encoder.name
 
-        let decoder: SequenceDecoder = selection.preferExact
-            ? .exact(materializePicks: selection.materializePicks)
-            : .guided(fallbackTree: state.tree, materializePicks: selection.materializePicks)
+        let decoder = selection.decoder(fallbackTree: state.tree)
 
         var filterObservations: [UInt64: FilterObservation] = [:]
 

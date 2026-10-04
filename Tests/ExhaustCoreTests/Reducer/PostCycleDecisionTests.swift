@@ -199,6 +199,40 @@ struct PostCycleDecisionTests {
         }
     }
 
+    @Test("Numeric fallback precedes the excursion and never triggers it")
+    func numericFallbackOrdering() {
+        let evaluation = ChoiceGraphScheduler.evaluatePostCycle(
+            outcome: .init(
+                anyAccepted: false,
+                hadUnresolvedReplacement: true,
+                hasUnprobedImprovingPivot: false,
+                allConverged: true,
+                improved: false,
+                structurallyImproved: false,
+                shouldAttemptNumericPairs: true
+            ),
+            stallBudget: 4,
+            maxStalls: 4,
+            deferBindInner: false
+        )
+        #expect(evaluation.actions == [.confirmConvergence, .relationPass, .pairwiseNumericPass, .excursion])
+        let numericOnly = ChoiceGraphScheduler.evaluatePostCycle(
+            outcome: .init(
+                anyAccepted: false,
+                hadUnresolvedReplacement: false,
+                hasUnprobedImprovingPivot: false,
+                allConverged: false,
+                improved: false,
+                structurallyImproved: false,
+                shouldAttemptNumericPairs: true
+            ),
+            stallBudget: 4,
+            maxStalls: 4,
+            deferBindInner: false
+        )
+        #expect(numericOnly.actions == [.pairwiseNumericPass])
+    }
+
     // MARK: - Helpers
 
     private static let maxStalls = 4
@@ -220,7 +254,8 @@ struct PostCycleDecisionTests {
                 hasUnprobedImprovingPivot: hasUnprobedImprovingPivot,
                 allConverged: allConverged,
                 improved: improved,
-                structurallyImproved: structurallyImproved
+                structurallyImproved: structurallyImproved,
+                shouldAttemptNumericPairs: false
             ),
             stallBudget: stallBudget,
             maxStalls: maxStalls,

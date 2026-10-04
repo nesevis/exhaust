@@ -77,6 +77,7 @@ package struct ReductionMachine: ProbeSessionState {
         case improvingPivotsCompleted(improved: Bool)
         case excursionCompleted(improved: Bool)
         case relationPassCompleted(accepted: Bool)
+        case pairwiseNumericPassCompleted(accepted: Bool)
         case deferralReleased
 
         case reorderCompleted(accepted: Bool)
@@ -169,6 +170,8 @@ package struct ReductionMachine: ProbeSessionState {
     /// Consecutive migration passes that rejected every probe, across the whole run. Reset by any migration acceptance. When this reaches ``SchedulerTuning/migrationDemotionThreshold`` (and the threshold is nonzero), dispatch skips migration transformations for the rest of the run.
     var migrationConsecutiveRejects: Int = 0
     var sequenceBeforeCycle: ChoiceSequence = []
+
+    var exhaustedNumericPairScope: ExhaustedNumericPairScope?
 
     // MARK: - Coupling Attribution
 
@@ -360,7 +363,8 @@ package struct ReductionMachine: ProbeSessionState {
                 hasUnprobedImprovingPivot: anyAccepted == false && hasUnprobedImprovingPivot,
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
-                structurallyImproved: sequence.count < sequenceBeforeCycle.count
+                structurallyImproved: sequence.count < sequenceBeforeCycle.count,
+                shouldAttemptNumericPairs: anyAccepted == false && pendingNumericPairs() != nil
             )
         )
 
@@ -397,6 +401,8 @@ package struct ReductionMachine: ProbeSessionState {
                 let improved = try runImprovingPivotPass()
                 recordPostCycleImprovement(improved)
                 return .improvingPivotsCompleted(improved: improved)
+            case .pairwiseNumericPass:
+                return try .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
             case .excursion:
                 // Perturbing away from a counterexample that an earlier action just improved spends budget escaping a local minimum the run may not be in.
                 guard anyAccepted == false else {

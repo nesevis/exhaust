@@ -436,6 +436,7 @@ package extension ReductionStats {
         package var convergenceConfirmation: UInt64 = 0
         package var relaxRound: UInt64 = 0
         package var relationPass: UInt64 = 0
+        package var pairwiseNumericPass: UInt64 = 0
         package var reorder: UInt64 = 0
 
         package var dispatchCount: Int = 0
@@ -457,6 +458,7 @@ package extension ReductionStats {
             convergenceConfirmation += other.convergenceConfirmation
             relaxRound += other.relaxRound
             relationPass += other.relationPass
+            pairwiseNumericPass += other.pairwiseNumericPass
             reorder += other.reorder
             dispatchCount += other.dispatchCount
             encodeCount += other.encodeCount
@@ -487,6 +489,8 @@ package extension ReductionStats {
                     relaxRound += elapsed
                 case .relationPassCompleted:
                     relationPass += elapsed
+                case .pairwiseNumericPassCompleted:
+                    pairwiseNumericPass += elapsed
                 case .reorderCompleted:
                     reorder += elapsed
                 case .sourcesBuilt:
