@@ -36,12 +36,12 @@ struct NumericPairEncoder: GraphEncoder {
             LeafChange(
                 leafNodeID: proposal.pair.source.nodeID,
                 newValue: ChoiceValue(proposal.sourceBitPattern, tag: proposal.pair.source.choice.tag),
-                mayReshape: true
+                mayReshape: proposal.pair.source.mayReshapeOnAcceptance
             ),
             LeafChange(
                 leafNodeID: proposal.pair.sink.nodeID,
                 newValue: ChoiceValue(proposal.sinkBitPattern, tag: proposal.pair.sink.choice.tag),
-                mayReshape: true
+                mayReshape: proposal.pair.sink.mayReshapeOnAcceptance
             ),
         ])
     }

@@ -28,7 +28,8 @@ struct PairwiseNumericSearchTests {
                 path: [],
                 choice: choice,
                 range: lower ... upper,
-                bindFingerprints: []
+                bindFingerprints: [],
+                mayReshapeOnAcceptance: false
             )
             // The admission check compares whole sequences, so a simplifying candidate must make the sequence it is written into shortlex-smaller.
             let base = ChoiceSequence(.choice(choice, .init(validRange: lower ... upper, isRangeExplicit: true)))
@@ -82,7 +83,8 @@ struct PairwiseNumericSearchTests {
             path: sink.path,
             choice: sink.choice,
             range: 0 ... 19,
-            bindFingerprints: sink.bindFingerprints
+            bindFingerprints: sink.bindFingerprints,
+            mayReshapeOnAcceptance: sink.mayReshapeOnAcceptance
         ))
         #expect(pairs != stale)
     }
@@ -319,6 +321,45 @@ struct PairwiseNumericSearchTests {
         #expect(evaluations.allSatisfy { $0 == (1, 1) })
         #expect(evaluations.count == 1)
         #expect((machine.stats.encoderCounts[.pairwiseNumericSearch]?.rejectedDuringMaterialization ?? 0) > 0)
+    }
+
+    @Test("Pair probes mark only bind-inner edits as reshaping", arguments: [false, true])
+    func reshapeFollowsBindInner(sourceIsBindInner: Bool) throws {
+        let source = Self.tree(values: [3], range: 0 ... 20)
+        let sink = Self.tree(values: [0], range: 0 ... 20)
+        let tree: ChoiceTree = switch sourceIsBindInner {
+            case true:
+                .bind(fingerprint: 42, inner: source, bound: sink)
+            case false:
+                .group([source, sink])
+        }
+        var graph = ChoiceGraph.build(from: tree)
+        graph.bindClassifications[42] = BindClassification(topology: .identical, liftability: .both)
+        try Self.markConverged(#require(graph.leafNodes.first), in: &graph)
+        let pairs = NumericPairQuery.build(graph: graph, gate: BoundValueGate(baseBudget: 15))
+        let sequence = ChoiceSequence(tree)
+        var encoder = NumericPairEncoder()
+        encoder.start(scope: EncoderInput(
+            transformation: GraphTransformation(
+                operation: .exchange(.numericPairs(pairs, probeBudget: 4)),
+                priority: DispatchPriority(
+                    structuralBenefit: 0,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 4
+                )
+            ),
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        ))
+        var candidate = sequence
+        guard case let .leafValues(changes) = encoder.nextProbe(into: &candidate, lastAccepted: false) else {
+            Issue.record("Expected a leaf-value probe")
+            return
+        }
+        #expect(changes.map { $0.mayReshape } == [sourceIsBindInner, false])
     }
 
     @Test("Cached topology determines whether a nonconstant bind is eligible")

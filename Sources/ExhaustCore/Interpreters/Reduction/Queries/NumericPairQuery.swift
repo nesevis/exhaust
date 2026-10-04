@@ -13,6 +13,8 @@ enum NumericPairQuery {
         let choice: ChoiceValue
         let range: ClosedRange<UInt64>
         let bindFingerprints: [UInt64]
+        /// Mirrors ``LeafEntry/mayReshapeOnAcceptance``: only a bind inner's edit can make the graph's dependent ranges stale, so every other edit is written in place.
+        let mayReshapeOnAcceptance: Bool
 
         static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.position == rhs.position && lhs.path == rhs.path && lhs.choice == rhs.choice
@@ -26,7 +28,7 @@ enum NumericPairQuery {
         let sink: Leaf
     }
 
-    /// Interleaves neighboring and distant partners within a bounded search scope.
+    /// Collects the bounded search scope, interleaving each source's nearest and farthest partners before any intermediate distance.
     static func build(graph: ChoiceGraph, gate: BoundValueGate) -> [Pair] {
         var pairs: [Pair] = []
         // Filter before capping, so non-numeric leaves (a long string's characters, say) cannot use up the cap ahead of numeric ones.
@@ -45,7 +47,8 @@ enum NumericPairQuery {
                 path: node.choicePath,
                 choice: metadata.value,
                 range: metadata.validRange ?? metadata.typeTag.bitPatternRange,
-                bindFingerprints: bindFingerprints(above: nodeID, graph: graph)
+                bindFingerprints: bindFingerprints(above: nodeID, graph: graph),
+                mayReshapeOnAcceptance: node.scopeAnnotation.isBindInner
             )
         }.prefix(maximumLeaves).sorted { $0.position < $1.position }
         guard leaves.count > 1 else {
@@ -60,19 +63,23 @@ enum NumericPairQuery {
                 || (graph.nodes[leaf.nodeID].scopeAnnotation.isBindInner
                     && ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: leaf.nodeID, graph: graph, gate: gate))
         }
+        // Each source's nearest and farthest partners come first, alternating source by source, so neither distance class can take the whole cap.
+        let lastIndex = leaves.count - 1
+        let rounds = [[1, lastIndex]] + stride(from: 2, to: lastIndex, by: 1).map { [$0] }
         var seen: Set<Int> = []
-        let offsets = [1, leaves.count - 1] + Array(2 ..< leaves.count)
-        for offset in offsets {
+        for offsets in rounds {
             for sourceIndex in sourceIndices {
-                let sinkIndex = min(sourceIndex + offset, leaves.count - 1)
-                guard sinkIndex > sourceIndex,
-                      seen.insert(sourceIndex * maximumLeaves + sinkIndex).inserted
-                else {
-                    continue
-                }
-                pairs.append(Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex]))
-                if pairs.count == maximumPairs {
-                    return pairs
+                for offset in offsets {
+                    let sinkIndex = min(sourceIndex + offset, lastIndex)
+                    guard sinkIndex > sourceIndex,
+                          seen.insert(sourceIndex * maximumLeaves + sinkIndex).inserted
+                    else {
+                        continue
+                    }
+                    pairs.append(Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex]))
+                    if pairs.count == maximumPairs {
+                        return pairs
+                    }
                 }
             }
         }
