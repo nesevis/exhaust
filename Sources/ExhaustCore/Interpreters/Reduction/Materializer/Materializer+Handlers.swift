@@ -525,10 +525,14 @@ extension Materializer {
                 )))
             }
             let bodyStart = context.flatCount
-            guard let (value, tree) = try generateRecursive(
-                arm.generator, with: inputValue, context: &context,
-                fallbackTree: branchBodyFallback
-            ) else { return nil }
+            // An oversized audition may return nil and yield to a smaller arm. Its temporary history is not a lower bound on the eventual selected history.
+            let armResult = try context.withSuspendedSequenceCeiling { context in
+                try generateRecursive(
+                    arm.generator, with: inputValue, context: &context,
+                    fallbackTree: branchBodyFallback
+                )
+            }
+            guard let (value, tree) = armResult else { return nil }
             if isNilOptional(value), BacktrackAudition.isAbsentArm(arm, in: choices) == false {
                 context.restore(snapshot)
                 continue
@@ -672,10 +676,6 @@ extension Materializer {
         // `results` is reserved inside each element loop: the batch path returns without appending, and reserving allocates.
         var results: [Any] = []
         var elements: [ChoiceTree] = []
-        if context.skipTree == false {
-            elements.reserveCapacity(Int(length))
-        }
-
         // Unwrap a forward-inert contramap layer once, before the loop: materialization ignores the backward transform, so character-style elements (contramap over chooseBits) can take the fused loop below as long as the wrapper's continuation is applied to each element.
         var fusedElementGen = elementGen
         var contramapContinuation: ((Any) throws -> AnyGenerator)?
@@ -692,6 +692,18 @@ extension Materializer {
                 wrapperForward = forward
             default:
                 break
+        }
+
+        // Each batched scalar contributes one entry, plus the sequence's two markers. Reject before reserving arrays or evaluating elements; enclosing structure can only add entries. Other element shapes retain the final complete-history check.
+        if context.flatEmissionSuspended == false,
+           elementBatch != nil,
+           case .impure(.chooseBits, _) = fusedElementGen,
+           context.sequenceCeiling.admits(arrayLength: length) == false
+        {
+            throw RejectionError()
+        }
+        if context.skipTree == false {
+            elements.reserveCapacity(Int(length))
         }
 
         var elementIndex = 0

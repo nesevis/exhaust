@@ -142,7 +142,8 @@ extension ChoiceGraphScheduler {
                 guard let tree = Materializer.guidedLift(
                     generator: generator,
                     prefix: candidate,
-                    fallbackTree: fallbackTree
+                    fallbackTree: fallbackTree,
+                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
                 ) else {
                     let proposed = controllerBitPattern(in: candidate, at: controllerSequenceIndex)
                     Self.logReducer("bound_value_lift_failed", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
