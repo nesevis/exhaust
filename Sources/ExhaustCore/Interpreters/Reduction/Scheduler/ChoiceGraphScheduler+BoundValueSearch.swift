@@ -214,7 +214,8 @@ extension ChoiceGraphScheduler {
             parent: parent,
             bindNodeID: bindNodeID,
             stage: stage,
-            chain: chain
+            chain: chain,
+            omittingScalarSequenceElements: stage.canRecurseIntoNestedBind
         ) {
             case let .lifted(liftedBind):
                 lifted = liftedBind
@@ -249,7 +250,8 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         bindNodeID: Int,
         stage: BoundValueStage,
-        chain: BoundValueChain
+        chain: BoundValueChain,
+        omittingScalarSequenceElements: Bool = false
     ) -> BoundValueLift {
         let freshTree = liftResult.tree
         let liftedSequence = liftResult.sequence
@@ -259,7 +261,9 @@ extension ChoiceGraphScheduler {
         {
             return .failed(.liftedTooLong)
         }
-        let liftedGraph = ChoiceGraph.build(from: freshTree)
+        let liftedGraph = ChoiceGraphBuilder.build(
+            from: freshTree, omittingScalarSequenceElements: omittingScalarSequenceElements
+        )
 
         guard bindNodeID < parent.graph.nodes.count,
               case let .bind(sourceMetadata) = parent.graph.nodes[bindNodeID].kind,
@@ -323,7 +327,8 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         chain: BoundValueChain
     ) -> DownstreamBuild {
-        let liftedGraph = lifted.graph
+        // Bind identity and its position range were resolved once; only omitted value leaves need rebuilding.
+        let liftedGraph = lifted.graph.isComplete ? lifted.graph : ChoiceGraph.build(from: lifted.tree)
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }
             if liftedGraph.nodes[leafID].scopeAnnotation.isDepthControl { return false }

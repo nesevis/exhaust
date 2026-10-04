@@ -28,6 +28,9 @@
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``TypeCompatibilityEdge``
 package struct ChoiceGraph: Sendable {
+    /// False for controller-only graphs, which cannot drive terminal probes or become the live reducer graph.
+    var isComplete = true
+
     /// All nodes in the graph, indexed by ``ChoiceGraphNode/id``.
     package var nodes: [ChoiceGraphNode]
 
