@@ -6,6 +6,13 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-10-04
+
+### Changed
+
+- Counterexamples that stall because the property ties numbers together in an arbitrary way can now reduce further, by searching pairs of numeric values jointly once other strategies stop making progress.
+- Reduction of generators with nested binds is faster when a bind produces a large array, because candidates that would be larger than the current best are rejected before they are built.
+
 ## [1.5.5] - 2026-10-03
 
 ### Changed
