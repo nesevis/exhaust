@@ -254,17 +254,20 @@ enum ChoiceGraphScheduler {
     /// Snapshot of what happened during a single reduction cycle, consumed by ``evaluatePostCycle`` to determine the next actions.
     struct CycleOutcome: Sendable {
         let anyAccepted: Bool
+        /// Latched across stalled cycles until the sequence changes.
         let hadUnresolvedReplacement: Bool
+        let hasUnprobedImprovingPivot: Bool
         let allConverged: Bool
         let improved: Bool
         let structurallyImproved: Bool
     }
 
-    /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful relax round prevents termination, convergence confirmation can clear stale floors that change the ``allValuesConverged`` result, and a relation-pass acceptance re-enters the loop).
+    /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful excursion prevents termination, convergence confirmation can clear stale floors that change the ``allValuesConverged`` result, and a relation-pass acceptance re-enters the loop).
     enum PostCycleAction: Equatable, Sendable {
         case confirmConvergence
         case relationPass
-        case relaxRound
+        case improvingPivots
+        case excursion
         case releaseDeferral
     }
 
@@ -290,11 +293,19 @@ enum ChoiceGraphScheduler {
             actions.append(.relationPass)
         }
 
-        if outcome.anyAccepted == false, outcome.hadUnresolvedReplacement {
-            actions.append(.relaxRound)
+        if outcome.anyAccepted == false, outcome.hasUnprobedImprovingPivot {
+            actions.append(.improvingPivots)
         }
 
         let newStallBudget = outcome.improved ? maxStalls : stallBudget - 1
+
+        // The excursion worsens shortlex before it can improve, so it waits for the stall that would otherwise end the run. An all-converged stall terminates whatever budget remains.
+        if outcome.anyAccepted == false,
+           outcome.hadUnresolvedReplacement,
+           newStallBudget <= 0 || outcome.allConverged
+        {
+            actions.append(.excursion)
+        }
 
         var newDeferBindInner = deferBindInner
         if deferBindInner, outcome.structurallyImproved == false {

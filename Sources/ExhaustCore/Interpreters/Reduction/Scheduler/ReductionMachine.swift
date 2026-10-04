@@ -74,7 +74,8 @@ package struct ReductionMachine: ProbeSessionState {
         case rebuilt(sequenceLength: Int, structurallyChanged: Bool)
 
         case convergenceConfirmed(anyStale: Bool)
-        case relaxRoundCompleted(improved: Bool)
+        case improvingPivotsCompleted(improved: Bool)
+        case excursionCompleted(improved: Bool)
         case relationPassCompleted(accepted: Bool)
         case deferralReleased
 
@@ -321,7 +322,8 @@ package struct ReductionMachine: ProbeSessionState {
         cycles += 1
         convergence.resetForNewCycle()
         scopeRejectionCache.clearCoarse()
-        hadUnresolvedReplacement = false
+        // Latched across stalled cycles: the scope rejection cache can skip a replacement scope on the very stall that schedules the excursion.
+        hadUnresolvedReplacement = hadUnresolvedReplacement && sequence == sequenceBeforeCycle
         anyAccepted = false
         deferralReleasedThisCycle = false
         sequenceBeforeCycle = sequence
@@ -353,8 +355,9 @@ package struct ReductionMachine: ProbeSessionState {
         let evaluation = convergence.evaluatePostCycle(
             outcome: ChoiceGraphScheduler.CycleOutcome(
                 anyAccepted: anyAccepted,
+                hadUnresolvedReplacement: hadUnresolvedReplacement,
                 // The pivot's source is spent in the cycle that probed it, so no encoder sees it in the stalled cycle and the graph has to answer.
-                hadUnresolvedReplacement: hadUnresolvedReplacement || (anyAccepted == false && hasUnprobedImprovingPivot),
+                hasUnprobedImprovingPivot: anyAccepted == false && hasUnprobedImprovingPivot,
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
                 structurallyImproved: sequence.count < sequenceBeforeCycle.count
@@ -390,13 +393,18 @@ package struct ReductionMachine: ProbeSessionState {
             case .relationPass:
                 let accepted = try runRelationPass()
                 return .relationPassCompleted(accepted: accepted)
-            case .relaxRound:
-                let improved = try runRelaxRound()
-                if improved {
-                    anyAccepted = true
-                    scopeRejectionCache.clear()
+            case .improvingPivots:
+                let improved = try runImprovingPivotPass()
+                recordPostCycleImprovement(improved)
+                return .improvingPivotsCompleted(improved: improved)
+            case .excursion:
+                // Perturbing away from a counterexample that an earlier action just improved spends budget escaping a local minimum the run may not be in.
+                guard anyAccepted == false else {
+                    return .excursionCompleted(improved: false)
                 }
-                return .relaxRoundCompleted(improved: improved)
+                let improved = try runExcursion()
+                recordPostCycleImprovement(improved)
+                return .excursionCompleted(improved: improved)
             case .releaseDeferral:
                 // Only worth a cycle when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none, and the extra cycle would replay the structural sources for nothing.
                 deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
@@ -405,6 +413,15 @@ package struct ReductionMachine: ProbeSessionState {
                 ])
                 return .deferralReleased
         }
+    }
+
+    /// Pivot and excursion acceptances bypass ``applyPassReport(_:)``, so they mark the cycle accepted and drop scope rejections recorded against the previous sequence here.
+    private mutating func recordPostCycleImprovement(_ improved: Bool) {
+        guard improved else {
+            return
+        }
+        anyAccepted = true
+        scopeRejectionCache.clear()
     }
 
     // MARK: - Check Termination
@@ -494,6 +511,18 @@ package struct ReductionMachine: ProbeSessionState {
     func isDeadlineExceeded() -> Bool {
         guard deadlineNanoseconds > 0 else { return false }
         return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
+    }
+
+    /// Captures the deadline bounds rather than `self`, for passes that hold `self` `inout` while checking it.
+    func makeDeadlineCheck() -> () -> Bool {
+        let deadlineNanos = deadlineNanoseconds
+        let startNanos = startNanoseconds
+        return {
+            guard deadlineNanos > 0 else {
+                return false
+            }
+            return monotonicNanoseconds() - startNanos >= deadlineNanos
+        }
     }
 
     func allValuesConverged() -> Bool {
