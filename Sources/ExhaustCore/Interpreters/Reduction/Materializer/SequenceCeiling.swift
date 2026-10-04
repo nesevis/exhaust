@@ -11,6 +11,14 @@ struct SequenceCeiling {
         }
         return maximumCount >= 2 && arrayLength <= UInt64(maximumCount - 2)
     }
+
+    /// Whether a complete history fits. The array check is only a lower bound, so combined subtrees still need this one.
+    func admits(tree: ChoiceTree) -> Bool {
+        guard let maximumCount else {
+            return true
+        }
+        return tree.flattenedEntryCount <= maximumCount
+    }
 }
 
 extension Materializer.Context {

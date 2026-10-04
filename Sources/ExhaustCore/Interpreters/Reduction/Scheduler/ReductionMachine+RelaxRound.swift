@@ -169,8 +169,6 @@ extension ReductionMachine {
         }
 
         if excursionCommitted {
-            // The excursion runs on the terminal stall, and its exploitation skips generator-dependent searches. Without fresh budget the run would end before ordinary reduction, bind search included, reaches the committed result.
-            convergence.stallBudget = convergence.maxStalls
             ChoiceGraphScheduler.logReducer("relax_round_committed", isInstrumented: isInstrumented, metadata: [
                 "old_seq_len": "\(checkpointSequence.count)", "new_seq_len": "\(sequence.count)",
             ])
@@ -238,8 +236,6 @@ extension ReductionMachine {
                 stats.relaxImprovingAcceptances += 1
             }
             _ = rebuildAndUpdateGraph()
-            // The stalled cycle that led here already spent a stall. The accepted arm holds non-minimal content, so the run must not end before a cycle has minimized it.
-            convergence.stallBudget = convergence.maxStalls
             ChoiceGraphScheduler.logReducer("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "probes": "\(probesUsed)",
             ])

@@ -215,7 +215,7 @@ extension ChoiceGraphScheduler {
             bindNodeID: bindNodeID,
             stage: stage,
             chain: chain,
-            omittingScalarSequenceElements: stage.canRecurseIntoNestedBind
+            controllerTopologyOnly: stage.canRecurseIntoNestedBind
         ) {
             case let .lifted(liftedBind):
                 lifted = liftedBind
@@ -251,7 +251,7 @@ extension ChoiceGraphScheduler {
         bindNodeID: Int,
         stage: BoundValueStage,
         chain: BoundValueChain,
-        omittingScalarSequenceElements: Bool = false
+        controllerTopologyOnly: Bool
     ) -> BoundValueLift {
         let freshTree = liftResult.tree
         let liftedSequence = liftResult.sequence
@@ -261,9 +261,9 @@ extension ChoiceGraphScheduler {
         {
             return .failed(.liftedTooLong)
         }
-        let liftedGraph = ChoiceGraphBuilder.build(
-            from: freshTree, omittingScalarSequenceElements: omittingScalarSequenceElements
-        )
+        let liftedGraph = controllerTopologyOnly
+            ? ChoiceGraphBuilder.buildControllerTopology(from: freshTree)
+            : ChoiceGraph.build(from: freshTree)
 
         guard bindNodeID < parent.graph.nodes.count,
               case let .bind(sourceMetadata) = parent.graph.nodes[bindNodeID].kind,
@@ -285,7 +285,8 @@ extension ChoiceGraphScheduler {
             tree: freshTree,
             graph: liftedGraph,
             bindNodeID: liftedBindNodeID,
-            boundRange: boundRange
+            boundRange: boundRange,
+            isControllerTopology: controllerTopologyOnly
         ))
     }
 
@@ -327,8 +328,7 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         chain: BoundValueChain
     ) -> DownstreamBuild {
-        // Bind identity and its position range were resolved once; only omitted value leaves need rebuilding.
-        let liftedGraph = lifted.graph.isComplete ? lifted.graph : ChoiceGraph.build(from: lifted.tree)
+        let liftedGraph = lifted.terminalGraph()
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }
             if liftedGraph.nodes[leafID].scopeAnnotation.isDepthControl { return false }

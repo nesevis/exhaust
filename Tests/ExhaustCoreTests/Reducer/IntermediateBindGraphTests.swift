@@ -25,9 +25,7 @@ struct IntermediateBindGraphTests {
             ])),
         ])
         let full = ChoiceGraphBuilder.build(from: tree)
-        let compact = ChoiceGraphBuilder.build(from: tree, omittingScalarSequenceElements: true)
-        #expect(full.isComplete)
-        #expect(compact.isComplete == false)
+        let compact = ChoiceGraphBuilder.buildControllerTopology(from: tree)
         #expect(compact.nodes.count < full.nodes.count / 20)
         #expect(Self.hasMatchingControllerTopology(tree))
     }
@@ -44,7 +42,7 @@ struct IntermediateBindGraphTests {
             bound: .sequence(elements: elements, metadata: .init(validRange: 2 ... 2))
         )
         let full = ChoiceGraphBuilder.build(from: tree)
-        let compact = ChoiceGraphBuilder.build(from: tree, omittingScalarSequenceElements: true)
+        let compact = ChoiceGraphBuilder.buildControllerTopology(from: tree)
         #expect(compact.nodes.count == full.nodes.count)
         #expect(compact.composableNestedBind(under: 0, seenBindFingerprints: [11]) == nil)
         #expect(compact.nodes.map(\.positionRange) == full.nodes.map(\.positionRange))
@@ -55,7 +53,7 @@ struct IntermediateBindGraphTests {
     /// Every live bind in the complete graph has a counterpart in the partial graph with the same span, the same controller leaf, and the same composable nested bind. Binds in unselected arms have no span, and bind lookup cannot address them in either graph.
     private static func hasMatchingControllerTopology(_ tree: ChoiceTree) -> Bool {
         let full = ChoiceGraphBuilder.build(from: tree)
-        let compact = ChoiceGraphBuilder.build(from: tree, omittingScalarSequenceElements: true)
+        let compact = ChoiceGraphBuilder.buildControllerTopology(from: tree)
         return full.nodes.allSatisfy { node in
             guard case let .bind(metadata) = node.kind, node.positionRange != nil else {
                 return true

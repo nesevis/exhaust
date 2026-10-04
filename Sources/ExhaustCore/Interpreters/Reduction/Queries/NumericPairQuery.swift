@@ -6,6 +6,8 @@ enum NumericPairQuery {
     static let maximumPairs = 30
 
     /// Captures the domain as well as the address so exhausted work becomes eligible again after a domain change.
+    ///
+    /// Equality is hand-written for comparing exhausted scopes across graph rebuilds: it ignores `nodeID`, which rebuilds renumber, and `mayReshapeOnAcceptance`, which the path already determines.
     struct Leaf: Equatable {
         let nodeID: Int
         let position: Int

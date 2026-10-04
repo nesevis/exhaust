@@ -276,6 +276,26 @@ extension EncoderDispatch: GraphEncoder {
         }
     }
 
+    var admission: DecoderAdmission {
+        switch self {
+            case let .structural(encoder): encoder.admission
+            case let .value(encoder): encoder.admission
+            case let .redistribution(encoder): encoder.admission
+            case let .lockstep(encoder): encoder.admission
+            case let .relation(encoder): encoder.admission
+            case let .numericPair(encoder): encoder.admission
+            case let .swap(encoder): encoder.admission
+            case let .windowRemoval(encoder): encoder.admission
+            case let .reorder(encoder): encoder.admission
+            case let .laneCollapse(encoder): encoder.admission
+            case let .depthCollapse(encoder): encoder.admission
+            case let .binarySearch(encoder): encoder.admission
+            case let .boundValueCovering(encoder): encoder.admission
+            case let .liftedStage(encoder): encoder.admission
+            case let .composed(encoder): encoder.admission
+        }
+    }
+
     /// Constructed stages for bound value and exchange pass reporting. Pivot seeds retain their separate lift-site accounting.
     var composedUpstreamProbesUsed: Int? {
         switch self {
@@ -307,18 +327,6 @@ extension EncoderDispatch: GraphEncoder {
                 self = .swap(encoder)
             default:
                 break
-        }
-    }
-}
-
-extension EncoderDispatch {
-    /// Admission for the most recent probe. ``ProbeSession`` folds it into the probe's decoder selection at encode time.
-    var admission: DecoderAdmission {
-        switch self {
-            case let .numericPair(encoder):
-                encoder.admission
-            default:
-                .standard
         }
     }
 }

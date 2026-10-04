@@ -20,8 +20,7 @@ extension Materializer {
         ) else {
             return nil
         }
-        // The early sequence check is a lower bound, so combined subtrees still need the complete-history check.
-        if let maximumSequenceCount, tree.flattenedEntryCount > maximumSequenceCount {
+        guard SequenceCeiling(maximumCount: maximumSequenceCount).admits(tree: tree) else {
             return nil
         }
         return tree

@@ -34,11 +34,7 @@ extension ReductionMachine {
         guard report.anyAccepted else {
             return false
         }
-        graph.convergenceStore.removeAll()
-        rejectCache.removeAll()
-        scopeRejectionCache.clear()
-        convergence.gate.invalidateSearchHistory()
-        convergence.stallBudget = convergence.maxStalls
+        invalidateAfterCoupledAcceptance()
         return true
     }
 }

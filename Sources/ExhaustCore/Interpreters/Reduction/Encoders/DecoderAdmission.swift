@@ -3,8 +3,8 @@ enum DecoderAdmission {
     case standard
     case numericPair(NumericPairQuery.Pair)
 
-    /// Only exact decoding can apply a non-standard admission.
-    var requiresExactDecoding: Bool {
+    /// Whether the admission inspects the decoded history. Only exact decoding produces a history to inspect, and only then does value-only decoding need to build it.
+    var inspectsDecodedHistory: Bool {
         switch self {
             case .standard:
                 false
@@ -13,38 +13,15 @@ enum DecoderAdmission {
         }
     }
 
-    /// The value-only materialization outcome after admission, before the property runs.
-    enum Materialization {
-        case admitted(output: Any, decodingReport: DecodingReport?)
-        case rejected(decodingReport: DecodingReport?)
-    }
-
-    /// Materializes without a tree. Pair admission also requires both numeric edits to survive decoding verbatim and improve the checkpoint, so a clamped edit never reaches the property.
-    func materialize(
-        _ generator: AnyGenerator,
-        context: consuming Materializer.Context,
-        candidate: ChoiceSequence,
-        original: ChoiceSequence
-    ) -> Materialization {
+    /// Requires both numeric edits to survive decoding verbatim and improve the checkpoint, so a clamped edit never reaches the property.
+    ///
+    /// Equality compares choices and markers, not range metadata. Fresh bounds can change while both requested edits and every structural marker remain intact.
+    func admits(decoded: ChoiceSequence, candidate: ChoiceSequence, original: ChoiceSequence) -> Bool {
         switch self {
             case .standard:
-                switch Materializer.materializeAny(generator, context: consume context) {
-                    case let .success(output, _, report):
-                        return .admitted(output: output, decodingReport: report)
-                    case let .rejected(report), let .failed(report):
-                        return .rejected(decodingReport: report)
-                }
+                true
             case .numericPair:
-                switch Materializer.materializeAnyFlat(generator, context: consume context) {
-                    case let .success(output, decoded, report):
-                        // Equality compares choices and markers, not range metadata. Fresh bounds can change while both requested edits and every structural marker remain intact.
-                        guard decoded == candidate, decoded.shortLexPrecedes(original) else {
-                            return .rejected(decodingReport: report)
-                        }
-                        return .admitted(output: output, decodingReport: report)
-                    case let .rejected(report), let .failed(report):
-                        return .rejected(decodingReport: report)
-                }
+                decoded == candidate && decoded.shortLexPrecedes(original)
         }
     }
 

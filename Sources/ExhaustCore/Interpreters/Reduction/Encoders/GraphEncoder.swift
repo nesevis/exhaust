@@ -65,6 +65,9 @@ protocol GraphEncoder {
     ///
     /// ``AcceptanceHandling/applyMutation`` ends the session whenever the mutation requires a full rebuild. An encoder whose search must continue past acceptances returns ``AcceptanceHandling/refreshAndIdle`` and keeps whatever state its ``StatefulGraphEncoder/refreshState(graph:sequence:)`` leaves valid. Defaults to ``AcceptanceHandling/applyMutation``.
     var acceptanceHandling: AcceptanceHandling { get }
+
+    /// Candidate-specific checks for the most recent probe. ``ProbeSession`` reads it straight after ``nextProbe(into:lastAccepted:)`` and folds it into that probe's decoder selection; a non-standard admission forces exact decoding. Defaults to ``DecoderAdmission/standard``.
+    var admission: DecoderAdmission { get }
 }
 
 /// An encoder whose probe candidates are post-lift sequences with a bound subtree that differs from ``EncoderInput/tree``.
@@ -105,5 +108,10 @@ extension GraphEncoder {
     /// Default: apply the mutation to the live graph.
     var acceptanceHandling: AcceptanceHandling {
         .applyMutation
+    }
+
+    /// Default: no checks beyond decoding.
+    var admission: DecoderAdmission {
+        .standard
     }
 }

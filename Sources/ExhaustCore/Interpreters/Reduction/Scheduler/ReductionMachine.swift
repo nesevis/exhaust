@@ -399,7 +399,9 @@ package struct ReductionMachine: ProbeSessionState {
                 return .relationPassCompleted(accepted: accepted)
             case .improvingPivots:
                 let improved = try runImprovingPivotPass()
-                recordPostCycleImprovement(improved)
+                if improved {
+                    recordPostCycleAcceptance()
+                }
                 return .improvingPivotsCompleted(improved: improved)
             case .pairwiseNumericPass:
                 return try .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
@@ -409,7 +411,9 @@ package struct ReductionMachine: ProbeSessionState {
                     return .excursionCompleted(improved: false)
                 }
                 let improved = try runExcursion()
-                recordPostCycleImprovement(improved)
+                if improved {
+                    recordPostCycleAcceptance()
+                }
                 return .excursionCompleted(improved: improved)
             case .releaseDeferral:
                 // Only worth a cycle when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none, and the extra cycle would replay the structural sources for nothing.
@@ -421,13 +425,21 @@ package struct ReductionMachine: ProbeSessionState {
         }
     }
 
-    /// Pivot and excursion acceptances bypass ``applyPassReport(_:)``, so they mark the cycle accepted and drop scope rejections recorded against the previous sequence here.
-    private mutating func recordPostCycleImprovement(_ improved: Bool) {
-        guard improved else {
-            return
-        }
+    /// Records an acceptance made by a post-cycle pass: marks the cycle accepted, drops scope rejections recorded against the previous sequence, and restores the stall budget.
+    ///
+    /// The stall that scheduled the pass has already been spent, and the excursion only runs on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
+    mutating func recordPostCycleAcceptance() {
         anyAccepted = true
         scopeRejectionCache.clear()
+        convergence.stallBudget = convergence.maxStalls
+    }
+
+    /// Records an acceptance whose effect can reach beyond the edited leaves, because the property couples values the generator treats as independent. Every convergence floor, cached rejection, and bind search history is invalidated on top of ``recordPostCycleAcceptance()``.
+    mutating func invalidateAfterCoupledAcceptance() {
+        recordPostCycleAcceptance()
+        graph.convergenceStore.removeAll()
+        rejectCache.removeAll()
+        convergence.gate.invalidateSearchHistory()
     }
 
     // MARK: - Check Termination

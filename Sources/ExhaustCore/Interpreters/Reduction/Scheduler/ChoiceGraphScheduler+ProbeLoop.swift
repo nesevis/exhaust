@@ -68,7 +68,7 @@ extension ChoiceGraphScheduler {
             default:
                 hasBind
         }
-        guard requiresExactDecoder || admission.requiresExactDecoding || probeCanReshape == false else {
+        guard requiresExactDecoder || admission.inspectsDecodedHistory || probeCanReshape == false else {
             return .guided(materializePicks: picksUnchanged == false)
         }
         return .exact(materializePicks: picksUnchanged == false, admission: admission)

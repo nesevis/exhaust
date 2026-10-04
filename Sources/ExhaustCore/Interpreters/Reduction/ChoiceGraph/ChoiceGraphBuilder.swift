@@ -40,10 +40,19 @@ struct ChoiceGraphBuilder {
     ///
     /// The tree contains all structural and value information needed for graph construction. The ``ChoiceSequence`` is a projection of the tree and is not required — sequence offsets are computed from the tree's own structure.
     ///
-    /// - Parameters:
-    ///   - tree: The generator's compositional structure. Produced by the materializer with `materializePicks` controlling whether inactive branches have full subtrees.
-    ///   - omittingScalarSequenceElements: Builds controller topology for intermediate bind composition. Scalar arrays keep their complete spans but have no element nodes or child indexes. These partial graphs must not be used by terminal searches or the live reducer.
-    static func build(from tree: ChoiceTree, omittingScalarSequenceElements: Bool = false) -> ChoiceGraph {
+    /// - Parameter tree: The generator's compositional structure. Produced by the materializer with `materializePicks` controlling whether inactive branches have full subtrees.
+    static func build(from tree: ChoiceTree) -> ChoiceGraph {
+        build(from: tree, omittingScalarSequenceElements: false)
+    }
+
+    /// Builds controller topology for intermediate bind composition.
+    ///
+    /// Scalar arrays keep their complete spans but have no element nodes or child indexes, so the result answers bind lookup, span, and nested-bind questions only. It must not drive terminal searches or become the live reducer graph.
+    static func buildControllerTopology(from tree: ChoiceTree) -> ChoiceGraph {
+        build(from: tree, omittingScalarSequenceElements: true)
+    }
+
+    private static func build(from tree: ChoiceTree, omittingScalarSequenceElements: Bool) -> ChoiceGraph {
         if case .just = tree {
             return ChoiceGraph(
                 nodes: [],
@@ -58,9 +67,7 @@ struct ChoiceGraphBuilder {
         }
         var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
-        var graph = builder.assembleGraph()
-        graph.isComplete = omittingScalarSequenceElements == false
-        return graph
+        return builder.assembleGraph()
     }
 
     // MARK: - Recursive Walk
