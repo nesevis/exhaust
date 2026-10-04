@@ -18,7 +18,7 @@ extension ReductionMachine {
 
     /// Runs the bounded numeric pair search as a post-cycle pass. Every accepted probe precedes the current sequence, so it runs even after an earlier post-cycle action has accepted.
     ///
-    /// An acceptance invalidates every convergence floor and cached rejection, not only those of the edited pair: the property can couple values the generator treats as independent.
+    /// An acceptance invalidates every convergence floor, cached rejection, and bind search history, not only those of the edited pair: the property can couple values the generator treats as independent.
     mutating func runPairwiseNumericSearch() throws -> Bool {
         guard isDeadlineExceeded() == false,
               let pairs = pendingNumericPairs()
@@ -37,6 +37,7 @@ extension ReductionMachine {
         graph.convergenceStore.removeAll()
         rejectCache.removeAll()
         scopeRejectionCache.clear()
+        convergence.gate.invalidateSearchHistory()
         convergence.stallBudget = convergence.maxStalls
         return true
     }

@@ -270,12 +270,13 @@ struct PairwiseNumericSearchTests {
             return
         }
         machine.convergence.gate.recordOutcome(fingerprint: metadata.fingerprint, accepted: false)
-        let decayedBudget = machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint)
+        let fullBudget = SchedulerTuning().boundValueBaseBudget
+        #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) < fullBudget)
         #expect(machine.graph.convergenceStore[source] == nil)
         let accepted = try machine.runPairwiseNumericSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Int, Int))
-        #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) == decayedBudget)
+        #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) == fullBudget)
         #expect(machine.convergence.gate.isFirstDispatch(fingerprint: metadata.fingerprint) == false)
         #expect(machine.graph.convergenceStore.isEmpty)
         #expect(ChoiceSequence(machine.tree) == machine.sequence)
