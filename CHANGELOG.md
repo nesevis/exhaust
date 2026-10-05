@@ -6,6 +6,12 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-10-05
+
+### Fixed
+
+- The precompiled `ExhaustCore` framework now includes an arm64e macOS slice, so Xcode workspaces that build package dependencies for arm64e no longer fail with "Unable to resolve module dependency: 'ExhaustCore'". Its visionOS slices also now include the coverage runtime, which they were missing.
+
 ## [1.5.6] - 2026-10-04
 
 ### Changed
@@ -235,7 +241,9 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.5...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.7...HEAD
+[1.5.7]: https://github.com/nesevis/exhaust/compare/v1.5.6...v1.5.7
+[1.5.6]: https://github.com/nesevis/exhaust/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/nesevis/exhaust/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/nesevis/exhaust/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/nesevis/exhaust/compare/v1.5.2...v1.5.3

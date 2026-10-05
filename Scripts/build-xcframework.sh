@@ -30,7 +30,7 @@ mkdir -p "${BUILD_DIR}"
 # Remove stale .o files from SPM's incremental build cache.
 # Without this, object files from deleted source files survive and
 # get archived into the static library by the ar glob below.
-for triple in arm64-apple-macosx x86_64-apple-macosx \
+for triple in arm64-apple-macosx arm64e-apple-macosx x86_64-apple-macosx \
     arm64-apple-ios arm64-apple-ios-simulator x86_64-apple-ios-simulator \
     arm64-apple-tvos arm64-apple-tvos-simulator x86_64-apple-tvos-simulator \
     arm64-apple-watchos arm64-apple-watchos-simulator x86_64-apple-watchos-simulator; do
@@ -61,7 +61,8 @@ build_triple() {
 
 # SwiftPM 6.3 crashes on --triple arm64-apple-xros (Triple+Basics.swift fatalError
 # for "unknown os" when computing dynamic library extensions). Work around by using
-# --sdk with a separate --scratch-path and passing the target triple via -Xswiftc.
+# --sdk with a separate --scratch-path and passing the target triple via -Xswiftc, and via -Xcc so the
+# ExhaustCoverageRuntime C target is compiled for visionOS rather than the macOS host.
 XROS_DEV_SCRATCH="${PACKAGE_DIR}/.build/xros-device"
 XROS_SIM_SCRATCH="${PACKAGE_DIR}/.build/xros-sim"
 
@@ -75,12 +76,17 @@ build_xros() {
         --configuration release \
         "${EVOLUTION_FLAGS[@]}" \
         -Xswiftc -target -Xswiftc "${target_triple}" \
+        -Xcc -target -Xcc "${target_triple}" \
         --target ExhaustCore 2>&1 | tail -20
 }
 
 PIDS=()
 
 build_triple arm64-apple-macosx &
+PIDS+=($!)
+
+# Xcode builds package dependencies for arm64e when a workspace sets iOSPackagesShouldBuildARM64e, which Xcode 27 also applies to macOS destinations. Without this slice those consumers fail with "Unable to resolve module dependency: 'ExhaustCore'".
+build_triple arm64e-apple-macosx &
 PIDS+=($!)
 
 build_triple x86_64-apple-macosx &
@@ -220,7 +226,14 @@ collect_xros() {
 
     mkdir -p "${dest}/ExhaustCore.swiftmodule"
 
-    ar rcs "${dest}/libExhaustCore.a" "${build_products}/ExhaustCore.build/"*.o
+    # See collect(): ExhaustCoverageRuntime's objects must ship alongside ExhaustCore's.
+    if ! compgen -G "${build_products}/ExhaustCoverageRuntime.build/*.o" > /dev/null; then
+        echo "error: no ExhaustCoverageRuntime objects at ${build_products}/ExhaustCoverageRuntime.build/ — libExhaustCore.a would ship with undefined exhaust_cmp_* and exhaust_tpg_* symbols." >&2
+        exit 1
+    fi
+    ar rcs "${dest}/libExhaustCore.a" \
+        "${build_products}/ExhaustCore.build/"*.o \
+        "${build_products}/ExhaustCoverageRuntime.build/"*.o
 
     cp "${build_products}/Modules/ExhaustCore.swiftmodule" \
        "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftmodule"
@@ -246,6 +259,7 @@ collect_xros() {
 }
 
 MACOS_ARM64_DIR="${BUILD_DIR}/macos-arm64"
+MACOS_ARM64E_DIR="${BUILD_DIR}/macos-arm64e"
 MACOS_X86_DIR="${BUILD_DIR}/macos-x86_64"
 MACOS_FAT_DIR="${BUILD_DIR}/macos-fat"
 IOS_DEV_DIR="${BUILD_DIR}/ios-arm64"
@@ -264,6 +278,7 @@ VISIONOS_DEV_DIR="${BUILD_DIR}/visionos-arm64"
 VISIONOS_SIM_DIR="${BUILD_DIR}/visionos-simulator-arm64"
 
 collect arm64-apple-macosx              "arm64-apple-macos"                 "${MACOS_ARM64_DIR}"
+collect arm64e-apple-macosx             "arm64e-apple-macos"                "${MACOS_ARM64E_DIR}"
 collect x86_64-apple-macosx             "x86_64-apple-macos"                "${MACOS_X86_DIR}"
 collect arm64-apple-ios                 "arm64-apple-ios"                   "${IOS_DEV_DIR}"
 collect arm64-apple-ios-simulator       "arm64-apple-ios-simulator"         "${IOS_SIM_ARM64_DIR}"
@@ -279,24 +294,31 @@ collect_xros "${XROS_SIM_SCRATCH}" "arm64-apple-xros-simulator" "${VISIONOS_SIM_
 
 # ---------- Create fat libraries ----------
 
+# Usage: create_fat <label> <fat_dir> <primary_dir> <other_dir>...
+# The primary slice's module files are copied first; the others only add files the primary lacks.
 create_fat() {
-    local label=$1 arm64_dir=$2 x86_dir=$3 fat_dir=$4
+    local label=$1 fat_dir=$2 primary_dir=$3
+    shift 2
+    local slice_dirs=("$@")
     echo "==> Creating fat ${label} library"
     mkdir -p "${fat_dir}/ExhaustCore.swiftmodule"
-    lipo -create \
-        "${arm64_dir}/libExhaustCore.a" \
-        "${x86_dir}/libExhaustCore.a" \
-        -output "${fat_dir}/libExhaustCore.a"
-    cp "${arm64_dir}/ExhaustCore.swiftmodule/"* "${fat_dir}/ExhaustCore.swiftmodule/"
-    for f in "${x86_dir}/ExhaustCore.swiftmodule/"*; do
-        cp -n "$f" "${fat_dir}/ExhaustCore.swiftmodule/" 2>/dev/null || true
+    local libraries=()
+    for dir in "${slice_dirs[@]}"; do
+        libraries+=("${dir}/libExhaustCore.a")
+    done
+    lipo -create "${libraries[@]}" -output "${fat_dir}/libExhaustCore.a"
+    cp "${primary_dir}/ExhaustCore.swiftmodule/"* "${fat_dir}/ExhaustCore.swiftmodule/"
+    for dir in "${slice_dirs[@]:1}"; do
+        for f in "${dir}/ExhaustCore.swiftmodule/"*; do
+            cp -n "$f" "${fat_dir}/ExhaustCore.swiftmodule/" 2>/dev/null || true
+        done
     done
 }
 
-create_fat "macOS"             "${MACOS_ARM64_DIR}"       "${MACOS_X86_DIR}"       "${MACOS_FAT_DIR}"
-create_fat "iOS Simulator"     "${IOS_SIM_ARM64_DIR}"     "${IOS_SIM_X86_DIR}"     "${IOS_SIM_FAT_DIR}"
-create_fat "tvOS Simulator"    "${TVOS_SIM_ARM64_DIR}"    "${TVOS_SIM_X86_DIR}"    "${TVOS_SIM_FAT_DIR}"
-create_fat "watchOS Simulator" "${WATCHOS_SIM_ARM64_DIR}" "${WATCHOS_SIM_X86_DIR}" "${WATCHOS_SIM_FAT_DIR}"
+create_fat "macOS"             "${MACOS_FAT_DIR}"       "${MACOS_ARM64_DIR}"       "${MACOS_ARM64E_DIR}" "${MACOS_X86_DIR}"
+create_fat "iOS Simulator"     "${IOS_SIM_FAT_DIR}"     "${IOS_SIM_ARM64_DIR}"     "${IOS_SIM_X86_DIR}"
+create_fat "tvOS Simulator"    "${TVOS_SIM_FAT_DIR}"    "${TVOS_SIM_ARM64_DIR}"    "${TVOS_SIM_X86_DIR}"
+create_fat "watchOS Simulator" "${WATCHOS_SIM_FAT_DIR}" "${WATCHOS_SIM_ARM64_DIR}" "${WATCHOS_SIM_X86_DIR}"
 
 # ---------- Assemble xcframework ----------
 
@@ -323,7 +345,7 @@ for slice_dir in "${OUTPUT_DIR}/ExhaustCore.xcframework/"*/; do
     [ -d "${slice_dir}" ] || continue
     local_name="$(basename "${slice_dir}")"
     case "${local_name}" in
-        macos-arm64_x86_64)
+        macos-arm64_arm64e_x86_64)
             cp -R "${MACOS_FAT_DIR}/ExhaustCore.swiftmodule" "${slice_dir}/"
             ;;
         ios-arm64)
