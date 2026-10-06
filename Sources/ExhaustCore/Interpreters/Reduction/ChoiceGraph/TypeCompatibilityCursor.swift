@@ -14,11 +14,57 @@ struct TypeCompatibilityCursor: Sendable {
         let homogeneousTag: TypeTag?
     }
 
-    /// Tracks only the current subtree prefix while memoization avoids revisiting it for enclosing zip contexts.
-    private struct PrefixFrame {
+    /// Records every active leaf once in preorder, so each subtree's leaves form one contiguous interval and nested zip slots share a single walk.
+    private struct PreorderFrame {
         let nodeID: Int
         var nextChild = 0
-        var leaves: [Leaf] = []
+    }
+
+    private struct PreorderLeaves {
+        private var leaves: [Leaf] = []
+        private var intervalStarts: [Int]
+        private var intervalEnds: [Int]
+
+        /// Visits each active node once; inactive subtrees keep empty intervals, matching a walk that stops at nodes without positions.
+        init(graph: ChoiceGraph) {
+            intervalStarts = [Int](repeating: 0, count: graph.nodes.count)
+            intervalEnds = [Int](repeating: 0, count: graph.nodes.count)
+            for rootID in graph.nodes.indices where graph.nodes[rootID].parent == nil {
+                var stack = [PreorderFrame(nodeID: rootID)]
+                while var frame = stack.popLast() {
+                    let node = graph.nodes[frame.nodeID]
+                    guard node.positionRange != nil else {
+                        continue
+                    }
+                    if frame.nextChild == 0 {
+                        intervalStarts[frame.nodeID] = leaves.count
+                        if case let .chooseBits(metadata) = node.kind {
+                            leaves.append(Leaf(nodeID: frame.nodeID, tag: metadata.typeTag))
+                            intervalEnds[frame.nodeID] = leaves.count
+                            continue
+                        }
+                    }
+                    guard frame.nextChild < node.children.count else {
+                        intervalEnds[frame.nodeID] = leaves.count
+                        continue
+                    }
+                    let childID = node.children[frame.nextChild]
+                    frame.nextChild += 1
+                    stack.append(frame)
+                    if childID < graph.nodes.count {
+                        stack.append(PreorderFrame(nodeID: childID))
+                    }
+                }
+            }
+        }
+
+        func prefix(under nodeID: Int, limit: Int) -> [Leaf] {
+            guard nodeID < intervalStarts.count else {
+                return []
+            }
+            let start = intervalStarts[nodeID]
+            return Array(leaves[start ..< min(intervalEnds[nodeID], start + limit)])
+        }
     }
 
     private let sequenceGroups: [[Leaf]]
@@ -36,11 +82,11 @@ struct TypeCompatibilityCursor: Sendable {
     let edgeCount: Int
     let preparedLeafCount: Int
 
-    /// Prepares decision contexts once, sharing memoized leaf prefixes across nested zip slots.
+    /// Prepares decision contexts once, walking leaf order only when a zip needs cross-slot prefixes.
     init(graph: ChoiceGraph) {
         var sequences: [[Leaf]] = []
         var zips: [[ZipChild]] = []
-        var leafPrefixes: [Int: [Leaf]] = [:]
+        var preorderLeaves: PreorderLeaves?
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
             switch node.kind {
@@ -58,6 +104,8 @@ struct TypeCompatibilityCursor: Sendable {
                         sequences.append(leaves)
                     }
                 case .zip where node.children.count >= 2:
+                    let leafOrder = preorderLeaves ?? PreorderLeaves(graph: graph)
+                    preorderLeaves = leafOrder
                     zips.append(node.children.map { childID in
                         let tag: TypeTag? = switch graph.nodes[childID].kind {
                             case let .sequence(metadata):
@@ -65,7 +113,7 @@ struct TypeCompatibilityCursor: Sendable {
                             default:
                                 nil
                         }
-                        return ZipChild(leaves: Self.leafPrefix(under: childID, graph: graph, cache: &leafPrefixes), homogeneousTag: tag)
+                        return ZipChild(leaves: leafOrder.prefix(under: childID, limit: SchedulerTuning.maxPairLookahead + 1), homogeneousTag: tag)
                     })
                 default:
                     continue
@@ -78,42 +126,6 @@ struct TypeCompatibilityCursor: Sendable {
             + zips.reduce(0) { total, children in
                 total + children.reduce(0) { $0 + $1.leaves.count }
             }
-    }
-
-    /// Memoizes depth-first prefixes so nested zip contexts do not repeat containment walks. Child lists are consumed incrementally, avoiding a temporary stack of every sibling beneath a wide sequence.
-    private static func leafPrefix(under rootID: Int, graph: ChoiceGraph, cache: inout [Int: [Leaf]]) -> [Leaf] {
-        if let leaves = cache[rootID] {
-            return leaves
-        }
-        let limit = SchedulerTuning.maxPairLookahead + 1
-        var stack = [PrefixFrame(nodeID: rootID)]
-        while var frame = stack.popLast() {
-            guard frame.nodeID < graph.nodes.count,
-                  graph.nodes[frame.nodeID].positionRange != nil
-            else {
-                cache[frame.nodeID] = []
-                continue
-            }
-            let node = graph.nodes[frame.nodeID]
-            if case let .chooseBits(metadata) = node.kind {
-                cache[frame.nodeID] = [Leaf(nodeID: frame.nodeID, tag: metadata.typeTag)]
-                continue
-            }
-            guard frame.leaves.count < limit, frame.nextChild < node.children.count else {
-                cache[frame.nodeID] = frame.leaves
-                continue
-            }
-            let childID = node.children[frame.nextChild]
-            if let leaves = cache[childID] {
-                frame.leaves.append(contentsOf: leaves.prefix(limit - frame.leaves.count))
-                frame.nextChild += 1
-                stack.append(frame)
-            } else {
-                stack.append(frame)
-                stack.append(PrefixFrame(nodeID: childID))
-            }
-        }
-        return cache[rootID] ?? []
     }
 
     /// Accumulates earlier first-side leaves by homogeneous tag, subtracting the group products that enumeration skips.

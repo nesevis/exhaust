@@ -51,7 +51,7 @@ struct ScopeQueryDifferentialPropertyTests {
         #expect(nonemptyPairStreams >= minimumNonemptyStreams)
     }
 
-    @Test("Priority, discovery, and pivot-only replacement streams match the eager builder")
+    @Test("Priority, discovery, and pivot-only replacement streams match the eager builder through both buffered and merged enumeration")
     func replacementStreamsMatchEager() throws {
         var nonemptyStreams = 0
         var selfSimilarStreams = 0
@@ -63,7 +63,11 @@ struct ScopeQueryDifferentialPropertyTests {
             var priority = ReplacementQuery.cursor(graph: graph)
             var discovery = ReplacementQuery.discoveryCursor(graph: graph)
             var pivots = ReplacementQuery.pivotCursor(graph: graph)
+            var mergedPriority = ReplacementCandidateSource(graph: graph, order: .priority, eagerRowLimit: 0)
+            var mergedDiscovery = ReplacementCandidateSource(graph: graph, order: .discovery, eagerRowLimit: 0)
+            var mergedPivots = ReplacementCandidateSource(pivotGraph: graph, eagerRowLimit: 0)
             let actualCandidates = drainCheckingPriorities(&priority)
+            let mergedCandidates = drainCheckingPriorities(&mergedPriority)
 
             nonemptyStreams += expectedCandidates.isEmpty ? 0 : 1
             selfSimilarStreams += expectedScopes.contains(where: \.isSelfSimilar) ? 1 : 0
@@ -72,6 +76,10 @@ struct ScopeQueryDifferentialPropertyTests {
                 && actualCandidates?.map(\.priority) == expectedCandidates.map(\.priority)
                 && drainCheckingPriorities(&discovery)?.map(TransformationSignature.init) == expectedScopes.map(TransformationSignature.init)
                 && drainCheckingPriorities(&pivots)?.map(TransformationSignature.init) == expectedScopes.filter(\.isBranchPivot).map(TransformationSignature.init)
+                && mergedCandidates?.map(TransformationSignature.init) == expectedCandidates.map(TransformationSignature.init)
+                && mergedCandidates?.map(\.priority) == expectedCandidates.map(\.priority)
+                && drainCheckingPriorities(&mergedDiscovery)?.map(TransformationSignature.init) == expectedScopes.map(TransformationSignature.init)
+                && drainCheckingPriorities(&mergedPivots)?.map(TransformationSignature.init) == expectedScopes.filter(\.isBranchPivot).map(TransformationSignature.init)
         }
         #expect(nonemptyStreams >= minimumNonemptyStreams)
         #expect(selfSimilarStreams >= minimumNonemptyStreams)
@@ -89,11 +97,15 @@ struct ScopeQueryDifferentialPropertyTests {
             let previousGraph = ChoiceGraph.build(from: reusesTree == 1 ? tree : otherTree)
             let expected = EagerScopeReference.replacementCandidates(graph: graph, previousGraph: previousGraph)
             var cursor = ReplacementQuery.cursor(graph: graph, previousGraph: previousGraph)
+            var merged = ReplacementCandidateSource(graph: graph, previousGraph: previousGraph, eagerRowLimit: 0)
             let actual = drainCheckingPriorities(&cursor)
+            let mergedActual = drainCheckingPriorities(&merged)
 
             nonemptyStreams += expected.isEmpty ? 0 : 1
             return actual?.map(TransformationSignature.init) == expected.map(TransformationSignature.init)
                 && actual?.map(\.priority) == expected.map(\.priority)
+                && mergedActual?.map(TransformationSignature.init) == expected.map(TransformationSignature.init)
+                && mergedActual?.map(\.priority) == expected.map(\.priority)
         }
         #expect(nonemptyStreams >= minimumNonemptyStreams)
     }
