@@ -26,11 +26,12 @@ extension ReductionMachine {
             return false
         }
         exhaustedNumericPairScope = ExhaustedNumericPairScope(base: sequence, pairs: pairs)
-        let report = try runPostCycleEncoder(
+        guard let report = try runPostCycleEncoder(
             operation: .exchange(.numericPairs(pairs, probeBudget: tuning.pairwiseNumericProbeBudget)),
-            estimatedCost: tuning.pairwiseNumericProbeBudget,
-            deadlineCheck: makeDeadlineCheck()
-        )
+            estimatedCost: tuning.pairwiseNumericProbeBudget
+        ) else {
+            return false
+        }
         guard report.anyAccepted else {
             return false
         }

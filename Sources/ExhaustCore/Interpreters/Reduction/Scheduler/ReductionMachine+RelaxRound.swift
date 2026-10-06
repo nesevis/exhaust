@@ -58,6 +58,9 @@ extension ReductionMachine {
             guard let candidate = candidates.next(lastAccepted: false) else {
                 break
             }
+            guard deadlineCheck() == false else {
+                break
+            }
             probeCounts.recordEmission()
             let decoder: SequenceDecoder = .exact(materializePicks: true)
             var filterObservations: [UInt64: FilterObservation] = [:]
@@ -100,8 +103,29 @@ extension ReductionMachine {
             return false
         }
 
+        // The graph still describes the checkpoint here. Keep a directly improving perturbation on expiry; otherwise restore the checkpoint before allocating exploitation sources.
+        if deadlineCheck() {
+            let improved = sequence.shortLexPrecedes(checkpointSequence)
+            if improved {
+                _ = rebuildAndUpdateGraph()
+            } else {
+                sequence = checkpointSequence
+                tree = checkpointTree
+                output = checkpointOutput
+            }
+            if collectDiagnostics {
+                stats.relaxRoundLog.append(RelaxRoundRecord(
+                    candidateCount: candidates.candidateCount,
+                    materializationsUsed: materializationsUsed,
+                    perturbationDecoded: true,
+                    committed: improved
+                ))
+            }
+            return improved
+        }
+
         _ = rebuildAndUpdateGraph()
-        var exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+        var exploitSources = deadlineCheck() ? [] : CandidateSourceBuilder.buildSources(from: graph)
 
         ChoiceGraphScheduler.logReducer("relax_round_exploitation_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(sequence.count)", "sources": "\(exploitSources.count)",
@@ -110,7 +134,9 @@ extension ReductionMachine {
         let savedRejectCache = rejectCache
         rejectCache = []
         while true {
-            guard deadlineCheck() == false else { break }
+            guard deadlineCheck() == false else {
+                break
+            }
             guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(exploitSources) else {
                 break
             }
@@ -118,6 +144,9 @@ extension ReductionMachine {
                 exploitSources.swapAt(sourceIndex, exploitSources.count - 1)
                 exploitSources.removeLast()
                 continue
+            }
+            guard deadlineCheck() == false else {
+                break
             }
             guard exploitTransformation.operation.isValid(in: graph) else {
                 continue
@@ -144,7 +173,12 @@ extension ReductionMachine {
                 transformation: exploitTransformation,
                 boundValueFingerprint: nil,
                 baseSequence: sequence,
-                hasBind: sequence.contains { if case .bind = $0 { return true }; return false }
+                hasBind: sequence.contains { entry in
+                    if case .bind = entry {
+                        return true
+                    }
+                    return false
+                }
             )
             let report = try session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
 
@@ -155,7 +189,7 @@ extension ReductionMachine {
                     valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs
                         .union(report.convergenceRecords.keys)
                 )
-                exploitSources = CandidateSourceBuilder.buildSources(from: graph)
+                exploitSources = deadlineCheck() ? [] : CandidateSourceBuilder.buildSources(from: graph)
             }
         }
         rejectCache = savedRejectCache

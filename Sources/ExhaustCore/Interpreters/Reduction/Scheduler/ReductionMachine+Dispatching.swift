@@ -32,6 +32,9 @@ extension ReductionMachine {
             sources.removeLast()
             return .dispatched(decision: .sourceExhausted)
         }
+        guard isDeadlineExceeded() == false else {
+            return finishAtDeadline()
+        }
 
         if let enabled = enabledEncoders, enabled.contains(transformation.operation.encoderName) == false {
             return .dispatched(decision: .skipped)
@@ -106,6 +109,9 @@ extension ReductionMachine {
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?
     ) -> Transition {
+        guard isDeadlineExceeded() == false else {
+            return finishAtDeadline()
+        }
         let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
         let scope = EncoderInput(
             transformation: transformation,
@@ -170,16 +176,6 @@ extension ReductionMachine {
                 return .encoded(encoder: encoder, cacheHit: cacheHit)
 
             case let .decoded(encoder, accepted):
-                if isDeadlineExceeded() {
-                    if session.anyRequiresRebuild {
-                        _ = rebuildAndUpdateGraph()
-                    }
-                    activeSession = nil
-                    pendingReport = nil
-                    stats.reductionWasCapped = true
-                    phase = .reorderPass
-                    return .decoded(encoder: encoder, accepted: accepted)
-                }
                 return .decoded(encoder: encoder, accepted: accepted)
 
             case .finished:

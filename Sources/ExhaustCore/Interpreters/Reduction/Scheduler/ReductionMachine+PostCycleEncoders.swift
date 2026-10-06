@@ -16,10 +16,12 @@ extension ReductionMachine {
         guard let relationScope = RelationQuery.build(graph: graph) else {
             return false
         }
-        let report = try runPostCycleEncoder(
+        guard let report = try runPostCycleEncoder(
             operation: .exchange(.relation(relationScope)),
             estimatedCost: relationScope.pairs.count * 8
-        )
+        ) else {
+            return false
+        }
         if isInstrumented, report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
         }
@@ -28,12 +30,15 @@ extension ReductionMachine {
 
     /// Runs one encoder pass to completion outside cycle dispatch, through the same decoding, accounting, and acceptance policy as dispatched passes.
     ///
-    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph.
+    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph. Returns nil without starting an encoder when the deadline has already expired.
     mutating func runPostCycleEncoder(
         operation: GraphOperation,
-        estimatedCost: Int,
-        deadlineCheck: (() -> Bool)? = nil
-    ) throws -> PassReport {
+        estimatedCost: Int
+    ) throws -> PassReport? {
+        guard isDeadlineExceeded() == false else {
+            stats.reductionWasCapped = true
+            return nil
+        }
         let transformation = GraphTransformation(
             operation: operation,
             priority: DispatchPriority(
@@ -64,7 +69,7 @@ extension ReductionMachine {
             baseSequence: sequence,
             hasBind: hasBind
         )
-        let report = try session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
+        let report = try session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())
 
         _ = applyPassReport(report)
 

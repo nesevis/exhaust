@@ -47,7 +47,7 @@ extension ReductionMachine {
                 ChoiceGraphScheduler.logReducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
                     "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
                 ])
-            } else if result == .rejected, origin.bound - minBound >= 2 {
+            } else if result == .rejected, origin.bound - minBound >= 2, isDeadlineExceeded() == false {
                 let gapResult = try probeBelow(
                     value: origin.bound - 2,
                     at: range.lowerBound,
