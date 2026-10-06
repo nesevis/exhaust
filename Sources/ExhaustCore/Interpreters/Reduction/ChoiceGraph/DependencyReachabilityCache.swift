@@ -33,7 +33,7 @@ struct DependencyReachabilityCache {
         self.nodeLimit = max(0, nodeLimit ?? max(4096, candidates.count))
     }
 
-    /// Excludes the source itself, matching restricted reachability used by replacement promotion.
+    /// Excludes the source itself, including when dependency cycles return to it. Replacement and migration consumers query distinct candidate nodes.
     mutating func isReachable(from source: Int, to target: Int) -> Bool {
         guard source >= 0, source < adjacency.count,
               target >= 0, target < adjacency.count,

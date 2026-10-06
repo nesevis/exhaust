@@ -2,9 +2,9 @@
 ///
 /// Every receiver for a source has the same structural benefit, so sorting source descriptors by yield is sufficient to preserve the eager builder's priority order. Equal yields retain source position order, and each source visits receivers in position order. Only the next valid scope is buffered; element arrays are shared across that source's emitted scopes.
 ///
-/// The dependency adjacency snapshot excludes mutable graph nodes, so value-only acceptance does not force a graph-node array copy while the cursor remains alive.
+/// The dependency cache retains immutable adjacency and only sequence-node results, excluding mutable graph nodes so value-only acceptance does not force a graph-node array copy while the cursor remains alive. Both directions use the complete live sequence domain, including full sequences that can donate but cannot receive.
 ///
-/// - Complexity: O(V + S log S + C) descriptor preparation and O(S + C + V + E) retained state, where S is the number of sequences and C is their collected child extents. Buffering the first scope and each subsequent scope may scan multiple ineligible pairs. Enumerating every eligible pair still requires O(S²) receiver checks, including dependency reachability costs.
+/// - Complexity: O(V + S log S + C) descriptor preparation and O(S + C + V + E) retained state, where S is the number of sequences and C is their collected child extents. Buffering the first scope and each subsequent scope may scan multiple ineligible pairs. Enumerating every eligible pair still requires O(S²) receiver checks. Dependency cache hits are expected O(1); each miss traverses O(V + E), and bounded positive-result retention can cause repeated searches after eviction.
 struct MigrationCandidateSource {
     private struct SequenceDescriptor {
         let nodeID: Int
@@ -22,7 +22,7 @@ struct MigrationCandidateSource {
 
     private let sequences: [SequenceDescriptor]
     private let sources: [SourceDescriptor]
-    private let dependencyAdjacency: [[Int]]
+    private var dependencyReachability: DependencyReachabilityCache
     private var sourceIndex = 0
     private var receiverIndex: Int
     private var pendingTransformation: GraphTransformation?
@@ -92,7 +92,10 @@ struct MigrationCandidateSource {
             }
             return first.sequenceIndex < second.sequenceIndex
         }
-        dependencyAdjacency = sources.isEmpty ? [] : graph.dependencyAdjacency
+        dependencyReachability = DependencyReachabilityCache(
+            adjacency: sources.isEmpty ? [] : graph.dependencyAdjacency,
+            candidates: Set(sequenceNodes)
+        )
         receiverIndex = (sources.first?.sequenceIndex ?? -1) + 1
         prepareNext()
     }
@@ -109,8 +112,8 @@ struct MigrationCandidateSource {
                 guard receiver.canReceive,
                       sourceSequence.positionRange.contains(receiver.positionRange.lowerBound) == false,
                       receiver.positionRange.contains(sourceSequence.positionRange.lowerBound) == false,
-                      DependencyReachability.isReachable(from: sourceSequence.nodeID, to: receiver.nodeID, adjacency: dependencyAdjacency) == false,
-                      DependencyReachability.isReachable(from: receiver.nodeID, to: sourceSequence.nodeID, adjacency: dependencyAdjacency) == false
+                      dependencyReachability.isReachable(from: sourceSequence.nodeID, to: receiver.nodeID) == false,
+                      dependencyReachability.isReachable(from: receiver.nodeID, to: sourceSequence.nodeID) == false
                 else {
                     continue
                 }
@@ -133,6 +136,19 @@ struct MigrationCandidateSource {
             }
             receiverIndex = sources[sourceIndex].sequenceIndex + 1
         }
+    }
+
+    /// Exposes actual searches and retained results for profiling enumeration independently of emitted scopes.
+    var dependencyTraversalCount: Int {
+        dependencyReachability.traversalCount
+    }
+
+    var dependencyCachedSourceCount: Int {
+        dependencyReachability.cachedSourceCount
+    }
+
+    var dependencyCachedNodeCount: Int {
+        dependencyReachability.cachedNodeCount
     }
 }
 
