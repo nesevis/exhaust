@@ -303,13 +303,13 @@ package struct ReductionMachine: ProbeSessionState {
 
     /// Advances one cooperative step, preserving in-flight work in a final report when the deadline expires.
     ///
-    /// Checks before starting each step and after it returns. An in-flight materialization or property call completes normally; expiry stops subsequent work, including post-cycle and cosmetic reorder passes.
+    /// Checks before starting each step and after it returns. An in-flight materialization or property call completes normally; expiry stops subsequent search work. The enabled final numeric reorder pass still runs to completion after expiry, including its materializations and property calls, to preserve the returned counterexample's presentation.
     mutating func next() throws -> Transition? {
         if case .done = phase {
             return nil
         }
         guard isDeadlineExceeded() == false else {
-            return finishAtDeadline()
+            return try finishAtDeadline()
         }
         let transition: Transition? = switch phase {
             case .beginCycle:
@@ -330,7 +330,7 @@ package struct ReductionMachine: ProbeSessionState {
                 nil
         }
         if isDeadlineExceeded() {
-            _ = finishAtDeadline()
+            _ = try finishAtDeadline()
         }
         return transition
     }
@@ -504,15 +504,15 @@ package struct ReductionMachine: ProbeSessionState {
     // MARK: - Reorder Pass
 
     private mutating func stepReorderPass() throws -> Transition {
-        recordStallDiagnostic()
         let accepted = isEncoderEnabled(.numericReorder) ? try runReorderPass() : false
+        recordStallDiagnostic()
         phase = .done
         return .reorderCompleted(accepted: accepted)
     }
 
     /// Populates the stall-diagnostic fields on ``ReductionStats`` at termination.
     ///
-    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
+    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Leaf counts use the graph from before final numeric reordering, which does not update the graph; the acceptance flag includes that final pass. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
     private mutating func recordStallDiagnostic() {
         var stalledCount = 0
         var residualDistance: Double = 0
@@ -543,10 +543,10 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Helpers
 
-    /// Applies an interrupted session exactly once, then ends without rebuilding candidate sources or entering another pass.
+    /// Applies an interrupted search session exactly once, then runs the enabled final numeric reorder pass without rebuilding candidate sources.
     ///
-    /// A pending structural acceptance rebuilds only the graph needed for final stall diagnostics. The decoded sequence, tree, and output are already committed; cosmetic reordering never needs a graph rebuild after its final value is accepted.
-    mutating func finishAtDeadline() -> Transition {
+    /// A pending structural acceptance rebuilds only the graph needed for final reordering and stall diagnostics. The decoded sequence, tree, and output are already committed; cosmetic reordering never needs a graph rebuild after its final value is accepted.
+    mutating func finishAtDeadline() throws -> Transition {
         stats.reductionWasCapped = true
         if case .done = phase {
             return .terminated
@@ -565,8 +565,7 @@ package struct ReductionMachine: ProbeSessionState {
         }
         pendingReport = nil
         sources = []
-        recordStallDiagnostic()
-        phase = .done
+        _ = try stepReorderPass()
         return .terminated
     }
 
@@ -599,9 +598,6 @@ package struct ReductionMachine: ProbeSessionState {
         guard let reorderScope = ReorderingQuery.build(graph: graph) else {
             return false
         }
-        guard isDeadlineExceeded() == false else {
-            return false
-        }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
             priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
@@ -632,7 +628,7 @@ package struct ReductionMachine: ProbeSessionState {
                 return false
             }
         )
-        let report = try session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())
+        let report = try session.runToCompletion(state: &self)
 
         rejectCache = savedRejectCache
 

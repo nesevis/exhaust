@@ -278,13 +278,13 @@ package struct ReductionStats: Sendable {
 
     // MARK: - Stall Diagnostic
 
-    /// Leaves that terminated with a convergence record at their current value while short of their reduction target. Nonzero counts are normal for successful reductions (a property demanding nonzero values leaves surviving leaves short of their targets); the silent-stall signal is a nonzero count with ``anyAcceptanceEverOccurred`` false.
+    /// Leaves that terminated search with a convergence record at their current value while short of their reduction target, measured on the graph before final numeric reordering. Nonzero counts are normal for successful reductions (a property demanding nonzero values leaves surviving leaves short of their targets); the silent-stall signal is a nonzero count with ``anyAcceptanceEverOccurred`` false.
     package var stalledLeafCount: Int = 0
 
-    /// Sum of the pattern-space gaps between each stalled leaf's terminal value and its reduction target. A magnitude for the stall warning; meaningful only relative to the workload's value ranges.
+    /// Sum of the pattern-space gaps between each stalled leaf's terminal search value and its reduction target, before final numeric reordering. A magnitude for the stall warning; meaningful only relative to the workload's value ranges.
     package var stalledLeafResidualDistance: Double = 0
 
-    /// True when any pass in the run accepted at least one probe. False means the reducer could not improve the input even once — combined with a nonzero ``stalledLeafCount``, the counterexample likely sits far from minimal behind a coupling the encoder roster cannot cross.
+    /// True when any pass in the run, including final numeric reordering, accepted at least one probe. False means the reducer could not improve the input even once — combined with a nonzero ``stalledLeafCount``, the counterexample likely sits far from minimal behind a coupling the encoder roster cannot cross.
     package var anyAcceptanceEverOccurred: Bool = false
 
     // MARK: - Filter Observations

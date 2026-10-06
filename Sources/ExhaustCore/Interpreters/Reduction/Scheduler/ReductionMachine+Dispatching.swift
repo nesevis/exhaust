@@ -33,7 +33,7 @@ extension ReductionMachine {
             return .dispatched(decision: .sourceExhausted)
         }
         guard isDeadlineExceeded() == false else {
-            return finishAtDeadline()
+            return try finishAtDeadline()
         }
 
         guard isEncoderEnabled(transformation.operation.encoderName) else {
@@ -96,7 +96,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .rematerialized)
 
             case let .readyToDispatch(boundValueFingerprint):
-                return beginProbeSession(
+                return try beginProbeSession(
                     transformation: transformation,
                     boundValueFingerprint: boundValueFingerprint
                 )
@@ -108,9 +108,9 @@ extension ReductionMachine {
     private mutating func beginProbeSession(
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?
-    ) -> Transition {
+    ) throws -> Transition {
         guard isDeadlineExceeded() == false else {
-            return finishAtDeadline()
+            return try finishAtDeadline()
         }
         let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
         let scope = EncoderInput(
