@@ -377,6 +377,26 @@ struct BatchRemovalSource {
     }
 }
 
+extension BatchedCrossSequenceRemovalSource: CandidateSource {
+    var isValueDependent: Bool {
+        false
+    }
+
+    var isPermutationSource: Bool {
+        false
+    }
+}
+
+extension BatchRemovalSource: CandidateSource {
+    var isValueDependent: Bool {
+        false
+    }
+
+    var isPermutationSource: Bool {
+        false
+    }
+}
+
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {

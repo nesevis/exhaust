@@ -63,7 +63,7 @@ enum ChoiceGraphScheduler {
 
     /// Returns the index of the source with the highest peekPriority, or nil if all are exhausted.
     static func highestPrioritySourceIndex(
-        _ sources: [AnyCandidateSource]
+        _ sources: [some CandidateSource]
     ) -> Int? {
         var bestIndex: Int?
         var bestPriority: DispatchPriority?

@@ -266,8 +266,9 @@ extension ReductionMachine {
         graph: ChoiceGraph
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
-        for scope in ReplacementQuery.build(graph: graph) {
-            guard case let .branchPivot(pickNodeID, targetBranchID) = scope else {
+        var cursor = ReplacementQuery.pivotCursor(graph: graph)
+        while let transformation = cursor.next(lastAccepted: false) {
+            guard case let .replace(.branchPivot(pickNodeID, targetBranchID)) = transformation.operation else {
                 continue
             }
             guard let recorded = GraphStructuralEncoder.branchPivotCandidate(
@@ -314,7 +315,11 @@ extension ReductionMachine {
     ) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
 
-        for scope in ReplacementQuery.build(graph: graph) {
+        var cursor = ReplacementQuery.discoveryCursor(graph: graph)
+        while let transformation = cursor.next(lastAccepted: false) {
+            guard case let .replace(scope) = transformation.operation else {
+                continue
+            }
             switch scope {
                 case let .branchPivot(pickNodeID, targetBranchID):
                     if let candidate = GraphStructuralEncoder.branchPivotCandidate(

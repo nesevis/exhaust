@@ -24,7 +24,7 @@
 ///
 /// ## File Layout
 ///
-/// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`. Computation functions for non-eagerly-derived data live in `ChoiceGraph+LazyComputation.swift`. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Per-scope query families each have their own `ChoiceGraph+*Scopes.swift`.
+/// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`, and type-compatibility edge computation lives in `ChoiceGraph+TypeCompatibility.swift`. Dependency traversal lives in ``DependencyReachability`` so graph queries and scope cursors can share it without retaining mutable graph nodes. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Scope query families live in the Reduction/Queries directory.
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``TypeCompatibilityEdge``
 package struct ChoiceGraph: Sendable {

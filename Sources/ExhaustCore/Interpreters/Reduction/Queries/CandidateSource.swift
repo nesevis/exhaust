@@ -3,83 +3,113 @@
 //  Exhaust
 //
 
+// MARK: - Candidate Source Contract
+
+/// Adds scheduling and invalidation metadata to a cursor over graph transformations.
+///
+/// Priority inspection must not advance enumeration. Adaptive sources may advertise the next rejection continuation while awaiting feedback; the scheduler rebuilds sources after invalidating acceptances. Invalidation metadata describes the whole prepared source and remains available after exhaustion.
+protocol CandidateSource: ScopeCursor where Scope == GraphTransformation {
+    var peekPriority: DispatchPriority? { get }
+    var isValueDependent: Bool { get }
+    var isPermutationSource: Bool { get }
+}
+
+extension CandidateSource {
+    /// Leaf-kind changes invalidate value-dependent scopes and sibling-shape groups, even when node identities remain stable.
+    var canReuseAfterLeafKindChange: Bool {
+        isValueDependent == false && isPermutationSource == false
+    }
+}
+
 // MARK: - Sorted Candidate Source
 
-/// A stateless candidate source that emits pre-built transformations in priority order.
+/// Adapts a buffered scope cursor whose transformations are already in dispatch priority order.
 struct SortedCandidateSource {
-    private let transformations: [GraphTransformation]
-    private var index = 0
+    private var cursor: BufferedScopeCursor<GraphTransformation>
+    let isValueDependent: Bool
+    let isPermutationSource: Bool
 
     init(_ transformations: [GraphTransformation]) {
-        self.transformations = transformations
+        cursor = BufferedScopeCursor(transformations)
+        isValueDependent = transformations.contains { $0.operation.isValueDependent }
+        isPermutationSource = transformations.contains { transformation in
+            guard case .permute = transformation.operation else {
+                return false
+            }
+            return true
+        }
     }
+}
 
+extension SortedCandidateSource: CandidateSource {
     var peekPriority: DispatchPriority? {
-        guard index < transformations.count else { return nil }
-        return transformations[index].priority
+        cursor.peekScope?.priority
     }
 
-    /// The first remaining transformation, for type inspection without consuming.
-    var peekTransformation: GraphTransformation? {
-        guard index < transformations.count else { return nil }
-        return transformations[index]
-    }
-
-    /// The first transformation originally held by the source, including after enumeration finishes.
-    var firstTransformation: GraphTransformation? {
-        transformations.first
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        guard index < transformations.count else { return nil }
-        let result = transformations[index]
-        index += 1
-        return result
+    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+        cursor.next(lastAccepted: lastAccepted)
     }
 }
 
 // MARK: - Candidate Source Union
 
-/// Inline-stored union of the three candidate source types. The dispatch loop iterates `[AnyCandidateSource]` and calls ``peekPriority`` and ``next(lastAccepted:)`` through a three-way switch, keeping all source data contiguous in the array buffer without heap-allocated boxes or indirect calls.
+/// Bridges buffered and generated scope cursors to the scheduler without heap-allocated existential boxes.
+///
+/// Each case implements ``CandidateSource``. The union forwards advancement, feedback, priority inspection, and invalidation metadata while keeping the concrete source state inline in the scheduler's array.
 enum AnyCandidateSource {
     case sorted(SortedCandidateSource)
     case batchedCrossSequence(BatchedCrossSequenceRemovalSource)
     case batchRemoval(BatchRemovalSource)
+    case replacement(ReplacementCandidateSource)
+    case migration(MigrationCandidateSource)
+}
 
+extension AnyCandidateSource: CandidateSource {
     var peekPriority: DispatchPriority? {
         switch self {
-            case let .sorted(source): source.peekPriority
-            case let .batchedCrossSequence(source): source.peekPriority
-            case let .batchRemoval(source): source.peekPriority
+            case let .sorted(source):
+                source.peekPriority
+            case let .batchedCrossSequence(source):
+                source.peekPriority
+            case let .batchRemoval(source):
+                source.peekPriority
+            case let .replacement(source):
+                source.peekPriority
+            case let .migration(source):
+                source.peekPriority
         }
     }
 
     /// Whether the source contains operations whose scopes depend on current leaf values.
     var isValueDependent: Bool {
-        guard case let .sorted(source) = self,
-              let transformation = source.firstTransformation
-        else {
-            return false
+        switch self {
+            case let .sorted(source):
+                source.isValueDependent
+            case let .batchedCrossSequence(source):
+                source.isValueDependent
+            case let .batchRemoval(source):
+                source.isValueDependent
+            case let .replacement(source):
+                source.isValueDependent
+            case let .migration(source):
+                source.isValueDependent
         }
-        return transformation.operation.isValueDependent
     }
 
     /// Whether the source groups zip children by structural node kind for permutation.
     var isPermutationSource: Bool {
-        guard case let .sorted(source) = self,
-              let transformation = source.firstTransformation
-        else {
-            return false
+        switch self {
+            case let .sorted(source):
+                source.isPermutationSource
+            case let .batchedCrossSequence(source):
+                source.isPermutationSource
+            case let .batchRemoval(source):
+                source.isPermutationSource
+            case let .replacement(source):
+                source.isPermutationSource
+            case let .migration(source):
+                source.isPermutationSource
         }
-        if case .permute = transformation.operation {
-            return true
-        }
-        return false
-    }
-
-    /// Whether the source's remaining enumeration stays valid when a live leaf changes between a value and a constant.
-    var canReuseAfterLeafKindChange: Bool {
-        isValueDependent == false && isPermutationSource == false
     }
 
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
@@ -89,12 +119,25 @@ enum AnyCandidateSource {
                 self = .sorted(source)
                 return result
             case var .batchedCrossSequence(source):
+                self = .sorted(SortedCandidateSource([]))
                 let result = source.next(lastAccepted: lastAccepted)
                 self = .batchedCrossSequence(source)
                 return result
             case var .batchRemoval(source):
+                self = .sorted(SortedCandidateSource([]))
                 let result = source.next(lastAccepted: lastAccepted)
                 self = .batchRemoval(source)
+                return result
+            case var .replacement(source):
+                // Release the enum's ownership before mutating the extracted cursor's heap buffer.
+                self = .sorted(SortedCandidateSource([]))
+                let result = source.next(lastAccepted: lastAccepted)
+                self = .replacement(source)
+                return result
+            case var .migration(source):
+                self = .sorted(SortedCandidateSource([]))
+                let result = source.next(lastAccepted: lastAccepted)
+                self = .migration(source)
                 return result
         }
     }
@@ -137,7 +180,9 @@ enum CandidateSourceBuilder {
 
         // Batch removal — one source per sequence (stateful: geometric halving).
         for scope in elementScopes {
-            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
+            guard scope.targets.count == 1, let target = scope.targets.first else {
+                continue
+            }
             let source = BatchRemovalSource(
                 sequenceNodeID: target.sequenceNodeID,
                 graph: graph
@@ -148,9 +193,9 @@ enum CandidateSourceBuilder {
         }
 
         // Migration.
-        let migrationCandidates = buildMigrationCandidates(graph: graph)
-        if migrationCandidates.isEmpty == false {
-            sources.append(.sorted(SortedCandidateSource(migrationCandidates)))
+        let migrationSource = MigrationCandidateSource(graph: graph)
+        if migrationSource.peekPriority != nil {
+            sources.append(.migration(migrationSource))
         }
 
         // Per-element removal.
@@ -166,9 +211,9 @@ enum CandidateSourceBuilder {
         }
 
         // Replacement.
-        let replacementCandidates = buildReplacementCandidates(graph: graph, previousGraph: previousGraph)
-        if replacementCandidates.isEmpty == false {
-            sources.append(.sorted(SortedCandidateSource(replacementCandidates)))
+        let replacementSource = ReplacementQuery.cursor(graph: graph, previousGraph: previousGraph)
+        if replacementSource.peekPriority != nil {
+            sources.append(.replacement(replacementSource))
         }
 
         // Permutation.
