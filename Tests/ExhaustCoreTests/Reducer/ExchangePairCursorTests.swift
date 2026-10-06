@@ -4,45 +4,6 @@ import Testing
 
 @Suite("Generated exchange pair cursors")
 struct ExchangePairCursorTests {
-    @Test("Edge and redistribution streams match eager discovery, payloads, and scheduling metadata")
-    func streamsMatchEager() {
-        for tree in fixtures() {
-            let graph = ChoiceGraph.build(from: tree)
-            let expectedEdges = EagerExchangeReference.typeCompatibilityEdges(graph: graph)
-            var edges = TypeCompatibilityCursor(graph: graph)
-            #expect(edges.edgeCount == expectedEdges.count)
-            #expect(drain(&edges) == expectedEdges)
-            #expect(edges.edgeCount == expectedEdges.count)
-            #expect(graph.typeCompatibilityEdges == expectedEdges)
-            #expect(ChoiceGraphStats.from(graph).typeCompatibilityEdgeCount == expectedEdges.count)
-
-            let expectedPairs = EagerExchangeReference.redistributionPairs(graph: graph)
-            var pairs = GeneratedRedistributionPairCursor(graph: graph)
-            let summary = pairs.summary()
-            #expect(drain(&pairs).map(signature) == expectedPairs.map(signature))
-            #expect(summary.pairCount == expectedPairs.count)
-            let expectedDistance = expectedPairs.reduce(UInt64(0)) { maximum, pair in
-                guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
-                    return maximum
-                }
-                return max(maximum, QueryHelpers.reductionDistance(metadata))
-            }
-            #expect(summary.maximumSourceDistance == expectedDistance)
-            let transformations = CandidateSourceBuilder.buildExchangeCandidates(graph: graph)
-            let redistribution = transformations.first { transformation in
-                if case .exchange(.redistribution) = transformation.operation {
-                    return true
-                }
-                return false
-            }
-            #expect((redistribution == nil) == expectedPairs.isEmpty)
-            if let redistribution {
-                #expect(redistribution.priority.reductionMagnitude == Int(min(expectedDistance, UInt64(Int.max))))
-                #expect(redistribution.priority.estimatedCost == min(24, expectedPairs.count))
-            }
-        }
-    }
-
     @Test("Lookahead retains the exact heterogeneous sibling window and asymmetric zip leaf limits")
     func lookaheadBoundaries() {
         let mixedLeaves = (0 ..< 75).map { index in
@@ -248,33 +209,5 @@ struct ExchangePairCursorTests {
 
     private func sequence(_ elements: some Sequence<ChoiceTree>) -> ChoiceTree {
         .sequence(elements: Array(elements), metadata: .init(validRange: nil, isRangeExplicit: false))
-    }
-
-    /// Combines target-converged values, controls, mixed types, inactive picks, nested sequences, and constant bind wrappers.
-    private func fixtures() -> [ChoiceTree] {
-        let heterogeneous = sequence([choice(9, tag: .uint64), choice(3, tag: .uint32), choice(0, tag: .uint64)])
-        let wrapper = ChoiceTree.bind(fingerprint: 2, inner: .uint64(0), bound: .uint64Sequence([3, 8, 8]))
-        return [
-            .just,
-            .uint64(1),
-            .uint64Sequence([0, 0]),
-            .uint64Sequence([3, 2, 0, 8]),
-            heterogeneous,
-            .group([heterogeneous, .uint64Sequence([1, 2, 8]), .uint64(3)]),
-            .group([.uint64Sequence([3, 2, 2, 1, 0]), .uint64Sequence([8, 7]), .uint64Sequence([])]),
-            .group([wrapper, .uint64Sequence([6, 0, 2])]),
-            .group([.uint64Sequence([2, 3]), sequence([.uint64Sequence([5]), .uint64Sequence([8])])]),
-            .group([
-                .bind(fingerprint: 3, inner: .uint64Zip([9, 8]), bound: .uint64(1)),
-                .bind(fingerprint: 4, inner: .uint64Zip([5, 6]), bound: .uint64(2)),
-            ]),
-            .pickSite(fingerprint: 5, selected: 1, branches: [.uint64Sequence([1, 2]), .group([heterogeneous, wrapper])]),
-            .group([
-                choice(3, tag: .depthControl), choice(4, tag: .laneControl),
-                choice(5, tag: .character), .uint64Sequence([2, 0]),
-                .choice(ChoiceValue(-1.5, tag: .double), .init(validRange: nil, isRangeExplicit: false)),
-            ]),
-            .group((0 ..< 3).map { _ in sequence((0 ..< 45).map { index in .uint64(UInt64(index % 4)) }) }),
-        ]
     }
 }

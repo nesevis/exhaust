@@ -162,7 +162,7 @@ enum EagerExchangeReference {
             return []
         }
 
-        leaves.sort { $0.position < $1.position }
+        leaves = leaves.stablySorted { $0.position < $1.position }
 
         var pairs: [RedistributionPair] = []
         for index in 0 ..< leaves.count {
@@ -207,7 +207,7 @@ enum EagerExchangeReference {
             sources.append((nodeID: childID, distance: distance))
         }
 
-        sources.sort { $0.distance > $1.distance }
+        sources = sources.stablySorted { $0.distance > $1.distance }
         let budget = min(sources.count, GraphRedistributionEncoder.maxPairsPerScope)
 
         return sources.prefix(budget).map { source in
@@ -391,5 +391,54 @@ extension GraphRedistributionEncoder {
     /// Exercises arbitrary reference pairs through the same cursor consumer as production.
     mutating func startRedistribution(pairs: [RedistributionPair], graph: ChoiceGraph) {
         startRedistribution(cursor: BufferedScopeCursor(pairs), graph: graph)
+    }
+}
+
+// MARK: - Relation Reference
+
+extension EagerExchangeReference {
+    /// Scans every positional pair of stalled leaves, as an independent oracle for both gate semantics and exact ratio orientation.
+    static func relationPairs(graph: ChoiceGraph) -> [RelationPair] {
+        let leaves = graph.liveNodeIDs.compactMap { nodeID -> (entry: LeafEntry, tag: TypeTag, position: Int, magnitude: UInt64)? in
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind,
+                  node.scopeAnnotation.isDepthControl == false,
+                  node.scopeAnnotation.isLaneControl == false,
+                  node.scopeAnnotation.isBindInner == false,
+                  metadata.typeTag.isFloatingPoint == false,
+                  let range = node.positionRange,
+                  metadata.value.bitPattern64 != metadata.value.reductionTarget(in: metadata.validRange),
+                  metadata.value.bitPattern64 > metadata.value.semanticSimplest.bitPattern64,
+                  graph.convergenceStore[nodeID]?.bound == metadata.value.bitPattern64
+            else {
+                return nil
+            }
+            return (LeafEntry(nodeID: nodeID, mayReshapeOnAcceptance: node.scopeAnnotation.isBindInner, bindDepth: node.scopeAnnotation.controllingBindDepth), metadata.typeTag, range.lowerBound, metadata.value.bitPattern64 - metadata.value.semanticSimplest.bitPattern64)
+        }.stablySorted { $0.position < $1.position }
+        var pairs: [RelationPair] = []
+        for firstIndex in leaves.indices {
+            for secondIndex in (firstIndex + 1) ..< leaves.count {
+                let first = leaves[firstIndex]
+                let second = leaves[secondIndex]
+                guard first.tag == second.tag else {
+                    continue
+                }
+                var scale = first.magnitude
+                var remainder = second.magnitude
+                while remainder != 0 {
+                    (scale, remainder) = (remainder, scale % remainder)
+                }
+                guard scale >= 2 else {
+                    continue
+                }
+                let numerator = first.magnitude / scale
+                let denominator = second.magnitude / scale
+                guard numerator != denominator, max(numerator, denominator) <= RelationQuery.ratioCap else {
+                    continue
+                }
+                pairs.append(RelationPair(first: first.entry, second: second.entry, numerator: numerator, denominator: denominator, scale: scale))
+            }
+        }
+        return pairs
     }
 }

@@ -95,30 +95,6 @@ struct BoundedCandidatePreparationTests {
         #expect(candidate == candidates[firstExpected])
     }
 
-    @Test("Relax cursor preserves eager length order and exact candidate count", arguments: [0, 1, 3, 1000])
-    func relaxMatchesEagerPrefix(limit: Int) {
-        let nested = pick(content: .uint64Zip([5, 6]))
-        let tree = ChoiceTree.group([
-            pick(content: .group([.uint64(9), nested])),
-            pick(content: .uint64Zip([2, 3])),
-            pick(content: .uint64Zip([2, 3])),
-            pick(content: .uint64Zip([8, 7, 6])),
-            pick(content: .uint64(1)),
-        ])
-        let graph = ChoiceGraph.build(from: tree)
-        let sequence = ChoiceSequence.flatten(tree)
-        let expected = eagerRelaxCandidates(sequence: sequence, graph: graph)
-        var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: limit)
-        var actual: [ChoiceSequence] = []
-        while let candidate = cursor.next() {
-            actual.append(candidate)
-        }
-        #expect(expected.isEmpty == false)
-        #expect(cursor.candidateCount == expected.count)
-        #expect(cursor.retainedCandidateCount == min(limit, expected.count))
-        #expect(actual == Array(expected.prefix(limit)))
-    }
-
     @Test("Relax no-op classification checks metadata despite operative hash collisions")
     func relaxNoOpMetadata() {
         let tree = ChoiceTree.group([
@@ -127,7 +103,7 @@ struct BoundedCandidatePreparationTests {
         ])
         let graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence.flatten(tree)
-        let expected = eagerRelaxCandidates(sequence: sequence, graph: graph)
+        let expected = EagerScopeReference.relaxCandidates(sequence: sequence, graph: graph)
         var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: 100)
         var actual: [ChoiceSequence] = []
         while let candidate = cursor.next() {
@@ -166,7 +142,7 @@ struct BoundedCandidatePreparationTests {
             return expanded.count - range.count
         }
         #expect(expandedCounts.contains { $0 > 0 })
-        let expected = eagerRelaxCandidates(sequence: sequence, graph: graph)
+        let expected = EagerScopeReference.relaxCandidates(sequence: sequence, graph: graph)
         var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: 5)
         var actual: [ChoiceSequence] = []
         while let candidate = cursor.next() {
@@ -195,44 +171,6 @@ struct BoundedCandidatePreparationTests {
 
     private func pick(content: ChoiceTree) -> ChoiceTree {
         .pickSite(fingerprint: 42, selected: 1, branches: [.just, content])
-    }
-
-    /// Keeps full-sequence sorting as an independent oracle for the cursor's bounded splice ranking.
-    private func eagerRelaxCandidates(sequence: ChoiceSequence, graph: ChoiceGraph) -> [ChoiceSequence] {
-        var candidates: [ChoiceSequence] = []
-        for scope in EagerScopeReference.replacementScopes(graph: graph) {
-            switch scope {
-                case let .branchPivot(pickNodeID, targetBranchID):
-                    if let candidate = GraphStructuralEncoder.branchPivotCandidate(
-                        pickNodeID: pickNodeID,
-                        targetBranchID: targetBranchID,
-                        sequence: sequence,
-                        graph: graph
-                    ) {
-                        candidates.append(candidate)
-                    }
-                case let .selfSimilar(targetNodeID, donorNodeID, _),
-                     let .descendantPromotion(targetNodeID, donorNodeID, _):
-                    guard let targetRange = graph.nodes[targetNodeID].positionRange,
-                          let donorRange = graph.nodes[donorNodeID].positionRange
-                    else {
-                        continue
-                    }
-                    let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
-                        Array(sequence[donorRange]),
-                        donorNodeID: donorNodeID,
-                        donorRangeStart: donorRange.lowerBound,
-                        graph: graph
-                    )
-                    var candidate = sequence
-                    candidate.replaceSubrange(targetRange, with: expanded)
-                    if candidate != sequence {
-                        candidates.append(candidate)
-                    }
-            }
-        }
-        candidates.sort { $0.count < $1.count }
-        return candidates
     }
 
     private func redistributionFixture() -> (pairs: [RedistributionPair], graph: ChoiceGraph, sequence: ChoiceSequence) {

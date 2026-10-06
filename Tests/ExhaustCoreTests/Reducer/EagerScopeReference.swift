@@ -30,7 +30,7 @@ enum EagerScopeReference {
             ))
         }
 
-        results.sort { $0.priority > $1.priority }
+        results = results.stablySorted { $0.priority > $1.priority }
         return results
     }
 
@@ -257,7 +257,7 @@ enum EagerScopeReference {
                 maxLength: maxLength
             ))
         }
-        sequenceNodes.sort { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
+        sequenceNodes = sequenceNodes.stablySorted { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
 
         // For each pair (source earlier, receiver later), check independence and capacity.
         for sourceIndex in 0 ..< sequenceNodes.count {
@@ -334,7 +334,7 @@ enum EagerScopeReference {
         }
 
         // Sort by yield descending.
-        entries.sort { $0.yield > $1.yield }
+        entries = entries.stablySorted { $0.yield > $1.yield }
 
         return entries.map { entry in
             GraphTransformation(
@@ -365,5 +365,91 @@ extension ReplacementQuery {
             scopes.append(scope)
         }
         return scopes
+    }
+}
+
+// MARK: - Relaxation References
+
+extension EagerScopeReference {
+    /// Materializes every structural perturbation and sorts by length, as an independent oracle for the relax cursor's bounded splice ranking.
+    static func relaxCandidates(sequence: ChoiceSequence, graph: ChoiceGraph) -> [ChoiceSequence] {
+        var candidates: [ChoiceSequence] = []
+        for scope in replacementScopes(graph: graph) {
+            switch scope {
+                case let .branchPivot(pickNodeID, targetBranchID):
+                    if let candidate = GraphStructuralEncoder.branchPivotCandidate(
+                        pickNodeID: pickNodeID,
+                        targetBranchID: targetBranchID,
+                        sequence: sequence,
+                        graph: graph
+                    ) {
+                        candidates.append(candidate)
+                    }
+                case let .selfSimilar(targetNodeID, donorNodeID, _),
+                     let .descendantPromotion(targetNodeID, donorNodeID, _):
+                    guard let targetRange = graph.nodes[targetNodeID].positionRange,
+                          let donorRange = graph.nodes[donorNodeID].positionRange
+                    else {
+                        continue
+                    }
+                    let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
+                        Array(sequence[donorRange]),
+                        donorNodeID: donorNodeID,
+                        donorRangeStart: donorRange.lowerBound,
+                        graph: graph
+                    )
+                    var candidate = sequence
+                    candidate.replaceSubrange(targetRange, with: expanded)
+                    if candidate != sequence {
+                        candidates.append(candidate)
+                    }
+            }
+        }
+        return candidates.stablySorted { $0.count < $1.count }
+    }
+
+    /// Materializes every improving fill of every eager pivot scope, as an independent oracle for fill eligibility and stable length ordering.
+    static func improvingPivotCandidates(sequence: ChoiceSequence, graph: ChoiceGraph) -> [ChoiceSequence] {
+        var candidates: [ChoiceSequence] = []
+        for scope in replacementScopes(graph: graph) {
+            guard case let .branchPivot(pickNodeID, targetBranchID) = scope,
+                  let recorded = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .recorded, sequence: sequence, graph: graph),
+                  recorded.count <= sequence.count
+            else {
+                continue
+            }
+            let isShorter = recorded.count < sequence.count
+            if isShorter || recorded.shortLexPrecedes(sequence) {
+                candidates.append(recorded)
+                if let farthest = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .farthestFromTarget, sequence: sequence, graph: graph),
+                   isShorter || farthest.shortLexPrecedes(sequence)
+                {
+                    candidates.append(farthest)
+                }
+            }
+            if let transplanted = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .transplanted, sequence: sequence, graph: graph),
+               isShorter || transplanted.shortLexPrecedes(sequence)
+            {
+                candidates.append(transplanted)
+            }
+        }
+        return candidates.stablySorted { $0.count < $1.count }
+    }
+}
+
+// MARK: - Stable Sorting
+
+extension Array {
+    /// Breaks ties by original index, so oracles do not depend on the standard library's unspecified sort stability.
+    func stablySorted(by areInIncreasingOrder: (Element, Element) -> Bool) -> [Element] {
+        enumerated().sorted { first, second in
+            if areInIncreasingOrder(first.element, second.element) {
+                return true
+            }
+            if areInIncreasingOrder(second.element, first.element) {
+                return false
+            }
+            return first.offset < second.offset
+        }.map(\.element)
     }
 }

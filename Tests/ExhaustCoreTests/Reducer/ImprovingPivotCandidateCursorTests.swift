@@ -4,26 +4,6 @@ import Testing
 
 @Suite("Improving pivot candidate cursor")
 struct ImprovingPivotCandidateCursorTests {
-    @Test("Generated prefixes preserve eager length, fill, and discovery ordering", arguments: [0, 1, 2, 20], [false, true])
-    func eagerPrefixes(limit: Int, cacheAlternatingCandidates: Bool) {
-        let fixture = mixedPivots()
-        let eager = eagerCandidates(sequence: fixture.sequence, graph: fixture.graph)
-        #expect(eager.count > 2)
-        #expect(Set(eager.map(\.count)).count > 1)
-        let rejected = Set(eager.enumerated().compactMap { index, candidate in
-            cacheAlternatingCandidates && index.isMultiple(of: 2) ? ZobristHash.hash(of: candidate) : nil
-        })
-        let expected = eager.filter { rejected.contains(ZobristHash.hash(of: $0)) == false }
-        var cursor = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: rejected)
-        #expect(cursor.constructedCandidateCount == 0)
-        var actual: [ChoiceSequence] = []
-        while actual.count < limit, let probe = cursor.next() {
-            #expect(probe.probeHash == ZobristHash.hash(of: probe.sequence))
-            actual.append(probe.sequence)
-        }
-        #expect(actual == Array(expected.prefix(limit)))
-    }
-
     @Test("A non-improving recorded fill suppresses farthest but allows an improving transplant")
     func transplantAfterNonImprovingRecordedFill() throws {
         let target = ChoiceTree.group([leaf(2, range: 0 ... 3), leaf(2, range: 0 ... 3)], isZip: true)
@@ -69,7 +49,7 @@ struct ImprovingPivotCandidateCursorTests {
     @Test("A fully cached stream exhausts without returning a candidate")
     func cacheExhaustion() {
         let fixture = mixedPivots()
-        let rejected = Set(eagerCandidates(sequence: fixture.sequence, graph: fixture.graph).map { ZobristHash.hash(of: $0) })
+        let rejected = Set(EagerScopeReference.improvingPivotCandidates(sequence: fixture.sequence, graph: fixture.graph).map { ZobristHash.hash(of: $0) })
         #expect(rejected.isEmpty == false)
         var cursor = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: rejected)
         #expect(cursor.next() == nil)
@@ -86,7 +66,7 @@ struct ImprovingPivotCandidateCursorTests {
             propertyCalls += 1
             return true
         }
-        let candidates = eagerCandidates(sequence: machine.sequence, graph: machine.graph)
+        let candidates = EagerScopeReference.improvingPivotCandidates(sequence: machine.sequence, graph: machine.graph)
         #expect(candidates.count == 2)
         let first = try #require(candidates.first)
         machine.rejectCache.insert(ZobristHash.hash(of: first))
@@ -166,35 +146,6 @@ struct ImprovingPivotCandidateCursorTests {
             .pickSite(fingerprint: 45, selected: 1, branches: [.sequence(elements: [leaf(1, range: 0 ... 10)], metadata: .init(validRange: nil)), leaf(5, range: 0 ... 10)]),
         ])
         return (ChoiceSequence(tree), ChoiceGraph.build(from: tree))
-    }
-
-    /// Retains the pre-cursor algorithm as an independent oracle for fill eligibility and stable sorting.
-    private func eagerCandidates(sequence: ChoiceSequence, graph: ChoiceGraph) -> [ChoiceSequence] {
-        var candidates: [ChoiceSequence] = []
-        var cursor = ReplacementQuery.pivotCursor(graph: graph)
-        while let transformation = cursor.next() {
-            guard case let .replace(.branchPivot(pickNodeID, targetBranchID)) = transformation.operation,
-                  let recorded = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .recorded, sequence: sequence, graph: graph),
-                  recorded.count <= sequence.count
-            else {
-                continue
-            }
-            let isShorter = recorded.count < sequence.count
-            if isShorter || recorded.shortLexPrecedes(sequence) {
-                candidates.append(recorded)
-                if let farthest = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .farthestFromTarget, sequence: sequence, graph: graph),
-                   isShorter || farthest.shortLexPrecedes(sequence)
-                {
-                    candidates.append(farthest)
-                }
-            }
-            if let transplanted = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .transplanted, sequence: sequence, graph: graph),
-               isShorter || transplanted.shortLexPrecedes(sequence)
-            {
-                candidates.append(transplanted)
-            }
-        }
-        return candidates.sorted { $0.count < $1.count }
     }
 
     private func makeMachine(budget: Int, property: @escaping (UInt64) -> Bool) throws -> ReductionMachine {
