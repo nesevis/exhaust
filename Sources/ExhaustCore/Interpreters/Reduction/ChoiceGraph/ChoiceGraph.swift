@@ -24,7 +24,7 @@
 ///
 /// ## File Layout
 ///
-/// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`, and type-compatibility edge computation lives in `ChoiceGraph+TypeCompatibility.swift`. Dependency traversal lives in ``DependencyReachability`` so graph queries and scope cursors can share it without retaining mutable graph nodes. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Scope query families live in the Reduction/Queries directory.
+/// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`, and type-compatibility edge enumeration lives in ``TypeCompatibilityCursor``. Dependency traversal lives in ``DependencyReachability`` so graph queries and scope cursors can share it without retaining mutable graph nodes. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Scope query families live in the Reduction/Queries directory.
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``TypeCompatibilityEdge``
 package struct ChoiceGraph: Sendable {
@@ -73,9 +73,15 @@ package struct ChoiceGraph: Sendable {
 
     // MARK: - Non-Caching Computed Properties
 
-    /// Type-compatibility edges between antichain members with matching types. Recomputed on each access.
+    /// Materializes all eligible sequence-sibling and zip cross-slot edges on each access. Production consumers use ``TypeCompatibilityCursor`` to avoid retaining the cross products.
     package var typeCompatibilityEdges: [TypeCompatibilityEdge] {
-        computeTypeCompatibilityEdges()
+        var cursor = TypeCompatibilityCursor(graph: self)
+        var edges: [TypeCompatibilityEdge] = []
+        edges.reserveCapacity(cursor.edgeCount)
+        while let edge = cursor.next(lastAccepted: false) {
+            edges.append(edge)
+        }
+        return edges
     }
 
     /// Writes convergence records from an encoder pass into the store by node ID.

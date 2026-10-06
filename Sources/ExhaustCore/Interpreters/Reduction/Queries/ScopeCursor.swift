@@ -40,3 +40,5 @@ extension BufferedScopeCursor: ScopeCursor {
         return scope
     }
 }
+
+extension BufferedScopeCursor: Sendable where Scope: Sendable {}

@@ -242,10 +242,44 @@ enum SinkLocation: Equatable {
     case boundLeaf(bindNodeID: Int)
 }
 
-/// Scope for redistribution along type-compatibility edges.
+/// Keeps redistribution domains complete while deferring individual pair construction to the encoder's bounded ranking.
 struct RedistributionScope: Sendable {
-    /// Source-sink pairs from type-compatibility edges. Unordered at the query level; ``GraphRedistributionEncoder`` orders them by full-delta candidate shortlex.
-    let pairs: [RedistributionPair]
+    private let initialCursor: RedistributionPairCursor
+    let pairCount: Int
+    private let preparedMaximumSourceDistance: UInt64?
+
+    init(pairs: [RedistributionPair]) {
+        initialCursor = .buffered(BufferedScopeCursor(pairs))
+        pairCount = pairs.count
+        preparedMaximumSourceDistance = nil
+    }
+
+    /// Requires the summary and unconsumed cursor to describe the same graph state and complete pair stream.
+    init(cursor: RedistributionPairCursor, summary: RedistributionPairSummary) {
+        initialCursor = cursor
+        pairCount = summary.pairCount
+        preparedMaximumSourceDistance = summary.maximumSourceDistance
+    }
+
+    func pairCursor() -> RedistributionPairCursor {
+        initialCursor
+    }
+
+    /// Reuses graph-prepared distance metadata, computing it from the graph only for explicitly buffered pair lists.
+    func maximumSourceDistance(graph: ChoiceGraph) -> UInt64 {
+        if let distance = preparedMaximumSourceDistance {
+            return distance
+        }
+        var cursor = initialCursor
+        var maximumDistance: UInt64 = 0
+        while let pair = cursor.next(lastAccepted: false) {
+            guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
+                continue
+            }
+            maximumDistance = max(maximumDistance, QueryHelpers.reductionDistance(metadata))
+        }
+        return maximumDistance
+    }
 }
 
 /// A single source-sink pair for redistribution.

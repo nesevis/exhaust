@@ -12,7 +12,8 @@ extension GraphRedistributionEncoder {
     ) {
         // Every edit changes two values and leaves structure intact, so ranking reads at most four positions rather than copying or scanning the baseline. Keeping a sorted prefix bounds setup storage even when the query supplies many more pairs than the probe budget permits.
         var rankedPairs = BoundedSortedBuffer<RankedPair>(limit: Self.maxPairsPerScope)
-        for scopePair in scope.pairs {
+        var cursor = scope.pairCursor()
+        while let scopePair = cursor.next(lastAccepted: false) {
             guard let pair = preparePair(scopePair, graph: graph) else {
                 continue
             }
