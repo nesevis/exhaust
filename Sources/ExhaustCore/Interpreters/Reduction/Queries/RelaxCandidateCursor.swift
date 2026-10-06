@@ -9,14 +9,24 @@ struct RelaxCandidateCursor {
     let candidateCount: Int
     let retainedCandidateCount: Int
 
-    init(sequence: ChoiceSequence, graph: ChoiceGraph, limit: Int) {
+    /// Rejects disabled operations before splice preparation and bounded ranking, so they cannot displace enabled candidates from the retained prefix.
+    init(sequence: ChoiceSequence, graph: ChoiceGraph, limit: Int, isEncoderEnabled: (EncoderName) -> Bool = { _ in true }) {
         self.sequence = sequence
+        guard isEncoderEnabled(.branchPivot) || isEncoderEnabled(.substitution) else {
+            candidateCount = 0
+            retainedCandidateCount = 0
+            splices = BufferedScopeCursor([])
+            return
+        }
         var cache = ContentCache()
         var selected = BoundedSortedBuffer<ChoiceSequenceSplice>(limit: limit)
         var count = 0
-        var cursor = ReplacementQuery.discoveryCursor(graph: graph)
+        var cursor = isEncoderEnabled(.substitution)
+            ? ReplacementQuery.discoveryCursor(graph: graph)
+            : ReplacementQuery.pivotCursor(graph: graph)
         while let transformation = cursor.next(lastAccepted: false) {
-            guard case let .replace(scope) = transformation.operation,
+            guard isEncoderEnabled(transformation.operation.encoderName),
+                  case let .replace(scope) = transformation.operation,
                   let splice = cache.splice(for: scope, sequence: sequence, graph: graph)
             else {
                 continue

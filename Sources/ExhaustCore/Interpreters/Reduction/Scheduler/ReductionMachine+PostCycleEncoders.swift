@@ -10,7 +10,7 @@ extension ReductionMachine {
     ///
     /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
     mutating func runRelationPass() throws -> Bool {
-        if let enabled = enabledEncoders, enabled.contains(.relationSearch) == false {
+        guard isEncoderEnabled(.relationSearch) else {
             return false
         }
         guard let relationScope = RelationQuery.build(graph: graph) else {
@@ -30,11 +30,14 @@ extension ReductionMachine {
 
     /// Runs one encoder pass to completion outside cycle dispatch, through the same decoding, accounting, and acceptance policy as dispatched passes.
     ///
-    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph. Returns nil without starting an encoder when the deadline has already expired.
+    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph. Returns nil without starting a disabled encoder or when the deadline has already expired.
     mutating func runPostCycleEncoder(
         operation: GraphOperation,
         estimatedCost: Int
     ) throws -> PassReport? {
+        guard isEncoderEnabled(operation.encoderName) else {
+            return nil
+        }
         guard isDeadlineExceeded() == false else {
             stats.reductionWasCapped = true
             return nil

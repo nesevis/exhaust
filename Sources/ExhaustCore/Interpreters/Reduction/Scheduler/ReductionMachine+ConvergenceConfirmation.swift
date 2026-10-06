@@ -7,6 +7,9 @@ extension ReductionMachine {
     ///
     /// - Returns: True if any stale floors were found and cleared.
     mutating func confirmConvergence() throws -> Bool {
+        guard isEncoderEnabled(.convergenceConfirmation) else {
+            return false
+        }
         var anyStale = false
         var counts = ReductionProbeCounts()
         defer {

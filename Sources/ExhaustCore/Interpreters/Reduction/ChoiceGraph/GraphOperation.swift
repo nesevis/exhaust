@@ -42,6 +42,7 @@ enum GraphOperation {
     var encoderName: EncoderName {
         switch self {
             case .remove: .deletion
+            case .replace(.branchPivot): .branchPivot
             case .replace: .substitution
             case .migrate: .migration
             case .minimize(.valueLeaves): .valueSearch

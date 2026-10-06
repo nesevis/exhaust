@@ -10,13 +10,19 @@ extension ReductionMachine {
     ///
     /// - Returns: True if a pivot was accepted.
     mutating func runImprovingPivotPass() throws -> Bool {
-        try runImprovingPivotProbes(deadlineCheck: makeDeadlineCheck())
+        guard isEncoderEnabled(.branchPivot) else {
+            return false
+        }
+        return try runImprovingPivotProbes(deadlineCheck: makeDeadlineCheck())
     }
 
     /// Runs a structural excursion: checkpoints, applies a shortlex-worsening perturbation, reduces from it, and commits only if the result beats the checkpoint.
     ///
     /// - Returns: True if the excursion produced a net improvement (committed).
     mutating func runExcursion() throws -> Bool {
+        guard isPostCycleActionEnabled(.excursion), tuning.relaxMaterializationBudget > 0 else {
+            return false
+        }
         let deadlineCheck = makeDeadlineCheck()
         let checkpointSequence = sequence
         let checkpointTree = tree
@@ -34,7 +40,8 @@ extension ReductionMachine {
         var candidates = RelaxCandidateCursor(
             sequence: sequence,
             graph: graph,
-            limit: materializationBudget
+            limit: materializationBudget,
+            isEncoderEnabled: isEncoderEnabled
         )
 
         guard candidates.candidateCount > 0 else {
@@ -147,6 +154,9 @@ extension ReductionMachine {
             }
             guard deadlineCheck() == false else {
                 break
+            }
+            guard isEncoderEnabled(exploitTransformation.operation.encoderName) else {
+                continue
             }
             guard exploitTransformation.operation.isValid(in: graph) else {
                 continue
@@ -282,7 +292,7 @@ extension ReductionMachine {
 
     /// Whether the improving phase has a probe to spend.
     var hasUnprobedImprovingPivot: Bool {
-        tuning.relaxImprovingProbeBudget > 0 && unprobedImprovingPivotCandidates().isEmpty == false
+        isEncoderEnabled(.branchPivot) && tuning.relaxImprovingProbeBudget > 0 && unprobedImprovingPivotCandidates().isEmpty == false
     }
 
     /// Improving pivot candidates absent from the reject cache, so exhausted pivots stop triggering relax rounds.

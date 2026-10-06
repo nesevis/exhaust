@@ -36,7 +36,7 @@ extension ReductionMachine {
             return finishAtDeadline()
         }
 
-        if let enabled = enabledEncoders, enabled.contains(transformation.operation.encoderName) == false {
+        guard isEncoderEnabled(transformation.operation.encoderName) else {
             return .dispatched(decision: .skipped)
         }
 

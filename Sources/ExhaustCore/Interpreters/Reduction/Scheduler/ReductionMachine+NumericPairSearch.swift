@@ -2,7 +2,7 @@ extension ReductionMachine {
     /// Returns a fresh scope only when its base or domains differ from the exhausted search.
     func pendingNumericPairs() -> [NumericPairQuery.Pair]? {
         guard tuning.pairwiseNumericProbeBudget > 0,
-              enabledEncoders?.contains(.pairwiseNumericSearch) != false,
+              isEncoderEnabled(.pairwiseNumericSearch),
               convergence.deferBindInner == false
         else {
             return nil

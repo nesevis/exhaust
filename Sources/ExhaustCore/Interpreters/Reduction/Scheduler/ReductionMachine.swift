@@ -368,7 +368,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     private mutating func stepEndCycle() -> Transition {
         // A stripped graph has no pivot scopes.
-        if anyAccepted == false, graphIsStripped, tuning.relaxImprovingProbeBudget > 0 {
+        if anyAccepted == false, graphIsStripped, isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 {
             rematerializeUnselectedBranches()
         }
         let evaluation = convergence.evaluatePostCycle(
@@ -386,10 +386,11 @@ package struct ReductionMachine: ProbeSessionState {
 
         convergence.apply(evaluation)
 
-        if evaluation.actions.isEmpty {
+        let actions = evaluation.actions.filter(isPostCycleActionEnabled)
+        if actions.isEmpty {
             phase = .checkTermination
         } else {
-            phase = .postCycle(remaining: evaluation.actions)
+            phase = .postCycle(remaining: actions)
         }
         return .cycleEnded(stallBudget: convergence.stallBudget)
     }
@@ -504,8 +505,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     private mutating func stepReorderPass() throws -> Transition {
         recordStallDiagnostic()
-        let skipReorder = enabledEncoders.map { $0.contains(.numericReorder) == false } ?? false
-        let accepted = skipReorder ? false : try runReorderPass()
+        let accepted = isEncoderEnabled(.numericReorder) ? try runReorderPass() : false
         phase = .done
         return .reorderCompleted(accepted: accepted)
     }

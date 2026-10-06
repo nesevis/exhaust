@@ -184,7 +184,7 @@ struct ReductionDeadlineTests {
     func confirmationStopsBeforeGap() throws {
         let clock = DeadlineTestClock()
         var propertyCalls = 0
-        var machine = try scalarMachine(clock: clock) { _ in
+        var machine = try scalarMachine(clock: clock, enabledEncoders: [.convergenceConfirmation]) { _ in
             propertyCalls += 1
             clock.expire()
             return true
@@ -206,7 +206,7 @@ struct ReductionDeadlineTests {
             (1, Gen.choose(in: UInt64(200) ... 300)),
         ])
         var propertyCalls = 0
-        var machine = try makeMachine(generator: generator, initialOutput: UInt64(10), clock: clock, enabledEncoders: []) { _ in
+        var machine = try makeMachine(generator: generator, initialOutput: UInt64(10), clock: clock, enabledEncoders: [.branchPivot]) { _ in
             propertyCalls += 1
             clock.expire()
             return false
@@ -234,7 +234,7 @@ struct ReductionDeadlineTests {
             (1, Gen.choose(in: UInt64(200) ... 300)),
         ])
         var propertyCalls = 0
-        var machine = try makeMachine(generator: generator, initialOutput: UInt64(250), clock: clock, enabledEncoders: []) { _ in
+        var machine = try makeMachine(generator: generator, initialOutput: UInt64(250), clock: clock, enabledEncoders: [.branchPivot]) { _ in
             propertyCalls += 1
             clock.expire()
             return false
@@ -324,9 +324,10 @@ private func scalarMachine(
     clock: DeadlineTestClock,
     collectStats: Bool = true,
     deadline: UInt64 = 100,
+    enabledEncoders: Set<EncoderName> = [.valueSearch],
     property: @escaping (UInt64) -> Bool
 ) throws -> ReductionMachine {
-    try makeMachine(generator: Gen.choose(in: UInt64(0) ... 100), initialOutput: UInt64(37), clock: clock, collectStats: collectStats, deadline: deadline, enabledEncoders: [.valueSearch], property: property)
+    try makeMachine(generator: Gen.choose(in: UInt64(0) ... 100), initialOutput: UInt64(37), clock: clock, collectStats: collectStats, deadline: deadline, enabledEncoders: enabledEncoders, property: property)
 }
 
 /// Reflects the exact counterexample so fixture setup uses the same generator and tree the decoder will replay.
