@@ -1,6 +1,6 @@
 /// Answers strict descendant queries without walking parent chains for every candidate pair.
 ///
-/// Preorder intervals follow the parent links, which are authoritative for the prior descendant predicate. The forest includes inactive nodes and does not rely on flattened sequence ranges or node-ID order. Parent links must form an acyclic forest with valid node IDs.
+/// Preorder intervals follow the parent links, which define containment ancestry. The forest includes inactive nodes and does not rely on flattened sequence ranges or node-ID order. Parent links must form an acyclic forest with valid node IDs.
 ///
 /// - Complexity: O(V) preparation and retained storage, followed by O(1) queries.
 struct ContainmentIndex {

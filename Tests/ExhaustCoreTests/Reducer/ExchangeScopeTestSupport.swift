@@ -23,7 +23,7 @@ extension RedistributionScope {
         var cursor = pairCursor()
         var result: [RedistributionPair] = []
         result.reserveCapacity(pairCount)
-        while let pair = cursor.next(lastAccepted: false) {
+        while let pair = cursor.next() {
             result.append(pair)
         }
         return result

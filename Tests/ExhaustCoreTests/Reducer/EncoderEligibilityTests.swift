@@ -191,7 +191,7 @@ struct EncoderEligibilityTests {
         let expected = eagerCandidates(sequence: sequence, graph: graph, name: name)
         var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: limit, isEncoderEnabled: { $0 == name })
         var actual: [ChoiceSequence] = []
-        while let candidate = cursor.next(lastAccepted: false) {
+        while let candidate = cursor.next() {
             actual.append(candidate)
         }
         #expect(expected.isEmpty == false)
@@ -213,7 +213,7 @@ struct EncoderEligibilityTests {
         let baseline = machine.sequence
         let originalTree = machine.tree
         var candidates = RelaxCandidateCursor(sequence: baseline, graph: machine.graph, limit: 1, isEncoderEnabled: machine.isEncoderEnabled)
-        let nextCandidate = candidates.next(lastAccepted: false)
+        let nextCandidate = candidates.next()
         let perturbation = try #require(nextCandidate)
         #expect(perturbation.shortLexPrecedes(baseline) == false, "The fixture must start with a worsening donor substitution")
         let committed = try machine.runExcursion()

@@ -226,24 +226,12 @@ extension GraphRedistributionEncoder {
         return scaled
     }
 
-    /// Reduces denominator factors with remainders so intermediate products cannot overflow.
-    private static func greatestCommonDivisor(_ first: UInt64, _ second: UInt64) -> UInt64 {
-        var dividend = first
-        var divisor = second
-        while divisor != 0 {
-            let remainder = dividend % divisor
-            dividend = divisor
-            divisor = remainder
-        }
-        return dividend
-    }
-
     /// Keeps the common denominator exact and rejects products that exceed the unsigned representation.
     private static func leastCommonMultiple(_ first: UInt64, _ second: UInt64) -> UInt64? {
         guard first > 0, second > 0 else {
             return nil
         }
-        let divisor = greatestCommonDivisor(first, second)
+        let divisor = ReductionIntegerMath.greatestCommonDivisor(first, second)
         let reducedFirst = first / divisor
         let (product, overflow) = reducedFirst.multipliedReportingOverflow(by: second)
         guard overflow == false else {

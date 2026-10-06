@@ -70,15 +70,15 @@ struct ExchangePairCursorTests {
             .uint64Sequence([4]),
         ]))
         let expected = EagerExchangeReference.redistributionPairs(graph: graph)
-        var generated = RedistributionPairCursor.generated(GeneratedRedistributionPairCursor(graph: graph))
+        var generated = GeneratedRedistributionPairCursor(graph: graph)
         var copied = generated
-        var buffered = RedistributionPairCursor.buffered(BufferedScopeCursor(expected))
-        #expect(signature(generated.next(lastAccepted: false)) == signature(buffered.next(lastAccepted: true)))
-        #expect(signature(generated.next(lastAccepted: true)) == signature(buffered.next(lastAccepted: false)))
+        var buffered = BufferedScopeCursor(expected)
+        #expect(signature(generated.next()) == signature(buffered.next()))
+        #expect(signature(generated.next()) == signature(buffered.next()))
         #expect(drain(&copied).map(signature) == expected.map(signature))
         #expect(drain(&generated).map(signature) == drain(&buffered).map(signature))
-        #expect(generated.next(lastAccepted: true) == nil)
-        #expect(buffered.next(lastAccepted: false) == nil)
+        #expect(generated.next() == nil)
+        #expect(buffered.next() == nil)
     }
 
     @Test("Exchange scopes retain independent cursors and preserve bounded encoder pair selection")
@@ -99,7 +99,7 @@ struct ExchangePairCursorTests {
         #expect(scope.pairs.map(signature) == expected.map(signature))
         var first = scope.pairCursor()
         var second = scope.pairCursor()
-        _ = first.next(lastAccepted: false)
+        _ = first.next()
         #expect(drain(&second).map(signature) == expected.map(signature))
 
         var generatedEncoder = GraphRedistributionEncoder()
@@ -107,7 +107,7 @@ struct ExchangePairCursorTests {
         generatedEncoder.startRedistribution(scope: scope, graph: graph)
         var eagerEncoder = GraphRedistributionEncoder()
         eagerEncoder.valueState.reset(sequence: sequence)
-        eagerEncoder.startRedistribution(scope: RedistributionScope(pairs: expected), graph: graph)
+        eagerEncoder.startRedistribution(pairs: expected, graph: graph)
         guard case let .active(generatedState) = generatedEncoder.mode,
               case let .active(eagerState) = eagerEncoder.mode
         else {
@@ -151,8 +151,8 @@ struct ExchangePairCursorTests {
             typeTagPayload: metadata.typeTagPayload
         )))
         #expect(graph.nodes.withUnsafeBufferPointer { $0.baseAddress } == address)
-        #expect(edges.next(lastAccepted: false) != nil || edges.edgeCount == 0)
-        #expect(pairs.next(lastAccepted: false) != nil)
+        #expect(edges.next() != nil || edges.edgeCount == 0)
+        #expect(pairs.next() != nil)
     }
 
     @Test("A million-edge zip retains linear descriptors and can emit a short prefix")
@@ -165,7 +165,7 @@ struct ExchangePairCursorTests {
         #expect(ChoiceGraphStats.from(graph).typeCompatibilityEdgeCount == cursor.edgeCount)
         let nodeIDs = graph.leafNodes
         for index in 1 ... 32 {
-            let edge = cursor.next(lastAccepted: false)
+            let edge = cursor.next()
             #expect(edge?.nodeA == nodeIDs[0])
             #expect(edge?.nodeB == nodeIDs[index])
         }
@@ -199,10 +199,10 @@ struct ExchangePairCursorTests {
             return redistribution
         }.first)
         #expect(scope.pairCount == count + count * (count - 1))
-        #expect(scope.maximumSourceDistance(graph: graph) == 2)
+        #expect(scope.maximumSourceDistance == 2)
         var cursor = scope.pairCursor()
         for _ in 0 ..< 32 {
-            #expect(cursor.next(lastAccepted: false) != nil)
+            #expect(cursor.next() != nil)
         }
     }
 
@@ -236,7 +236,7 @@ struct ExchangePairCursorTests {
 
     private func drain<Cursor: ScopeCursor>(_ cursor: inout Cursor) -> [Cursor.Scope] {
         var scopes: [Cursor.Scope] = []
-        while let scope = cursor.next(lastAccepted: false) {
+        while let scope = cursor.next() {
             scopes.append(scope)
         }
         return scopes

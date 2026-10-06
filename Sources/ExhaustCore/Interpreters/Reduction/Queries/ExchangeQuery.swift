@@ -16,7 +16,7 @@ enum ExchangeQuery {
         let pairCursor = GeneratedRedistributionPairCursor(graph: graph)
         let summary = pairCursor.summary()
         if summary.pairCount > 0 {
-            scopes.append(.redistribution(RedistributionScope(cursor: .generated(pairCursor), summary: summary)))
+            scopes.append(.redistribution(RedistributionScope(cursor: pairCursor, summary: summary)))
         }
 
         let groups = tandemGroups(graph: graph)
@@ -43,7 +43,7 @@ enum ExchangeQuery {
         let roleGroups = PositionRelativeQuery.build(graph: graph).filter { broadKeys.contains($0.nodeIDs) == false }
         return (roleGroups + broadGroups).map { group in
             TandemGroup(
-                leaves: group.nodeIDs.map { leafEntry(for: $0, graph: graph) },
+                leaves: group.nodeIDs.map { LeafEntry(nodeID: $0, graph: graph) },
                 typeTag: group.typeTag
             )
         }
@@ -77,15 +77,6 @@ enum ExchangeQuery {
             return groupA.nodeIDs.count > groupB.nodeIDs.count
         }
         return groups
-    }
-
-    private static func leafEntry(for nodeID: Int, graph: ChoiceGraph) -> LeafEntry {
-        let annotation = graph.nodes[nodeID].scopeAnnotation
-        return LeafEntry(
-            nodeID: nodeID,
-            mayReshapeOnAcceptance: annotation.isBindInner,
-            bindDepth: annotation.controllingBindDepth
-        )
     }
 
     // MARK: - Bound Exchange Scopes

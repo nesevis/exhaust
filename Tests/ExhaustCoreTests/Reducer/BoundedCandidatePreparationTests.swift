@@ -21,7 +21,7 @@ struct BoundedCandidatePreparationTests {
         let fixture = redistributionFixture()
         var encoder = GraphRedistributionEncoder()
         encoder.valueState.reset(sequence: fixture.sequence)
-        let prepared = fixture.scope.pairs.compactMap { encoder.preparePair($0, graph: fixture.graph) }
+        let prepared = fixture.pairs.compactMap { encoder.preparePair($0, graph: fixture.graph) }
         let edits = prepared.compactMap { pair in
             encoder.redistributionEdit(
                 sourceIndex: pair.sourceIndex,
@@ -55,7 +55,7 @@ struct BoundedCandidatePreparationTests {
         let fixture = redistributionFixture()
         var encoder = GraphRedistributionEncoder()
         encoder.valueState.reset(sequence: fixture.sequence)
-        let pairs = fixture.scope.pairs.compactMap { encoder.preparePair($0, graph: fixture.graph) }
+        let pairs = fixture.pairs.compactMap { encoder.preparePair($0, graph: fixture.graph) }
         let candidates = pairs.map { pair in
             encoder.buildRedistributionCandidate(
                 sourceIndex: pair.sourceIndex,
@@ -79,7 +79,7 @@ struct BoundedCandidatePreparationTests {
                     pairs[first].maxDelta > pairs[second].maxDelta
             }
         }.prefix(GraphRedistributionEncoder.maxPairsPerScope)
-        encoder.startRedistribution(scope: fixture.scope, graph: fixture.graph)
+        encoder.startRedistribution(pairs: fixture.pairs, graph: fixture.graph)
         guard case let .active(state) = encoder.mode else {
             Issue.record("Expected active redistribution")
             return
@@ -110,7 +110,7 @@ struct BoundedCandidatePreparationTests {
         let expected = eagerRelaxCandidates(sequence: sequence, graph: graph)
         var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: limit)
         var actual: [ChoiceSequence] = []
-        while let candidate = cursor.next(lastAccepted: false) {
+        while let candidate = cursor.next() {
             actual.append(candidate)
         }
         #expect(expected.isEmpty == false)
@@ -130,7 +130,7 @@ struct BoundedCandidatePreparationTests {
         let expected = eagerRelaxCandidates(sequence: sequence, graph: graph)
         var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: 100)
         var actual: [ChoiceSequence] = []
-        while let candidate = cursor.next(lastAccepted: false) {
+        while let candidate = cursor.next() {
             actual.append(candidate)
         }
         #expect(actual == expected)
@@ -169,7 +169,7 @@ struct BoundedCandidatePreparationTests {
         let expected = eagerRelaxCandidates(sequence: sequence, graph: graph)
         var cursor = RelaxCandidateCursor(sequence: sequence, graph: graph, limit: 5)
         var actual: [ChoiceSequence] = []
-        while let candidate = cursor.next(lastAccepted: false) {
+        while let candidate = cursor.next() {
             actual.append(candidate)
         }
         #expect(cursor.candidateCount == expected.count)
@@ -187,7 +187,7 @@ struct BoundedCandidatePreparationTests {
         #expect(cursor.candidateCount > 10000)
         #expect(cursor.retainedCandidateCount == 3)
         var emitted = 0
-        while cursor.next(lastAccepted: false) != nil {
+        while cursor.next() != nil {
             emitted += 1
         }
         #expect(emitted == 3)
@@ -235,7 +235,7 @@ struct BoundedCandidatePreparationTests {
         return candidates
     }
 
-    private func redistributionFixture() -> (scope: RedistributionScope, graph: ChoiceGraph, sequence: ChoiceSequence) {
+    private func redistributionFixture() -> (pairs: [RedistributionPair], graph: ChoiceGraph, sequence: ChoiceSequence) {
         let integers = (1 ... 40).map { value in
             ChoiceTree.choice(ChoiceValue(UInt64(value % 13 + 1), tag: .uint64), .init(validRange: 0 ... 15, isRangeExplicit: true))
         }
@@ -269,6 +269,6 @@ struct BoundedCandidatePreparationTests {
                 ))
             }
         }
-        return (RedistributionScope(pairs: pairs), graph, ChoiceSequence.flatten(tree))
+        return (pairs, graph, ChoiceSequence.flatten(tree))
     }
 }

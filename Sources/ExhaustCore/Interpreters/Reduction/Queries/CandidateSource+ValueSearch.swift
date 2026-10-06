@@ -67,7 +67,7 @@ extension CandidateSourceBuilder {
             let sourceDistance: Int
             switch scope {
                 case let .redistribution(redistScope):
-                    let maxDistance = redistScope.maximumSourceDistance(graph: graph)
+                    let maxDistance = redistScope.maximumSourceDistance
                     sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
                     estimatedCost = min(24, redistScope.pairCount)
                 case let .tandem(tandemScope):

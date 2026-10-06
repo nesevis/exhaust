@@ -373,3 +373,23 @@ extension EagerExchangeReference {
         }
     }
 }
+
+extension ChoiceGraph {
+    /// Materializes all eligible sequence-sibling and zip cross-slot edges on each access. Production consumers use ``TypeCompatibilityCursor`` to avoid retaining the cross products.
+    var typeCompatibilityEdges: [TypeCompatibilityEdge] {
+        var cursor = TypeCompatibilityCursor(graph: self)
+        var edges: [TypeCompatibilityEdge] = []
+        edges.reserveCapacity(cursor.edgeCount)
+        while let edge = cursor.next() {
+            edges.append(edge)
+        }
+        return edges
+    }
+}
+
+extension GraphRedistributionEncoder {
+    /// Exercises arbitrary reference pairs through the same cursor consumer as production.
+    mutating func startRedistribution(pairs: [RedistributionPair], graph: ChoiceGraph) {
+        startRedistribution(cursor: BufferedScopeCursor(pairs), graph: graph)
+    }
+}

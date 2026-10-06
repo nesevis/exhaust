@@ -91,11 +91,11 @@ struct RelationPairCursorTests {
         var cursor = RelationPairCursor(graph: graph)
         #expect(cursor.preparedLeafCount == count)
         #expect(cursor.magnitudeLookupCount == 0)
-        #expect(cursor.next(lastAccepted: false) == nil)
+        #expect(cursor.next() == nil)
         #expect(cursor.magnitudeLookupCount > 0)
         #expect(cursor.magnitudeLookupCount <= count * Int(RelationQuery.ratioCap * (RelationQuery.ratioCap - 1)))
         let lookups = cursor.magnitudeLookupCount
-        #expect(cursor.next(lastAccepted: false) == nil)
+        #expect(cursor.next() == nil)
         #expect(cursor.magnitudeLookupCount == lookups)
     }
 
@@ -106,7 +106,7 @@ struct RelationPairCursorTests {
         var cursor = RelationPairCursor(graph: graph)
         var actual: [RelationPair] = []
         for _ in 0 ..< GraphRedistributionEncoder.maxPairsPerScope {
-            let next = cursor.next(lastAccepted: false)
+            let next = cursor.next()
             try actual.append(#require(next))
         }
         #expect(actual.count == 30)
@@ -120,7 +120,7 @@ struct RelationPairCursorTests {
     func copiedCursors() throws {
         let graph = stalledGraph(.group([200, 100, 50, 300, 100, 20, 400].map { magnitudeLeaf($0) }))
         var original = RelationPairCursor(graph: graph)
-        let first = original.next(lastAccepted: false)
+        let first = original.next()
         _ = try #require(first)
         var copied = original
         let copiedLookups = copied.magnitudeLookupCount
@@ -205,7 +205,7 @@ struct RelationPairCursorTests {
 
     private func drain(_ cursor: inout RelationPairCursor) -> [RelationPair] {
         var pairs: [RelationPair] = []
-        while let pair = cursor.next(lastAccepted: false) {
+        while let pair = cursor.next() {
             pairs.append(pair)
         }
         return pairs

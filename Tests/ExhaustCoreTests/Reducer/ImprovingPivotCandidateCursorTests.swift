@@ -17,7 +17,7 @@ struct ImprovingPivotCandidateCursorTests {
         var cursor = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: rejected)
         #expect(cursor.constructedCandidateCount == 0)
         var actual: [ChoiceSequence] = []
-        while actual.count < limit, let probe = cursor.next(lastAccepted: false) {
+        while actual.count < limit, let probe = cursor.next() {
             #expect(probe.probeHash == ZobristHash.hash(of: probe.sequence))
             actual.append(probe.sequence)
         }
@@ -42,10 +42,10 @@ struct ImprovingPivotCandidateCursorTests {
         #expect(recorded.shortLexPrecedes(sequence) == false)
         #expect(transplanted.shortLexPrecedes(sequence))
         var cursor = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: [])
-        let first = cursor.next(lastAccepted: false)
+        let first = cursor.next()
         #expect(first?.sequence == transplanted)
         #expect(cursor.constructedCandidateCount == 2)
-        #expect(cursor.next(lastAccepted: false) == nil)
+        #expect(cursor.next() == nil)
     }
 
     @Test("Wide preparation stores descriptors and constructs only requested complete sequences")
@@ -59,7 +59,7 @@ struct ImprovingPivotCandidateCursorTests {
         #expect(cursor.preparedPivotCount == 400)
         #expect(cursor.constructedCandidateCount == 0)
         for _ in 0 ..< 2 {
-            let next = cursor.next(lastAccepted: false)
+            let next = cursor.next()
             let probe = try #require(next)
             #expect(probe.sequence.shortLexPrecedes(sequence))
         }
@@ -72,10 +72,10 @@ struct ImprovingPivotCandidateCursorTests {
         let rejected = Set(eagerCandidates(sequence: fixture.sequence, graph: fixture.graph).map { ZobristHash.hash(of: $0) })
         #expect(rejected.isEmpty == false)
         var cursor = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: rejected)
-        #expect(cursor.next(lastAccepted: false) == nil)
+        #expect(cursor.next() == nil)
         let constructed = cursor.constructedCandidateCount
         #expect(constructed > 0)
-        #expect(cursor.next(lastAccepted: false) == nil)
+        #expect(cursor.next() == nil)
         #expect(cursor.constructedCandidateCount == constructed)
     }
 
@@ -106,18 +106,18 @@ struct ImprovingPivotCandidateCursorTests {
         let sequence = ChoiceSequence(tree)
         let graph = ChoiceGraph.build(from: tree)
         var cursor = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: [])
-        let first = cursor.next(lastAccepted: false)
+        let first = cursor.next()
         let recorded = try #require(first)
-        let second = cursor.next(lastAccepted: false)
+        let second = cursor.next()
         let farthest = try #require(second)
         #expect(recorded.sequence == farthest.sequence)
         #expect(recorded.probeHash == farthest.probeHash)
-        #expect(cursor.next(lastAccepted: false) == nil)
+        #expect(cursor.next() == nil)
         var cached = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: [recorded.probeHash])
-        #expect(cached.next(lastAccepted: false) == nil)
+        #expect(cached.next() == nil)
     }
 
-    @Test("Deadlines stop preparation before candidate construction and permanently stop an interrupted cursor")
+    @Test("Deadlines stop preparation without constructing candidates; a prepared prefix remains enumerable")
     func preparationDeadline() {
         let fixture = mixedPivots()
         let deadline = CursorDeadline()
@@ -125,27 +125,30 @@ struct ImprovingPivotCandidateCursorTests {
         var expired = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: [], deadlineCheck: deadline.isExpired)
         #expect(expired.preparedPivotCount == 0)
         #expect(expired.constructedCandidateCount == 0)
-        #expect(expired.next(lastAccepted: false) == nil)
+        #expect(expired.next() == nil)
         deadline.remainingChecks = 2
         var interrupted = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: [], deadlineCheck: deadline.isExpired)
         #expect(interrupted.preparedPivotCount == 1)
         #expect(interrupted.constructedCandidateCount == 0)
-        #expect(interrupted.next(lastAccepted: false) == nil)
+        #expect(interrupted.next() != nil)
+        #expect(interrupted.constructedCandidateCount == 1)
         deadline.remainingChecks = nil
-        #expect(interrupted.next(lastAccepted: false) == nil)
+        while interrupted.next() != nil {}
+        #expect(interrupted.next() == nil)
     }
 
-    @Test("Expiry while constructing a candidate prevents returning it for a property probe")
-    func generationDeadline() {
+    @Test("Enumeration does not consult the scheduler's preparation deadline")
+    func generationIsIndependentOfDeadline() {
         let fixture = mixedPivots()
         let deadline = CursorDeadline()
         var cursor = ImprovingPivotCandidateCursor(sequence: fixture.sequence, graph: fixture.graph, rejectCache: [], deadlineCheck: deadline.isExpired)
-        deadline.remainingChecks = 1
-        #expect(cursor.next(lastAccepted: false) == nil)
+        deadline.remainingChecks = 0
+        #expect(cursor.next() != nil)
         #expect(cursor.constructedCandidateCount == 1)
+        #expect(deadline.remainingChecks == 0)
         deadline.remainingChecks = nil
-        #expect(cursor.next(lastAccepted: false) == nil)
-        #expect(cursor.constructedCandidateCount == 1)
+        #expect(cursor.next() != nil)
+        #expect(cursor.constructedCandidateCount == 2)
     }
 
     // MARK: - Helpers
@@ -169,7 +172,7 @@ struct ImprovingPivotCandidateCursorTests {
     private func eagerCandidates(sequence: ChoiceSequence, graph: ChoiceGraph) -> [ChoiceSequence] {
         var candidates: [ChoiceSequence] = []
         var cursor = ReplacementQuery.pivotCursor(graph: graph)
-        while let transformation = cursor.next(lastAccepted: false) {
+        while let transformation = cursor.next() {
             guard case let .replace(.branchPivot(pickNodeID, targetBranchID)) = transformation.operation,
                   let recorded = GraphStructuralEncoder.branchPivotCandidate(pickNodeID: pickNodeID, targetBranchID: targetBranchID, fill: .recorded, sequence: sequence, graph: graph),
                   recorded.count <= sequence.count

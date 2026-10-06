@@ -61,8 +61,8 @@ extension ReductionMachine {
                 stats.recordStructuralRelax(probeCounts)
             }
         }
-        while materializationsUsed < materializationBudget, deadlineCheck() == false {
-            guard let candidate = candidates.next(lastAccepted: false) else {
+        while materializationsUsed < materializationBudget {
+            guard let candidate = candidates.next() else {
                 break
             }
             guard deadlineCheck() == false else {
@@ -142,9 +142,6 @@ extension ReductionMachine {
         let savedRejectCache = rejectCache
         rejectCache = []
         while true {
-            guard deadlineCheck() == false else {
-                break
-            }
             guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(exploitSources) else {
                 break
             }
@@ -255,8 +252,8 @@ extension ReductionMachine {
             }
         }
         var candidates = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: deadlineCheck)
-        while probesUsed < budget, deadlineCheck() == false {
-            guard let probe = candidates.next(lastAccepted: false), deadlineCheck() == false else {
+        while probesUsed < budget {
+            guard let probe = candidates.next(), deadlineCheck() == false else {
                 break
             }
             let candidate = probe.sequence
@@ -301,6 +298,6 @@ extension ReductionMachine {
             return false
         }
         var cursor = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: makeDeadlineCheck())
-        return cursor.next(lastAccepted: false) != nil
+        return cursor.next() != nil
     }
 }

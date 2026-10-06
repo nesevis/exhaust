@@ -147,6 +147,12 @@ struct LeafEntry: Sendable {
         self.mayReshapeOnAcceptance = mayReshapeOnAcceptance
         self.bindDepth = bindDepth
     }
+
+    /// Carries graph-derived acceptance and bind ordering metadata into value scopes.
+    init(nodeID: Int, graph: ChoiceGraph) {
+        let annotation = graph.nodes[nodeID].scopeAnnotation
+        self.init(nodeID: nodeID, mayReshapeOnAcceptance: annotation.isBindInner, bindDepth: annotation.controllingBindDepth)
+    }
 }
 
 /// Scope for integer leaf value minimization.
@@ -244,41 +250,19 @@ enum SinkLocation: Equatable {
 
 /// Keeps redistribution domains complete while deferring individual pair construction to the encoder's bounded ranking.
 struct RedistributionScope: Sendable {
-    private let initialCursor: RedistributionPairCursor
+    private let initialCursor: GeneratedRedistributionPairCursor
     let pairCount: Int
-    private let preparedMaximumSourceDistance: UInt64?
-
-    init(pairs: [RedistributionPair]) {
-        initialCursor = .buffered(BufferedScopeCursor(pairs))
-        pairCount = pairs.count
-        preparedMaximumSourceDistance = nil
-    }
+    let maximumSourceDistance: UInt64
 
     /// Requires the summary and unconsumed cursor to describe the same graph state and complete pair stream.
-    init(cursor: RedistributionPairCursor, summary: RedistributionPairSummary) {
+    init(cursor: GeneratedRedistributionPairCursor, summary: RedistributionPairSummary) {
         initialCursor = cursor
         pairCount = summary.pairCount
-        preparedMaximumSourceDistance = summary.maximumSourceDistance
+        maximumSourceDistance = summary.maximumSourceDistance
     }
 
-    func pairCursor() -> RedistributionPairCursor {
+    func pairCursor() -> GeneratedRedistributionPairCursor {
         initialCursor
-    }
-
-    /// Reuses graph-prepared distance metadata, computing it from the graph only for explicitly buffered pair lists.
-    func maximumSourceDistance(graph: ChoiceGraph) -> UInt64 {
-        if let distance = preparedMaximumSourceDistance {
-            return distance
-        }
-        var cursor = initialCursor
-        var maximumDistance: UInt64 = 0
-        while let pair = cursor.next(lastAccepted: false) {
-            guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
-                continue
-            }
-            maximumDistance = max(maximumDistance, QueryHelpers.reductionDistance(metadata))
-        }
-        return maximumDistance
     }
 }
 

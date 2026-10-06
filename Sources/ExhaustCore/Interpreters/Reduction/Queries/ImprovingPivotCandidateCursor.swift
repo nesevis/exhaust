@@ -20,7 +20,6 @@ struct ImprovingPivotCandidateCursor {
     private let sequence: ChoiceSequence
     private let graph: ChoiceGraph
     private let rejectCache: Set<UInt64>
-    private let deadlineCheck: () -> Bool
     private let pivots: [Pivot]
     private var pivotIndex = 0
     private var fillIndex = 0
@@ -33,19 +32,18 @@ struct ImprovingPivotCandidateCursor {
     /// Counts complete sequences constructed, including those discarded by ordering or the cache, so preparation cost can be characterized independently of property probes.
     private(set) var constructedCandidateCount = 0
 
-    /// Captures the cache at pass entry, preserving the eager pass's treatment of duplicate fills within that pass.
-    init(sequence: ChoiceSequence, graph: ChoiceGraph, rejectCache: Set<UInt64>, deadlineCheck: @escaping () -> Bool = { false }) {
+    /// Captures the cache at pass entry, allowing duplicate fills generated within the pass to remain independently eligible.
+    init(sequence: ChoiceSequence, graph: ChoiceGraph, rejectCache: Set<UInt64>, deadlineCheck: () -> Bool = { false }) {
         self.sequence = sequence
         self.graph = graph
         self.rejectCache = rejectCache
-        self.deadlineCheck = deadlineCheck
         guard deadlineCheck() == false else {
             pivots = []
             return
         }
         var prepared: [Pivot] = []
         var cursor = ReplacementQuery.pivotCursor(graph: graph)
-        while deadlineCheck() == false, let transformation = cursor.next(lastAccepted: false) {
+        while deadlineCheck() == false, let transformation = cursor.next() {
             guard case let .replace(.branchPivot(pickNodeID, targetBranchID)) = transformation.operation,
                   let splice = GraphStructuralEncoder.branchPivotSplice(
                       pickNodeID: pickNodeID,
@@ -91,12 +89,8 @@ struct ImprovingPivotCandidateCursor {
 }
 
 extension ImprovingPivotCandidateCursor: ScopeCursor {
-    mutating func next(lastAccepted _: Bool) -> Probe? {
+    mutating func next() -> Probe? {
         while pivotIndex < pivots.count {
-            guard deadlineCheck() == false else {
-                pivotIndex = pivots.count
-                return nil
-            }
             if fillIndex == 3 {
                 pivotIndex += 1
                 fillIndex = 0
@@ -120,18 +114,10 @@ extension ImprovingPivotCandidateCursor: ScopeCursor {
             if fill == .recorded {
                 isRecordedFillImproving = isImproving
             }
-            guard deadlineCheck() == false else {
-                pivotIndex = pivots.count
-                return nil
-            }
             guard isImproving else {
                 continue
             }
             let probeHash = ZobristHash.hash(of: candidate)
-            guard deadlineCheck() == false else {
-                pivotIndex = pivots.count
-                return nil
-            }
             guard rejectCache.contains(probeHash) == false else {
                 continue
             }

@@ -349,3 +349,21 @@ enum EagerScopeReference {
         }
     }
 }
+
+/// Materializes production streams only for tests that inspect the complete scope set.
+extension ReplacementQuery {
+    /// Materializes the discovery stream for assertions inspecting complete replacement scopes.
+    ///
+    /// When `previousGraph` is present, unchanged self-similarity families are suppressed while pivots remain available.
+    static func build(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil) -> [ReplacementScope] {
+        var cursor = discoveryCursor(graph: graph, previousGraph: previousGraph)
+        var scopes: [ReplacementScope] = []
+        while let transformation = cursor.next() {
+            guard case let .replace(scope) = transformation.operation else {
+                continue
+            }
+            scopes.append(scope)
+        }
+        return scopes
+    }
+}

@@ -1,6 +1,6 @@
 /// Streams compatibility edges in sequence-then-zip discovery order without retaining the cross products.
 ///
-/// Zip children retain only the leaf prefixes the existing lookahead permits: 51 leaves on the first side and 50 on the second. This asymmetry preserves the prior builder's inclusive first-side cutoff. Prepared descriptors are immutable and do not retain the graph's mutable node storage.
+/// Zip children retain only the leaf prefixes the existing lookahead permits: 51 leaves on the first side and 50 on the second. The first-side cutoff is inclusive, while the second-side cutoff is exclusive. Prepared descriptors are immutable and do not retain the graph's mutable node storage.
 ///
 /// - Complexity: O(C + A · W) retained descriptors, where C is the heterogeneous sequences' direct leaf count, A is the number of zip-child links, and W is the lookahead. Exhaustive zip enumeration remains quadratic in child-group count.
 struct TypeCompatibilityCursor: Sendable {
@@ -214,7 +214,7 @@ struct TypeCompatibilityCursor: Sendable {
 }
 
 extension TypeCompatibilityCursor: ScopeCursor {
-    mutating func next(lastAccepted _: Bool) -> TypeCompatibilityEdge? {
+    mutating func next() -> TypeCompatibilityEdge? {
         nextSequenceEdge() ?? nextZipEdge()
     }
 }

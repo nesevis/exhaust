@@ -125,6 +125,10 @@ struct BatchedCrossSequenceRemovalSource {
         cachedPriority = nil
     }
 
+    mutating func next() -> GraphTransformation? {
+        next(lastAccepted: false)
+    }
+
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
         guard exhausted == false else { return nil }
 
@@ -265,7 +269,7 @@ struct BatchRemovalSource {
         cachedPriority
     }
 
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
+    mutating func next() -> GraphTransformation? {
         if let transformation = nextHalvingWindow() {
             return transformation
         }
@@ -377,25 +381,9 @@ struct BatchRemovalSource {
     }
 }
 
-extension BatchedCrossSequenceRemovalSource: CandidateSource {
-    var isValueDependent: Bool {
-        false
-    }
+extension BatchedCrossSequenceRemovalSource: CandidateSource {}
 
-    var isPermutationSource: Bool {
-        false
-    }
-}
-
-extension BatchRemovalSource: CandidateSource {
-    var isValueDependent: Bool {
-        false
-    }
-
-    var isPermutationSource: Bool {
-        false
-    }
-}
+extension BatchRemovalSource: CandidateSource {}
 
 // MARK: - Builder Functions
 

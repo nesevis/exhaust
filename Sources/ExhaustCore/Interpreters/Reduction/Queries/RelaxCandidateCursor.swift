@@ -24,7 +24,7 @@ struct RelaxCandidateCursor {
         var cursor = isEncoderEnabled(.substitution)
             ? ReplacementQuery.discoveryCursor(graph: graph)
             : ReplacementQuery.pivotCursor(graph: graph)
-        while let transformation = cursor.next(lastAccepted: false) {
+        while let transformation = cursor.next() {
             guard isEncoderEnabled(transformation.operation.encoderName),
                   case let .replace(scope) = transformation.operation,
                   let splice = cache.splice(for: scope, sequence: sequence, graph: graph)
@@ -129,7 +129,7 @@ struct RelaxCandidateCursor {
 }
 
 extension RelaxCandidateCursor: ScopeCursor {
-    mutating func next(lastAccepted: Bool) -> ChoiceSequence? {
-        splices.next(lastAccepted: lastAccepted)?.applying(to: sequence)
+    mutating func next() -> ChoiceSequence? {
+        splices.next()?.applying(to: sequence)
     }
 }

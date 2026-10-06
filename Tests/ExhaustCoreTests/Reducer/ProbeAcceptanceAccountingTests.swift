@@ -130,7 +130,7 @@ struct ProbeAcceptanceAccountingTests {
         }
         let baseline = machine.sequence
         var candidates = RelaxCandidateCursor(sequence: baseline, graph: machine.graph, limit: 1, isEncoderEnabled: machine.isEncoderEnabled)
-        let first = candidates.next(lastAccepted: false)
+        let first = candidates.next()
         let perturbation = try #require(first)
         #expect(perturbation.shortLexPrecedes(baseline) == false)
         let committed = try machine.runExcursion()

@@ -4,10 +4,8 @@
 protocol ScopeCursor<Scope> {
     associatedtype Scope
 
-    /// Advances after feedback for the previously emitted scope, returning nil when enumeration is exhausted.
-    ///
-    /// Pass false before the first scope and when the previous scope was rejected or skipped. Buffered cursors ignore feedback. Adaptive cursors may use it to choose subsequent scopes; acceptance that invalidates the prepared graph requires a fresh cursor instead of another call.
-    mutating func next(lastAccepted: Bool) -> Scope?
+    /// Returns the next complete scope, or nil when enumeration is exhausted.
+    mutating func next() -> Scope?
 }
 
 /// Preserves a prepared scope order while allowing the same consumer to use generated cursors.
@@ -31,7 +29,7 @@ struct BufferedScopeCursor<Scope> {
 }
 
 extension BufferedScopeCursor: ScopeCursor {
-    mutating func next(lastAccepted _: Bool) -> Scope? {
+    mutating func next() -> Scope? {
         guard index < scopes.count else {
             return nil
         }

@@ -1,4 +1,4 @@
-/// Indexes stalled magnitudes and merges only matching small-ratio buckets in the eager query's positional order.
+/// Indexes stalled magnitudes and merges only matching small-ratio buckets in positional order.
 ///
 /// Every eligible pair has a unique coprime numerator and denominator bounded by ``RelationQuery/ratioCap``. For each first magnitude, dividing by a possible numerator gives its scale; multiplying that scale by the denominator identifies a same-tag bucket directly. Each matching bucket contributes one pending second index, so duplicate magnitudes never materialize a cross product. The index is tied to the values and convergence records at preparation and must be discarded when those change.
 ///
@@ -21,8 +21,8 @@ struct RelationPairCursor {
         let denominator: UInt64
     }
 
-    /// Reverses positional comparison because the shared queue emits its greatest entry first. Different magnitude buckets cannot share a second index.
-    private struct Row: Comparable {
+    /// Each magnitude bucket contributes its earliest remaining second index.
+    private struct Row {
         let secondIndices: [Int]
         var offset: Int
         let ratio: Ratio
@@ -31,20 +31,12 @@ struct RelationPairCursor {
         var secondIndex: Int {
             secondIndices[offset]
         }
-
-        static func < (lhs: Self, rhs: Self) -> Bool {
-            lhs.secondIndex > rhs.secondIndex
-        }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.secondIndex == rhs.secondIndex
-        }
     }
 
     /// Reduced components make a target magnitude unique for any fixed first magnitude, avoiding duplicate bucket rows.
     private static let ratios: [Ratio] = (1 ... RelationQuery.ratioCap).flatMap { numerator in
         (1 ... RelationQuery.ratioCap).compactMap { denominator in
-            guard numerator != denominator, greatestCommonDivisor(numerator, denominator) == 1 else {
+            guard numerator != denominator, ReductionIntegerMath.greatestCommonDivisor(numerator, denominator) == 1 else {
                 return nil
             }
             return Ratio(numerator: numerator, denominator: denominator)
@@ -55,7 +47,7 @@ struct RelationPairCursor {
     private let buckets: [MagnitudeKey: [Int]]
     private var firstIndex = 0
     private var isCurrentRowPrepared = false
-    private var pendingRows = ScopePriorityQueue<Row>()
+    private var pendingRows = ScopePriorityQueue<Row> { $0.secondIndex < $1.secondIndex }
 
     var preparedLeafCount: Int {
         leaves.count
@@ -82,7 +74,7 @@ struct RelationPairCursor {
                 return nil
             }
             return Leaf(
-                entry: LeafEntry(nodeID: nodeID, mayReshapeOnAcceptance: node.scopeAnnotation.isBindInner, bindDepth: node.scopeAnnotation.controllingBindDepth),
+                entry: LeafEntry(nodeID: nodeID, graph: graph),
                 position: range.lowerBound,
                 typeTag: metadata.typeTag,
                 magnitude: metadata.value.bitPattern64 - metadata.value.semanticSimplest.bitPattern64
@@ -137,19 +129,10 @@ struct RelationPairCursor {
         }
         return lowerBound
     }
-
-    private static func greatestCommonDivisor(_ first: UInt64, _ second: UInt64) -> UInt64 {
-        var firstRemainder = first
-        var secondRemainder = second
-        while secondRemainder != 0 {
-            (firstRemainder, secondRemainder) = (secondRemainder, firstRemainder % secondRemainder)
-        }
-        return firstRemainder
-    }
 }
 
 extension RelationPairCursor: ScopeCursor {
-    mutating func next(lastAccepted _: Bool) -> RelationPair? {
+    mutating func next() -> RelationPair? {
         while firstIndex + 1 < leaves.count {
             if isCurrentRowPrepared == false {
                 prepareRows()

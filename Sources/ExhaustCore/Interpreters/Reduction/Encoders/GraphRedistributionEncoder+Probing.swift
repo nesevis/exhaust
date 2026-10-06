@@ -10,10 +10,15 @@ extension GraphRedistributionEncoder {
         scope: RedistributionScope,
         graph: ChoiceGraph
     ) {
+        startRedistribution(cursor: scope.pairCursor(), graph: graph)
+    }
+
+    /// Accepts any complete pair stream so ranking and bounded retention are independent of domain preparation.
+    mutating func startRedistribution<Cursor: ScopeCursor>(cursor initialCursor: Cursor, graph: ChoiceGraph) where Cursor.Scope == RedistributionPair {
         // Every edit changes two values and leaves structure intact, so ranking reads at most four positions rather than copying or scanning the baseline. Keeping a sorted prefix bounds setup storage even when the query supplies many more pairs than the probe budget permits.
         var rankedPairs = BoundedSortedBuffer<RankedPair>(limit: Self.maxPairsPerScope)
-        var cursor = scope.pairCursor()
-        while let scopePair = cursor.next(lastAccepted: false) {
+        var cursor = initialCursor
+        while let scopePair = cursor.next() {
             guard let pair = preparePair(scopePair, graph: graph) else {
                 continue
             }

@@ -250,6 +250,36 @@ struct ReductionDeadlineTests {
         #expect(machine.stats.reductionWasCapped)
     }
 
+    @Test("Improving-pivot preparation and enumeration cannot start a property after expiry", arguments: [0, 1, 2, 3])
+    func improvingPivotPreparationBoundary(permittedClockReads: Int) throws {
+        let clock = DeadlineTestClock()
+        let generator = Gen.pick(choices: [
+            (1, Gen.choose(in: UInt64(0) ... 100)),
+            (1, Gen.choose(in: UInt64(200) ... 300)),
+        ])
+        var propertyCalls = 0
+        var machine = try makeMachine(generator: generator, initialOutput: UInt64(250), clock: clock, enabledEncoders: [.branchPivot]) { _ in
+            propertyCalls += 1
+            return false
+        }
+        let checkpoint = machine.sequence
+        let originalMaterializations = machine.stats.totalMaterializations
+        clock.permittedReadsBeforeExpiry = permittedClockReads
+        let improved = try machine.runImprovingPivotPass()
+        #expect(improved == false)
+        #expect(propertyCalls == 0)
+        #expect(machine.sequence == checkpoint)
+        #expect(machine.stats.totalMaterializations == originalMaterializations)
+        #expect(machine.stats.relaxImprovingProbes == 0)
+        #expect(machine.stats.reductionProbes == 0)
+        #expect(machine.passCounter == 0)
+        #expect(machine.anyAcceptanceEverOccurred == false)
+        _ = try complete(&machine)
+        #expect(machine.stats.reductionWasCapped)
+        #expect(propertyCalls == 0)
+        #expect(machine.output as? UInt64 == 250)
+    }
+
     @Test("Unlimited runs do not read the injected deadline clock")
     func zeroDeadlineIsUnlimited() throws {
         let clock = DeadlineTestClock()
@@ -309,9 +339,17 @@ struct ReductionDeadlineTests {
 private final class DeadlineTestClock {
     private var nanoseconds: UInt64 = 0
     private(set) var readCount = 0
+    var permittedReadsBeforeExpiry: Int?
 
     func read() -> UInt64 {
         readCount += 1
+        if let remainingReads = permittedReadsBeforeExpiry {
+            if remainingReads == 0 {
+                expire()
+            } else {
+                permittedReadsBeforeExpiry = remainingReads - 1
+            }
+        }
         return nanoseconds
     }
 

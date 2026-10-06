@@ -3,7 +3,7 @@ import Testing
 
 @Suite("Scope cursors")
 struct ScopeCursorTests {
-    @Test("Buffered enumeration preserves complete leaf groups and ignores acceptance feedback")
+    @Test("Buffered enumeration preserves complete leaf groups")
     func bufferedGroupsRemainComplete() throws {
         let groupedScope = ValueMinimizationScope(
             leaves: [LeafEntry(nodeID: 1), LeafEntry(nodeID: 2)],
@@ -16,23 +16,23 @@ struct ScopeCursorTests {
         var cursor = BufferedScopeCursor([groupedScope, singleScope])
 
         #expect(cursor.peekScope?.leaves.map(\.nodeID) == [1, 2])
-        let first = try #require(nextScope(from: &cursor, lastAccepted: false))
-        let second = try #require(nextScope(from: &cursor, lastAccepted: true))
+        let first = try #require(nextScope(from: &cursor))
+        let second = try #require(nextScope(from: &cursor))
 
         #expect(first.leaves.map(\.nodeID) == [1, 2])
         #expect(first.batchZeroEligible)
         #expect(second.leaves.map(\.nodeID) == [3])
         #expect(second.batchZeroEligible == false)
-        #expect(nextScope(from: &cursor, lastAccepted: false) == nil)
-        #expect(nextScope(from: &cursor, lastAccepted: true) == nil)
+        #expect(nextScope(from: &cursor) == nil)
+        #expect(nextScope(from: &cursor) == nil)
         #expect(cursor.peekScope == nil)
     }
 
     @Test("Empty buffered cursors remain exhausted")
     func emptyCursorIsExhausted() {
         var cursor = BufferedScopeCursor<ValueMinimizationScope>([])
-        #expect(nextScope(from: &cursor, lastAccepted: false) == nil)
-        #expect(nextScope(from: &cursor, lastAccepted: true) == nil)
+        #expect(nextScope(from: &cursor) == nil)
+        #expect(nextScope(from: &cursor) == nil)
         #expect(cursor.peekScope == nil)
     }
 
@@ -152,8 +152,12 @@ struct ScopeCursorTests {
 
 // MARK: - Fixtures
 
-private func nextScope<Cursor: ScopeCursor>(from cursor: inout Cursor, lastAccepted: Bool) -> Cursor.Scope? {
-    cursor.next(lastAccepted: lastAccepted)
+private func nextScope<Cursor: ScopeCursor>(from cursor: inout Cursor) -> Cursor.Scope? {
+    cursor.next()
+}
+
+private func nextScope(from source: inout some CandidateSource, lastAccepted: Bool) -> GraphTransformation? {
+    source.next(lastAccepted: lastAccepted)
 }
 
 /// Exercises the encoder boundary through the shared cursor contract, preserving each emitted batch as one probe.
@@ -164,7 +168,7 @@ private func removalProbes<Cursor: ScopeCursor>(
 ) throws -> [ChoiceSequence] where Cursor.Scope == GraphTransformation {
     let sequence = ChoiceSequence(tree)
     var candidates: [ChoiceSequence] = []
-    while let transformation = nextScope(from: &cursor, lastAccepted: false) {
+    while let transformation = nextScope(from: &cursor) {
         guard case .remove(.elements) = transformation.operation else {
             continue
         }

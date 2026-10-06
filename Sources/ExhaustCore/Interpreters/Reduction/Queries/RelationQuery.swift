@@ -18,7 +18,7 @@ enum RelationQuery {
     static func build(graph: ChoiceGraph) -> RelationScope? {
         var cursor = RelationPairCursor(graph: graph)
         var pairs: [RelationPair] = []
-        while pairs.count < GraphRedistributionEncoder.maxPairsPerScope, let pair = cursor.next(lastAccepted: false) {
+        while pairs.count < GraphRedistributionEncoder.maxPairsPerScope, let pair = cursor.next() {
             pairs.append(pair)
         }
 

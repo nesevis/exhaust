@@ -71,6 +71,9 @@ extension ReductionMachine {
             if collectStats {
                 stats.recordMaterializations(classificationMaterializations, at: .classification)
             }
+            guard isDeadlineExceeded() == false else {
+                return try finishAtDeadline()
+            }
             guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
                   let classification = updatedMetadata.classification
             else {
@@ -109,9 +112,6 @@ extension ReductionMachine {
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?
     ) throws -> Transition {
-        guard isDeadlineExceeded() == false else {
-            return try finishAtDeadline()
-        }
         let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
         let scope = EncoderInput(
             transformation: transformation,

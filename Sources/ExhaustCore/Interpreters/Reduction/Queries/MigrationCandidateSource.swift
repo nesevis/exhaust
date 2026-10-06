@@ -1,6 +1,6 @@
 /// Streams source/receiver scopes while preparing each source's element extents only once.
 ///
-/// Every receiver for a source has the same structural benefit, so sorting source descriptors by yield is sufficient to preserve the eager builder's priority order. Equal yields retain source position order, and each source visits receivers in position order. Only the next valid scope is buffered; element arrays are shared across that source's emitted scopes.
+/// Every receiver for a source has the same structural benefit, so sorting source descriptors by yield is sufficient to preserve descending priority order. Equal yields retain source position order, and each source visits receivers in position order. Only the next valid scope is buffered; element arrays are shared across that source's emitted scopes.
 ///
 /// The dependency cache retains immutable adjacency and only sequence-node results, excluding mutable graph nodes so value-only acceptance does not force a graph-node array copy while the cursor remains alive. Both directions use the complete live sequence domain, including full sequences that can donate but cannot receive.
 ///
@@ -29,27 +29,20 @@ struct MigrationCandidateSource {
 
     /// Collects source payloads before pair enumeration so receiver count does not multiply extent collection or storage.
     init(graph: ChoiceGraph) {
-        let sequenceNodes = graph.liveNodeIDs.filter { nodeID in
-            guard case .sequence = graph.nodes[nodeID].kind, graph.nodes[nodeID].positionRange != nil else {
-                return false
-            }
-            return true
-        }.sorted { first, second in
-            graph.nodes[first].positionRange!.lowerBound < graph.nodes[second].positionRange!.lowerBound
-        }
-        sequences = sequenceNodes.map { nodeID in
+        let sequenceNodes = graph.liveNodeIDs.compactMap { nodeID -> SequenceDescriptor? in
             let node = graph.nodes[nodeID]
-            guard case let .sequence(metadata) = node.kind else {
-                preconditionFailure("Prepared migration node must be a sequence")
+            guard case let .sequence(metadata) = node.kind, let range = node.positionRange else {
+                return nil
             }
             return SequenceDescriptor(
                 nodeID: nodeID,
-                positionRange: node.positionRange!,
+                positionRange: range,
                 canReceive: UInt64(metadata.elementCount) < (metadata.lengthConstraint?.upperBound ?? UInt64.max)
             )
-        }
-        sources = sequenceNodes.enumerated().compactMap { sequenceIndex, nodeID -> SourceDescriptor? in
-            let node = graph.nodes[nodeID]
+        }.sorted { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
+        sequences = sequenceNodes
+        sources = sequenceNodes.enumerated().compactMap { sequenceIndex, descriptor -> SourceDescriptor? in
+            let node = graph.nodes[descriptor.nodeID]
             guard sequenceIndex + 1 < sequenceNodes.count,
                   case let .sequence(metadata) = node.kind,
                   metadata.elementCount > 0,
@@ -94,7 +87,7 @@ struct MigrationCandidateSource {
         }
         dependencyReachability = DependencyReachabilityCache(
             adjacency: sources.isEmpty ? [] : graph.dependencyAdjacency,
-            candidates: Set(sequenceNodes)
+            candidates: Set(sequenceNodes.map(\.nodeID))
         )
         receiverIndex = (sources.first?.sequenceIndex ?? -1) + 1
         prepareNext()
@@ -157,15 +150,7 @@ extension MigrationCandidateSource: CandidateSource {
         pendingTransformation?.priority
     }
 
-    var isValueDependent: Bool {
-        false
-    }
-
-    var isPermutationSource: Bool {
-        false
-    }
-
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
+    mutating func next() -> GraphTransformation? {
         guard let transformation = pendingTransformation else {
             return nil
         }

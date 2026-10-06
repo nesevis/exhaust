@@ -170,7 +170,7 @@ struct RedistributionBoundaryTests {
         let pair = RedistributionPair(source: .init(nodeID: sourceNodeID), sink: .init(nodeID: sinkNodeID), sourceTag: .int64, sinkTag: sinkTag)
         var encoder = GraphRedistributionEncoder()
         encoder.valueState.reset(sequence: fixture.sequence)
-        encoder.startRedistribution(scope: RedistributionScope(pairs: [pair]), graph: fixture.graph)
+        encoder.startRedistribution(pairs: [pair], graph: fixture.graph)
         var candidate = fixture.sequence
         let firstProbe = encoder.nextProbe(into: &candidate, lastAccepted: false)
         #expect(firstProbe != nil)

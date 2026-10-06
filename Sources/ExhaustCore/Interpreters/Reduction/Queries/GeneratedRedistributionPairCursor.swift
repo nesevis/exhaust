@@ -42,7 +42,7 @@ struct GeneratedRedistributionPairCursor: Sendable {
             }
             let annotation = node.scopeAnnotation
             return Leaf(
-                entry: Self.leafEntry(for: node.id, graph: graph),
+                entry: LeafEntry(nodeID: node.id, graph: graph),
                 tag: metadata.typeTag,
                 position: range.lowerBound,
                 distance: QueryHelpers.reductionDistance(metadata),
@@ -104,7 +104,7 @@ struct GeneratedRedistributionPairCursor: Sendable {
         var cursor = self
         var count = 0
         var maximumDistance: UInt64 = 0
-        while let pair = cursor.next(lastAccepted: false) {
+        while let pair = cursor.next() {
             count += 1
             maximumDistance = max(maximumDistance, leavesByNodeID[pair.source.nodeID]?.distance ?? 0)
         }
@@ -120,7 +120,7 @@ struct GeneratedRedistributionPairCursor: Sendable {
             sources.insert(member) { $0.distance > $1.distance }
         }
         let firstSink = node.children.first { graph.nodes[$0].positionRange != nil }.map {
-            leafEntry(for: $0, graph: graph)
+            LeafEntry(nodeID: $0, graph: graph)
         }
         return HomogeneousGroup(
             tag: tag,
@@ -151,7 +151,7 @@ struct GeneratedRedistributionPairCursor: Sendable {
         return nil
     }
 
-    /// Visits slot pairs in child order while orienting the source by the sequences' positions, as the eager builder did.
+    /// Visits slot pairs in child order while orienting the source by the sequences' positions, with the earlier sequence donating.
     private mutating func nextHomogeneousZipPair() -> RedistributionPair? {
         while zipIndex < zipGroups.count {
             let groups = zipGroups[zipIndex]
@@ -188,7 +188,7 @@ struct GeneratedRedistributionPairCursor: Sendable {
 
     /// Excludes cross-bind and control-leaf edges before choosing the earlier off-target leaf as the source.
     private mutating func nextCompatibilityPair() -> RedistributionPair? {
-        while let edge = edges.next(lastAccepted: false) {
+        while let edge = edges.next() {
             guard let first = leavesByNodeID[edge.nodeA],
                   let second = leavesByNodeID[edge.nodeB],
                   first.controllingBindNodeID == second.controllingBindNodeID,
@@ -206,15 +206,10 @@ struct GeneratedRedistributionPairCursor: Sendable {
         }
         return nil
     }
-
-    private static func leafEntry(for nodeID: Int, graph: ChoiceGraph) -> LeafEntry {
-        let annotation = graph.nodes[nodeID].scopeAnnotation
-        return LeafEntry(nodeID: nodeID, mayReshapeOnAcceptance: annotation.isBindInner, bindDepth: annotation.controllingBindDepth)
-    }
 }
 
 extension GeneratedRedistributionPairCursor: ScopeCursor {
-    mutating func next(lastAccepted _: Bool) -> RedistributionPair? {
+    mutating func next() -> RedistributionPair? {
         nextAdjacentPair() ?? nextHomogeneousZipPair() ?? nextCompatibilityPair()
     }
 }

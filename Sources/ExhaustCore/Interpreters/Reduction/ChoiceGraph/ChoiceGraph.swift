@@ -71,19 +71,6 @@ package struct ChoiceGraph: Sendable {
     /// Measured value-coupling dependents. Maps each "changed" node to the set of nodes whose convergence floors shifted when it changed. Populated from floor-motion events in `ReductionMachine.applyPassReport`, only when the maintainer-set `collectDiagnostics` flag is enabled. Diagnostic instrumentation with no scheduling consumer yet; a coupling-aware leaf ordering in ``MinimizationQuery`` was tried and reverted (zero measured effect on the ECOOP suite because coupling data arrives only after the affected leaves have converged).
     package var couplingDependents: [Int: Set<Int>] = [:]
 
-    // MARK: - Non-Caching Computed Properties
-
-    /// Materializes all eligible sequence-sibling and zip cross-slot edges on each access. Production consumers use ``TypeCompatibilityCursor`` to avoid retaining the cross products.
-    package var typeCompatibilityEdges: [TypeCompatibilityEdge] {
-        var cursor = TypeCompatibilityCursor(graph: self)
-        var edges: [TypeCompatibilityEdge] = []
-        edges.reserveCapacity(cursor.edgeCount)
-        while let edge = cursor.next(lastAccepted: false) {
-            edges.append(edge)
-        }
-        return edges
-    }
-
     /// Writes convergence records from an encoder pass into the store by node ID.
     ///
     /// When a leaf already has a convergence record, the existing bound is carried forward as ``ConvergedOrigin/priorBound`` on the new entry so that floor motion is observable across cycles. Each new entry is stamped with `rebuildGeneration` so that structural floor motion (a rebuild happened between old and new record) can be distinguished from value floor motion (same generation, floor shifted by partner movement).

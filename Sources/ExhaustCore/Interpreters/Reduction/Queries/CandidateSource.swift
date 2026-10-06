@@ -9,12 +9,28 @@
 ///
 /// Priority inspection must not advance enumeration. Adaptive sources may advertise the next rejection continuation while awaiting feedback; the scheduler rebuilds sources after invalidating acceptances. Invalidation metadata describes the whole prepared source and remains available after exhaustion.
 protocol CandidateSource: ScopeCursor where Scope == GraphTransformation {
+    /// Applies feedback only to adaptive enumeration; acceptance that invalidates the graph requires a new source.
+    mutating func next(lastAccepted: Bool) -> GraphTransformation?
+
     var peekPriority: DispatchPriority? { get }
     var isValueDependent: Bool { get }
     var isPermutationSource: Bool { get }
 }
 
 extension CandidateSource {
+    var isValueDependent: Bool {
+        false
+    }
+
+    var isPermutationSource: Bool {
+        false
+    }
+
+    /// Stateless sources ignore feedback; adaptive sources override this requirement.
+    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
+        next()
+    }
+
     /// Leaf-kind changes invalidate value-dependent scopes and sibling-shape groups, even when node identities remain stable.
     var canReuseAfterLeafKindChange: Bool {
         isValueDependent == false && isPermutationSource == false
@@ -46,8 +62,8 @@ extension SortedCandidateSource: CandidateSource {
         cursor.peekScope?.priority
     }
 
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
-        cursor.next(lastAccepted: lastAccepted)
+    mutating func next() -> GraphTransformation? {
+        cursor.next()
     }
 }
 
@@ -82,36 +98,26 @@ extension AnyCandidateSource: CandidateSource {
 
     /// Whether the source contains operations whose scopes depend on current leaf values.
     var isValueDependent: Bool {
-        switch self {
-            case let .sorted(source):
-                source.isValueDependent
-            case let .batchedCrossSequence(source):
-                source.isValueDependent
-            case let .batchRemoval(source):
-                source.isValueDependent
-            case let .replacement(source):
-                source.isValueDependent
-            case let .migration(source):
-                source.isValueDependent
+        if case let .sorted(source) = self {
+            return source.isValueDependent
         }
+        return false
     }
 
-    /// Whether the source groups zip children by structural node kind for permutation.
     var isPermutationSource: Bool {
-        switch self {
-            case let .sorted(source):
-                source.isPermutationSource
-            case let .batchedCrossSequence(source):
-                source.isPermutationSource
-            case let .batchRemoval(source):
-                source.isPermutationSource
-            case let .replacement(source):
-                source.isPermutationSource
-            case let .migration(source):
-                source.isPermutationSource
+        if case let .sorted(source) = self {
+            return source.isPermutationSource
         }
+        return false
     }
 
+    mutating func next() -> GraphTransformation? {
+        next(lastAccepted: false)
+    }
+
+    /// Releases generated sources before mutating their owned buffers, preserving uniqueness for copy-on-write storage.
+    ///
+    /// Sorted advancement only changes its scalar index and keeps shared scopes immutable.
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
         switch self {
             case var .sorted(source):
@@ -129,7 +135,6 @@ extension AnyCandidateSource: CandidateSource {
                 self = .batchRemoval(source)
                 return result
             case var .replacement(source):
-                // Release the enum's ownership before mutating the extracted cursor's heap buffer.
                 self = .sorted(SortedCandidateSource([]))
                 let result = source.next(lastAccepted: lastAccepted)
                 self = .replacement(source)
