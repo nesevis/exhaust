@@ -321,7 +321,7 @@ extension GraphRedistributionEncoder {
         }
 
         // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit bounds enforcement.
-        let patterns = Self.narrowTransferPatterns(
+        let patterns = Self.checkedTransferPatterns(
             sourceBitPattern: sourceBitPattern,
             sinkBitPattern: sinkBitPattern,
             sourceMovesDownward: sourceBitPattern > targetBitPattern,
@@ -360,8 +360,10 @@ extension GraphRedistributionEncoder {
         )
     }
 
-    /// Rejects UInt64 overflow before explicit narrow-domain validation.
-    private static func narrowTransferPatterns(
+    /// Rejects unsigned overflow and underflow before type-width or explicit-domain validation.
+    ///
+    /// Both the narrow integer path and mixed rational path use additive, order-preserving encodings. For rational numerators, checked pattern bounds are exactly the `Int64` bounds, allowing deltas larger than `Int64.max` when both results still fit.
+    static func checkedTransferPatterns(
         sourceBitPattern: UInt64,
         sinkBitPattern: UInt64,
         sourceMovesDownward: Bool,
