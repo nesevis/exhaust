@@ -111,8 +111,9 @@ extension ReductionMachine {
             filterObservations: &filterObservations,
             precomputedHash: probeHash
         )
-        counts.record(outcome)
+        counts.recordOutcome(outcome)
         if outcome.reduction != nil {
+            counts.recordAcceptance()
             return .accepted
         }
 

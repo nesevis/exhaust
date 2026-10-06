@@ -80,9 +80,10 @@ extension ReductionMachine {
                 property: wrappedProperty(for: candidate),
                 filterObservations: &filterObservations
             )
-            probeCounts.record(outcome)
+            probeCounts.recordOutcome(outcome)
 
             if let result = outcome.reduction {
+                probeCounts.recordAcceptance()
                 sequence = result.sequence
                 tree = result.tree
                 output = result.output
@@ -269,12 +270,13 @@ extension ReductionMachine {
                 property: wrappedProperty(for: candidate),
                 filterObservations: &filterObservations
             )
-            probeCounts.record(outcome)
+            probeCounts.recordOutcome(outcome)
 
             guard let result = outcome.reduction, result.sequence.shortLexPrecedes(sequence) else {
                 rejectCache.insert(probeHash)
                 continue
             }
+            probeCounts.recordAcceptance()
             sequence = result.sequence
             tree = result.tree
             output = result.output

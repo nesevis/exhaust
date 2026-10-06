@@ -141,7 +141,7 @@ public struct ExhaustReport: Sendable {
     /// Each key names a reduction encoder (for example `"deletion"` or `"valueSearch"`), and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
     public var encoderProbes: [String: Int] = [:]
 
-    /// Per-encoder counts of probes that were accepted (decoder produced a valid reduction) during the reduction phase.
+    /// Per-encoder counts of probes admitted by their producer after the property failed and admission checks passed.
     public var encoderProbesAccepted: [String: Int] = [:]
 
     /// Per-encoder counts of probes that were rejected by the scope rejection cache without materializing.

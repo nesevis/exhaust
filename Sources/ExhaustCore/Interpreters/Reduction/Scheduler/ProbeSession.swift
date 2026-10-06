@@ -205,7 +205,7 @@ struct ProbeSession {
             filterObservations: &filterObservations,
             precomputedHash: pendingProbeHash
         )
-        counts.record(outcome)
+        counts.recordOutcome(outcome)
         if let pendingObservationID, let result = outcome.reduction {
             observer?(.decoded(probeID: pendingObservationID, sequence: result.sequence))
         }
@@ -214,6 +214,7 @@ struct ProbeSession {
         if let result = outcome.reduction,
            encoderName == .numericReorder || state.sequence.shortLexPrecedes(result.sequence) == false
         {
+            counts.recordAcceptance()
             state.sequence = result.sequence
             state.tree = result.tree
             state.output = result.output

@@ -1,4 +1,4 @@
-/// Counts the mutually exclusive outcomes from one encoder pass.
+/// Counts terminal probe outcomes and the producer's subsequent admissions separately.
 package struct ReductionProbeCounts: Sendable, Equatable {
     package private(set) var emitted = 0
     package private(set) var accepted = 0
@@ -52,20 +52,22 @@ package struct ReductionProbeCounts: Sendable, Equatable {
         rejectedByCache += 1
     }
 
-    /// Terminates the current probe with its decode outcome and records admission separately.
-    mutating func record(_ outcome: SequenceDecodingOutcome) {
+    /// Terminates the current probe with its decode outcome. A returned reduction still needs the producer's admission checks.
+    mutating func recordOutcome(_ outcome: SequenceDecodingOutcome) {
         materializationAttempts += outcome.materializationAttempts
         switch outcome {
             case .materializationRejected:
                 rejectedDuringMaterialization += 1
             case .propertyPassed:
                 propertyPassed += 1
-            case let .propertyFailed(reduction, _):
+            case .propertyFailed:
                 propertyFailed += 1
-                if reduction != nil {
-                    accepted += 1
-                }
         }
+    }
+
+    /// Records one admission after the failing outcome and the producer's policy checks. Provisional admissions remain counted if a later excursion rolls back.
+    mutating func recordAcceptance() {
+        accepted += 1
     }
 
     /// Merges another pass after both have finished.
@@ -180,7 +182,7 @@ package struct ReductionStats: Sendable {
         encoderCounts.mapValues { $0.emitted }
     }
 
-    /// Per-encoder probe counts that were accepted (the decoder produced a valid reduction).
+    /// Per-encoder probes admitted by their producer after the property failed and admission checks passed.
     package var encoderProbesAccepted: [EncoderName: Int] {
         encoderCounts.mapValues { $0.accepted }
     }
