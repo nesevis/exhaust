@@ -40,13 +40,17 @@ struct GraphReorderEncoder: GraphEncoder {
                 ChoiceSequence.siblingComparisonKey(from: currentSequence, range: $0)
             }
 
-            // ``ReorderingQuery`` buckets siblings by outer-node ``ChoiceGraphNodeKind`` category. For container kinds (bind, zip, sequence, pick) the inner structure may diverge across siblings — for example, two recursive bind siblings where one took a base-case branch and the other took a non-base branch will flatten to different ``ChoiceValue`` type profiles. ``naturalOrderPrecedes`` traps on mismatched tag categories (unsigned vs signed vs floating), so skip any group whose keys are not pairwise type-compatible rather than attempting to sort them.
-            guard keysAreTypeCompatible(keys) else { continue }
+            // ``ReorderingQuery`` buckets siblings by outer-node ``ChoiceGraphNodeKind`` category. Container siblings can still flatten to different numeric type profiles. ``ChoiceValue`` comparisons assume matching numeric categories, so skip incompatible groups before sorting them.
+            guard keysAreTypeCompatible(keys) else {
+                continue
+            }
 
             let sortedIndices = keys.indices.sorted { lhs, rhs in
                 naturalOrderPrecedes(keys[lhs], keys[rhs])
             }
-            guard sortedIndices != Array(keys.indices) else { continue }
+            guard sortedIndices != Array(keys.indices) else {
+                continue
+            }
 
             candidate = currentSequence.permutingSpans(
                 ranges: ranges,
@@ -69,30 +73,41 @@ private func naturalOrderPrecedes(
     _ rhs: [ChoiceValue]
 ) -> Bool {
     for (left, right) in zip(lhs, rhs) {
-        if left < right { return true }
-        if left > right { return false }
+        if left < right {
+            return true
+        }
+        if left > right {
+            return false
+        }
     }
     return lhs.count < rhs.count
 }
 
 /// Returns `true` when every pair of keys is compatible at every overlapping position.
 ///
-/// Compatibility means matching numeric category (unsigned, signed, or floating). Different bit widths within the same category are fine because ``ChoiceValue``'s `<` operator extracts to a category-wide type (`UInt64`, `Int64`, or `Double`) before comparing — only cross-category comparisons trap. Different array lengths are fine because ``naturalOrderPrecedes`` handles them via its trailing `lhs.count < rhs.count` tiebreaker, and the structural rearrangement that follows operates on whole sibling slices regardless of inner length.
+/// The longest key covers every position that another pair can compare. A shorter reference would miss conflicting categories in longer siblings' suffixes. Matching numeric categories permit different bit widths within a category and different key lengths; mismatched categories can compare decoded values against zero or unrelated bit patterns.
+///
+/// - Complexity: O(*k* + *v*), where *k* is the number of keys and *v* is their total value count.
 private func keysAreTypeCompatible(_ keys: [[ChoiceValue]]) -> Bool {
-    guard let first = keys.first(where: { $0.isEmpty == false }) else { return true }
-    for other in keys where other.isEmpty == false {
-        let upper = min(first.count, other.count)
-        var i = 0
-        while i < upper {
-            if categoryRank(first[i].tag) != categoryRank(other[i].tag) { return false }
-            i += 1
+    guard let longest = keys.max(by: { $0.count < $1.count }) else {
+        return true
+    }
+    for key in keys {
+        for (reference, value) in zip(longest, key) {
+            guard categoryRank(reference.tag) == categoryRank(value.tag) else {
+                return false
+            }
         }
     }
     return true
 }
 
 private func categoryRank(_ tag: TypeTag) -> Int {
-    if tag.isFloatingPoint { return 2 }
-    if tag.isSigned { return 1 }
+    if tag.isFloatingPoint {
+        return 2
+    }
+    if tag.isSigned {
+        return 1
+    }
     return 0
 }

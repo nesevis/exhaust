@@ -28,8 +28,8 @@ package extension ChoiceGraph {
 
     /// Whether two nodes are independent (no dependency path between them in either direction).
     func areIndependent(_ nodeA: Int, _ nodeB: Int) -> Bool {
-        isReachable(from: nodeA, to: nodeB) == false
-            && isReachable(from: nodeB, to: nodeA) == false
+        DependencyReachability.isReachable(from: nodeA, to: nodeB, adjacency: dependencyAdjacency) == false
+            && DependencyReachability.isReachable(from: nodeB, to: nodeA, adjacency: dependencyAdjacency) == false
     }
 }
 
@@ -65,7 +65,7 @@ package extension ChoiceGraph {
         var reachability = [Int: Set<Int>]()
         reachability.reserveCapacity(candidateCount)
         for (sourceIndex, sourceID) in candidateIDs.enumerated() {
-            let reached = reachableNodes(from: sourceID, within: candidateIDSet)
+            let reached = DependencyReachability.reachableNodes(from: sourceID, within: candidateIDSet, adjacency: dependencyAdjacency)
             var targetIndices = Set<Int>()
             for targetID in reached {
                 if let targetIndex = idToIndex[targetID] {

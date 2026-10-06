@@ -153,6 +153,8 @@ package struct ReductionMachine: ProbeSessionState {
     var graphIsStripped: Bool = false
     let deadlineNanoseconds: UInt64
     let startNanoseconds: UInt64
+    /// Uses the production monotonic clock by default; an injected clock makes deadline boundaries deterministic in tests.
+    private let currentNanoseconds: () -> UInt64
 
     // MARK: - Per-Cycle State
 
@@ -208,6 +210,7 @@ package struct ReductionMachine: ProbeSessionState {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         collectStats: Bool,
+        currentNanoseconds: @escaping () -> UInt64 = monotonicNanoseconds,
         property: @escaping (Output) -> Bool
     ) {
         let erasedGen = gen.erase()
@@ -263,7 +266,8 @@ package struct ReductionMachine: ProbeSessionState {
             gate: BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
         )
         deadlineNanoseconds = config.wallClockDeadlineNanoseconds
-        startNanoseconds = deadlineNanoseconds > 0 ? monotonicNanoseconds() : 0
+        self.currentNanoseconds = currentNanoseconds
+        startNanoseconds = deadlineNanoseconds > 0 ? currentNanoseconds() : 0
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
@@ -297,26 +301,38 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Step
 
-    /// Advances the machine by one step, returning a ``Transition`` that describes what happened, or `nil` when reduction is complete.
+    /// Advances one cooperative step, preserving in-flight work in a final report when the deadline expires.
+    ///
+    /// Checks before starting each step and after it returns. An in-flight materialization or property call completes normally; expiry stops subsequent search work. The enabled final numeric reorder pass still runs to completion after expiry, including its materializations and property calls, to preserve the returned counterexample's presentation.
     mutating func next() throws -> Transition? {
-        switch phase {
-            case .beginCycle:
-                return stepBeginCycle()
-            case .buildSources:
-                return stepBuildSources()
-            case .dispatching:
-                return try stepDispatching()
-            case .endCycle:
-                return stepEndCycle()
-            case let .postCycle(remaining):
-                return try stepPostCycle(remaining: remaining)
-            case .checkTermination:
-                return stepCheckTermination()
-            case .reorderPass:
-                return try stepReorderPass()
-            case .done:
-                return nil
+        if case .done = phase {
+            return nil
         }
+        guard isDeadlineExceeded() == false else {
+            return try finishAtDeadline()
+        }
+        let transition: Transition? = switch phase {
+            case .beginCycle:
+                stepBeginCycle()
+            case .buildSources:
+                stepBuildSources()
+            case .dispatching:
+                try stepDispatching()
+            case .endCycle:
+                stepEndCycle()
+            case let .postCycle(remaining):
+                try stepPostCycle(remaining: remaining)
+            case .checkTermination:
+                stepCheckTermination()
+            case .reorderPass:
+                try stepReorderPass()
+            case .done:
+                nil
+        }
+        if isDeadlineExceeded() {
+            _ = try finishAtDeadline()
+        }
+        return transition
     }
 
     // MARK: - Begin Cycle
@@ -352,7 +368,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     private mutating func stepEndCycle() -> Transition {
         // A stripped graph has no pivot scopes.
-        if anyAccepted == false, graphIsStripped, tuning.relaxImprovingProbeBudget > 0 {
+        if anyAccepted == false, graphIsStripped, isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 {
             rematerializeUnselectedBranches()
         }
         let evaluation = convergence.evaluatePostCycle(
@@ -370,10 +386,11 @@ package struct ReductionMachine: ProbeSessionState {
 
         convergence.apply(evaluation)
 
-        if evaluation.actions.isEmpty {
+        let actions = evaluation.actions.filter(isPostCycleActionEnabled)
+        if actions.isEmpty {
             phase = .checkTermination
         } else {
-            phase = .postCycle(remaining: evaluation.actions)
+            phase = .postCycle(remaining: actions)
         }
         return .cycleEnded(stallBudget: convergence.stallBudget)
     }
@@ -430,6 +447,7 @@ package struct ReductionMachine: ProbeSessionState {
     /// The stall that scheduled the pass has already been spent, and the excursion only runs on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
     mutating func recordPostCycleAcceptance() {
         anyAccepted = true
+        anyAcceptanceEverOccurred = true
         scopeRejectionCache.clear()
         convergence.stallBudget = convergence.maxStalls
     }
@@ -486,8 +504,7 @@ package struct ReductionMachine: ProbeSessionState {
     // MARK: - Reorder Pass
 
     private mutating func stepReorderPass() throws -> Transition {
-        let skipReorder = enabledEncoders.map { $0.contains(.numericReorder) == false } ?? false
-        let accepted = skipReorder ? false : try runReorderPass()
+        let accepted = isEncoderEnabled(.numericReorder) ? try runReorderPass() : false
         recordStallDiagnostic()
         phase = .done
         return .reorderCompleted(accepted: accepted)
@@ -495,7 +512,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     /// Populates the stall-diagnostic fields on ``ReductionStats`` at termination.
     ///
-    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
+    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Leaf counts use the graph from before final numeric reordering, which does not update the graph; the acceptance flag includes that final pass. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
     private mutating func recordStallDiagnostic() {
         var stalledCount = 0
         var residualDistance: Double = 0
@@ -526,20 +543,50 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Helpers
 
+    /// Applies an interrupted search session exactly once, then runs the enabled final numeric reorder pass without rebuilding candidate sources.
+    ///
+    /// A pending structural acceptance rebuilds only the graph needed for final reordering and stall diagnostics. The decoded sequence, tree, and output are already committed; cosmetic reordering never needs a graph rebuild after its final value is accepted.
+    mutating func finishAtDeadline() throws -> Transition {
+        stats.reductionWasCapped = true
+        if case .done = phase {
+            return .terminated
+        }
+        if var session = activeSession {
+            let report = session.report()
+            activeSession = nil
+            pendingReport = report
+            _ = applyPassReport(report)
+        }
+        if let report = pendingReport, report.anyAccepted, report.anyRequiresRebuild {
+            _ = rebuildAndUpdateGraph(
+                valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs.union(report.convergenceRecords.keys)
+            )
+            graphIsStripped = report.latestTreeIsStripped
+        }
+        pendingReport = nil
+        sources = []
+        _ = try stepReorderPass()
+        return .terminated
+    }
+
+    /// Treats zero as unlimited; otherwise compares elapsed time on the same monotonic clock used at initialization.
     func isDeadlineExceeded() -> Bool {
-        guard deadlineNanoseconds > 0 else { return false }
-        return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
+        guard deadlineNanoseconds > 0 else {
+            return false
+        }
+        return currentNanoseconds() - startNanoseconds >= deadlineNanoseconds
     }
 
     /// Captures the deadline bounds rather than `self`, for passes that hold `self` `inout` while checking it.
     func makeDeadlineCheck() -> () -> Bool {
-        let deadlineNanos = deadlineNanoseconds
-        let startNanos = startNanoseconds
+        let deadline = deadlineNanoseconds
+        let start = startNanoseconds
+        let clock = currentNanoseconds
         return {
-            guard deadlineNanos > 0 else {
+            guard deadline > 0 else {
                 return false
             }
-            return monotonicNanoseconds() - startNanos >= deadlineNanos
+            return clock() - start >= deadline
         }
     }
 
@@ -548,7 +595,9 @@ package struct ReductionMachine: ProbeSessionState {
     }
 
     private mutating func runReorderPass() throws -> Bool {
-        guard let reorderScope = ReorderingQuery.build(graph: graph) else { return false }
+        guard let reorderScope = ReorderingQuery.build(graph: graph) else {
+            return false
+        }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
             priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
@@ -572,7 +621,12 @@ package struct ReductionMachine: ProbeSessionState {
             transformation: reorderTransformation,
             boundValueFingerprint: nil,
             baseSequence: sequence,
-            hasBind: sequence.contains { if case .bind = $0 { return true }; return false }
+            hasBind: sequence.contains { entry in
+                if case .bind = entry {
+                    return true
+                }
+                return false
+            }
         )
         let report = try session.runToCompletion(state: &self)
 

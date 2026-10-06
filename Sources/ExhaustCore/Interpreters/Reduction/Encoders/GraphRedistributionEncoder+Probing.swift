@@ -10,98 +10,37 @@ extension GraphRedistributionEncoder {
         scope: RedistributionScope,
         graph: ChoiceGraph
     ) {
-        var pairs: [(sourceIndex: Int, sinkIndex: Int, sourceTag: TypeTag, sinkTag: TypeTag, maxDelta: UInt64, mixedContext: MixedRedistributionContext?)] = []
+        startRedistribution(cursor: scope.pairCursor(), graph: graph)
+    }
 
-        for pair in scope.pairs {
-            guard let sourceRange = graph.nodes[pair.source.nodeID].positionRange,
-                  let sinkRange = graph.nodes[pair.sink.nodeID].positionRange
-            else {
+    /// Accepts any complete pair stream so ranking and bounded retention are independent of domain preparation.
+    mutating func startRedistribution<Cursor: ScopeCursor>(cursor initialCursor: Cursor, graph: ChoiceGraph) where Cursor.Scope == RedistributionPair {
+        // Every edit changes two values and leaves structure intact, so ranking reads at most four positions rather than copying or scanning the baseline. Keeping a sorted prefix bounds setup storage even when the query supplies many more pairs than the probe budget permits.
+        var rankedPairs = BoundedSortedBuffer<RankedPair>(limit: Self.maxPairsPerScope)
+        var cursor = initialCursor
+        while let scopePair = cursor.next() {
+            guard let pair = preparePair(scopePair, graph: graph) else {
                 continue
             }
-            guard case let .chooseBits(sourceMetadata) = graph.nodes[pair.source.nodeID].kind,
-                  case let .chooseBits(sinkMetadata) = graph.nodes[pair.sink.nodeID].kind
-            else {
-                continue
-            }
-
-            guard sourceMetadata.typeTag.isCharacter == false,
-                  sinkMetadata.typeTag.isCharacter == false
-            else { continue }
-
-            let needsMixedMath = sourceMetadata.typeTag != sinkMetadata.typeTag
-                || sourceMetadata.typeTag.isFloatingPoint
-                || sinkMetadata.typeTag.isFloatingPoint
-
-            if needsMixedMath {
-                // Build a rational-arithmetic context. Handles same-tag float pairs and any cross-type combination.
-                guard let context = Self.makeMixedRedistributionContext(
-                    sourceChoice: sourceMetadata.value,
-                    sinkChoice: sinkMetadata.value,
-                    sourceValidRange: sourceMetadata.validRange,
-                    sourceIsRangeExplicit: sourceMetadata.isRangeExplicit
-                ) else {
-                    continue
-                }
-                pairs.append((
-                    sourceIndex: sourceRange.lowerBound,
-                    sinkIndex: sinkRange.lowerBound,
-                    sourceTag: sourceMetadata.typeTag,
-                    sinkTag: sinkMetadata.typeTag,
-                    maxDelta: context.distanceInSteps,
-                    mixedContext: context
-                ))
-                continue
-            }
-
-            // Same-tag integer pair: bit-pattern arithmetic.
-            let sourceTarget = sourceMetadata.value.reductionTarget(in: sourceMetadata.validRange)
-            let maxDelta: UInt64 = sourceMetadata.value.bitPattern64 > sourceTarget
-                ? sourceMetadata.value.bitPattern64 - sourceTarget
-                : sourceTarget - sourceMetadata.value.bitPattern64
-            guard maxDelta > 0 else { continue }
-
-            pairs.append((
-                sourceIndex: sourceRange.lowerBound,
-                sinkIndex: sinkRange.lowerBound,
-                sourceTag: sourceMetadata.typeTag,
-                sinkTag: sinkMetadata.typeTag,
-                maxDelta: maxDelta,
-                mixedContext: nil
-            ))
-        }
-
-        guard pairs.isEmpty == false else { return }
-
-        // Sort by value-projection shortlex of each pair's full-delta candidate. Pairs whose full-delta probe produces the smallest value shortlex fire first: they make the most progress per probe, which matters when the futility budget is tight. Pre-building candidates is cheap (at most `maxPairsPerScope` sequence copies, each changing exactly two entries). Pairs whose full-delta candidate cannot be built sort last; among those, largest maxDelta sorts first as a fallback.
-        //
-        // A Nash-gap dependency tier above this sort was tried and reverted: ``ConvergenceSignal/zeroingDependency`` marks leaves that individually reached target despite batch-zero failure, and target-converged leaves are excluded from sources by the `maxDelta > 0` guard, so the tier was uniform. Coupling-aware ordering needs a verdict that marks non-target floors first.
-        let fullDeltaCandidates: [ChoiceSequence?] = pairs.map { pair in
-            buildRedistributionCandidate(
+            let edit = redistributionEdit(
                 sourceIndex: pair.sourceIndex,
                 sinkIndex: pair.sinkIndex,
                 sourceTag: pair.sourceTag,
-                sinkTag: pair.sinkTag,
                 delta: pair.maxDelta,
                 mixedContext: pair.mixedContext
             )
-        }
-        let sortedIndices = pairs.indices.sorted { lhs, rhs in
-            switch (fullDeltaCandidates[lhs], fullDeltaCandidates[rhs]) {
-                case let (.some(lhsCandidate), .some(rhsCandidate)):
-                    lhsCandidate.shortLexPrecedes(rhsCandidate)
-                case (.some, .none):
-                    true
-                case (.none, .some):
-                    false
-                case (.none, .none):
-                    pairs[lhs].maxDelta > pairs[rhs].maxDelta
+            let ranked = RankedPair(pair: pair, edit: edit)
+            rankedPairs.insert(ranked) { first, second in
+                first.precedes(second, sequence: valueState.sequence)
             }
         }
-        pairs = sortedIndices.map { pairs[$0] }
-
-        // Cap the working set to limited subset of pairs. After sorting, the prefix is the highest-yield slice; the tail is the long stretch of low-distance pairs whose acceptance rate is near zero on workloads with many type-compatible leaves.
-        if pairs.count > Self.maxPairsPerScope {
-            pairs.removeLast(pairs.count - Self.maxPairsPerScope)
+        guard rankedPairs.elements.isEmpty == false else {
+            return
+        }
+        let pairs = rankedPairs.elements.map(\.pair)
+        for pair in pairs {
+            valueState.registerLeaf(nodeID: pair.scopePair.source.nodeID, mayReshape: pair.scopePair.source.mayReshapeOnAcceptance, graph: graph)
+            valueState.registerLeaf(nodeID: pair.scopePair.sink.nodeID, mayReshape: pair.scopePair.sink.mayReshapeOnAcceptance, graph: graph)
         }
 
         mode = .active(RedistributionState(
@@ -289,12 +228,38 @@ extension GraphRedistributionEncoder {
         delta: UInt64,
         mixedContext: MixedRedistributionContext?
     ) -> ChoiceSequence? {
-        guard delta > 0 else { return nil }
+        guard let edit = redistributionEdit(
+            sourceIndex: sourceIndex,
+            sinkIndex: sinkIndex,
+            sourceTag: sourceTag,
+            delta: delta,
+            mixedContext: mixedContext
+        ) else {
+            return nil
+        }
+        return edit.applying(to: valueState.sequence)
+    }
+
+    /// Validates a transfer without materializing the baseline, so setup can rank an unbounded pair set with bounded storage.
+    func redistributionEdit(
+        sourceIndex: Int,
+        sinkIndex: Int,
+        sourceTag: TypeTag,
+        delta: UInt64,
+        mixedContext: MixedRedistributionContext?
+    ) -> RedistributionEdit? {
+        guard delta > 0 else {
+            return nil
+        }
 
         let sourceEntry = valueState.sequence[sourceIndex]
         let sinkEntry = valueState.sequence[sinkIndex]
-        guard let sourceValue = sourceEntry.value else { return nil }
-        guard let sinkValue = sinkEntry.value else { return nil }
+        guard let sourceValue = sourceEntry.value else {
+            return nil
+        }
+        guard let sinkValue = sinkEntry.value else {
+            return nil
+        }
 
         // Mixed/rational path for cross-type or float pairs.
         if let context = mixedContext {
@@ -303,26 +268,33 @@ extension GraphRedistributionEncoder {
                 sinkChoice: sinkValue.choice,
                 delta: delta,
                 context: context
-            ) else { return nil }
+            ) else {
+                return nil
+            }
 
             // Validate against valid ranges.
             if sourceValue.isRangeExplicit,
-               newSourceChoice.fits(in: sourceValue.validRange) == false { return nil }
+               newSourceChoice.fits(in: sourceValue.validRange) == false
+            {
+                return nil
+            }
             if sinkValue.isRangeExplicit,
-               newSinkChoice.fits(in: sinkValue.validRange) == false { return nil }
+               newSinkChoice.fits(in: sinkValue.validRange) == false
+            {
+                return nil
+            }
 
-            var candidate = valueState.sequence
-            candidate[sourceIndex] = .value(.init(
+            let newSourceEntry: ChoiceSequenceValue = .value(.init(
                 choice: newSourceChoice,
                 validRange: sourceValue.validRange,
                 isRangeExplicit: sourceValue.isRangeExplicit
             ))
-            candidate[sinkIndex] = .value(.init(
+            let newSinkEntry: ChoiceSequenceValue = .value(.init(
                 choice: newSinkChoice,
                 validRange: sinkValue.validRange,
                 isRangeExplicit: sinkValue.isRangeExplicit
             ))
-            return candidate
+            return RedistributionEdit(sourceIndex: sourceIndex, sinkIndex: sinkIndex, sourceEntry: newSourceEntry, sinkEntry: newSinkEntry)
         }
 
         // Same-tag integer path.
@@ -339,40 +311,29 @@ extension GraphRedistributionEncoder {
 
         if sinkValue.allowsModularArithmetic {
             let mask = sinkValue.choice.tag.bitPatternRange.upperBound
-            let newSourceBitPattern: UInt64
-            let newSinkBitPattern: UInt64
-            if sourceBitPattern > targetBitPattern {
-                newSourceBitPattern = (sourceBitPattern &- delta) & mask
-                newSinkBitPattern = (sinkBitPattern &+ delta) & mask
-            } else {
-                newSourceBitPattern = (sourceBitPattern &+ delta) & mask
-                newSinkBitPattern = (sinkBitPattern &- delta) & mask
+            let (newSourceBitPattern, newSinkBitPattern) = switch sourceBitPattern > targetBitPattern {
+                case true:
+                    ((sourceBitPattern &- delta) & mask, (sinkBitPattern &+ delta) & mask)
+                case false:
+                    ((sourceBitPattern &+ delta) & mask, (sinkBitPattern &- delta) & mask)
             }
-
-            var candidate = valueState.sequence
-            candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBitPattern)
-            candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBitPattern)
-            return candidate
+            return RedistributionEdit(
+                sourceIndex: sourceIndex,
+                sinkIndex: sinkIndex,
+                sourceEntry: sourceEntry.withBitPattern(newSourceBitPattern),
+                sinkEntry: sinkEntry.withBitPattern(newSinkBitPattern)
+            )
         }
 
         // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit bounds enforcement.
-        let newSourceBitPattern: UInt64
-        let newSinkBitPattern: UInt64
-        if sourceBitPattern > targetBitPattern {
-            // Source moves down (toward target), sink moves up.
-            // The encoder bounds delta to `currentMaxDelta`'s `distance = sourceBitPattern - targetBitPattern`, and `targetBitPattern >= 0`, so this subtraction cannot underflow. Defensive guard against stale state.
-            guard sourceBitPattern >= delta else { return nil }
-            newSourceBitPattern = sourceBitPattern - delta
-            let (sinkSum, sinkOverflow) = sinkBitPattern.addingReportingOverflow(delta)
-            guard sinkOverflow == false else { return nil }
-            newSinkBitPattern = sinkSum
-        } else {
-            // Source moves up (toward target), sink moves down.
-            let (sourceSum, sourceOverflow) = sourceBitPattern.addingReportingOverflow(delta)
-            guard sourceOverflow == false else { return nil }
-            newSourceBitPattern = sourceSum
-            guard sinkBitPattern >= delta else { return nil }
-            newSinkBitPattern = sinkBitPattern - delta
+        let patterns = Self.checkedTransferPatterns(
+            sourceBitPattern: sourceBitPattern,
+            sinkBitPattern: sinkBitPattern,
+            sourceMovesDownward: sourceBitPattern > targetBitPattern,
+            delta: delta
+        )
+        guard let (newSourceBitPattern, newSinkBitPattern) = patterns else {
+            return nil
         }
 
         // Enforce natural type bounds via `tag.bitPatternRange`.
@@ -396,9 +357,42 @@ extension GraphRedistributionEncoder {
             return nil
         }
 
-        var candidate = valueState.sequence
-        candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBitPattern)
-        candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBitPattern)
-        return candidate
+        return RedistributionEdit(
+            sourceIndex: sourceIndex,
+            sinkIndex: sinkIndex,
+            sourceEntry: sourceEntry.withBitPattern(newSourceBitPattern),
+            sinkEntry: sinkEntry.withBitPattern(newSinkBitPattern)
+        )
+    }
+
+    /// Rejects unsigned overflow and underflow before type-width or explicit-domain validation.
+    ///
+    /// Both the narrow integer path and mixed rational path use additive, order-preserving encodings. For rational numerators, checked pattern bounds are exactly the `Int64` bounds, allowing deltas larger than `Int64.max` when both results still fit.
+    static func checkedTransferPatterns(
+        sourceBitPattern: UInt64,
+        sinkBitPattern: UInt64,
+        sourceMovesDownward: Bool,
+        delta: UInt64
+    ) -> (source: UInt64, sink: UInt64)? {
+        switch sourceMovesDownward {
+            case true:
+                guard sourceBitPattern >= delta else {
+                    return nil
+                }
+                let (sinkSum, sinkOverflow) = sinkBitPattern.addingReportingOverflow(delta)
+                guard sinkOverflow == false else {
+                    return nil
+                }
+                return (sourceBitPattern - delta, sinkSum)
+            case false:
+                guard sinkBitPattern >= delta else {
+                    return nil
+                }
+                let (sourceSum, sourceOverflow) = sourceBitPattern.addingReportingOverflow(delta)
+                guard sourceOverflow == false else {
+                    return nil
+                }
+                return (sourceSum, sinkBitPattern - delta)
+        }
     }
 }

@@ -10,16 +10,18 @@ extension ReductionMachine {
     ///
     /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
     mutating func runRelationPass() throws -> Bool {
-        if let enabled = enabledEncoders, enabled.contains(.relationSearch) == false {
+        guard isEncoderEnabled(.relationSearch) else {
             return false
         }
         guard let relationScope = RelationQuery.build(graph: graph) else {
             return false
         }
-        let report = try runPostCycleEncoder(
+        guard let report = try runPostCycleEncoder(
             operation: .exchange(.relation(relationScope)),
             estimatedCost: relationScope.pairs.count * 8
-        )
+        ) else {
+            return false
+        }
         if isInstrumented, report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
         }
@@ -28,12 +30,18 @@ extension ReductionMachine {
 
     /// Runs one encoder pass to completion outside cycle dispatch, through the same decoding, accounting, and acceptance policy as dispatched passes.
     ///
-    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph.
+    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph. Returns nil without starting a disabled encoder or when the deadline has already expired.
     mutating func runPostCycleEncoder(
         operation: GraphOperation,
-        estimatedCost: Int,
-        deadlineCheck: (() -> Bool)? = nil
-    ) throws -> PassReport {
+        estimatedCost: Int
+    ) throws -> PassReport? {
+        guard isEncoderEnabled(operation.encoderName) else {
+            return nil
+        }
+        guard isDeadlineExceeded() == false else {
+            stats.reductionWasCapped = true
+            return nil
+        }
         let transformation = GraphTransformation(
             operation: operation,
             priority: DispatchPriority(
@@ -64,7 +72,7 @@ extension ReductionMachine {
             baseSequence: sequence,
             hasBind: hasBind
         )
-        let report = try session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
+        let report = try session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())
 
         _ = applyPassReport(report)
 

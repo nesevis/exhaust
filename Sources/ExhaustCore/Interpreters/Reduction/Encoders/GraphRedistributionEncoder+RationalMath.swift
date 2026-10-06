@@ -8,7 +8,7 @@
 extension GraphRedistributionEncoder {
     /// Builds a ``MixedRedistributionContext`` from current source and sink choices.
     ///
-    /// Both sides are converted to rational form with a common denominator. When at least one side is integer, ``MixedRedistributionContext/intStepSize`` equals the denominator so the integer side only takes whole-number deltas.
+    /// Both sides are converted to rational form with a common denominator. When at least one side is integer, ``MixedRedistributionContext/intStepSize`` equals the denominator so the integer side only takes whole-number deltas. Distance uses order-preserving `Int64` bit patterns: the gap from `Int64.min` to zero fits in `UInt64` even though signed subtraction would overflow.
     static func makeMixedRedistributionContext(
         sourceChoice: ChoiceValue,
         sinkChoice: ChoiceValue,
@@ -21,37 +21,51 @@ extension GraphRedistributionEncoder {
             return nil
         }
 
-        // Compute source's reduction target as a rational.
         let sourceTargetBitPattern = sourceChoice.reductionTarget(
             in: sourceIsRangeExplicit ? sourceValidRange : nil
         )
         guard let targetRatio = rationalForTarget(
             sourceChoice,
             targetBitPattern: sourceTargetBitPattern
-        ) else { return nil }
+        ) else {
+            return nil
+        }
 
-        guard let lcmAB = leastCommonMultiple(sourceRatio.denominator, sinkRatio.denominator),
-              let denominator = leastCommonMultiple(lcmAB, targetRatio.denominator),
-              denominator > 0 else { return nil }
+        guard let pairDenominator = leastCommonMultiple(sourceRatio.denominator, sinkRatio.denominator),
+              let denominator = leastCommonMultiple(pairDenominator, targetRatio.denominator),
+              denominator > 0
+        else {
+            return nil
+        }
 
         guard let sourceNumerator = scaledNumerator(sourceRatio, to: denominator),
               let sinkNumerator = scaledNumerator(sinkRatio, to: denominator),
               let targetNumerator = scaledNumerator(targetRatio, to: denominator)
-        else { return nil }
+        else {
+            return nil
+        }
 
-        let sourceIsInt = isIntegerTag(sourceChoice.tag)
-        let sinkIsInt = isIntegerTag(sinkChoice.tag)
-        let intStepSize: UInt64 = (sourceIsInt || sinkIsInt) ? denominator : 1
-        guard intStepSize > 0 else { return nil }
+        let sourceIsInteger = isIntegerTag(sourceChoice.tag)
+        let sinkIsInteger = isIntegerTag(sinkChoice.tag)
+        let intStepSize: UInt64 = (sourceIsInteger || sinkIsInteger) ? denominator : 1
+        guard intStepSize > 0 else {
+            return nil
+        }
 
         let sourceMovesUpward = targetNumerator > sourceNumerator
+        let sourcePattern = sourceNumerator.bitPattern64
+        let targetPattern = targetNumerator.bitPattern64
         let rawDistance = sourceMovesUpward
-            ? UInt64(targetNumerator - sourceNumerator)
-            : UInt64(sourceNumerator - targetNumerator)
-        guard rawDistance > 0 else { return nil }
+            ? targetPattern - sourcePattern
+            : sourcePattern - targetPattern
+        guard rawDistance > 0 else {
+            return nil
+        }
 
         let distanceInSteps = rawDistance / intStepSize
-        guard distanceInSteps > 0 else { return nil }
+        guard distanceInSteps > 0 else {
+            return nil
+        }
 
         return MixedRedistributionContext(
             sourceNumerator: sourceNumerator,
@@ -63,67 +77,71 @@ extension GraphRedistributionEncoder {
         )
     }
 
-    /// Applies a delta (in step units) to a mixed pair, producing new source and sink choices.
+    /// Rejects transfers whose resulting numerators or original numeric types cannot represent the new values.
+    ///
+    /// The delta need not fit in `Int64`; checked transfers in order-preserving pattern space cover the full signed span without wrapping. Both numerators remain `Int64` after decoding, and each choice is validated against its own type width.
     static func mixedRedistributedPairChoices(
         sourceChoice: ChoiceValue,
         sinkChoice: ChoiceValue,
         delta: UInt64,
         context: MixedRedistributionContext
     ) -> (ChoiceValue, ChoiceValue)? {
-        guard delta <= context.distanceInSteps else { return nil }
+        guard delta <= context.distanceInSteps else {
+            return nil
+        }
 
         let (actualDelta, stepOverflow) = delta.multipliedReportingOverflow(by: context.intStepSize)
-        guard stepOverflow == false, actualDelta <= UInt64(Int64.max) else { return nil }
-        let signedDelta = Int64(actualDelta)
-
-        let newSourceNum: Int64
-        let newSinkNum: Int64
-        if context.sourceMovesUpward {
-            let (s, sOverflow) = context.sourceNumerator.addingReportingOverflow(signedDelta)
-            let (k, kOverflow) = context.sinkNumerator.subtractingReportingOverflow(signedDelta)
-            guard sOverflow == false, kOverflow == false else { return nil }
-            newSourceNum = s
-            newSinkNum = k
-        } else {
-            let (s, sOverflow) = context.sourceNumerator.subtractingReportingOverflow(signedDelta)
-            let (k, kOverflow) = context.sinkNumerator.addingReportingOverflow(signedDelta)
-            guard sOverflow == false, kOverflow == false else { return nil }
-            newSourceNum = s
-            newSinkNum = k
+        guard stepOverflow == false,
+              let patterns = checkedTransferPatterns(
+                  sourceBitPattern: context.sourceNumerator.bitPattern64,
+                  sinkBitPattern: context.sinkNumerator.bitPattern64,
+                  sourceMovesDownward: context.sourceMovesUpward == false,
+                  delta: actualDelta
+              )
+        else {
+            return nil
         }
 
         guard let newSourceChoice = choiceFromNumerator(
-            newSourceNum,
+            Int64(bitPattern64: patterns.source),
             denominator: context.denominator,
             original: sourceChoice
         ),
             let newSinkChoice = choiceFromNumerator(
-                newSinkNum,
+                Int64(bitPattern64: patterns.sink),
                 denominator: context.denominator,
                 original: sinkChoice
             )
-        else { return nil }
+        else {
+            return nil
+        }
 
         return (newSourceChoice, newSinkChoice)
     }
 
     // MARK: - Rational Arithmetic Helpers
 
+    /// Restricts rational numerators to the shared signed representation before denominator scaling.
     private static func rationalForChoice(
         _ choice: ChoiceValue
     ) -> (numerator: Int64, denominator: UInt64)? {
         if choice.tag.isFloatingPoint {
             let value = choice.decodedDoubleValue
-            guard value.isFinite else { return nil }
+            guard value.isFinite else {
+                return nil
+            }
             return FloatReduction.integerRatio(for: value, tag: choice.tag)
         } else if choice.tag.isSigned {
             return (choice.decodedSignedValue, 1)
         } else {
-            guard choice.bitPattern64 <= UInt64(Int64.max) else { return nil }
+            guard choice.bitPattern64 <= UInt64(Int64.max) else {
+                return nil
+            }
             return (Int64(choice.bitPattern64), 1)
         }
     }
 
+    /// Decodes the target with the source tag so range-constrained and floating targets use the same rational units.
     private static func rationalForTarget(
         _ choice: ChoiceValue,
         targetBitPattern: UInt64
@@ -135,16 +153,21 @@ extension GraphRedistributionEncoder {
         )
         if tag.isFloatingPoint {
             let targetValue = targetChoice.decodedDoubleValue
-            guard targetValue.isFinite else { return nil }
+            guard targetValue.isFinite else {
+                return nil
+            }
             return FloatReduction.integerRatio(for: targetValue, tag: tag)
         } else if tag.isSigned {
             return (targetChoice.decodedSignedValue, 1)
         } else {
-            guard targetChoice.bitPattern64 <= UInt64(Int64.max) else { return nil }
+            guard targetChoice.bitPattern64 <= UInt64(Int64.max) else {
+                return nil
+            }
             return (Int64(targetChoice.bitPattern64), 1)
         }
     }
 
+    /// Preserves integral values only when the quotient fits the original type; signed encoding uses that type's zero pattern rather than the 64-bit sign bias.
     private static func choiceFromNumerator(
         _ numerator: Int64,
         denominator: UInt64,
@@ -154,54 +177,66 @@ extension GraphRedistributionEncoder {
         if tag.isFloatingPoint {
             let value = Double(numerator) / Double(denominator)
             return tag.floatingChoice(from: value)
-        } else if tag.isSigned {
-            let denom = Int64(denominator)
-            guard denom > 0, numerator % denom == 0 else { return nil }
-            let intValue = numerator / denom
-            let narrowed = ChoiceValue(intValue, tag: tag)
-            guard narrowed.decodedSignedValue == intValue else { return nil }
-            return narrowed
-        } else {
-            let denom = Int64(denominator)
-            guard denom > 0, numerator % denom == 0 else { return nil }
-            let intValue = numerator / denom
-            guard intValue >= 0 else { return nil }
-            let uintValue = UInt64(intValue)
-            let narrowed = ChoiceValue(uintValue, tag: tag)
-            guard narrowed.bitPattern64 == uintValue else { return nil }
-            return narrowed
         }
+        guard let signedDenominator = Int64(exactly: denominator),
+              signedDenominator > 0,
+              numerator % signedDenominator == 0
+        else {
+            return nil
+        }
+        let integerValue = numerator / signedDenominator
+        if tag.isSigned {
+            let (pattern, overflow) = switch integerValue >= 0 {
+                case true:
+                    tag.simplestBitPattern.addingReportingOverflow(integerValue.magnitude)
+                case false:
+                    tag.simplestBitPattern.subtractingReportingOverflow(integerValue.magnitude)
+            }
+            guard overflow == false, tag.bitPatternRange.contains(pattern) else {
+                return nil
+            }
+            return ChoiceValue(pattern, tag: tag)
+        }
+        guard integerValue >= 0 else {
+            return nil
+        }
+        let pattern = UInt64(integerValue)
+        guard tag.bitPatternRange.contains(pattern) else {
+            return nil
+        }
+        return ChoiceValue(pattern, tag: tag)
     }
 
+    /// Rejects denominator expansion when its scale or resulting signed numerator exceeds the rational representation.
     private static func scaledNumerator(
         _ ratio: (numerator: Int64, denominator: UInt64),
         to denominator: UInt64
     ) -> Int64? {
-        guard denominator % ratio.denominator == 0 else { return nil }
+        guard denominator % ratio.denominator == 0 else {
+            return nil
+        }
         let scale = denominator / ratio.denominator
-        guard scale <= UInt64(Int64.max) else { return nil }
+        guard scale <= UInt64(Int64.max) else {
+            return nil
+        }
         let (scaled, overflow) = ratio.numerator.multipliedReportingOverflow(by: Int64(scale))
-        guard overflow == false else { return nil }
+        guard overflow == false else {
+            return nil
+        }
         return scaled
     }
 
-    private static func greatestCommonDivisor(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
-        var a = lhs
-        var b = rhs
-        while b != 0 {
-            let remainder = a % b
-            a = b
-            b = remainder
+    /// Keeps the common denominator exact and rejects products that exceed the unsigned representation.
+    private static func leastCommonMultiple(_ first: UInt64, _ second: UInt64) -> UInt64? {
+        guard first > 0, second > 0 else {
+            return nil
         }
-        return a
-    }
-
-    private static func leastCommonMultiple(_ lhs: UInt64, _ rhs: UInt64) -> UInt64? {
-        guard lhs > 0, rhs > 0 else { return nil }
-        let gcd = greatestCommonDivisor(lhs, rhs)
-        let reducedLHS = lhs / gcd
-        let (product, overflow) = reducedLHS.multipliedReportingOverflow(by: rhs)
-        guard overflow == false else { return nil }
+        let divisor = ReductionIntegerMath.greatestCommonDivisor(first, second)
+        let reducedFirst = first / divisor
+        let (product, overflow) = reducedFirst.multipliedReportingOverflow(by: second)
+        guard overflow == false else {
+            return nil
+        }
         return product
     }
 

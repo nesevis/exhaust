@@ -6,7 +6,7 @@ enum SequenceDecodingOutcome {
     /// Materialization produced a value for which the property held.
     case propertyPassed(materializationAttempts: Int)
 
-    /// Materialization produced a value for which the property failed. The reduction is `nil` when a later materialization or admission check rejected the proposal.
+    /// Materialization produced a value for which the property failed. The reduction is `nil` when a later materialization or the decoder's admission check rejected the proposal. A nonnil reduction still needs the producer's admission checks.
     case propertyFailed(
         reduction: ReductionResult<Any>?,
         materializationAttempts: Int
@@ -22,7 +22,7 @@ enum SequenceDecodingOutcome {
         }
     }
 
-    /// The admitted reduction, or `nil` when the reducer did not accept the proposal.
+    /// The reduction that passed the decoder's checks, or `nil`. The producer still applies its admission policy.
     var reduction: ReductionResult<Any>? {
         guard case let .propertyFailed(reduction, _) = self else {
             return nil

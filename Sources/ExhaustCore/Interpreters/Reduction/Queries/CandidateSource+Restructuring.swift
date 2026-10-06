@@ -16,37 +16,6 @@
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
-    /// Constructs replacement candidates (self-similar subtree collapse, branch pivots, descendant promotions) from the graph's structural topology. Each candidate replaces a subtree with a smaller equivalent, sorted by structural yield descending.
-    static func buildReplacementCandidates(
-        graph: ChoiceGraph,
-        previousGraph: ChoiceGraph? = nil
-    ) -> [GraphTransformation] {
-        var results: [GraphTransformation] = []
-
-        for scope in ReplacementQuery.build(graph: graph, previousGraph: previousGraph) {
-            let structuralYield: Int = switch scope {
-                case let .selfSimilar(_, _, sizeDelta):
-                    max(0, sizeDelta)
-                case let .branchPivot(pickNodeID, _):
-                    graph.nodes[pickNodeID].positionRange?.count ?? 0
-                case let .descendantPromotion(_, _, sizeDelta):
-                    sizeDelta
-            }
-            results.append(GraphTransformation(
-                operation: .replace(scope),
-                priority: DispatchPriority(
-                    structuralBenefit: structuralYield,
-                    valueBenefit: 0,
-                    reductionMagnitude: 0,
-                    estimatedCost: 1
-                )
-            ))
-        }
-
-        results.sort { $0.priority > $1.priority }
-        return results
-    }
-
     /// Constructs permutation candidates from groups of swappable siblings within each sequence node. Groups with two or more type-compatible siblings are emitted as individual scopes, ordered by position so earlier groups (with more shortlex impact) are tried first.
     static func buildPermutationCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var entries: [(parentNodeID: Int, group: [Int], position: Int)] = []

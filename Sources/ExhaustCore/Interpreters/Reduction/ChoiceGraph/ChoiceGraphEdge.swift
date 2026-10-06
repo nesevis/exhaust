@@ -31,16 +31,16 @@ package struct ContainmentEdge: Equatable, Sendable {
 
 // MARK: - Type-Compatibility Edge
 
-/// Undirected edge between two nodes in the same antichain with compatible types.
+/// Connects value leaves in one sequence-sibling or zip cross-slot decision context.
 ///
-/// Connects `chooseBits` leaves with matching ``TypeTag``, or `sequence` nodes with matching element generator identity. The edge itself is structurally stable — it changes only when the antichain changes. Source/sink annotations are dynamic and updated on any acceptance.
-package struct TypeCompatibilityEdge: Equatable {
+/// Cross-type pairs are eligible for rational redistribution as well as same-type pairs. Bind-role and control-leaf restrictions are applied by ``GeneratedRedistributionPairCursor`` after compatibility enumeration.
+package struct TypeCompatibilityEdge: Equatable, Sendable {
     /// Node ID of one endpoint.
     package let nodeA: Int
 
     /// Node ID of the other endpoint.
     package let nodeB: Int
 
-    /// The shared ``TypeTag`` that makes these nodes compatible, or nil for sequence-to-sequence edges matched by element generator identity.
+    /// The endpoints' shared ``TypeTag``, or nil when rational redistribution must bridge different types.
     package let typeTag: TypeTag?
 }

@@ -11,7 +11,7 @@
 ///
 /// This is a value encoder: the delta magnitude is above the opacity boundary and requires predicate feedback to find.
 ///
-/// Candidate construction and rational-arithmetic helpers live in `GraphRedistributionEncoder+Probing.swift` and `GraphRedistributionEncoder+RationalMath.swift`.
+/// Candidate construction, compact pair ranking, and rational-arithmetic helpers live in `GraphRedistributionEncoder+Probing.swift`, `GraphRedistributionEncoder+Ranking.swift`, and `GraphRedistributionEncoder+RationalMath.swift`.
 struct GraphRedistributionEncoder: GraphEncoder {
     let name: EncoderName = .redistribution
 
@@ -37,7 +37,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
 
     /// Tracks the binary search state for redistribution magnitude and the current pair iteration across probes.
     struct RedistributionState {
-        let pairs: [(sourceIndex: Int, sinkIndex: Int, sourceTag: TypeTag, sinkTag: TypeTag, maxDelta: UInt64, mixedContext: MixedRedistributionContext?)]
+        let pairs: [PreparedPair]
         var pairIndex: Int
         var stepper: BinarySearchStepper?
         var didEmitCandidate: Bool
@@ -64,12 +64,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
             return
         }
 
-        let graph = scope.graph
-        for pair in redistScope.pairs {
-            valueState.registerLeaf(nodeID: pair.source.nodeID, mayReshape: pair.source.mayReshapeOnAcceptance, graph: graph)
-            valueState.registerLeaf(nodeID: pair.sink.nodeID, mayReshape: pair.sink.mayReshapeOnAcceptance, graph: graph)
-        }
-        startRedistribution(scope: redistScope, graph: graph)
+        startRedistribution(scope: redistScope, graph: scope.graph)
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {

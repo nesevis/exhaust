@@ -9,7 +9,7 @@ struct WindowRemovalTests {
         var source = BatchRemovalSource(sequenceNodeID: fixture.sequenceNodeID, graph: fixture.graph)
 
         var operations: [GraphOperation] = []
-        while let transformation = source.next(lastAccepted: false) {
+        while let transformation = source.next() {
             operations.append(transformation.operation)
         }
         let windows = operations.compactMap(windowScope(of:))

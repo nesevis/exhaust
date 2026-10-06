@@ -6,6 +6,18 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-10-06
+
+### Changed
+
+- Counterexample reduction prepares large and recursive inputs more efficiently, reducing repeated work and memory use.
+
+### Fixed
+
+- Fixed overflow and invalid values during numeric redistribution, and prevented reordering between incompatible fields.
+- Deadline-limited reduction completes final numeric reordering and includes interrupted passes in its statistics.
+- Accepted-probe counts now reflect the reducer's acceptance checks, and reduction passes consistently respect the selected strategies.
+
 ## [1.5.7] - 2026-10-05
 
 ### Fixed
@@ -241,7 +253,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.7...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.8...HEAD
+[1.5.8]: https://github.com/nesevis/exhaust/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/nesevis/exhaust/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/nesevis/exhaust/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/nesevis/exhaust/compare/v1.5.4...v1.5.5

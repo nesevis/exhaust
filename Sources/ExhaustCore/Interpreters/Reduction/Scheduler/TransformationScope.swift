@@ -147,6 +147,12 @@ struct LeafEntry: Sendable {
         self.mayReshapeOnAcceptance = mayReshapeOnAcceptance
         self.bindDepth = bindDepth
     }
+
+    /// Carries graph-derived acceptance and bind ordering metadata into value scopes.
+    init(nodeID: Int, graph: ChoiceGraph) {
+        let annotation = graph.nodes[nodeID].scopeAnnotation
+        self.init(nodeID: nodeID, mayReshapeOnAcceptance: annotation.isBindInner, bindDepth: annotation.controllingBindDepth)
+    }
 }
 
 /// Scope for integer leaf value minimization.
@@ -242,10 +248,22 @@ enum SinkLocation: Equatable {
     case boundLeaf(bindNodeID: Int)
 }
 
-/// Scope for redistribution along type-compatibility edges.
+/// Keeps redistribution domains complete while deferring individual pair construction to the encoder's bounded ranking.
 struct RedistributionScope: Sendable {
-    /// Source-sink pairs from type-compatibility edges. Unordered at the query level; ``GraphRedistributionEncoder`` orders them by full-delta candidate shortlex.
-    let pairs: [RedistributionPair]
+    private let initialCursor: GeneratedRedistributionPairCursor
+    let pairCount: Int
+    let maximumSourceDistance: UInt64
+
+    /// Requires the summary and unconsumed cursor to describe the same graph state and complete pair stream.
+    init(cursor: GeneratedRedistributionPairCursor, summary: RedistributionPairSummary) {
+        initialCursor = cursor
+        pairCount = summary.pairCount
+        maximumSourceDistance = summary.maximumSourceDistance
+    }
+
+    func pairCursor() -> GeneratedRedistributionPairCursor {
+        initialCursor
+    }
 }
 
 /// A single source-sink pair for redistribution.

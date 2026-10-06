@@ -27,13 +27,16 @@ extension ReductionMachine {
             return .dispatched(decision: .sourceExhausted)
         }
 
-        guard let transformation = sources[sourceIndex].next(lastAccepted: false) else {
+        guard let transformation = sources[sourceIndex].next() else {
             sources.swapAt(sourceIndex, sources.count - 1)
             sources.removeLast()
             return .dispatched(decision: .sourceExhausted)
         }
+        guard isDeadlineExceeded() == false else {
+            return try finishAtDeadline()
+        }
 
-        if let enabled = enabledEncoders, enabled.contains(transformation.operation.encoderName) == false {
+        guard isEncoderEnabled(transformation.operation.encoderName) else {
             return .dispatched(decision: .skipped)
         }
 
@@ -68,6 +71,9 @@ extension ReductionMachine {
             if collectStats {
                 stats.recordMaterializations(classificationMaterializations, at: .classification)
             }
+            guard isDeadlineExceeded() == false else {
+                return try finishAtDeadline()
+            }
             guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
                   let classification = updatedMetadata.classification
             else {
@@ -93,7 +99,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .rematerialized)
 
             case let .readyToDispatch(boundValueFingerprint):
-                return beginProbeSession(
+                return try beginProbeSession(
                     transformation: transformation,
                     boundValueFingerprint: boundValueFingerprint
                 )
@@ -105,7 +111,7 @@ extension ReductionMachine {
     private mutating func beginProbeSession(
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?
-    ) -> Transition {
+    ) throws -> Transition {
         let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
         let scope = EncoderInput(
             transformation: transformation,
@@ -170,16 +176,6 @@ extension ReductionMachine {
                 return .encoded(encoder: encoder, cacheHit: cacheHit)
 
             case let .decoded(encoder, accepted):
-                if isDeadlineExceeded() {
-                    if session.anyRequiresRebuild {
-                        _ = rebuildAndUpdateGraph()
-                    }
-                    activeSession = nil
-                    pendingReport = nil
-                    stats.reductionWasCapped = true
-                    phase = .reorderPass
-                    return .decoded(encoder: encoder, accepted: accepted)
-                }
                 return .decoded(encoder: encoder, accepted: accepted)
 
             case .finished:

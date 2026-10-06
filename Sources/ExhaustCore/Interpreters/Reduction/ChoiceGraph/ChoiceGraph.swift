@@ -24,7 +24,7 @@
 ///
 /// ## File Layout
 ///
-/// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`. Computation functions for non-eagerly-derived data live in `ChoiceGraph+LazyComputation.swift`. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Per-scope query families each have their own `ChoiceGraph+*Scopes.swift`.
+/// This file holds the struct definition, eagerly-computed fields, the convergence-record helpers, and the init/build plumbing. Read-only graph queries live in `ChoiceGraph+Queries.swift`, and type-compatibility edge enumeration lives in ``TypeCompatibilityCursor``. Dependency traversal lives in ``DependencyReachability`` so graph queries and scope cursors can share it without retaining mutable graph nodes. The mutation entry point (`apply`) lives in `ChoiceGraph+Lifecycle.swift`. Scope query families live in the Reduction/Queries directory.
 ///
 /// - SeeAlso: ``ChoiceGraphBuilder``, ``ChoiceGraphNode``, ``DependencyEdge``, ``ContainmentEdge``, ``TypeCompatibilityEdge``
 package struct ChoiceGraph: Sendable {
@@ -70,13 +70,6 @@ package struct ChoiceGraph: Sendable {
 
     /// Measured value-coupling dependents. Maps each "changed" node to the set of nodes whose convergence floors shifted when it changed. Populated from floor-motion events in `ReductionMachine.applyPassReport`, only when the maintainer-set `collectDiagnostics` flag is enabled. Diagnostic instrumentation with no scheduling consumer yet; a coupling-aware leaf ordering in ``MinimizationQuery`` was tried and reverted (zero measured effect on the ECOOP suite because coupling data arrives only after the affected leaves have converged).
     package var couplingDependents: [Int: Set<Int>] = [:]
-
-    // MARK: - Non-Caching Computed Properties
-
-    /// Type-compatibility edges between antichain members with matching types. Recomputed on each access.
-    package var typeCompatibilityEdges: [TypeCompatibilityEdge] {
-        computeTypeCompatibilityEdges()
-    }
 
     /// Writes convergence records from an encoder pass into the store by node ID.
     ///

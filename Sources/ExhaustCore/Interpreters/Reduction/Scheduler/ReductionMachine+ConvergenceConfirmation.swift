@@ -7,6 +7,9 @@ extension ReductionMachine {
     ///
     /// - Returns: True if any stale floors were found and cleared.
     mutating func confirmConvergence() throws -> Bool {
+        guard isEncoderEnabled(.convergenceConfirmation) else {
+            return false
+        }
         var anyStale = false
         var counts = ReductionProbeCounts()
         defer {
@@ -47,7 +50,7 @@ extension ReductionMachine {
                 ChoiceGraphScheduler.logReducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
                     "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
                 ])
-            } else if result == .rejected, origin.bound - minBound >= 2 {
+            } else if result == .rejected, origin.bound - minBound >= 2, isDeadlineExceeded() == false {
                 let gapResult = try probeBelow(
                     value: origin.bound - 2,
                     at: range.lowerBound,
@@ -108,8 +111,9 @@ extension ReductionMachine {
             filterObservations: &filterObservations,
             precomputedHash: probeHash
         )
-        counts.record(outcome)
+        counts.recordOutcome(outcome)
         if outcome.reduction != nil {
+            counts.recordAcceptance()
             return .accepted
         }
 

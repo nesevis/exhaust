@@ -11,10 +11,10 @@ package extension Interpreters {
         /// Maximum number of outer cycles with no improvement before terminating.
         package let maxStalls: Int
 
-        /// Wall-clock deadline for the reduction phase, in nanoseconds. The machine checks this after each decode step and terminates early when exceeded. Zero means no limit.
+        /// Cooperative elapsed-time budget for reduction search, in nanoseconds. Checked between machine and probe steps, including post-cycle search passes. In-flight materializations and property invocations complete before search stops. The enabled final numeric reorder pass still runs to completion after expiry, so its materializations and property calls can exceed this budget. Zero means no limit.
         package var wallClockDeadlineNanoseconds: UInt64
 
-        /// When non-nil, only encoders whose name is in this set are dispatched. Transformations targeting other encoders are skipped. Use this to stage reduction in multiple passes (for example, structural-only followed by value-only).
+        /// Restricts dispatch, post-cycle probes, and excursion exploitation to the named encoders. Nil enables all encoders; an empty set disables every probe. Branch pivots, including improving fills and excursion perturbations, use ``EncoderName/branchPivot``; subtree substitutions and descendant promotions use ``EncoderName/substitution``. Use this to stage reduction in multiple passes (for example, structural-only followed by value-only).
         package let enabledEncoders: Set<EncoderName>?
 
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.

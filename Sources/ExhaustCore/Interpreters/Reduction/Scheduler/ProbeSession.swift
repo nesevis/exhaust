@@ -205,7 +205,7 @@ struct ProbeSession {
             filterObservations: &filterObservations,
             precomputedHash: pendingProbeHash
         )
-        counts.record(outcome)
+        counts.recordOutcome(outcome)
         if let pendingObservationID, let result = outcome.reduction {
             observer?(.decoded(probeID: pendingObservationID, sequence: result.sequence))
         }
@@ -214,6 +214,7 @@ struct ProbeSession {
         if let result = outcome.reduction,
            encoderName == .numericReorder || state.sequence.shortLexPrecedes(result.sequence) == false
         {
+            counts.recordAcceptance()
             state.sequence = result.sequence
             state.tree = result.tree
             state.output = result.output
@@ -314,16 +315,19 @@ struct ProbeSession {
 
     // MARK: - Run To Completion
 
-    /// Runs the full encode-decode loop to completion, checking the optional deadline after each decode.
+    /// Stops before the next encode or decode step when the deadline expires, reporting all work already performed.
+    ///
+    /// Checking every step also bounds runs consisting entirely of cache rejections. A pending undecoded probe is interrupted by ``report()``; an in-flight decode completes before the next check.
     mutating func runToCompletion(
         state: inout some ProbeSessionState,
         deadlineCheck: (() -> Bool)? = nil
     ) throws -> PassReport {
         while phase != .finished {
-            let result = try step(state: &state)
-            if case .decoded = result, deadlineCheck?() == true {
+            guard deadlineCheck?() != true else {
                 phase = .finished
+                break
             }
+            _ = try step(state: &state)
         }
         return report()
     }

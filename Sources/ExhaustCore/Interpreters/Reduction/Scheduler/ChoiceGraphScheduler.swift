@@ -62,13 +62,15 @@ enum ChoiceGraphScheduler {
     // MARK: - Source Selection
 
     /// Returns the index of the source with the highest peekPriority, or nil if all are exhausted.
+    ///
+    /// Reads each priority through the array subscript; binding elements in a `for` loop would copy every source, retaining all of its prepared storage, on each dispatch step.
     static func highestPrioritySourceIndex(
-        _ sources: [AnyCandidateSource]
+        _ sources: [some CandidateSource]
     ) -> Int? {
         var bestIndex: Int?
         var bestPriority: DispatchPriority?
-        for (index, source) in sources.enumerated() {
-            guard let priority = source.peekPriority else { continue }
+        for index in sources.indices {
+            guard let priority = sources[index].peekPriority else { continue }
             if let currentBest = bestPriority {
                 if priority > currentBest {
                     bestIndex = index

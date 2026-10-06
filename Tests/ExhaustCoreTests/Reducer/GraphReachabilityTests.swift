@@ -16,7 +16,9 @@ struct GraphReachabilityTests {
         let fixture = GraphFixture(tree)
 
         guard let bindNodeID = fixture.graph.liveNodeIDs.first(where: { nodeID in
-            if case .bind = fixture.graph.nodes[nodeID].kind { return true }
+            if case .bind = fixture.graph.nodes[nodeID].kind {
+                return true
+            }
             return false
         }) else {
             Issue.record("No bind node found")
@@ -30,11 +32,11 @@ struct GraphReachabilityTests {
         let boundChildID = fixture.graph.nodes[bindNodeID].children[metadata.boundChildIndex]
 
         #expect(
-            fixture.graph.isReachable(from: innerChildID, to: boundChildID) == true,
+            DependencyReachability.isReachable(from: innerChildID, to: boundChildID, adjacency: fixture.graph.dependencyAdjacency) == true,
             "Dependency edge inner→bound means inner can reach bound"
         )
         #expect(
-            fixture.graph.isReachable(from: boundChildID, to: innerChildID) == false,
+            DependencyReachability.isReachable(from: boundChildID, to: innerChildID, adjacency: fixture.graph.dependencyAdjacency) == false,
             "Dependency edges are directed — bound cannot reach inner"
         )
     }
@@ -44,7 +46,9 @@ struct GraphReachabilityTests {
         let fixture = GraphFixture(.uint64Zip([10, 20], in: 0 ... 100))
 
         let chooseBitsNodes = fixture.graph.liveNodeIDs.filter { nodeID in
-            if case .chooseBits = fixture.graph.nodes[nodeID].kind { return true }
+            if case .chooseBits = fixture.graph.nodes[nodeID].kind {
+                return true
+            }
             return false
         }
         guard chooseBitsNodes.count >= 2 else {
@@ -52,15 +56,15 @@ struct GraphReachabilityTests {
             return
         }
 
-        #expect(fixture.graph.isReachable(from: chooseBitsNodes[0], to: chooseBitsNodes[1]) == false)
-        #expect(fixture.graph.isReachable(from: chooseBitsNodes[1], to: chooseBitsNodes[0]) == false)
+        #expect(DependencyReachability.isReachable(from: chooseBitsNodes[0], to: chooseBitsNodes[1], adjacency: fixture.graph.dependencyAdjacency) == false)
+        #expect(DependencyReachability.isReachable(from: chooseBitsNodes[1], to: chooseBitsNodes[0], adjacency: fixture.graph.dependencyAdjacency) == false)
     }
 
     @Test("Out-of-bounds node IDs return false")
     func outOfBoundsReturnsFalse() {
         let fixture = GraphFixture(.uint64(10, in: 0 ... 100))
-        #expect(fixture.graph.isReachable(from: 999, to: 0) == false)
-        #expect(fixture.graph.isReachable(from: 0, to: 999) == false)
+        #expect(DependencyReachability.isReachable(from: 999, to: 0, adjacency: fixture.graph.dependencyAdjacency) == false)
+        #expect(DependencyReachability.isReachable(from: 0, to: 999, adjacency: fixture.graph.dependencyAdjacency) == false)
     }
 
     // MARK: - reachableNodes
@@ -75,7 +79,9 @@ struct GraphReachabilityTests {
         let fixture = GraphFixture(tree)
 
         guard let bindNodeID = fixture.graph.liveNodeIDs.first(where: { nodeID in
-            if case .bind = fixture.graph.nodes[nodeID].kind { return true }
+            if case .bind = fixture.graph.nodes[nodeID].kind {
+                return true
+            }
             return false
         }) else {
             Issue.record("No bind node")
@@ -88,7 +94,7 @@ struct GraphReachabilityTests {
         let innerChildID = fixture.graph.nodes[bindNodeID].children[metadata.innerChildIndex]
         let boundChildID = fixture.graph.nodes[bindNodeID].children[metadata.boundChildIndex]
         let candidates = Set(fixture.graph.liveNodeIDs)
-        let reachable = fixture.graph.reachableNodes(from: innerChildID, within: candidates)
+        let reachable = DependencyReachability.reachableNodes(from: innerChildID, within: candidates, adjacency: fixture.graph.dependencyAdjacency)
 
         #expect(reachable.contains(boundChildID),
                 "Inner node should reach the bound child via dependency edge")
@@ -104,7 +110,9 @@ struct GraphReachabilityTests {
         let fixture = GraphFixture(tree)
 
         guard let bindNodeID = fixture.graph.liveNodeIDs.first(where: { nodeID in
-            if case .bind = fixture.graph.nodes[nodeID].kind { return true }
+            if case .bind = fixture.graph.nodes[nodeID].kind {
+                return true
+            }
             return false
         }) else {
             Issue.record("No bind node")
@@ -116,7 +124,7 @@ struct GraphReachabilityTests {
         }
         let innerChildID = fixture.graph.nodes[bindNodeID].children[metadata.innerChildIndex]
         let candidates = Set(fixture.graph.liveNodeIDs)
-        let reachable = fixture.graph.reachableNodes(from: innerChildID, within: candidates)
+        let reachable = DependencyReachability.reachableNodes(from: innerChildID, within: candidates, adjacency: fixture.graph.dependencyAdjacency)
 
         #expect(reachable.contains(innerChildID) == false, "Source node should not be in its own reachable set")
     }
@@ -126,7 +134,9 @@ struct GraphReachabilityTests {
         let fixture = GraphFixture(.uint64(10, in: 0 ... 100))
 
         let leafNode = fixture.graph.liveNodeIDs.first { nodeID in
-            if case .chooseBits = fixture.graph.nodes[nodeID].kind { return true }
+            if case .chooseBits = fixture.graph.nodes[nodeID].kind {
+                return true
+            }
             return false
         }
         guard let leafNode else {
@@ -135,7 +145,7 @@ struct GraphReachabilityTests {
         }
 
         let candidates = Set(fixture.graph.liveNodeIDs)
-        let reachable = fixture.graph.reachableNodes(from: leafNode, within: candidates)
+        let reachable = DependencyReachability.reachableNodes(from: leafNode, within: candidates, adjacency: fixture.graph.dependencyAdjacency)
         #expect(reachable.isEmpty)
     }
 

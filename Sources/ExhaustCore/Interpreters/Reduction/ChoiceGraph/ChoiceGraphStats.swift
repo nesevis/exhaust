@@ -76,7 +76,7 @@ package struct ChoiceGraphStats: Sendable {
         stats.selfSimilarityEdgeCount = graph.selfSimilarityGroups.values.reduce(0) { total, group in
             total + group.count * (group.count - 1) / 2
         }
-        stats.typeCompatibilityEdgeCount = graph.typeCompatibilityEdges.count
+        stats.typeCompatibilityEdgeCount = TypeCompatibilityCursor(graph: graph).edgeCount
         stats.activeNodeCount = graph.nodes.count(where: { $0.positionRange != nil })
         stats.inactiveNodeCount = graph.nodes.count(where: { $0.positionRange == nil })
         stats.deletionAntichainSize = graph.deletionAntichain.count

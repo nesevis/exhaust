@@ -2,7 +2,7 @@ extension ReductionMachine {
     /// Returns a fresh scope only when its base or domains differ from the exhausted search.
     func pendingNumericPairs() -> [NumericPairQuery.Pair]? {
         guard tuning.pairwiseNumericProbeBudget > 0,
-              enabledEncoders?.contains(.pairwiseNumericSearch) != false,
+              isEncoderEnabled(.pairwiseNumericSearch),
               convergence.deferBindInner == false
         else {
             return nil
@@ -26,11 +26,12 @@ extension ReductionMachine {
             return false
         }
         exhaustedNumericPairScope = ExhaustedNumericPairScope(base: sequence, pairs: pairs)
-        let report = try runPostCycleEncoder(
+        guard let report = try runPostCycleEncoder(
             operation: .exchange(.numericPairs(pairs, probeBudget: tuning.pairwiseNumericProbeBudget)),
-            estimatedCost: tuning.pairwiseNumericProbeBudget,
-            deadlineCheck: makeDeadlineCheck()
-        )
+            estimatedCost: tuning.pairwiseNumericProbeBudget
+        ) else {
+            return false
+        }
         guard report.anyAccepted else {
             return false
         }

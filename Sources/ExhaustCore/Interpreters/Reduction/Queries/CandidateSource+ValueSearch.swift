@@ -67,18 +67,9 @@ extension CandidateSourceBuilder {
             let sourceDistance: Int
             switch scope {
                 case let .redistribution(redistScope):
-                    let maxDistance = redistScope.pairs.reduce(UInt64(0)) { maxSoFar, pair in
-                        guard case let .chooseBits(metadata) = graph.nodes[pair.source.nodeID].kind else {
-                            return maxSoFar
-                        }
-                        let target = metadata.value.reductionTarget(in: metadata.validRange)
-                        let distance = metadata.value.bitPattern64 > target
-                            ? metadata.value.bitPattern64 - target
-                            : target - metadata.value.bitPattern64
-                        return max(maxSoFar, distance)
-                    }
+                    let maxDistance = redistScope.maximumSourceDistance
                     sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
-                    estimatedCost = min(24, redistScope.pairs.count)
+                    estimatedCost = min(24, redistScope.pairCount)
                 case let .tandem(tandemScope):
                     let maxDistance = tandemScope.groups.reduce(UInt64(0)) { maxSoFar, group in
                         let groupMax = group.leaves.reduce(UInt64(0)) { leafMax, leaf in

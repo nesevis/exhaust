@@ -65,7 +65,7 @@ struct GraphStructuralEncoder: GraphEncoder {
                 }
 
             case let .replace(replacementScope):
-                name = .substitution
+                name = scope.transformation.operation.encoderName
                 probe = buildReplacementProbe(into: &candidateBuffer, scope: replacementScope, sequence: sequence, graph: graph)
                 if probe != nil { probeCandidate = candidateBuffer }
 

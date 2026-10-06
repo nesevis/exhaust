@@ -87,8 +87,10 @@ struct SequenceDecoderInvariantTests {
         counts.recordCacheRejection()
         for outcome in [materializationRejection, propertyPass, propertyFailure] {
             counts.recordEmission()
-            counts.record(outcome)
+            counts.recordOutcome(outcome)
         }
+        _ = try #require(propertyFailure.reduction)
+        counts.recordAcceptance()
 
         #expect(propertyInvocations == 2)
         #expect(counts.emitted == 4)
@@ -148,11 +150,11 @@ struct SequenceDecoderInvariantTests {
     func runWideCountsIncludeStructuralRelaxProposals() {
         var encoderCounts = ReductionProbeCounts()
         encoderCounts.recordEmission()
-        encoderCounts.record(.materializationRejected(materializationAttempts: 1))
+        encoderCounts.recordOutcome(.materializationRejected(materializationAttempts: 1))
 
         var relaxCounts = ReductionProbeCounts()
         relaxCounts.recordEmission()
-        relaxCounts.record(.propertyPassed(materializationAttempts: 1))
+        relaxCounts.recordOutcome(.propertyPassed(materializationAttempts: 1))
 
         var stats = ReductionStats()
         stats.record(encoderCounts, for: .valueSearch)

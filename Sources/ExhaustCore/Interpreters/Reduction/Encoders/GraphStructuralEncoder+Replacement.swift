@@ -100,6 +100,21 @@ extension GraphStructuralEncoder {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> ChoiceSequence? {
+        branchPivotSplice(
+            pickNodeID: pickNodeID,
+            targetBranchID: targetBranchID,
+            fill: fill,
+            graph: graph
+        )?.applying(to: sequence)
+    }
+
+    /// Prepares only the pivot's replacement span so length ranking can share the unchanged baseline.
+    static func branchPivotSplice(
+        pickNodeID: Int,
+        targetBranchID: UInt64,
+        fill: PivotLeafFill = .reductionTarget,
+        graph: ChoiceGraph
+    ) -> ChoiceSequenceSplice? {
         guard pickNodeID < graph.nodes.count else {
             return nil
         }
@@ -144,8 +159,7 @@ extension GraphStructuralEncoder {
             targetBranchID: targetBranchID,
             content: targetContent,
             pickRange: pickRange,
-            pickMetadata: pickMetadata,
-            sequence: sequence
+            pickMetadata: pickMetadata
         )
     }
 
@@ -154,10 +168,9 @@ extension GraphStructuralEncoder {
         targetBranchID: UInt64,
         content: ChoiceSequence,
         pickRange: ClosedRange<Int>,
-        pickMetadata: PickMetadata,
-        sequence: ChoiceSequence
-    ) -> ChoiceSequence {
-        var replacement: [ChoiceSequenceValue] = []
+        pickMetadata: PickMetadata
+    ) -> ChoiceSequenceSplice {
+        var replacement = ChoiceSequence()
         replacement.reserveCapacity(content.count + 3)
         replacement.append(.group(true))
         replacement.append(.branch(.init(
@@ -170,9 +183,7 @@ extension GraphStructuralEncoder {
         }
         replacement.append(.group(false))
 
-        var candidate = sequence
-        candidate.replaceSubrange(pickRange.lowerBound ... pickRange.upperBound, with: replacement)
-        return candidate
+        return ChoiceSequenceSplice(range: pickRange, replacement: replacement)
     }
 
     /// Copies current fixed-shape fields into the minimal target seed, preserving target-domain metadata and leaving unmatched fields minimized.
