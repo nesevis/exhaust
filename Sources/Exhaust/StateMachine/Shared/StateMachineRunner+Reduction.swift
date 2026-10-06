@@ -122,7 +122,7 @@ extension __ExhaustRuntime {
 
     /// Reduces a concurrent spec counterexample in two passes: structural (lane collapse + deletion) then value minimization.
     ///
-    /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
+    /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search, including convergence confirmation to reopen stale floors, on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
     ///
     /// The property closure returns a ``StateMachineProbeVerdict`` so the preemptive backend can carry linearizability evidence (response witnesses, failure descriptions) through reduction without a separate side-channel. The cooperative backend returns `.fail(())`. A `.abort` verdict (a probe timed out, so further probing would reduce toward a hang) stops reduction: remaining probes in the current pass are treated as passing and the second pass is skipped, leaving the counterexample as-is.
     static func reduceConcurrentTwoPass<Value, Evidence>(
@@ -209,7 +209,7 @@ extension __ExhaustRuntime {
                config: .init(
                    maxStalls: 2,
                    wallClockDeadlineNanoseconds: remainingBudget(),
-                   enabledEncoders: [.valueSearch, .floatSearch],
+                   enabledEncoders: [.valueSearch, .floatSearch, .convergenceConfirmation],
                    tuning: noRelax,
                    probeWrapper: probeWrapper
                ),

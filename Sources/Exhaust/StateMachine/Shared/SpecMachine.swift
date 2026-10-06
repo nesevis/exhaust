@@ -246,7 +246,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     /// Pass 0: value-reduces the setup step against the fixed command sequence, then re-runs skip pruning because a shrunk setup changes which commands skip.
     ///
-    /// The reduction runs over the extracted setup subtree with the spec's `setupGenerator`, so commands are unreachable by construction. Deletion is enabled deliberately: the setup step itself is the subtree's zip root, not a `.sequence` element, so deletion can only shorten sequence-valued setup arguments within their declared length ranges.
+    /// The reduction runs over the extracted setup subtree with the spec's `setupGenerator`, so commands are unreachable by construction. Deletion is enabled deliberately: the setup step itself is the subtree's zip root, not a `.sequence` element, so deletion can only shorten sequence-valued setup arguments within their declared length ranges. Convergence confirmation reopens floors made stale by reductions to other setup arguments.
     private mutating func stepReduceSetup() -> Transition {
         guard var reductionInput, let candidate else {
             phase = .pullSource
@@ -276,7 +276,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         let config = Interpreters.ReducerConfiguration(
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
-            enabledEncoders: [.valueSearch, .floatSearch, .deletion],
+            enabledEncoders: [.valueSearch, .floatSearch, .deletion, .convergenceConfirmation],
             tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         if let reduced = try? Interpreters.choiceGraphReduceCollectingStats(
