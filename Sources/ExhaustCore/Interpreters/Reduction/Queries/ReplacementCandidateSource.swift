@@ -295,6 +295,14 @@ struct ReplacementCandidateSource {
 }
 
 extension ReplacementCandidateSource: CandidateSource {
+    var isValueDependent: Bool {
+        false
+    }
+
+    var isPermutationSource: Bool {
+        false
+    }
+
     var peekPriority: DispatchPriority? {
         pendingTransformation?.priority
     }

@@ -93,7 +93,7 @@ struct MigrationReachabilityTests {
         var maximumSources = 0
         var maximumNodes = 0
         var actual: [GraphTransformation] = []
-        while let transformation = source.next(lastAccepted: false) {
+        while let transformation = source.next() {
             actual.append(transformation)
             maximumSources = max(maximumSources, source.dependencyCachedSourceCount)
             maximumNodes = max(maximumNodes, source.dependencyCachedNodeCount)
@@ -113,7 +113,7 @@ struct MigrationReachabilityTests {
         let graph = bindGraph(controllerCount: 8, boundElementCount: 12)
         var original = MigrationCandidateSource(graph: graph)
         for _ in 0 ..< 3 {
-            let next = original.next(lastAccepted: false)
+            let next = original.next()
             _ = try #require(next)
         }
         var copied = original
@@ -195,14 +195,14 @@ struct MigrationReachabilityTests {
             let searches = source.dependencyTraversalCount
             #expect(source.peekPriority == priority)
             #expect(source.dependencyTraversalCount == searches)
-            guard let transformation = source.next(lastAccepted: false) else {
+            guard let transformation = source.next() else {
                 Issue.record("An advertised migration priority must have a scope")
                 break
             }
             #expect(transformation.priority == priority)
             transformations.append(transformation)
         }
-        #expect(source.next(lastAccepted: false) == nil)
+        #expect(source.next() == nil)
         return transformations
     }
 }

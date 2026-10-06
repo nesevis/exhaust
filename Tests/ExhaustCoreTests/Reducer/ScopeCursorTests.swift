@@ -49,7 +49,7 @@ struct ScopeCursorTests {
         var generated = BatchRemovalSource(sequenceNodeID: sequenceNodeID, graph: graph)
         var preparation = generated
         var transformations: [GraphTransformation] = []
-        while let transformation = nextScope(from: &preparation, lastAccepted: false) {
+        while let transformation = nextScope(from: &preparation) {
             transformations.append(transformation)
         }
         var buffered = SortedCandidateSource(transformations)
@@ -72,28 +72,73 @@ struct ScopeCursorTests {
         #expect(buffered.peekPriority == nil)
     }
 
-    @Test("The source union forwards rejection and acceptance feedback to generated cursors")
-    func generatedFeedbackSurvivesSourceUnion() throws {
+    @Test("The source union preserves bisection order through the plain cursor contract")
+    func generatedBisectionSurvivesSourceUnion() throws {
         let tree = ChoiceTree.group([
             sequenceTree(values: [1, 2, 3, 4]),
             sequenceTree(values: [5, 6]),
         ])
         let graph = ChoiceGraph.build(from: tree)
         var source = AnyCandidateSource.batchedCrossSequence(BatchedCrossSequenceRemovalSource(graph: graph))
-        let root = try #require(nextScope(from: &source, lastAccepted: false))
+        let root = try #require(nextScope(from: &source))
         let rootTargets = try #require(removalTargets(of: root))
         try #require(rootTargets.count == 2)
-        var accepted = source
-
-        #expect(nextScope(from: &accepted, lastAccepted: true) == nil)
-        #expect(accepted.peekPriority == nil)
-
-        let firstHalf = try #require(nextScope(from: &source, lastAccepted: false))
-        let secondHalf = try #require(nextScope(from: &source, lastAccepted: false))
+        let firstHalf = try #require(nextScope(from: &source))
+        let secondHalf = try #require(nextScope(from: &source))
         #expect(removalTargets(of: firstHalf)?.map(\.sequenceNodeID) == [rootTargets[0].sequenceNodeID])
         #expect(removalTargets(of: secondHalf)?.map(\.sequenceNodeID) == [rootTargets[1].sequenceNodeID])
-        #expect(nextScope(from: &source, lastAccepted: false) == nil)
+        #expect(nextScope(from: &source) == nil)
         #expect(source.peekPriority == nil)
+    }
+
+    @Test("An accepted batched removal rebuilds sources instead of advancing the old bisection cursor")
+    func acceptedBatchRebuildsSources() throws {
+        let array = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 6)
+        let generator = Gen.zip(array, array)
+        let initialOutput = ([UInt64(1), 2, 3, 4], [UInt64(5), 6])
+        let tree = try #require(try Interpreters.reflect(generator, with: initialOutput))
+        var propertyCalls = 0
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initialOutput,
+            config: Interpreters.ReducerConfiguration(maxStalls: 2, enabledEncoders: [.deletion]),
+            collectStats: true
+        ) { _ in
+            propertyCalls += 1
+            return false
+        }
+        machine.sources = [.batchedCrossSequence(BatchedCrossSequenceRemovalSource(graph: machine.graph))]
+        machine.phase = .dispatching
+        let originalRebuilds = machine.stats.graphStats.fullGraphRebuilds
+        _ = try machine.next()
+        let transformation = try #require(machine.activeSession?.transformation)
+        #expect(removalTargets(of: transformation)?.count == 2)
+        var didRebuild = false
+        for _ in 0 ..< 100 {
+            if case .rebuilt = try machine.next() {
+                didRebuild = true
+                break
+            }
+        }
+        #expect(didRebuild)
+        #expect(propertyCalls == 1)
+        #expect(machine.passCounter == 1)
+        #expect(machine.stats.graphStats.fullGraphRebuilds == originalRebuilds + 1)
+        #expect(machine.sources.contains { source in
+            if case .batchedCrossSequence = source {
+                return true
+            }
+            return false
+        } == false)
+        #expect(machine.anyAcceptanceEverOccurred)
+        let reducedOutput = try #require(machine.output as? ([UInt64], [UInt64]))
+        #expect(reducedOutput.0.isEmpty)
+        #expect(reducedOutput.1.isEmpty)
+        #expect(ChoiceSequence(machine.tree) == machine.sequence)
+        var rebuilt = AnyCandidateSource.batchedCrossSequence(BatchedCrossSequenceRemovalSource(graph: machine.graph))
+        #expect(nextScope(from: &rebuilt) == nil)
+        #expect(rebuilt.peekPriority == nil)
     }
 
     @Test("Scheduling merges buffered and generated priorities without consuming during inspection")
@@ -113,7 +158,7 @@ struct ScopeCursorTests {
 
         #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 1)
         #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 1)
-        let emitted = try #require(nextScope(from: &sources[1], lastAccepted: false))
+        let emitted = try #require(nextScope(from: &sources[1]))
         #expect(emitted.priority == highest.priority)
         #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 0)
 
@@ -144,8 +189,8 @@ struct ScopeCursorTests {
             #expect(valueSource.canReuseAfterLeafKindChange == false)
             #expect(permutationSource.isPermutationSource)
             #expect(permutationSource.canReuseAfterLeafKindChange == false)
-            _ = nextScope(from: &valueSource, lastAccepted: false)
-            _ = nextScope(from: &permutationSource, lastAccepted: false)
+            _ = nextScope(from: &valueSource)
+            _ = nextScope(from: &permutationSource)
         }
     }
 }
@@ -154,10 +199,6 @@ struct ScopeCursorTests {
 
 private func nextScope<Cursor: ScopeCursor>(from cursor: inout Cursor) -> Cursor.Scope? {
     cursor.next()
-}
-
-private func nextScope(from source: inout some CandidateSource, lastAccepted: Bool) -> GraphTransformation? {
-    source.next(lastAccepted: lastAccepted)
 }
 
 /// Exercises the encoder boundary through the shared cursor contract, preserving each emitted batch as one probe.

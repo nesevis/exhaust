@@ -145,7 +145,7 @@ extension ReductionMachine {
             guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(exploitSources) else {
                 break
             }
-            guard let exploitTransformation = exploitSources[sourceIndex].next(lastAccepted: false) else {
+            guard let exploitTransformation = exploitSources[sourceIndex].next() else {
                 exploitSources.swapAt(sourceIndex, exploitSources.count - 1)
                 exploitSources.removeLast()
                 continue

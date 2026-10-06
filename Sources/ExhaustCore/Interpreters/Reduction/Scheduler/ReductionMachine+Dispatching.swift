@@ -27,7 +27,7 @@ extension ReductionMachine {
             return .dispatched(decision: .sourceExhausted)
         }
 
-        guard let transformation = sources[sourceIndex].next(lastAccepted: false) else {
+        guard let transformation = sources[sourceIndex].next() else {
             sources.swapAt(sourceIndex, sources.count - 1)
             sources.removeLast()
             return .dispatched(decision: .sourceExhausted)

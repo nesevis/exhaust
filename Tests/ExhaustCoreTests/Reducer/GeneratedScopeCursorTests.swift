@@ -20,7 +20,7 @@ struct GeneratedScopeCursorTests {
         #expect(actual.map(signature) == expected.map(signature))
         #expect(actual.map(\.priority) == expected.map(\.priority))
         #expect(source.peekPriority == nil)
-        #expect(source.next(lastAccepted: false) == nil)
+        #expect(source.next() == nil)
     }
 
     @Test("Discovery, priority, and pivot-only cursors preserve nested and dependent replacement behavior")
@@ -188,8 +188,8 @@ struct GeneratedScopeCursorTests {
         )))
         let updatedAddress = graph.nodes.withUnsafeBufferPointer { $0.baseAddress }
         #expect(updatedAddress == originalAddress)
-        #expect(replacement.next(lastAccepted: false) != nil)
-        #expect(migration.next(lastAccepted: false) != nil)
+        #expect(replacement.next() != nil)
+        #expect(migration.next() != nil)
     }
 
     @Test("A short replacement prefix does not require materializing a 5000-node family's pairs")
@@ -279,14 +279,14 @@ private func replacementSignature(_ scope: ReplacementScope) -> Signature {
 private func drain(_ source: inout some CandidateSource) -> [GraphTransformation] {
     var transformations: [GraphTransformation] = []
     while let expectedPriority = source.peekPriority {
-        guard let transformation = source.next(lastAccepted: false) else {
+        guard let transformation = source.next() else {
             Issue.record("A source advertising priority must emit a scope")
             break
         }
         #expect(transformation.priority == expectedPriority)
         transformations.append(transformation)
     }
-    #expect(source.next(lastAccepted: false) == nil)
+    #expect(source.next() == nil)
     return transformations
 }
 
@@ -310,5 +310,5 @@ private func sequence(_ elements: [ChoiceTree], maximumLength: UInt64? = nil) ->
 }
 
 private func pullScope(from source: inout some CandidateSource) -> GraphTransformation? {
-    source.next(lastAccepted: false)
+    source.next()
 }

@@ -9,13 +9,15 @@
 ///
 /// The deletion antichain identifies element nodes that are pairwise independent (no containment or dependency path). Grouping these by parent sequence yields a set of independent sequences. The first probe attempts to remove all deletable elements from every independent sequence at once. On rejection, the target list is bisected and each half is tried independently.
 ///
+/// A structural acceptance rebuilds the source collection. Advancing this cursor therefore means the previous scope did not accept, so its range can be bisected without explicit feedback.
+///
 /// Runs before the emptying builder — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
 struct BatchedCrossSequenceRemovalSource {
     /// Each entry represents one independent sequence with its deletable elements and yield.
     private let sequences: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)]
-    /// Queue of index ranges to try. Bisection appends two halves on rejection.
+    /// Stack of index ranges to try. Continuing after an unsuccessful scope appends its two halves.
     private var pendingRanges: [(start: Int, end: Int)]
-    /// The range most recently emitted as a probe, awaiting feedback.
+    /// The last emitted range, bisected if this cursor is advanced again.
     private var lastEmittedRange: (start: Int, end: Int)?
     private var exhausted: Bool
     private var cachedPriority: DispatchPriority?
@@ -88,7 +90,6 @@ struct BatchedCrossSequenceRemovalSource {
             cachedPriority = nil
             return
         }
-        // Active pending range — the normal case where the next ``next(lastAccepted:)`` call will pop ``pendingRanges.last`` and emit a probe for that range.
         if let range = pendingRanges.last {
             var totalYield = 0
             for index in range.start ..< range.end {
@@ -102,7 +103,7 @@ struct BatchedCrossSequenceRemovalSource {
             )
             return
         }
-        // Deferred bisection — the previous ``next(lastAccepted:)`` call emitted a probe whose rejection feedback has not yet been consumed. The next call will bisect ``lastEmittedRange`` into two halves and pop the higher-yield half (``[emitted.start, mid)``) first. Report that half's yield so the scheduler sees non-nil yield and dispatches ``next`` to actually perform the bisection. Without this branch, the scheduler drops the source from its merge the moment ``pendingRanges`` drains post-root, and the bisection code in ``next`` is never reached — making the halving tree functionally dead code in the current architecture.
+        // Advertise the first half of the deferred bisection even when the stack is empty, so the scheduler continues enumeration rather than dropping the source after its root scope.
         if let emitted = lastEmittedRange {
             let count = emitted.end - emitted.start
             guard count >= 2 else {
@@ -125,28 +126,20 @@ struct BatchedCrossSequenceRemovalSource {
         cachedPriority = nil
     }
 
+    /// Continuing the same graph snapshot bisects the previous unsuccessful scope; accepted structural edits discard this cursor.
     mutating func next() -> GraphTransformation? {
-        next(lastAccepted: false)
-    }
-
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
-        guard exhausted == false else { return nil }
-
-        // Handle feedback from the previous probe.
+        guard exhausted == false else {
+            return nil
+        }
         if let emitted = lastEmittedRange {
             lastEmittedRange = nil
-            if lastAccepted == false {
-                // Bisect the rejected range.
-                let count = emitted.end - emitted.start
-                if count >= 2 {
-                    let mid = emitted.start + count / 2
-                    // Append both halves (larger half first so it's tried first).
-                    pendingRanges.append((start: mid, end: emitted.end))
-                    pendingRanges.append((start: emitted.start, end: mid))
-                }
-                // count == 1: single sequence rejected, drop it (existing sources handle it).
+            let count = emitted.end - emitted.start
+            if count >= 2 {
+                let mid = emitted.start + count / 2
+                // The first half contains the highest-yield sequences and is popped first.
+                pendingRanges.append((start: mid, end: emitted.end))
+                pendingRanges.append((start: emitted.start, end: mid))
             }
-            // If accepted, the structural mutation triggers a full source rebuild from the scheduler, so no further action needed here.
         }
 
         guard let range = pendingRanges.popLast() else {
@@ -381,9 +374,25 @@ struct BatchRemovalSource {
     }
 }
 
-extension BatchedCrossSequenceRemovalSource: CandidateSource {}
+extension BatchedCrossSequenceRemovalSource: CandidateSource {
+    var isValueDependent: Bool {
+        false
+    }
 
-extension BatchRemovalSource: CandidateSource {}
+    var isPermutationSource: Bool {
+        false
+    }
+}
+
+extension BatchRemovalSource: CandidateSource {
+    var isValueDependent: Bool {
+        false
+    }
+
+    var isPermutationSource: Bool {
+        false
+    }
+}
 
 // MARK: - Builder Functions
 

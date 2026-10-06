@@ -266,13 +266,13 @@ private func signature(_ transformation: GraphTransformation) -> [Int] {
 private func drain(_ source: inout ReplacementCandidateSource) -> [GraphTransformation] {
     var results: [GraphTransformation] = []
     while let expectedPriority = source.peekPriority {
-        guard let transformation = source.next(lastAccepted: false) else {
+        guard let transformation = source.next() else {
             Issue.record("An advertised priority must have a transformation")
             break
         }
         #expect(transformation.priority == expectedPriority)
         results.append(transformation)
     }
-    #expect(source.next(lastAccepted: false) == nil)
+    #expect(source.next() == nil)
     return results
 }

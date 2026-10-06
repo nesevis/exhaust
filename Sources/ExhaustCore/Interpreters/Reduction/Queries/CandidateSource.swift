@@ -7,30 +7,14 @@
 
 /// Adds scheduling and invalidation metadata to a cursor over graph transformations.
 ///
-/// Priority inspection must not advance enumeration. Adaptive sources may advertise the next rejection continuation while awaiting feedback; the scheduler rebuilds sources after invalidating acceptances. Invalidation metadata describes the whole prepared source and remains available after exhaustion.
+/// Priority inspection must not advance enumeration. Batched removal sources advertise the next bisection continuation; the scheduler rebuilds sources after invalidating acceptances instead of advancing the old cursor. Each conformer must declare its invalidation policy explicitly. Invalidation metadata describes the whole prepared source and remains available after exhaustion.
 protocol CandidateSource: ScopeCursor where Scope == GraphTransformation {
-    /// Applies feedback only to adaptive enumeration; acceptance that invalidates the graph requires a new source.
-    mutating func next(lastAccepted: Bool) -> GraphTransformation?
-
     var peekPriority: DispatchPriority? { get }
     var isValueDependent: Bool { get }
     var isPermutationSource: Bool { get }
 }
 
 extension CandidateSource {
-    var isValueDependent: Bool {
-        false
-    }
-
-    var isPermutationSource: Bool {
-        false
-    }
-
-    /// Stateless sources ignore feedback; adaptive sources override this requirement.
-    mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
-        next()
-    }
-
     /// Leaf-kind changes invalidate value-dependent scopes and sibling-shape groups, even when node identities remain stable.
     var canReuseAfterLeafKindChange: Bool {
         isValueDependent == false && isPermutationSource == false
@@ -71,7 +55,7 @@ extension SortedCandidateSource: CandidateSource {
 
 /// Bridges buffered and generated scope cursors to the scheduler without heap-allocated existential boxes.
 ///
-/// Each case implements ``CandidateSource``. The union forwards advancement, feedback, priority inspection, and invalidation metadata while keeping the concrete source state inline in the scheduler's array.
+/// Each case implements ``CandidateSource``. The union forwards advancement, priority inspection, and invalidation metadata while keeping the concrete source state inline in the scheduler's array.
 enum AnyCandidateSource {
     case sorted(SortedCandidateSource)
     case batchedCrossSequence(BatchedCrossSequenceRemovalSource)
@@ -98,50 +82,62 @@ extension AnyCandidateSource: CandidateSource {
 
     /// Whether the source contains operations whose scopes depend on current leaf values.
     var isValueDependent: Bool {
-        if case let .sorted(source) = self {
-            return source.isValueDependent
+        switch self {
+            case let .sorted(source):
+                source.isValueDependent
+            case let .batchedCrossSequence(source):
+                source.isValueDependent
+            case let .batchRemoval(source):
+                source.isValueDependent
+            case let .replacement(source):
+                source.isValueDependent
+            case let .migration(source):
+                source.isValueDependent
         }
-        return false
     }
 
     var isPermutationSource: Bool {
-        if case let .sorted(source) = self {
-            return source.isPermutationSource
+        switch self {
+            case let .sorted(source):
+                source.isPermutationSource
+            case let .batchedCrossSequence(source):
+                source.isPermutationSource
+            case let .batchRemoval(source):
+                source.isPermutationSource
+            case let .replacement(source):
+                source.isPermutationSource
+            case let .migration(source):
+                source.isPermutationSource
         }
-        return false
-    }
-
-    mutating func next() -> GraphTransformation? {
-        next(lastAccepted: false)
     }
 
     /// Releases generated sources before mutating their owned buffers, preserving uniqueness for copy-on-write storage.
     ///
     /// Sorted advancement only changes its scalar index and keeps shared scopes immutable.
-    mutating func next(lastAccepted: Bool) -> GraphTransformation? {
+    mutating func next() -> GraphTransformation? {
         switch self {
             case var .sorted(source):
-                let result = source.next(lastAccepted: lastAccepted)
+                let result = source.next()
                 self = .sorted(source)
                 return result
             case var .batchedCrossSequence(source):
                 self = .sorted(SortedCandidateSource([]))
-                let result = source.next(lastAccepted: lastAccepted)
+                let result = source.next()
                 self = .batchedCrossSequence(source)
                 return result
             case var .batchRemoval(source):
                 self = .sorted(SortedCandidateSource([]))
-                let result = source.next(lastAccepted: lastAccepted)
+                let result = source.next()
                 self = .batchRemoval(source)
                 return result
             case var .replacement(source):
                 self = .sorted(SortedCandidateSource([]))
-                let result = source.next(lastAccepted: lastAccepted)
+                let result = source.next()
                 self = .replacement(source)
                 return result
             case var .migration(source):
                 self = .sorted(SortedCandidateSource([]))
-                let result = source.next(lastAccepted: lastAccepted)
+                let result = source.next()
                 self = .migration(source)
                 return result
         }

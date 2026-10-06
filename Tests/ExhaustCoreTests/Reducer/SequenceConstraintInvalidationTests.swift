@@ -33,8 +33,8 @@ struct SequenceConstraintInvalidationTests {
         ]))
         var fullCursor = MigrationCandidateSource(graph: fullGraph)
         var availableCursor = MigrationCandidateSource(graph: availableGraph)
-        #expect(fullCursor.next(lastAccepted: false) == nil)
-        #expect(availableCursor.next(lastAccepted: false) != nil)
+        #expect(fullCursor.next() == nil)
+        #expect(availableCursor.next() != nil)
 
         let oldGraph = reverse ? availableGraph : fullGraph
         let newGraph = reverse ? fullGraph : availableGraph
