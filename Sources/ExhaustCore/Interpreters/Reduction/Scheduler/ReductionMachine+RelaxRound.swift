@@ -30,21 +30,22 @@ extension ReductionMachine {
             "seq_len": "\(sequence.count)",
         ])
 
-        let candidates = Self.buildRelaxCandidates(
+        let materializationBudget = tuning.relaxMaterializationBudget
+        var candidates = RelaxCandidateCursor(
             sequence: sequence,
-            graph: graph
+            graph: graph,
+            limit: materializationBudget
         )
 
-        guard candidates.isEmpty == false else {
+        guard candidates.candidateCount > 0 else {
             ChoiceGraphScheduler.logReducer("relax_round_no_candidates", isInstrumented: isInstrumented, metadata: [:])
             return false
         }
 
         ChoiceGraphScheduler.logReducer("relax_round_candidates", isInstrumented: isInstrumented, metadata: [
-            "count": "\(candidates.count)",
+            "count": "\(candidates.candidateCount)",
         ])
 
-        let materializationBudget = tuning.relaxMaterializationBudget
         var perturbationAccepted = false
         var materializationsUsed = 0
         var probeCounts = ReductionProbeCounts()
@@ -53,9 +54,10 @@ extension ReductionMachine {
                 stats.recordStructuralRelax(probeCounts)
             }
         }
-        for candidate in candidates {
-            guard materializationsUsed < materializationBudget else { break }
-            guard deadlineCheck() == false else { break }
+        while materializationsUsed < materializationBudget, deadlineCheck() == false {
+            guard let candidate = candidates.next(lastAccepted: false) else {
+                break
+            }
             probeCounts.recordEmission()
             let decoder: SequenceDecoder = .exact(materializePicks: true)
             var filterObservations: [UInt64: FilterObservation] = [:]
@@ -88,7 +90,7 @@ extension ReductionMachine {
         guard perturbationAccepted else {
             if collectDiagnostics {
                 stats.relaxRoundLog.append(RelaxRoundRecord(
-                    candidateCount: candidates.count,
+                    candidateCount: candidates.candidateCount,
                     materializationsUsed: materializationsUsed,
                     perturbationDecoded: false,
                     committed: false
@@ -161,7 +163,7 @@ extension ReductionMachine {
         let excursionCommitted = sequence.shortLexPrecedes(checkpointSequence)
         if collectDiagnostics {
             stats.relaxRoundLog.append(RelaxRoundRecord(
-                candidateCount: candidates.count,
+                candidateCount: candidates.candidateCount,
                 materializationsUsed: materializationsUsed,
                 perturbationDecoded: true,
                 committed: excursionCommitted
@@ -305,100 +307,5 @@ extension ReductionMachine {
         }
         candidates.sort { $0.count < $1.count }
         return candidates
-    }
-
-    // MARK: - Perturbation Candidate Construction
-
-    private static func buildRelaxCandidates(
-        sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> [ChoiceSequence] {
-        var candidates: [ChoiceSequence] = []
-
-        var cursor = ReplacementQuery.discoveryCursor(graph: graph)
-        while let transformation = cursor.next(lastAccepted: false) {
-            guard case let .replace(scope) = transformation.operation else {
-                continue
-            }
-            switch scope {
-                case let .branchPivot(pickNodeID, targetBranchID):
-                    if let candidate = GraphStructuralEncoder.branchPivotCandidate(
-                        pickNodeID: pickNodeID,
-                        targetBranchID: targetBranchID,
-                        sequence: sequence,
-                        graph: graph
-                    ) {
-                        candidates.append(candidate)
-                    }
-
-                case let .selfSimilar(targetNodeID, donorNodeID, _):
-                    if let candidate = buildUnguardedSelfSimilar(
-                        targetNodeID: targetNodeID,
-                        donorNodeID: donorNodeID,
-                        sequence: sequence,
-                        graph: graph
-                    ) {
-                        candidates.append(candidate)
-                    }
-
-                case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID, _):
-                    if let candidate = buildUnguardedDescendantPromotion(
-                        ancestorPickNodeID: ancestorPickNodeID,
-                        descendantPickNodeID: descendantPickNodeID,
-                        sequence: sequence,
-                        graph: graph
-                    ) {
-                        candidates.append(candidate)
-                    }
-            }
-        }
-
-        // Length only, deliberately not full shortlex. A lex tiebreak among equal-length candidates was tried and reverted: it preferred perturbations that decode successfully, triggering full exploitation loops in relax rounds that previously ended cheaply at the perturbation stage.
-        candidates.sort { $0.count < $1.count }
-        return candidates
-    }
-
-    private static func buildUnguardedSelfSimilar(
-        targetNodeID: Int,
-        donorNodeID: Int,
-        sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> ChoiceSequence? {
-        guard let targetRange = graph.nodes[targetNodeID].positionRange,
-              let donorRange = graph.nodes[donorNodeID].positionRange
-        else { return nil }
-        let donorEntries = Array(sequence[donorRange.lowerBound ... donorRange.upperBound])
-        let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
-            donorEntries,
-            donorNodeID: donorNodeID,
-            donorRangeStart: donorRange.lowerBound,
-            graph: graph
-        )
-        var candidate = sequence
-        candidate.replaceSubrange(targetRange.lowerBound ... targetRange.upperBound, with: expanded)
-        guard candidate != sequence else { return nil }
-        return candidate
-    }
-
-    private static func buildUnguardedDescendantPromotion(
-        ancestorPickNodeID: Int,
-        descendantPickNodeID: Int,
-        sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> ChoiceSequence? {
-        guard let ancestorRange = graph.nodes[ancestorPickNodeID].positionRange,
-              let descendantRange = graph.nodes[descendantPickNodeID].positionRange
-        else { return nil }
-        let descendantEntries = Array(sequence[descendantRange.lowerBound ... descendantRange.upperBound])
-        let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
-            descendantEntries,
-            donorNodeID: descendantPickNodeID,
-            donorRangeStart: descendantRange.lowerBound,
-            graph: graph
-        )
-        var candidate = sequence
-        candidate.replaceSubrange(ancestorRange.lowerBound ... ancestorRange.upperBound, with: expanded)
-        guard candidate != sequence else { return nil }
-        return candidate
     }
 }
