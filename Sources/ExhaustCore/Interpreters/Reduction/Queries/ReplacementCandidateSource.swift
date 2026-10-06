@@ -4,7 +4,7 @@
 ///
 /// The discovery order is also available to the relax round, whose candidate-length sort relies on the original replacement order for ties. The cursor retains immutable topology and compact pick descriptors rather than the graph's mutable node array.
 ///
-/// - Complexity: O(P + B + V + E) retained state, where P is the number of family members, B is the prepared branch metadata, and V + E is the topology snapshot. Preparation sorts family members in O(P log P) time and performs the existing branch eligibility scans. Heap advancement costs O(log R), where R is the number of pending rows, plus any descendant reachability checks and rejected entries encountered before the next valid scope.
+/// - Complexity: O(P + B + V + E) retained state, where P is the number of family members, B is the prepared branch metadata, and V + E is the topology snapshot. Preparation sorts family members in O(P log P) time and performs the existing branch eligibility scans. Containment is indexed in O(V) time and queried in O(1). Heap advancement costs O(log R), where R is the number of pending rows, plus rejected entries and dependency cache misses encountered before the next valid scope. Each cache miss costs O(V + E); cached membership is expected O(1). The dependency cache retains a bounded working set of restricted results, plus O(V) negative-source identities, within the overall storage bound.
 struct ReplacementCandidateSource {
     /// Keeps scheduling order separate from discovery order used by structural relaxation.
     enum EnumerationOrder {
@@ -59,8 +59,8 @@ struct ReplacementCandidateSource {
 
     private let families: [Family]
     private let pivots: [Pivot]
-    private let parentNodeIDs: [Int?]
-    private let dependencyAdjacency: [[Int]]
+    private let containment: ContainmentIndex
+    private var dependencyReachability: DependencyReachabilityCache
     private let order: EnumerationOrder
     private var pendingRows = ScopePriorityQueue<Entry>()
     private var pendingTransformation: GraphTransformation?
@@ -125,8 +125,14 @@ struct ReplacementCandidateSource {
             }
             return Pivot(nodeID: nodeID, size: node.positionRange?.count ?? 0, liveOrder: liveIndex, branches: branches)
         }
-        parentNodeIDs = families.isEmpty ? [] : graph.nodes.map(\.parent)
-        dependencyAdjacency = families.isEmpty ? [] : graph.dependencyAdjacency
+        containment = ContainmentIndex(parentNodeIDs: families.isEmpty ? [] : graph.nodes.map(\.parent))
+        let candidateNodeIDs = Set(families.flatMap { family in
+            family.members.filter(\.isActive).map(\.nodeID)
+        })
+        dependencyReachability = DependencyReachabilityCache(
+            adjacency: families.isEmpty ? [] : graph.dependencyAdjacency,
+            candidates: candidateNodeIDs
+        )
         seedRows()
         prepareNext()
     }
@@ -225,7 +231,7 @@ struct ReplacementCandidateSource {
     }
 
     /// Constructs the selected scope, retaining original orientation for equal-size self-similar pairs.
-    private func scope(for entry: Entry) -> ReplacementScope? {
+    private mutating func scope(for entry: Entry) -> ReplacementScope? {
         switch entry.row {
             case let .selfSimilar(familyIndex, targetIndex, donorIndex):
                 let family = families[familyIndex]
@@ -243,8 +249,8 @@ struct ReplacementCandidateSource {
                 let target = family.members[targetIndex]
                 let donor = member(in: family, at: donorIndex)
                 guard target.nodeID != donor.nodeID, donor.isActive, entry.benefit > 0,
-                      isDescendant(donor.nodeID, of: target.nodeID)
-                      || DependencyReachability.isReachable(from: target.nodeID, to: donor.nodeID, adjacency: dependencyAdjacency)
+                      containment.isDescendant(donor.nodeID, of: target.nodeID)
+                      || dependencyReachability.isReachable(from: target.nodeID, to: donor.nodeID)
                 else {
                     return nil
                 }
@@ -252,15 +258,9 @@ struct ReplacementCandidateSource {
         }
     }
 
-    private func isDescendant(_ nodeID: Int, of ancestorNodeID: Int) -> Bool {
-        var current = nodeID
-        while let parent = parentNodeIDs[current] {
-            if parent == ancestorNodeID {
-                return true
-            }
-            current = parent
-        }
-        return false
+    /// Exposes actual dependency search work for profiling scope preparation and enumeration.
+    var dependencyTraversalCount: Int {
+        dependencyReachability.traversalCount
     }
 }
 
