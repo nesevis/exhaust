@@ -241,7 +241,7 @@ extension ReductionMachine {
     /// Probes improving pivots at non-minimal content and accepts the first that still fails the property.
     ///
     /// The next cycle minimizes the accepted arm under ordinary scheduling, so no exploitation runs here.
-    private mutating func runImprovingPivotProbes(deadlineCheck: () -> Bool) throws -> Bool {
+    private mutating func runImprovingPivotProbes(deadlineCheck: @escaping () -> Bool) throws -> Bool {
         let budget = tuning.relaxImprovingProbeBudget
         guard budget > 0 else {
             return false
@@ -254,10 +254,13 @@ extension ReductionMachine {
                 stats.relaxImprovingProbes += probesUsed
             }
         }
-        for (candidate, probeHash) in unprobedImprovingPivotCandidates() {
-            guard probesUsed < budget, deadlineCheck() == false else {
+        var candidates = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: deadlineCheck)
+        while probesUsed < budget, deadlineCheck() == false {
+            guard let probe = candidates.next(lastAccepted: false), deadlineCheck() == false else {
                 break
             }
+            let candidate = probe.sequence
+            let probeHash = probe.probeHash
             probesUsed += 1
             probeCounts.recordEmission()
             let decoder: SequenceDecoder = .exact(materializePicks: true)
@@ -294,64 +297,10 @@ extension ReductionMachine {
 
     /// Whether the improving phase has a probe to spend.
     var hasUnprobedImprovingPivot: Bool {
-        isEncoderEnabled(.branchPivot) && tuning.relaxImprovingProbeBudget > 0 && unprobedImprovingPivotCandidates().isEmpty == false
-    }
-
-    /// Improving pivot candidates absent from the reject cache, so exhausted pivots stop triggering relax rounds.
-    private func unprobedImprovingPivotCandidates() -> [(candidate: ChoiceSequence, probeHash: UInt64)] {
-        Self.buildImprovingPivotCandidates(sequence: sequence, graph: graph).compactMap { candidate in
-            let probeHash = ZobristHash.hash(of: candidate)
-            guard rejectCache.contains(probeHash) == false else {
-                return nil
-            }
-            return (candidate, probeHash)
+        guard isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 else {
+            return false
         }
-    }
-
-    /// Non-minimal fills that precede `sequence`, shortest first. Length decides once per scope when it differs; equal-length candidates need per-fill checks because their leaf values can change precedence.
-    private static func buildImprovingPivotCandidates(
-        sequence: ChoiceSequence,
-        graph: ChoiceGraph
-    ) -> [ChoiceSequence] {
-        var candidates: [ChoiceSequence] = []
-        var cursor = ReplacementQuery.pivotCursor(graph: graph)
-        while let transformation = cursor.next(lastAccepted: false) {
-            guard case let .replace(.branchPivot(pickNodeID, targetBranchID)) = transformation.operation else {
-                continue
-            }
-            guard let recorded = GraphStructuralEncoder.branchPivotCandidate(
-                pickNodeID: pickNodeID,
-                targetBranchID: targetBranchID,
-                fill: .recorded,
-                sequence: sequence,
-                graph: graph
-            ), recorded.count <= sequence.count else {
-                continue
-            }
-            let isShorter = recorded.count < sequence.count
-            if isShorter || recorded.shortLexPrecedes(sequence) {
-                candidates.append(recorded)
-                if let farthest = GraphStructuralEncoder.branchPivotCandidate(
-                    pickNodeID: pickNodeID,
-                    targetBranchID: targetBranchID,
-                    fill: .farthestFromTarget,
-                    sequence: sequence,
-                    graph: graph
-                ), isShorter || farthest.shortLexPrecedes(sequence) {
-                    candidates.append(farthest)
-                }
-            }
-            if let transplanted = GraphStructuralEncoder.branchPivotCandidate(
-                pickNodeID: pickNodeID,
-                targetBranchID: targetBranchID,
-                fill: .transplanted,
-                sequence: sequence,
-                graph: graph
-            ), isShorter || transplanted.shortLexPrecedes(sequence) {
-                candidates.append(transplanted)
-            }
-        }
-        candidates.sort { $0.count < $1.count }
-        return candidates
+        var cursor = ImprovingPivotCandidateCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: makeDeadlineCheck())
+        return cursor.next(lastAccepted: false) != nil
     }
 }
