@@ -233,6 +233,30 @@ struct PostCycleDecisionTests {
         #expect(numericOnly.actions == [.pairwiseNumericPass])
     }
 
+    @Test("Numeric encoders have separate post-cycle actions before the excursion", arguments: [false, true], [false, true])
+    func independentNumericFallbackActions(pairwise: Bool, staged: Bool) {
+        let evaluation = ChoiceGraphScheduler.evaluatePostCycle(
+            outcome: .init(
+                anyAccepted: false,
+                hadUnresolvedReplacement: true,
+                hasUnprobedImprovingPivot: false,
+                allConverged: false,
+                improved: false,
+                structurallyImproved: false,
+                shouldAttemptNumericPairs: pairwise,
+                shouldAttemptStagedJoint: staged
+            ),
+            stallBudget: 1,
+            maxStalls: 4,
+            deferBindInner: false
+        )
+        var expected: [ChoiceGraphScheduler.PostCycleAction] = []
+        if pairwise { expected.append(.pairwiseNumericPass) }
+        if staged { expected.append(.stagedJointPass) }
+        expected.append(.excursion)
+        #expect(evaluation.actions == expected)
+    }
+
     // MARK: - Helpers
 
     private static let maxStalls = 4

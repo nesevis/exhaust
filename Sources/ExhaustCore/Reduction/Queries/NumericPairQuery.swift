@@ -33,38 +33,11 @@ enum NumericPairQuery {
     /// Collects the bounded search scope, interleaving each source's nearest and farthest partners before any intermediate distance.
     static func build(graph: ChoiceGraph, gate: BoundValueGate) -> [Pair] {
         var pairs: [Pair] = []
-        // Filter before capping, so non-numeric leaves (a long string's characters, say) cannot use up the cap ahead of numeric ones.
-        let leaves = graph.leafNodes.lazy.compactMap { nodeID -> Leaf? in
-            let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind,
-                  let position = node.positionRange?.lowerBound,
-                  isNumeric(metadata),
-                  supportsBinds(above: nodeID, graph: graph)
-            else {
-                return nil
-            }
-            return Leaf(
-                nodeID: nodeID,
-                position: position,
-                path: node.choicePath,
-                choice: metadata.value,
-                range: metadata.validRange ?? metadata.typeTag.bitPatternRange,
-                bindFingerprints: bindFingerprints(above: nodeID, graph: graph),
-                mayReshapeOnAcceptance: node.scopeAnnotation.isBindInner
-            )
-        }.prefix(maximumLeaves).sorted { $0.position < $1.position }
+        let leaves = eligibleLeaves(graph: graph)
         guard leaves.count > 1 else {
             return []
         }
-        let sourceIndices = leaves.indices.filter { index in
-            let leaf = leaves[index]
-            guard leaf.choice.bitPattern64 != leaf.choice.reductionTarget(in: leaf.range) else {
-                return false
-            }
-            return graph.convergenceStore[leaf.nodeID]?.bound == leaf.choice.bitPattern64
-                || (graph.nodes[leaf.nodeID].scopeAnnotation.isBindInner
-                    && ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: leaf.nodeID, graph: graph, gate: gate))
-        }
+        let sourceIndices = leaves.indices.filter { isStalled(leaves[$0], graph: graph, gate: gate) }
         // Each source's nearest and farthest partners come first, alternating source by source, so neither distance class can take the whole cap.
         let lastIndex = leaves.count - 1
         let rounds = [[1, lastIndex]] + stride(from: 2, to: lastIndex, by: 1).map { [$0] }
@@ -88,6 +61,40 @@ enum NumericPairQuery {
         return pairs
     }
 
+    /// Shares numeric and bind admission between pair search and higher-order group discovery.
+    static func eligibleLeaves(graph: ChoiceGraph) -> [Leaf] {
+        // Filter before capping, so non-numeric leaves (a long string's characters, say) cannot use up the cap ahead of numeric ones.
+        graph.leafNodes.lazy.compactMap { nodeID -> Leaf? in
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind,
+                  let position = node.positionRange?.lowerBound,
+                  isNumeric(metadata),
+                  supportsBinds(above: nodeID, graph: graph)
+            else {
+                return nil
+            }
+            return Leaf(
+                nodeID: nodeID,
+                position: position,
+                path: node.choicePath,
+                choice: metadata.value,
+                range: metadata.validRange ?? metadata.typeTag.bitPatternRange,
+                bindFingerprints: bindFingerprints(above: nodeID, graph: graph),
+                mayReshapeOnAcceptance: node.scopeAnnotation.isBindInner
+            )
+        }.prefix(maximumLeaves).sorted { $0.position < $1.position }
+    }
+
+    /// Requires a current convergence floor above target, or a fruitless bound search for a bind inner.
+    static func isStalled(_ leaf: Leaf, graph: ChoiceGraph, gate: BoundValueGate) -> Bool {
+        guard leaf.choice.bitPattern64 != leaf.choice.reductionTarget(in: leaf.range) else {
+            return false
+        }
+        return graph.convergenceStore[leaf.nodeID]?.bound == leaf.choice.bitPattern64
+            || (graph.nodes[leaf.nodeID].scopeAnnotation.isBindInner
+                && ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: leaf.nodeID, graph: graph, gate: gate))
+    }
+
     /// Boolean generators use UInt8 in 0...1; exclude that domain, including numeric generators with the same representation.
     static func isNumeric(_ metadata: ChooseBitsMetadata) -> Bool {
         guard metadata.typeTag != .uint8 || metadata.validRange != 0 ... 1 else {
@@ -105,11 +112,16 @@ enum NumericPairQuery {
 
     /// Checks bind-site continuity even when different dependent generators happen to emit identical flat markers.
     static func preservesIdentity(of pair: Pair, in tree: ChoiceTree) -> Bool {
-        guard pair.source.bindFingerprints.isEmpty == false || pair.sink.bindFingerprints.isEmpty == false else {
+        preservesIdentity(of: [pair.source, pair.sink], in: tree)
+    }
+
+    /// Checks all joint edits against fresh bind ancestry using one graph construction per surviving failure.
+    static func preservesIdentity(of leaves: [Leaf], in tree: ChoiceTree) -> Bool {
+        guard leaves.contains(where: { $0.bindFingerprints.isEmpty == false }) else {
             return true
         }
         let graph = ChoiceGraph.build(from: tree)
-        for leaf in [pair.source, pair.sink] {
+        for leaf in leaves {
             guard let nodeID = graph.leafNodes.first(where: { graph.nodes[$0].positionRange?.lowerBound == leaf.position }),
                   graph.nodes[nodeID].choicePath == leaf.path,
                   bindFingerprints(above: nodeID, graph: graph) == leaf.bindFingerprints,

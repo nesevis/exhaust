@@ -9,7 +9,7 @@ struct ReductionDeadlineTests {
         .buildSources,
         .dispatching,
         .endCycle,
-        .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .pairwiseNumericPass, .excursion]),
+        .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .pairwiseNumericPass, .stagedJointPass, .excursion]),
         .checkTermination,
         .reorderPass,
     ])
@@ -125,11 +125,10 @@ struct ReductionDeadlineTests {
         #expect(try machine.next() == nil)
     }
 
-    @Test("Post-cycle relation and numeric passes stop after their first in-flight property", arguments: [false, true], [false, true])
-    func postCyclePassesHonorDeadline(numericPass: Bool, accepted: Bool) throws {
+    @Test("Post-cycle relation and numeric passes stop after their first in-flight property", arguments: [EncoderName.relationSearch, .pairwiseNumericSearch, .stagedJointSearch], [false, true])
+    func postCyclePassesHonorDeadline(encoder: EncoderName, accepted: Bool) throws {
         let clock = DeadlineTestClock()
         let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 2 ... 2)
-        let encoder: EncoderName = numericPass ? .pairwiseNumericSearch : .relationSearch
         var propertyCalls = 0
         var machine = try makeMachine(generator: generator, initialOutput: [UInt64(40), 20], clock: clock, enabledEncoders: [encoder]) { _ in
             propertyCalls += 1
@@ -138,12 +137,23 @@ struct ReductionDeadlineTests {
         }
         markStalledLeaves(&machine.graph)
         machine.convergence.deferBindInner = false
-        if numericPass {
-            #expect(machine.pendingNumericPairs() != nil)
-        } else {
-            #expect(RelationQuery.build(graph: machine.graph) != nil)
+        let action: ChoiceGraphScheduler.PostCycleAction = switch encoder {
+            case .pairwiseNumericSearch:
+                .pairwiseNumericPass
+            case .stagedJointSearch:
+                .stagedJointPass
+            default:
+                .relationPass
         }
-        machine.phase = .postCycle(remaining: [numericPass ? .pairwiseNumericPass : .relationPass, .excursion, .releaseDeferral])
+        switch encoder {
+            case .pairwiseNumericSearch:
+                #expect(machine.pendingNumericPairs() != nil)
+            case .stagedJointSearch:
+                #expect(machine.pendingStagedNumericPairs() != nil)
+            default:
+                #expect(RelationQuery.build(graph: machine.graph) != nil)
+        }
+        machine.phase = .postCycle(remaining: [action, .excursion, .releaseDeferral])
         let initialSequence = machine.sequence
         _ = try complete(&machine)
         #expect(propertyCalls == 1)

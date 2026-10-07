@@ -19,7 +19,7 @@ import Foundation
 /// return [("adaptive", base), ("relax-off", relaxOff)]
 /// ```
 ///
-/// An `enabledEncoders` subset works the same way: rebuild the configuration with, for example, `enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch])` to measure one encoder's contribution.
+/// An `enabledEncoders` subset works the same way: rebuild the configuration with, for example, `enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch])` to measure one encoder's contribution. To compare numeric fallbacks while retaining all other encoders, exclude `.stagedJointSearch` in the pairwise variant and `.pairwiseNumericSearch` in the staged variant. Their checkpoint probe budgets and per-encoder reports are independent.
 func withStrategies(
     _ base: Interpreters.ReducerConfiguration = reducerConfig
 ) -> [(name: String, config: Interpreters.ReducerConfiguration)] {

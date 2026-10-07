@@ -177,6 +177,9 @@ package struct ReductionStats: Sendable {
     /// Per-encoder probe outcome counts accumulated across all cycles.
     package var encoderCounts: [EncoderName: ReductionProbeCounts] = [:]
 
+    /// Separates the two-, three-, and four-way stages of ``EncoderName/stagedJointSearch``. Legacy pairwise counts remain only in ``encoderCounts`` so A/B reports do not mix the searches.
+    package var numericSearchCountsByArity: [Int: ReductionProbeCounts] = [:]
+
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
     package var encoderProbes: [EncoderName: Int] {
         encoderCounts.mapValues { $0.emitted }
@@ -313,6 +316,9 @@ package struct ReductionStats: Sendable {
         for (name, counts) in other.encoderCounts {
             encoderCounts[name, default: ReductionProbeCounts()].merge(counts)
         }
+        for (arity, counts) in other.numericSearchCountsByArity {
+            numericSearchCountsByArity[arity, default: .init()].merge(counts)
+        }
         probeCounts.merge(other.probeCounts)
         for (site, count) in other.outOfLoopMaterializations {
             outOfLoopMaterializations[site, default: 0] += count
@@ -439,6 +445,7 @@ package extension ReductionStats {
         package var relaxRound: UInt64 = 0
         package var relationPass: UInt64 = 0
         package var pairwiseNumericPass: UInt64 = 0
+        package var stagedJointPass: UInt64 = 0
         package var reorder: UInt64 = 0
 
         package var dispatchCount: Int = 0
@@ -461,6 +468,7 @@ package extension ReductionStats {
             relaxRound += other.relaxRound
             relationPass += other.relationPass
             pairwiseNumericPass += other.pairwiseNumericPass
+            stagedJointPass += other.stagedJointPass
             reorder += other.reorder
             dispatchCount += other.dispatchCount
             encodeCount += other.encodeCount
@@ -493,6 +501,8 @@ package extension ReductionStats {
                     relationPass += elapsed
                 case .pairwiseNumericPassCompleted:
                     pairwiseNumericPass += elapsed
+                case .stagedJointPassCompleted:
+                    stagedJointPass += elapsed
                 case .reorderCompleted:
                     reorder += elapsed
                 case .sourcesBuilt:

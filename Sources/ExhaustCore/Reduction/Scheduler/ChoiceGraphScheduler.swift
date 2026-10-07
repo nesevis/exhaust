@@ -245,6 +245,8 @@ enum ChoiceGraphScheduler {
                 .lockstep(GraphLockstepEncoder())
             case .exchange(.numericPairs):
                 .numericPair(NumericPairEncoder())
+            case .exchange(.stagedNumericPairs), .exchange(.numericJoint):
+                .stagedJoint(StagedJointEncoder())
             case .exchange(.relation):
                 .relation(GraphRelationEncoder())
             case .exchange(.boundExchange):
@@ -266,6 +268,7 @@ enum ChoiceGraphScheduler {
         let improved: Bool
         let structurallyImproved: Bool
         let shouldAttemptNumericPairs: Bool
+        var shouldAttemptStagedJoint: Bool = false
     }
 
     /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful excursion prevents termination, convergence confirmation can clear stale floors that change the ``allValuesConverged`` result, and a relation-pass acceptance re-enters the loop).
@@ -274,6 +277,7 @@ enum ChoiceGraphScheduler {
         case relationPass
         case improvingPivots
         case pairwiseNumericPass
+        case stagedJointPass
         case excursion
         case releaseDeferral
     }
@@ -306,6 +310,10 @@ enum ChoiceGraphScheduler {
 
         if outcome.anyAccepted == false, outcome.shouldAttemptNumericPairs {
             actions.append(.pairwiseNumericPass)
+        }
+
+        if outcome.anyAccepted == false, outcome.shouldAttemptStagedJoint {
+            actions.append(.stagedJointPass)
         }
 
         let newStallBudget = outcome.improved ? maxStalls : stallBudget - 1

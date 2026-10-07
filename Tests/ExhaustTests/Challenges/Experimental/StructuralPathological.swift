@@ -44,7 +44,7 @@ struct StructuralPathologicalChallenge {
             (arr.max() ?? 0) < 5 || arr.reduce(0, +) < 10
         }
 
-        #expect(output == [0, 4, 6])
+        #expect(output == [0, 5, 5]) // Represents a ChoiceSequence [5,0,5,5]
     }
 
     // MARK: - Cross-Level Sum (composition required)
@@ -68,7 +68,7 @@ struct StructuralPathologicalChallenge {
             arr[0] == 0 || arr[1] == 0 || arr[2] != arr[0] + arr[1]
         }
 
-        #expect(output == [1, 1, 2])
+        #expect(output == [1, 1, 2]) // Represents a ChoiceSequence [2, 1, 1, 2]
     }
 
     // MARK: - Nested Bind: Two Levels
@@ -92,7 +92,7 @@ struct StructuralPathologicalChallenge {
         ) { arr in
             arr.reduce(0, +) < 8
         }
-        #expect(output == [0, 8])
+        #expect(output == [4, 4])
     }
 
     // MARK: - Nested Bind: Three Levels

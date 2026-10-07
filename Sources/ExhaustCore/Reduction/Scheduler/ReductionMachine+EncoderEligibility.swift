@@ -15,6 +15,8 @@ extension ReductionMachine {
                 isEncoderEnabled(.branchPivot)
             case .pairwiseNumericPass:
                 isEncoderEnabled(.pairwiseNumericSearch)
+            case .stagedJointPass:
+                isEncoderEnabled(.stagedJointSearch)
             case .excursion:
                 isEncoderEnabled(.branchPivot) || isEncoderEnabled(.substitution)
             case .releaseDeferral:

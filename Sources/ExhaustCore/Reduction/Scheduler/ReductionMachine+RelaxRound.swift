@@ -225,6 +225,8 @@ extension ReductionMachine {
         anyAccepted = checkpointAnyAccepted
         hadUnresolvedReplacement = checkpointUnresolvedReplacement
         _ = rebuildAndUpdateGraph()
+        graph.couplingDependents.removeAll()
+        couplingTracker = CouplingTracker()
         ChoiceGraphScheduler.transferConvergence(checkpointConvergence, to: &graph)
 
         ChoiceGraphScheduler.logReducer("relax_round_rolled_back", isInstrumented: isInstrumented, metadata: [

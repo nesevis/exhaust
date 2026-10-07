@@ -78,6 +78,7 @@ package struct ReductionMachine: ProbeSessionState {
         case excursionCompleted(improved: Bool)
         case relationPassCompleted(accepted: Bool)
         case pairwiseNumericPassCompleted(accepted: Bool)
+        case stagedJointPassCompleted(accepted: Bool)
         case deferralReleased
 
         case reorderCompleted(accepted: Bool)
@@ -174,6 +175,7 @@ package struct ReductionMachine: ProbeSessionState {
     var sequenceBeforeCycle: ChoiceSequence = []
 
     var exhaustedNumericPairScope: ExhaustedNumericPairScope?
+    var exhaustedStagedJointScope: ExhaustedStagedJointScope?
 
     // MARK: - Coupling Attribution
 
@@ -182,6 +184,9 @@ package struct ReductionMachine: ProbeSessionState {
 
     /// The pass index at which each node's convergence was last recorded. When floor motion is detected at node A, the coupling partners are nodes that changed in passes after `lastConvergencePass[A]`.
     var lastConvergencePass: [Int: Int] = [:]
+
+    /// Maintains bounded coupling hints for joint-group ranking without enabling research diagnostics.
+    var couplingTracker = CouplingTracker()
 
     /// Monotonic pass counter incremented on each `applyPassReport` call.
     var passCounter: Int = 0
@@ -380,7 +385,8 @@ package struct ReductionMachine: ProbeSessionState {
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
                 structurallyImproved: sequence.count < sequenceBeforeCycle.count,
-                shouldAttemptNumericPairs: anyAccepted == false && pendingNumericPairs() != nil
+                shouldAttemptNumericPairs: anyAccepted == false && pendingNumericPairs() != nil,
+                shouldAttemptStagedJoint: anyAccepted == false && pendingStagedNumericPairs() != nil
             )
         )
 
@@ -422,6 +428,8 @@ package struct ReductionMachine: ProbeSessionState {
                 return .improvingPivotsCompleted(improved: improved)
             case .pairwiseNumericPass:
                 return .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
+            case .stagedJointPass:
+                return .stagedJointPassCompleted(accepted: runStagedJointSearch())
             case .excursion:
                 // Perturbing away from a counterexample that an earlier action just improved spends budget escaping a local minimum the run may not be in.
                 guard anyAccepted == false else {
@@ -687,6 +695,8 @@ package struct ReductionMachine: ProbeSessionState {
         let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
         if diff.canReuseStructuralSources {
             newGraph.couplingDependents = graph.couplingDependents
+        } else {
+            couplingTracker = CouplingTracker()
         }
         stats.graphStats.fullGraphRebuilds += 1
         graph = newGraph

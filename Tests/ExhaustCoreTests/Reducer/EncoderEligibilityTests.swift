@@ -119,7 +119,7 @@ struct EncoderEligibilityTests {
         }
         markConverged(&machine.graph)
         let baseline = machine.sequence
-        machine.phase = .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .pairwiseNumericPass, .excursion])
+        machine.phase = .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .pairwiseNumericPass, .stagedJointPass, .excursion])
         try finish(&machine)
         #expect(machine.sequence == baseline)
         #expect(machine.stats.reductionProbes == 0)

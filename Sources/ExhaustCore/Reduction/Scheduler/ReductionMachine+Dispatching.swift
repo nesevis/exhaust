@@ -194,12 +194,14 @@ extension ReductionMachine {
     /// Called identically whether the pass was stepped (via the main dispatching loop) or run to completion (via reorder/relax). Handles convergence recording, gate outcome, shortlex rejection propagation, stats accumulation, logging, and acceptance evaluation routing.
     mutating func applyPassReport(_ report: PassReport) -> Transition {
         passCounter += 1
+        var valueMotionNodes: Set<Int> = []
 
         if report.convergenceRecords.isEmpty == false {
             let motion = graph.recordConvergence(
                 byNodeID: report.convergenceRecords,
                 rebuildGeneration: stats.graphStats.fullGraphRebuilds
             )
+            valueMotionNodes = motion.valueMotionNodeIDs
             if collectDiagnostics {
                 for motionNodeID in motion.valueMotionNodeIDs {
                     let sincePass = lastConvergencePass[motionNodeID] ?? 0
@@ -207,7 +209,6 @@ extension ReductionMachine {
                     for entry in valueChangeLog where entry.passIndex > sincePass {
                         for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
                             partnerNodes.insert(changedNodeID)
-                            graph.couplingDependents[changedNodeID, default: []].insert(motionNodeID)
                             let edge = CouplingEdge(motionNodeID: motionNodeID, changedNodeID: changedNodeID)
                             stats.couplingEdges[edge, default: 0] += 1
                         }
@@ -223,6 +224,16 @@ extension ReductionMachine {
                     lastConvergencePass[nodeID] = passCounter
                 }
             }
+        }
+
+        if isEncoderEnabled(.stagedJointSearch), tuning.stagedJointProbeBudget > 0 {
+            couplingTracker.observe(
+                motionNodes: valueMotionNodes,
+                convergedNodes: Array(report.convergenceRecords.keys),
+                changedNodes: report.acceptedLeafNodeIDs,
+                pass: passCounter,
+                graph: &graph
+            )
         }
 
         if collectDiagnostics, report.acceptedLeafNodeIDs.isEmpty == false {
@@ -245,6 +256,16 @@ extension ReductionMachine {
 
         if collectStats {
             stats.record(report.counts, for: report.encoderName)
+            switch report.transformation.operation {
+                case .exchange(.stagedNumericPairs):
+                    stats.numericSearchCountsByArity[2, default: .init()].merge(report.counts)
+                case let .exchange(.numericJoint(groups, _)):
+                    if let arity = groups.first?.leaves.count {
+                        stats.numericSearchCountsByArity[arity, default: .init()].merge(report.counts)
+                    }
+                default:
+                    break
+            }
             if let liftMaterializations = report.liftMaterializations {
                 stats.recordMaterializations(liftMaterializations.count, at: liftMaterializations.site)
             }

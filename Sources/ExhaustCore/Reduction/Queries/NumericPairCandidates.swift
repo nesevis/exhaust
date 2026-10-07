@@ -20,6 +20,27 @@ enum NumericPairCandidates {
         samples.appendSubdivisions()
         return samples.candidates
     }
+
+    /// Keeps higher-order grids small while trying targets, coherent halving, local compensation, and simple magnitudes before widening. These are proposals, not an exhaustive domain or a monotonicity assumption.
+    static func jointValues(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
+        var samples = CandidateSamples(leaf: leaf, simplifying: simplifying)
+        samples.append(samples.target)
+        let zero = leaf.choice.tag.simplestBitPattern
+        let current = leaf.choice.bitPattern64
+        let half = current >= zero ? zero + (current - zero) / 2 : zero - (zero - current) / 2
+        samples.append(half)
+        let lower = min(current, samples.target)
+        let upper = max(current, samples.target)
+        samples.append(lower + (upper - lower) / 2)
+        for magnitude: UInt64 in [1, 2, 3] {
+            let (positive, overflow) = zero.addingReportingOverflow(magnitude)
+            if overflow == false { samples.append(positive) }
+            if leaf.choice.tag.isSigned, zero >= magnitude { samples.append(zero - magnitude) }
+        }
+        samples.appendNeighbors()
+        samples.appendIntegerMagnitudes()
+        return Array(samples.candidates.prefix(6))
+    }
 }
 
 // MARK: - Candidate Samples

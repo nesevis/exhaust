@@ -136,7 +136,7 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
             collectStats: true,
             property: { $0.0 * weight + $0.1 + $0.2 != 50 }
         )
@@ -155,7 +155,7 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, tuning: .init(pairwiseNumericProbeBudget: 7)),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch]), tuning: .init(pairwiseNumericProbeBudget: 7)),
             collectStats: true,
             property: { $0 != start }
         )
@@ -180,7 +180,7 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, tuning: .init(pairwiseNumericProbeBudget: 1)),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch]), tuning: .init(pairwiseNumericProbeBudget: 1)),
             collectStats: true,
             property: { _ in
                 Issue.record("Cached probes must not invoke the property")
@@ -211,7 +211,7 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
             collectStats: true,
             property: { $0.0 * 4 + $0.1 != 8 * scale }
         )
@@ -235,7 +235,7 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
             collectStats: true,
             property: { Int($0.0) * -3 + Int($0.1) != 9 }
         )
@@ -260,7 +260,7 @@ struct PairwiseNumericSearchTests {
             gen: generator.gen,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
             collectStats: true,
             property: { $0.0 * 2 + $0.1 != 10 }
         )
@@ -307,7 +307,7 @@ struct PairwiseNumericSearchTests {
             gen: generator.gen,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
             collectStats: true,
             property: { candidate in
                 evaluations.append(candidate)

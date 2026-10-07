@@ -1,4 +1,4 @@
-/// Shares exact unsigned factor reduction between relation discovery and rational redistribution.
+/// Shares exact unsigned factor reduction between relation discovery, rational redistribution, and coordinated common-divisor proposals.
 enum ReductionIntegerMath {
     /// Reduces denominator factors with remainders so intermediate products cannot overflow.
     static func greatestCommonDivisor(_ first: UInt64, _ second: UInt64) -> UInt64 {
