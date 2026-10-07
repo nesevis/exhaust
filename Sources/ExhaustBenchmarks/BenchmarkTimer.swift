@@ -1,6 +1,6 @@
 import Foundation
 
-/// Monotonic wall-clock timer for self-timed benchmarks. `ContinuousClock` needs macOS 13 and this target's floor is macOS 10.15, so timing goes through `DispatchTime`.
+/// Monotonic wall-clock timer for self-timed benchmarks. `ContinuousClock` needs macOS 13 and this target's floor is macOS 12, so timing goes through `DispatchTime`.
 struct BenchmarkTimer {
     private let start = DispatchTime.now()
 

@@ -10,17 +10,17 @@ on:
 
 jobs:
   profile:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Build memory profiles
-        run: swift build --package-path MemoryHarness --build-tests
+        run: swift build --build-system native --package-path MemoryHarness --build-tests
 
       - name: Measure memory profiles
         shell: bash
@@ -29,19 +29,19 @@ jobs:
           mkdir -p .build/memory
 
           bash Scripts/measure-memory.sh .build/memory/property -- \
-            swift test --package-path MemoryHarness --skip-build --no-parallel \
+            swift test --build-system native --package-path MemoryHarness --skip-build --no-parallel \
               --filter PropertyMemoryProfileTests || status=1
 
           bash Scripts/measure-memory.sh .build/memory/execute -- \
-            swift test --package-path MemoryHarness --skip-build --no-parallel \
+            swift test --build-system native --package-path MemoryHarness --skip-build --no-parallel \
               --filter ExecuteMemoryProfileTests || status=1
 
           bash Scripts/measure-memory.sh .build/memory/reduction -- \
-            swift test --package-path MemoryHarness --skip-build --no-parallel \
+            swift test --build-system native --package-path MemoryHarness --skip-build --no-parallel \
               --filter ReductionMemoryProfileTests || status=1
 
           bash Scripts/measure-memory.sh .build/memory/retention -- \
-            swift test --package-path MemoryHarness --skip-build --no-parallel \
+            swift test --build-system native --package-path MemoryHarness --skip-build --no-parallel \
               --filter RetentionMemoryProfileTests || status=1
 
           exit "$status"

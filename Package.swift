@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import Foundation
@@ -39,11 +39,11 @@ let coreTarget: Target = usePrecompiled
 let package = Package(
     name: "Exhaust",
     platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
-        .macCatalyst(.v13),
-        .tvOS(.v13),
-        .watchOS(.v6),
+        .macOS(.v12),
+        .iOS(.v15),
+        .macCatalyst(.v15),
+        .tvOS(.v15),
+        .watchOS(.v9),
         .visionOS(.v1),
     ],
     products: [
@@ -72,8 +72,9 @@ let package = Package(
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
-        .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.10.0"),
-        .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.1"),
+        // Its Swift 6.4 manifest depends directly on swift-issue-reporting.
+        .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
     ] + swiftLintDependency,
     targets: [
         coreTarget,
@@ -102,7 +103,7 @@ let package = Package(
                 "ExhaustCore",
                 "Exhaustable",
                 .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
-                .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+                .product(name: "IssueReporting", package: "swift-issue-reporting"),
             ],
             swiftSettings: strictConcurrencySettings + (usePrecompiled
                 ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
@@ -119,7 +120,7 @@ let package = Package(
                     name: "ExhaustObjCSupport",
                     condition: .when(platforms: [.macOS, .iOS, .macCatalyst, .tvOS, .watchOS, .visionOS])
                 ),
-                .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+                .product(name: "IssueReporting", package: "swift-issue-reporting"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
             ],
             swiftSettings: strictConcurrencySettings + (usePrecompiled
@@ -147,7 +148,7 @@ let package = Package(
                 "Exhaust",
                 "ExhaustCore",
                 "ExhaustTestSupport",
-                .product(name: "IssueReportingTestSupport", package: "xctest-dynamic-overlay"),
+                .product(name: "IssueReportingTestSupport", package: "swift-issue-reporting"),
             ],
             swiftSettings: strictConcurrencySettings + (usePrecompiled
                 ? [.define("EXHAUST_BINARY_CORE")]

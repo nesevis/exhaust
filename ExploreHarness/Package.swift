@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 // Validation harness for `#explore(time:)`. A separate package so the coverage `.unsafeFlags` live in a consumer's manifest — exactly the integration path a real user follows — and never touch Exhaust's own manifest, where they would disqualify it as a tagged dependency.
 
 import PackageDescription

@@ -18,6 +18,6 @@ rm -rf "${SMOKE_DIR}/.build"
 
 for configuration in debug release; do
     echo "==> ArtifactSmoke (${configuration})"
-    EXHAUST_RELEASE=1 swift build --package-path "${SMOKE_DIR}" --configuration "${configuration}" --product ArtifactSmoke
+    EXHAUST_RELEASE=1 swift build --build-system native --package-path "${SMOKE_DIR}" --configuration "${configuration}" --product ArtifactSmoke
     "${SMOKE_DIR}/.build/${configuration}/ArtifactSmoke"
 done

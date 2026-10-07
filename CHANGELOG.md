@@ -6,6 +6,13 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+### Changed
+
+- Raised the minimum supported versions to macOS 12, iOS 15, Mac Catalyst 15, tvOS 15, and watchOS 9. Intel Macs remain supported through the precompiled framework's x86_64 slice.
+- Building Exhaust now requires Swift 6.4 (Xcode 27).
+- Updated to Swift Issue Reporting 2.1.1 and pinned Custom Dump to 1.7.3, removing the XCTest Dynamic Overlay dependency.
+- The precompiled framework now targets iOS 15 and includes an arm64_32 watchOS device slice for watchOS 9 support.
+
 ## [1.5.8] - 2026-10-06
 
 ### Changed

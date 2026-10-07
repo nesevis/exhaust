@@ -3,10 +3,10 @@
 [![Tests](https://github.com/nesevis/exhaust/actions/workflows/test.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test.yml)
 [![Tests (Linux)](https://github.com/nesevis/exhaust/actions/workflows/test-linux.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test-linux.yml)
 [![Tests (Windows)](https://github.com/nesevis/exhaust/actions/workflows/test-windows.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test-windows.yml)
-[![Swift 6.3+](https://img.shields.io/badge/Swift-6.3%2B-orange)](https://swift.org)
+[![Swift 6.4+](https://img.shields.io/badge/Swift-6.4%2B-orange)](https://swift.org)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B%20%7C%20Linux%20%7C%20Windows-blue)](https://swift.org/platform-support/)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%2012%2B%20%7C%20iOS%2015%2B%20%7C%20tvOS%2015%2B%20%7C%20watchOS%209%2B%20%7C%20visionOS%201%2B%20%7C%20Linux%20%7C%20Windows-blue)](https://swift.org/platform-support/)
 
 # Find the bugs you didn't think of.
 
@@ -122,7 +122,7 @@ Then add it as a dependency of your test target:
 
 ## Requirements
 
-- Swift 6.3+ (Xcode 26+)
-- macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+, Linux, Windows
+- Swift 6.4+ (Xcode 27+)
+- macOS 12+ (Intel and Apple silicon), iOS 15+, Mac Catalyst 15+, tvOS 15+, watchOS 9+, visionOS 1+, Linux, Windows
 - Cooperative concurrent spec testing (`#execute(Spec.self, mode: .tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+ (no version requirement on Linux and Windows)
 - Sequential and preemptive spec testing (`#execute(Spec.self, mode: .sequential)`, `#execute(Spec.self, mode: .threads)`) have no additional availability requirements

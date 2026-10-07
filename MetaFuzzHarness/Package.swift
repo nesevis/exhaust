@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 // Self-fuzzing harness: runs `#explore(time:)` with ExhaustCore as the SUT, checking the oracle roster in ExhaustMetaFuzz. A separate package so fuzz runs stay out of the default `swift test` lane. This manifest carries NO coverage flags: instrumentation is whole-graph via `-Xswiftc` at the CI invocation, so ExhaustCore — a dependency this manifest cannot flag — gets counters without touching Exhaust's own manifest.
 
 import PackageDescription

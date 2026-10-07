@@ -17,22 +17,22 @@ on:
 # so the wall-clock gain, or its absence, is visible per run.
 jobs:
   explore-harness:
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Build harness
-        run: swift build --package-path ExploreHarness --build-tests
+        run: swift build --build-system native --package-path ExploreHarness --build-tests
 
       - name: Run harness serially
         id: serial
         run: |
           START=$(date +%s)
-          swift test --package-path ExploreHarness --skip-build --no-parallel
+          swift test --build-system native --package-path ExploreHarness --skip-build --no-parallel
           echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
 
       - name: Run harness in parallel
@@ -40,7 +40,7 @@ jobs:
         if: always()
         run: |
           START=$(date +%s)
-          swift test --package-path ExploreHarness --skip-build --parallel
+          swift test --build-system native --package-path ExploreHarness --skip-build --parallel
           echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
 
       - name: Report elapsed time

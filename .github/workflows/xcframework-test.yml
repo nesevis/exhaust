@@ -4,13 +4,13 @@ on: workflow_dispatch
 
 jobs:
   test-xcframework:
-    runs-on: macos-26
+    runs-on: xcode-27
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Build XCFramework
         run: bash Scripts/build-xcframework.sh
@@ -21,7 +21,7 @@ jobs:
         run: |
           mkdir -p .build
           set +o pipefail
-          swift test --no-parallel --skip ExhaustCoreTests 2>&1 | tee .build/test-output.txt
+          swift test --build-system native --no-parallel --skip ExhaustCoreTests 2>&1 | tee .build/test-output.txt
           exit ${PIPESTATUS[0]}
 
       - name: Smoke test artifact from an external package

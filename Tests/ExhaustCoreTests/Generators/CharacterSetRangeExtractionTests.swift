@@ -10,23 +10,32 @@ import Testing
 
 @Suite("CharacterSet Range Extraction")
 struct CharacterSetRangeExtractionTests {
-    @Test("ScalarRangeSet round-trips back to the original CharacterSet", arguments: allSets)
-    func scalarRangeSetRoundTrip(fixture: NamedCharacterSet) {
+    @Test("ScalarRangeSet preserves bitmap membership for every Unicode scalar", arguments: allSets)
+    func scalarRangeSetMembership(fixture: NamedCharacterSet) {
         let srs = fixture.set.scalarRangeSet()
+        let reference = CharacterSet(bitmapRepresentation: fixture.set.bitmapRepresentation)
 
-        // Rebuild a CharacterSet from ScalarRangeSet's ranges.
-        var rebuilt = CharacterSet()
-        for range in srs.rangeSet.ranges {
-            guard let lower = Unicode.Scalar(range.lowerBound),
-                  let upper = Unicode.Scalar(range.upperBound - 1)
-            else {
-                Issue.record("Invalid scalar values in range \(range) for \(fixture.name)")
-                continue
+        // OS 27's CharacterSet range insertion can drop supplementary-plane scalars
+        // whose low 16 bits fall in D800...DFFF. Compare membership directly so
+        // Foundation's reconstruction behavior cannot affect this extraction test.
+        // Normalize the reference through the input bitmap: older Foundation
+        // versions disagree between built-in control membership and that bitmap.
+        var memberCount = 0
+        for value in UInt32(0) ... 0x10FFFF {
+            guard let scalar = Unicode.Scalar(value) else { continue }
+            let expected = reference.contains(scalar)
+            let actual = srs.rangeSet.contains(value)
+            if expected != actual {
+                #expect(
+                    actual == expected,
+                    "Membership mismatch for U+\(String(value, radix: 16, uppercase: true)) in \(fixture.name)"
+                )
+                return
             }
-            rebuilt.insert(charactersIn: lower ... upper)
+            if expected { memberCount += 1 }
         }
 
-        #expect(rebuilt == fixture.set, "Round-trip failed for \(fixture.name)")
+        #expect(srs.scalarCount == memberCount, "Scalar count mismatch for \(fixture.name)")
     }
 
     @Test("ScalarRangeSet range counts are positive", arguments: allSets)

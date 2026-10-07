@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: swift:6.3
+    container: swift:6.4
     # In container jobs the runner's shell probe can fall back to sh, which rejects the
     # bashisms below (set +o pipefail, PIPESTATUS). The Ubuntu-based swift image has bash.
     defaults:
@@ -22,7 +22,7 @@ jobs:
         run: |
           mkdir -p .build
           set +o pipefail
-          swift test --parallel 2>&1 | tee .build/test-output.txt
+          swift test --build-system native --parallel 2>&1 | tee .build/test-output.txt
           exit ${PIPESTATUS[0]}
 
       - name: Test report

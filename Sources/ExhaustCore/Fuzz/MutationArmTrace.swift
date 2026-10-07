@@ -96,7 +96,6 @@ package struct MutationArmTrace {
         defer {
             handle.closeFile()
         }
-        // The throwing seek and write need macOS 10.15.4, above this module's floor.
         handle.seekToEndOfFile()
         handle.write(Data(rows.utf8))
     }

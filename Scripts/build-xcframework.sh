@@ -7,17 +7,21 @@ BUILD_DIR="${PACKAGE_DIR}/.build/xcframework-staging"
 OUTPUT_DIR="${PACKAGE_DIR}/Frameworks"
 
 EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface -Xswiftc -package-name -Xswiftc exhaust -Xswiftc -gnone)
+MACOS_DEPLOYMENT_TARGET="12.0"
+
 IOS_SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 IOS_DEV_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-IOS_DEPLOYMENT_TARGET="18.0"
+IOS_DEPLOYMENT_TARGET="15.0"
 
 TVOS_SIM_SDK="$(xcrun --sdk appletvsimulator --show-sdk-path)"
 TVOS_DEV_SDK="$(xcrun --sdk appletvos --show-sdk-path)"
-TVOS_DEPLOYMENT_TARGET="13.0"
+TVOS_DEPLOYMENT_TARGET="15.0"
 
 WATCHOS_SIM_SDK="$(xcrun --sdk watchsimulator --show-sdk-path)"
 WATCHOS_DEV_SDK="$(xcrun --sdk watchos --show-sdk-path)"
-WATCHOS_DEPLOYMENT_TARGET="6.0"
+WATCHOS_DEPLOYMENT_TARGET="9.0"
+# watchOS 26 introduced the arm64 device ABI; older watches use arm64_32.
+WATCHOS_ARM64_DEPLOYMENT_TARGET="26.0"
 
 VISIONOS_SIM_SDK="$(xcrun --sdk xrsimulator --show-sdk-path)"
 VISIONOS_DEV_SDK="$(xcrun --sdk xros --show-sdk-path)"
@@ -33,7 +37,7 @@ mkdir -p "${BUILD_DIR}"
 for triple in arm64-apple-macosx arm64e-apple-macosx x86_64-apple-macosx \
     arm64-apple-ios arm64-apple-ios-simulator x86_64-apple-ios-simulator \
     arm64-apple-tvos arm64-apple-tvos-simulator x86_64-apple-tvos-simulator \
-    arm64-apple-watchos arm64-apple-watchos-simulator x86_64-apple-watchos-simulator; do
+    arm64-apple-watchos arm64_32-apple-watchos arm64-apple-watchos-simulator x86_64-apple-watchos-simulator; do
     rm -rf "${PACKAGE_DIR}/.build/${triple}/release/ExhaustCore.build"
 done
 # visionOS uses separate scratch paths (--sdk workaround)
@@ -51,6 +55,7 @@ build_triple() {
     shift
     echo "==> Building ExhaustCore for ${triple}"
     swift build \
+        --build-system native \
         --package-path "${PACKAGE_DIR}" \
         --triple "${triple}" \
         --configuration release \
@@ -70,6 +75,7 @@ build_xros() {
     local label=$1 sdk_path=$2 target_triple=$3 scratch_path=$4
     echo "==> Building ExhaustCore for ${label}"
     swift build \
+        --build-system native \
         --package-path "${PACKAGE_DIR}" \
         --scratch-path "${scratch_path}" \
         --sdk "${sdk_path}" \
@@ -82,61 +88,74 @@ build_xros() {
 
 PIDS=()
 
-build_triple arm64-apple-macosx &
+# Keep both Swift and C object files at the package's macOS deployment minimum.
+build_triple arm64-apple-macosx \
+    -Xswiftc -target -Xswiftc "arm64-apple-macosx${MACOS_DEPLOYMENT_TARGET}" \
+    -Xcc -target -Xcc "arm64-apple-macosx${MACOS_DEPLOYMENT_TARGET}" &
 PIDS+=($!)
 
 # Xcode builds package dependencies for arm64e when a workspace sets iOSPackagesShouldBuildARM64e, which Xcode 27 also applies to macOS destinations. Without this slice those consumers fail with "Unable to resolve module dependency: 'ExhaustCore'".
-build_triple arm64e-apple-macosx &
+build_triple arm64e-apple-macosx \
+    -Xswiftc -target -Xswiftc "arm64e-apple-macosx${MACOS_DEPLOYMENT_TARGET}" \
+    -Xcc -target -Xcc "arm64e-apple-macosx${MACOS_DEPLOYMENT_TARGET}" &
 PIDS+=($!)
 
-build_triple x86_64-apple-macosx &
+build_triple x86_64-apple-macosx \
+    -Xswiftc -target -Xswiftc "x86_64-apple-macosx${MACOS_DEPLOYMENT_TARGET}" \
+    -Xcc -target -Xcc "x86_64-apple-macosx${MACOS_DEPLOYMENT_TARGET}" &
 PIDS+=($!)
 
 # iOS
 build_triple arm64-apple-ios \
-    -Xswiftc -sdk -Xswiftc "${IOS_DEV_SDK}" \
+    --sdk "${IOS_DEV_SDK}" \
     -Xswiftc -target -Xswiftc "arm64-apple-ios${IOS_DEPLOYMENT_TARGET}" &
 PIDS+=($!)
 
 build_triple arm64-apple-ios-simulator \
-    -Xswiftc -sdk -Xswiftc "${IOS_SIM_SDK}" \
+    --sdk "${IOS_SIM_SDK}" \
     -Xswiftc -target -Xswiftc "arm64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator" &
 PIDS+=($!)
 
 build_triple x86_64-apple-ios-simulator \
-    -Xswiftc -sdk -Xswiftc "${IOS_SIM_SDK}" \
+    --sdk "${IOS_SIM_SDK}" \
     -Xswiftc -target -Xswiftc "x86_64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator" &
 PIDS+=($!)
 
 # tvOS
 build_triple arm64-apple-tvos \
-    -Xswiftc -sdk -Xswiftc "${TVOS_DEV_SDK}" \
+    --sdk "${TVOS_DEV_SDK}" \
     -Xswiftc -target -Xswiftc "arm64-apple-tvos${TVOS_DEPLOYMENT_TARGET}" &
 PIDS+=($!)
 
 build_triple arm64-apple-tvos-simulator \
-    -Xswiftc -sdk -Xswiftc "${TVOS_SIM_SDK}" \
+    --sdk "${TVOS_SIM_SDK}" \
     -Xswiftc -target -Xswiftc "arm64-apple-tvos${TVOS_DEPLOYMENT_TARGET}-simulator" &
 PIDS+=($!)
 
 build_triple x86_64-apple-tvos-simulator \
-    -Xswiftc -sdk -Xswiftc "${TVOS_SIM_SDK}" \
+    --sdk "${TVOS_SIM_SDK}" \
     -Xswiftc -target -Xswiftc "x86_64-apple-tvos${TVOS_DEPLOYMENT_TARGET}-simulator" &
 PIDS+=($!)
 
 # watchOS
 build_triple arm64-apple-watchos \
-    -Xswiftc -sdk -Xswiftc "${WATCHOS_DEV_SDK}" \
-    -Xswiftc -target -Xswiftc "arm64-apple-watchos${WATCHOS_DEPLOYMENT_TARGET}" &
+    --sdk "${WATCHOS_DEV_SDK}" \
+    -Xswiftc -target -Xswiftc "arm64-apple-watchos${WATCHOS_ARM64_DEPLOYMENT_TARGET}" \
+    -Xcc -target -Xcc "arm64-apple-watchos${WATCHOS_ARM64_DEPLOYMENT_TARGET}" &
+PIDS+=($!)
+
+build_triple arm64_32-apple-watchos \
+    --sdk "${WATCHOS_DEV_SDK}" \
+    -Xswiftc -target -Xswiftc "arm64_32-apple-watchos${WATCHOS_DEPLOYMENT_TARGET}" &
 PIDS+=($!)
 
 build_triple arm64-apple-watchos-simulator \
-    -Xswiftc -sdk -Xswiftc "${WATCHOS_SIM_SDK}" \
+    --sdk "${WATCHOS_SIM_SDK}" \
     -Xswiftc -target -Xswiftc "arm64-apple-watchos${WATCHOS_DEPLOYMENT_TARGET}-simulator" &
 PIDS+=($!)
 
 build_triple x86_64-apple-watchos-simulator \
-    -Xswiftc -sdk -Xswiftc "${WATCHOS_SIM_SDK}" \
+    --sdk "${WATCHOS_SIM_SDK}" \
     -Xswiftc -target -Xswiftc "x86_64-apple-watchos${WATCHOS_DEPLOYMENT_TARGET}-simulator" &
 PIDS+=($!)
 
@@ -165,7 +184,11 @@ for pid in "${PIDS[@]}"; do wait "${pid}"; done
 #   ExhaustCore.build/ExhaustCore.swiftinterface
 #   ExhaustCore.build/ExhaustCore.private.swiftinterface
 
-# TODO: Swift 6.4 (Xcode 27) SwiftPM builds with Swift Build, which writes products to .build/out/Products/Release-<platform>/ instead of .build/<triple>/release/, so collect() finds no objects. Run with DEVELOPER_DIR pointing at Xcode 26 until the script handles both layouts.
+# TODO: Support the Swift Build layout used by default in Swift 6.4 (Xcode 27):
+# .build/out/Products/Release-<platform>/ instead of .build/<triple>/release/.
+# Both collect() and collect_xros(), plus stale-object cleanup, need adapting.
+# The builds above temporarily use --build-system native to retain the layout
+# these collectors expect. Native is deprecated; this is a migration workaround.
 collect() {
     local triple=$1 arch_qualifier=$2 dest=$3
     local build_products="${PACKAGE_DIR}/.build/${triple}/release"
@@ -270,7 +293,9 @@ TVOS_DEV_DIR="${BUILD_DIR}/tvos-arm64"
 TVOS_SIM_ARM64_DIR="${BUILD_DIR}/tvos-simulator-arm64"
 TVOS_SIM_X86_DIR="${BUILD_DIR}/tvos-simulator-x86_64"
 TVOS_SIM_FAT_DIR="${BUILD_DIR}/tvos-simulator-fat"
-WATCHOS_DEV_DIR="${BUILD_DIR}/watchos-arm64"
+WATCHOS_DEV_ARM64_DIR="${BUILD_DIR}/watchos-arm64"
+WATCHOS_DEV_ARM64_32_DIR="${BUILD_DIR}/watchos-arm64_32"
+WATCHOS_DEV_DIR="${BUILD_DIR}/watchos-device-fat"
 WATCHOS_SIM_ARM64_DIR="${BUILD_DIR}/watchos-simulator-arm64"
 WATCHOS_SIM_X86_DIR="${BUILD_DIR}/watchos-simulator-x86_64"
 WATCHOS_SIM_FAT_DIR="${BUILD_DIR}/watchos-simulator-fat"
@@ -286,7 +311,8 @@ collect x86_64-apple-ios-simulator      "x86_64-apple-ios-simulator"        "${I
 collect arm64-apple-tvos                "arm64-apple-tvos"                  "${TVOS_DEV_DIR}"
 collect arm64-apple-tvos-simulator      "arm64-apple-tvos-simulator"        "${TVOS_SIM_ARM64_DIR}"
 collect x86_64-apple-tvos-simulator     "x86_64-apple-tvos-simulator"       "${TVOS_SIM_X86_DIR}"
-collect arm64-apple-watchos             "arm64-apple-watchos"               "${WATCHOS_DEV_DIR}"
+collect arm64-apple-watchos             "arm64-apple-watchos"               "${WATCHOS_DEV_ARM64_DIR}"
+collect arm64_32-apple-watchos          "arm64_32-apple-watchos"            "${WATCHOS_DEV_ARM64_32_DIR}"
 collect arm64-apple-watchos-simulator   "arm64-apple-watchos-simulator"     "${WATCHOS_SIM_ARM64_DIR}"
 collect x86_64-apple-watchos-simulator  "x86_64-apple-watchos-simulator"    "${WATCHOS_SIM_X86_DIR}"
 collect_xros "${XROS_DEV_SCRATCH}" "arm64-apple-xros"           "${VISIONOS_DEV_DIR}"
@@ -318,6 +344,7 @@ create_fat() {
 create_fat "macOS"             "${MACOS_FAT_DIR}"       "${MACOS_ARM64_DIR}"       "${MACOS_ARM64E_DIR}" "${MACOS_X86_DIR}"
 create_fat "iOS Simulator"     "${IOS_SIM_FAT_DIR}"     "${IOS_SIM_ARM64_DIR}"     "${IOS_SIM_X86_DIR}"
 create_fat "tvOS Simulator"    "${TVOS_SIM_FAT_DIR}"    "${TVOS_SIM_ARM64_DIR}"    "${TVOS_SIM_X86_DIR}"
+create_fat "watchOS"           "${WATCHOS_DEV_DIR}"     "${WATCHOS_DEV_ARM64_DIR}" "${WATCHOS_DEV_ARM64_32_DIR}"
 create_fat "watchOS Simulator" "${WATCHOS_SIM_FAT_DIR}" "${WATCHOS_SIM_ARM64_DIR}" "${WATCHOS_SIM_X86_DIR}"
 
 # ---------- Assemble xcframework ----------
@@ -360,7 +387,7 @@ for slice_dir in "${OUTPUT_DIR}/ExhaustCore.xcframework/"*/; do
         tvos-arm64_x86_64-simulator)
             cp -R "${TVOS_SIM_FAT_DIR}/ExhaustCore.swiftmodule" "${slice_dir}/"
             ;;
-        watchos-arm64)
+        watchos-arm64_arm64_32)
             cp -R "${WATCHOS_DEV_DIR}/ExhaustCore.swiftmodule" "${slice_dir}/"
             ;;
         watchos-arm64_x86_64-simulator)

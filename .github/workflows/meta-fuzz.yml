@@ -32,28 +32,28 @@ jobs:
   # The hard gate: every frozen reproducer replays clean, plus the in-package oracle smoke
   # coverage. Deterministic, uninstrumented, minutes.
   replay:
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Replay frozen regressions
-        run: swift test --package-path MetaFuzzHarness
+        run: swift test --build-system native --package-path MetaFuzzHarness
 
       - name: Oracle smoke coverage
-        run: swift test --filter MetaFuzzOracleTests
+        run: swift test --build-system native --filter MetaFuzzOracleTests
 
   # The fuzz lane. Push runs are short and seed-pinned; nightly and manual runs go through the
   # trap-resilient probe wrapper with a longer budget and unpinned seeds.
   fuzz:
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Short pinned fuzz (push)
         if: github.event_name == 'push'
@@ -66,9 +66,9 @@ jobs:
           EXHAUST_RESUME: "0"
           EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
         run: |
-          swift build --package-path MetaFuzzHarness --build-tests $COVERAGE_FLAGS
+          swift build --build-system native --package-path MetaFuzzHarness --build-tests $COVERAGE_FLAGS
           bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-probe" -- \
-            swift test --package-path MetaFuzzHarness --skip-build \
+            swift test --build-system native --package-path MetaFuzzHarness --skip-build \
               --filter FuzzEntryTests $COVERAGE_FLAGS
 
       - name: Nightly fuzz campaign
@@ -76,10 +76,10 @@ jobs:
         env:
           EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
         run: |
-          swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS
+          swift build --build-system native --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS
           bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-probe" -- \
             bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
-              "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
+              "$(swift build --build-system native --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
               --budget-seconds "${{ github.event.inputs.budget || '2700' }}" \
               --depth 3 \
               --node-budget 160 \
@@ -97,7 +97,7 @@ jobs:
         run: |
           bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-screening-probe" -- \
             bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
-              "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
+              "$(swift build --build-system native --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
               --campaign screening \
               --budget-seconds 900 \
               --depth 3 \

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 
 import CompilerPluginSupport
 import PackageDescription
@@ -13,11 +13,11 @@ let strictConcurrencySettings: [SwiftSetting] = [
 let package = Package(
     name: "exhaust-macros",
     platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
-        .macCatalyst(.v13),
-        .tvOS(.v13),
-        .watchOS(.v6),
+        .macOS(.v12),
+        .iOS(.v15),
+        .macCatalyst(.v15),
+        .tvOS(.v15),
+        .watchOS(.v9),
         .visionOS(.v1),
     ],
     products: [
@@ -27,6 +27,8 @@ let package = Package(
         ),
     ],
     dependencies: [
+        // Keep snapshot-testing on the same Custom Dump version as the runtime.
+        .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
         .package(
             url: "https://github.com/swiftlang/swift-syntax.git",
             "601.0.1" ..< "604.0.0"

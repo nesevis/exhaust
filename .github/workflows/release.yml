@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build-and-release:
-    runs-on: macos-26
+    runs-on: xcode-27
     outputs:
       candidate-branch: ${{ steps.candidate.outputs.branch }}
       candidate-sha: ${{ steps.candidate.outputs.sha }}
@@ -33,19 +33,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Select Xcode 26.5
-        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Run tests (source)
         run: |
           set +o pipefail
-          swift test --no-parallel 2>&1 | tee "$RUNNER_TEMP/test-output-source.txt"
+          swift test --build-system native --no-parallel 2>&1 | tee "$RUNNER_TEMP/test-output-source.txt"
           exit ${PIPESTATUS[0]}
 
       - name: Run macro implementation tests
         run: |
           set +o pipefail
-          swift test --package-path Packages/exhaust-macros --no-parallel 2>&1 \
+          swift test --build-system native --package-path Packages/exhaust-macros --no-parallel 2>&1 \
             | tee "$RUNNER_TEMP/test-output-macros.txt"
           exit ${PIPESTATUS[0]}
 
@@ -145,7 +145,7 @@ jobs:
           EXHAUST_RELEASE: "1"
         run: |
           set +o pipefail
-          swift test --no-parallel --skip ExhaustCoreTests 2>&1 \
+          swift test --build-system native --no-parallel --skip ExhaustCoreTests 2>&1 \
             | tee "$RUNNER_TEMP/test-output-xcframework.txt"
           exit ${PIPESTATUS[0]}
 
@@ -298,7 +298,7 @@ jobs:
   verify-linux:
     needs: build-and-release
     runs-on: ubuntu-latest
-    container: swift:6.3
+    container: swift:6.4
 
     defaults:
       run:
@@ -310,7 +310,7 @@ jobs:
           ref: ${{ needs.build-and-release.outputs.candidate-branch }}
 
       - name: Build release manifest from source
-        run: swift build
+        run: swift build --build-system native
 
   publish-release:
     needs: [build-and-release, verify-linux]

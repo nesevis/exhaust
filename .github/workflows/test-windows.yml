@@ -14,14 +14,14 @@ jobs:
 
       - uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-6.3.2-release
-          tag: 6.3.2-RELEASE
+          branch: swift-6.4.0-release
+          tag: 6.4.0-RELEASE
 
       - name: Run tests
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path .build | Out-Null
-          swift test --parallel 2>&1 | Tee-Object -FilePath .build/test-output.txt
+          swift test --build-system native --parallel 2>&1 | Tee-Object -FilePath .build/test-output.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test report
