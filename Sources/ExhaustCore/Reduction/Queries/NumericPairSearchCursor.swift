@@ -38,10 +38,22 @@ struct NumericPairSearchCursor {
         let pair: NumericPairQuery.Pair
         let sourceBitPattern: UInt64
         let sinkBitPattern: UInt64
+
+        func write(into candidate: inout ChoiceSequence) {
+            candidate[pair.source.position] = candidate[pair.source.position].withBitPattern(sourceBitPattern)
+            candidate[pair.sink.position] = candidate[pair.sink.position].withBitPattern(sinkBitPattern)
+        }
     }
 
     /// Writes exactly two values into a buffer reset to the checkpoint by the caller.
     mutating func next(into candidate: inout ChoiceSequence) -> Proposal? {
+        guard let proposal = next() else { return nil }
+        proposal.write(into: &candidate)
+        return proposal
+    }
+
+    /// Advances the grid without constructing a candidate, so callers can check sparse hashes first.
+    mutating func next() -> Proposal? {
         while diagonal <= maximumDiagonal {
             while sourceOffset <= diagonal {
                 while planIndex < plans.count {
@@ -51,16 +63,11 @@ struct NumericPairSearchCursor {
                     guard sourceOffset < plan.sources.count, sinkOffset < plan.sinks.count else {
                         continue
                     }
-                    let proposal = Proposal(
+                    return Proposal(
                         pair: plan.pair,
                         sourceBitPattern: plan.sources[sourceOffset],
                         sinkBitPattern: plan.sinks[sinkOffset]
                     )
-                    candidate[plan.pair.source.position] = candidate[plan.pair.source.position]
-                        .withBitPattern(proposal.sourceBitPattern)
-                    candidate[plan.pair.sink.position] = candidate[plan.pair.sink.position]
-                        .withBitPattern(proposal.sinkBitPattern)
-                    return proposal
                 }
                 planIndex = 0
                 sourceOffset += 1

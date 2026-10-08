@@ -36,22 +36,23 @@ struct StagedPairSearchCursor {
         rescalingKeys = Set(rescalingProposals.map(ProposalKey.init))
     }
 
-    /// Skips grid points already emitted by ratio-preserving tactics. Restores the caller's checkpoint between skipped points so mutations from one pair cannot leak into the next pair's probe. Coprime groups use the original cursor directly.
+    /// Writes only the returned proposal; skipped grid points cannot leak edits into another pair's candidate.
     mutating func next(into candidate: inout ChoiceSequence) -> NumericPairSearchCursor.Proposal? {
+        guard let proposal = next() else { return nil }
+        proposal.write(into: &candidate)
+        return proposal
+    }
+
+    /// Skips grid points already emitted by ratio-preserving tactics without touching a candidate buffer.
+    mutating func next() -> NumericPairSearchCursor.Proposal? {
         if rescalingIndex < rescalingProposals.count {
             let proposal = rescalingProposals[rescalingIndex]
             rescalingIndex += 1
-            candidate[proposal.pair.source.position] = candidate[proposal.pair.source.position].withBitPattern(proposal.sourceBitPattern)
-            candidate[proposal.pair.sink.position] = candidate[proposal.pair.sink.position].withBitPattern(proposal.sinkBitPattern)
             return proposal
         }
-        guard rescalingKeys.isEmpty == false else { return cursor.next(into: &candidate) }
-        let checkpoint = candidate
-        while let proposal = cursor.next(into: &candidate) {
-            guard rescalingKeys.contains(ProposalKey(proposal)) == false else {
-                candidate = checkpoint
-                continue
-            }
+        guard rescalingKeys.isEmpty == false else { return cursor.next() }
+        while let proposal = cursor.next() {
+            guard rescalingKeys.contains(ProposalKey(proposal)) == false else { continue }
             return proposal
         }
         return nil

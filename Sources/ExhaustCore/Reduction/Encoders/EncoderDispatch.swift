@@ -19,6 +19,14 @@ indirect enum EncoderDispatch {
 }
 
 extension EncoderDispatch: GraphEncoder {
+    /// The staged session advances descriptors before touching its candidate buffer; other encoders retain their normal probe path.
+    mutating func nextStagedJointProbe(lastAccepted: Bool) -> StagedJointEncoder.Probe? {
+        guard case var .stagedJoint(encoder) = self else { return nil }
+        let probe = encoder.nextSparseProbe(lastAccepted: lastAccepted)
+        self = .stagedJoint(encoder)
+        return probe
+    }
+
     var name: EncoderName {
         switch self {
             case let .structural(encoder): encoder.name

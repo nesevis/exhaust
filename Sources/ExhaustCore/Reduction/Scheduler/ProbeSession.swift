@@ -70,6 +70,7 @@ struct ProbeSession {
     private let hasBind: Bool
 
     private var candidateBuffer: ChoiceSequence
+    private var previousStagedProbe: StagedJointEncoder.Probe?
     private var lastProbeAccepted: Bool = false
 
     private var pendingMutation: ProjectedMutation?
@@ -125,12 +126,31 @@ struct ProbeSession {
     // MARK: - Encode
 
     private mutating func stepEncode(state: inout some ProbeSessionState) -> StepResult {
-        guard let mutation = encoder.nextProbe(
-            into: &candidateBuffer,
-            lastAccepted: lastProbeAccepted
-        ) else {
-            phase = .finished
-            return .finished
+        let mutation: ProjectedMutation
+        let probeHash: UInt64
+        let cacheHit: Bool
+        if case .stagedJoint = encoder {
+            guard let probe = encoder.nextStagedJointProbe(lastAccepted: lastProbeAccepted) else {
+                phase = .finished
+                return .finished
+            }
+            mutation = probe.mutation
+            probeHash = probe.hash(baseHash: baseHash, baseSequence: state.sequence)
+            cacheHit = state.rejectCache.contains(probeHash)
+            // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
+            if cacheHit == false || observer != nil {
+                previousStagedProbe?.restore(into: &candidateBuffer, baseSequence: state.sequence)
+                probe.write(into: &candidateBuffer)
+                previousStagedProbe = probe
+            }
+        } else {
+            guard let probe = encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastProbeAccepted) else {
+                phase = .finished
+                return .finished
+            }
+            mutation = probe
+            probeHash = ZobristHash.incrementalHash(baseHash: baseHash, baseSequence: state.sequence, probe: candidateBuffer)
+            cacheHit = state.rejectCache.contains(probeHash)
         }
 
         counts.recordEmission()
@@ -142,12 +162,7 @@ struct ProbeSession {
             observer(.emitted(probeID: nextProbeID, sequence: candidateBuffer, mutation: mutation))
         }
 
-        let probeHash = ZobristHash.incrementalHash(
-            baseHash: baseHash,
-            baseSequence: state.sequence,
-            probe: candidateBuffer
-        )
-        if state.rejectCache.contains(probeHash) {
+        if cacheHit {
             counts.recordCacheRejection()
             terminateObservation(.cacheRejected)
             return .encoded(encoder: encoder.name, cacheHit: true)

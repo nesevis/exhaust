@@ -38,21 +38,34 @@ struct NumericJointSearchCursor {
     struct Proposal {
         let leaves: [NumericPairQuery.Leaf]
         let patterns: [UInt64]
+
+        func write(into candidate: inout ChoiceSequence) {
+            for index in leaves.indices {
+                let position = leaves[index].position
+                candidate[position] = candidate[position].withBitPattern(patterns[index])
+            }
+        }
     }
 
-    /// Shares each rescaling priority across retained groups before deepening to the next scale. All-target, all-halved, and mixed-rank grid points matching any earlier rescaling are skipped so prioritization does not spend extra probes on duplicates.
     mutating func next(into candidate: inout ChoiceSequence) -> Proposal? {
+        guard let proposal = next() else { return nil }
+        proposal.write(into: &candidate)
+        return proposal
+    }
+
+    /// Shares each rescaling priority across retained groups before deepening to the next scale. All-target, all-halved, and mixed-rank grid points matching any earlier rescaling are skipped so prioritization does not spend extra probes on duplicates. No candidate is constructed until the caller needs one.
+    mutating func next() -> Proposal? {
         if rescalingIndex < rescalingProposals.count {
             let proposal = rescalingProposals[rescalingIndex]
             rescalingIndex += 1
-            return write(leaves: proposal.leaves, patterns: proposal.patterns, into: &candidate)
+            return proposal
         }
         while coherentRank < 2 {
             while planIndex < plans.count {
                 let plan = plans[planIndex]
                 planIndex += 1
                 let indices = Array(repeating: coherentRank, count: plan.leaves.count)
-                if let proposal = proposal(plan: plan, indices: indices, into: &candidate) { return proposal }
+                if let proposal = proposal(plan: plan, indices: indices) { return proposal }
             }
             planIndex = 0
             coherentRank += 1
@@ -65,26 +78,18 @@ struct NumericJointSearchCursor {
             while planIndex < plans.count {
                 let plan = plans[planIndex]
                 planIndex += 1
-                if let proposal = proposal(plan: plan, indices: offsets!, into: &candidate) { return proposal }
+                if let proposal = proposal(plan: plan, indices: offsets!) { return proposal }
             }
             planIndex = 0
             offsets = nil
         }
     }
 
-    private func proposal(plan: Plan, indices: [Int], into candidate: inout ChoiceSequence) -> Proposal? {
+    private func proposal(plan: Plan, indices: [Int]) -> Proposal? {
         guard indices.indices.allSatisfy({ indices[$0] < plan.samples[$0].count }) else { return nil }
         let patterns = indices.indices.map { plan.samples[$0][indices[$0]] }
         guard plan.ratioPatterns.contains(patterns) == false else { return nil }
-        return write(leaves: plan.leaves, patterns: patterns, into: &candidate)
-    }
-
-    private func write(leaves: [NumericPairQuery.Leaf], patterns: [UInt64], into candidate: inout ChoiceSequence) -> Proposal {
-        for index in leaves.indices {
-            let position = leaves[index].position
-            candidate[position] = candidate[position].withBitPattern(patterns[index])
-        }
-        return Proposal(leaves: leaves, patterns: patterns)
+        return Proposal(leaves: plan.leaves, patterns: patterns)
     }
 
     /// Enumerates bounded compositions of a rank sum using a base-six prefix and a derived final coordinate. Skips the two coherent rows already visited.
