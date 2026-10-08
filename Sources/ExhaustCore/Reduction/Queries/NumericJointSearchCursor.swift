@@ -14,15 +14,18 @@ struct NumericJointSearchCursor {
     private var diagonal = 0
     private var prefix: [Int]
     private var offsets: [Int]?
+    private let maximumOffsets: [Int]
+    private let suffixCapacity: [Int]
     private let maximumDiagonal: Int
 
     /// Preserves scope rank within each rescaling priority and records membership once for deduplicating the later grid.
     init(groups: [NumericJointQuery.Group]) {
-        plans = groups.compactMap { group in
+        let plans: [Plan] = groups.compactMap { group in
             let samples = group.samples
             guard samples.allSatisfy({ $0.isEmpty == false }) else { return nil }
             return Plan(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.ratioProposals.map(\.patterns)))
         }
+        self.plans = plans
         rescalingProposals = groups.enumerated().flatMap { groupIndex, group in
             group.ratioProposals.map { rescaling in
                 (priority: rescaling.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: rescaling.patterns))
@@ -31,8 +34,17 @@ struct NumericJointSearchCursor {
             if first.priority != second.priority { return first.priority < second.priority }
             return first.groupIndex < second.groupIndex
         }.map(\.proposal)
-        prefix = Array(repeating: 0, count: max(0, (groups.first?.leaves.count ?? 1) - 1))
-        maximumDiagonal = plans.map { $0.samples.reduce(0) { $0 + $1.count - 1 } }.max() ?? -1
+        let arity = groups.first?.leaves.count ?? 0
+        maximumOffsets = (0 ..< arity).map { index in
+            plans.map { min($0.samples[index].count, NumericPairCandidates.maximumJointSamples) - 1 }.max() ?? 0
+        }
+        var capacity = Array(repeating: 0, count: arity + 1)
+        for index in maximumOffsets.indices.reversed() {
+            capacity[index] = maximumOffsets[index] + capacity[index + 1]
+        }
+        suffixCapacity = capacity
+        prefix = Array(repeating: 0, count: max(0, arity - 1))
+        maximumDiagonal = min(plans.map { $0.samples.reduce(0) { $0 + $1.count - 1 } }.max() ?? -1, capacity[0])
     }
 
     struct Proposal {
@@ -92,14 +104,13 @@ struct NumericJointSearchCursor {
         return Proposal(leaves: plan.leaves, patterns: patterns)
     }
 
-    /// Enumerates bounded compositions of a rank sum using a base-six prefix and a derived final coordinate. Skips the two coherent rows already visited.
+    /// Visits bounded compositions in lexicographic order within each rank sum, skipping the two coherent rows already visited.
     private mutating func nextOffsets() -> [Int]? {
         while diagonal <= maximumDiagonal {
             let last = diagonal - prefix.reduce(0, +)
             let indices = prefix + [last]
             advancePrefix()
-            guard (0 ..< NumericPairCandidates.maximumJointSamples).contains(last),
-                  indices.allSatisfy({ $0 == 0 }) == false,
+            guard indices.allSatisfy({ $0 == 0 }) == false,
                   indices.allSatisfy({ $0 == 1 }) == false
             else { continue }
             return indices
@@ -109,10 +120,21 @@ struct NumericJointSearchCursor {
 
     private mutating func advancePrefix() {
         for index in prefix.indices.reversed() {
+            var remaining = diagonal - prefix[..<index].reduce(0, +) - prefix[index] - 1
+            guard prefix[index] < maximumOffsets[index], (0 ... suffixCapacity[index + 1]).contains(remaining) else { continue }
             prefix[index] += 1
-            if prefix[index] < NumericPairCandidates.maximumJointSamples { return }
-            prefix[index] = 0
+            for following in (index + 1) ..< prefix.count {
+                prefix[following] = max(0, remaining - suffixCapacity[following + 1])
+                remaining -= prefix[following]
+            }
+            return
         }
         diagonal += 1
+        guard diagonal <= maximumDiagonal else { return }
+        var remaining = diagonal
+        for index in prefix.indices {
+            prefix[index] = max(0, remaining - suffixCapacity[index + 1])
+            remaining -= prefix[index]
+        }
     }
 }
