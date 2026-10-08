@@ -2,13 +2,13 @@ import Exhaust
 import ExhaustCore
 import Testing
 
-@Suite("ScreeningRunner continue-past-failure tests")
+@Suite("ScreeningPhase continue-past-failure tests")
 struct ScreeningContinuationTests {
     @Test("Default mode stops at the first failing row")
     func defaultModeStopsAtFirstFailure() {
         let gen = #gen(.int(in: 0 ... 9))
         var examples: [(value: Int, passed: Bool)] = []
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             gen.gen,
             screeningBudget: 100,
             coveringSeed: 0,
@@ -32,7 +32,7 @@ struct ScreeningContinuationTests {
     func continuePastFailureCataloguesAll() {
         let gen = #gen(.int(in: 0 ... 9))
         var examples: [(value: Int, passed: Bool)] = []
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             gen.gen,
             screeningBudget: 100,
             coveringSeed: 0,
@@ -57,7 +57,7 @@ struct ScreeningContinuationTests {
     @Test("Continue-past-failure with no failures still reports exhaustive")
     func continuePastFailureExhaustive() {
         let gen = #gen(.int(in: 0 ... 9))
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             gen.gen,
             screeningBudget: 100,
             coveringSeed: 0,

@@ -3,7 +3,7 @@
 // Analyzes the generator, then pulls rows from BalancedCoveringArrayGenerator one at a time, testing each against the property. Stops on first failure or budget.
 
 /// Runs the screening phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
-package enum ScreeningRunner {
+package enum ScreeningPhase {
     /// Headroom the domain model gets over the per-run row budget.
     ///
     /// Both model gates below (the composite threshold passed to analysis and the pair-product downgrade) compare against the row budget scaled by this factor rather than the raw budget. Per-run covering-seed rotation starts each run at a different row window, so a model larger than one run's rows still completes its pair coverage across successive runs. Every parameter still sweeps its full value catalog within roughly one run. Without the headroom, two-element composite slots for the character and float catalogs exceed the raw standard budget and go opaque, so their pair space is never screened.

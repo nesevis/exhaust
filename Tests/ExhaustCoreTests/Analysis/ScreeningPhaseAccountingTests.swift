@@ -1,8 +1,8 @@
 import Testing
 @testable import ExhaustCore
 
-@Suite("ScreeningRunner accounting")
-struct ScreeningRunnerAccountingTests {
+@Suite("ScreeningPhase accounting")
+struct ScreeningPhaseAccountingTests {
     @Test("Rejected rows are counted separately and prevent exhaustive completion")
     func rejectedRowsAreCountedSeparatelyAndPreventExhaustiveCompletion() {
         let unfilteredGenerator = Gen.zip(
@@ -26,7 +26,7 @@ struct ScreeningRunnerAccountingTests {
         )
         var acceptedPoints: [[UInt64]] = []
 
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator,
             screeningBudget: 4,
             coveringSeed: 0,
@@ -62,7 +62,7 @@ struct ScreeningRunnerAccountingTests {
         )
         var observedPoints = Set<[UInt64]>()
 
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator,
             screeningBudget: 200,
             coveringSeed: 0,

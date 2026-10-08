@@ -432,18 +432,18 @@ package final class FuzzRunner<Output> {
     // MARK: - Phase 1: Screening
 
     private func runScreeningPhase() {
-        guard let plan = ScreeningRunner.plan(
+        guard let plan = ScreeningPhase.plan(
             gen,
             screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget())
         ) else {
             return
         }
         // The run seed, so the screening rows are pinned by the same seed that pins every other search decision. An unseeded #explore draws a fresh seed per run, which rotates the rows the same way a fresh #exhaust run does.
-        var rows = ScreeningRunner.Rows(plan: plan, coveringSeed: configuration.seed, skipToRow: nil)
+        var rows = ScreeningPhase.Rows(plan: plan, coveringSeed: configuration.seed, skipToRow: nil)
         while terminationDue() == nil, let (rowIndex, row) = rows.next() {
             // The breadcrumb clears before the row is built, so a trap while the generator builds it is not attributed to the previous attempt.
             breadcrumb?.clear()
-            guard let (value, tree) = ScreeningRunner.materializeRow(
+            guard let (value, tree) = ScreeningPhase.materializeRow(
                 erasedGen,
                 row: row,
                 rowIndex: rowIndex,

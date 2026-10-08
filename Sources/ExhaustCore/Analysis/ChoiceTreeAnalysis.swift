@@ -30,7 +30,7 @@
 ///
 /// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted, that is, when the generator is purely deterministic (for example `Gen.just(value)`).
 ///
-/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``ScreeningRunner``, ``ProblematicValues``
+/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``ScreeningPhase``, ``ProblematicValues``
 package enum ChoiceTreeAnalysis {
     /// The outcome of analyzing a generator's choice tree structure.
     public enum AnalysisResult {
@@ -55,8 +55,8 @@ package enum ChoiceTreeAnalysis {
     /// Tries multiple seeds to maximize element coverage for sequences.
     ///
     /// - Parameters:
-    ///   - expandSequencePairs: When `true`, two-element configurations give both positions the full element catalog (N² pair entries), degrading per slot to disjoint halves ((N/2)² entries) when the full model exceeds `compositeThreshold`. When `false`, every two-element configuration uses disjoint halves. ``ScreeningRunner`` passes `false` on retry when the flattened pair product exceeds its model budget.
-    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion and pair halving go opaque. Defaults to ``enumerableDomainThreshold``. ``ScreeningRunner`` passes its model budget so composite domains stay within what rotated covering runs can sweep.
+    ///   - expandSequencePairs: When `true`, two-element configurations give both positions the full element catalog (N² pair entries), degrading per slot to disjoint halves ((N/2)² entries) when the full model exceeds `compositeThreshold`. When `false`, every two-element configuration uses disjoint halves. ``ScreeningPhase`` passes `false` on retry when the flattened pair product exceeds its model budget.
+    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion and pair halving go opaque. Defaults to ``enumerableDomainThreshold``. ``ScreeningPhase`` passes its model budget so composite domains stay within what rotated covering runs can sweep.
     public static func analyze(
         _ gen: Generator<some Any>,
         expandSequencePairs: Bool = true,

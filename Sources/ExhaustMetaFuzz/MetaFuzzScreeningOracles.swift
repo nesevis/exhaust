@@ -66,7 +66,7 @@ public extension MetaFuzz {
         try checkClassification(generator, budget: budget, fuzzCase)
 
         var rowOutputs: [Any] = []
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator,
             screeningBudget: budget,
             coveringSeed: fuzzCase.valueSeed,
@@ -99,7 +99,7 @@ extension MetaFuzz {
         _ fuzzCase: MetaFuzzCase
     ) throws {
         let expectation = fuzzCase.recipe.screeningExpectation
-        let plan = ScreeningRunner.plan(generator, screeningBudget: budget)
+        let plan = ScreeningPhase.plan(generator, screeningBudget: budget)
         switch expectation {
             case .unspecified:
                 return
@@ -141,10 +141,10 @@ extension MetaFuzz {
     private static func checkStability(
         _ generator: AnyGenerator,
         budget: UInt64,
-        first: ScreeningRunner.Result<Any>,
+        first: ScreeningPhase.Result<Any>,
         _ fuzzCase: MetaFuzzCase
     ) throws {
-        let second = ScreeningRunner.run(
+        let second = ScreeningPhase.run(
             generator,
             screeningBudget: budget,
             coveringSeed: fuzzCase.perturbationSeed,
@@ -191,7 +191,7 @@ extension MetaFuzz {
     }
 }
 
-private extension ScreeningRunner.Result {
+private extension ScreeningPhase.Result {
     var isExhaustive: Bool {
         if case .exhaustive = self {
             return true

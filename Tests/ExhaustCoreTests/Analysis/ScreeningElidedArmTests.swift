@@ -15,7 +15,7 @@ struct ScreeningElidedArmTests {
             (weight: 1, generator: Gen.just(UInt64(0))),
             (weight: 7, generator: binding),
         ])
-        let plan = try #require(ScreeningRunner.plan(generator, screeningBudget: 200))
+        let plan = try #require(ScreeningPhase.plan(generator, screeningBudget: 200))
         #expect(plan.isExhaustiveCandidate == false)
     }
 
@@ -26,19 +26,19 @@ struct ScreeningElidedArmTests {
             (weight: 1, generator: Gen.just(UInt64(0))),
             (weight: 1, generator: Gen.just(UInt64(1))),
         ])
-        let plan = try #require(ScreeningRunner.plan(generator, screeningBudget: 200))
+        let plan = try #require(ScreeningPhase.plan(generator, screeningBudget: 200))
         #expect(plan.isExhaustiveCandidate)
     }
 
     @Test("A generator with a choice outside the parameter model is never an exhaustive candidate", arguments: UnmodeledChoiceShape.allCases)
     func unmodeledChoicePreventsExhaustiveCandidacy(shape: UnmodeledChoiceShape) throws {
-        let plan = try #require(ScreeningRunner.plan(shape.generator, screeningBudget: 2000))
+        let plan = try #require(ScreeningPhase.plan(shape.generator, screeningBudget: 2000))
         #expect(plan.isExhaustiveCandidate == false)
     }
 
     @Test("A generator whose every choice is a modeled parameter remains an exhaustive candidate", arguments: FullyModeledShape.allCases)
     func fullyModeledShapeRemainsExhaustive(shape: FullyModeledShape) throws {
-        let plan = try #require(ScreeningRunner.plan(shape.generator, screeningBudget: 2000))
+        let plan = try #require(ScreeningPhase.plan(shape.generator, screeningBudget: 2000))
         #expect(plan.isExhaustiveCandidate)
     }
 
@@ -57,7 +57,7 @@ struct ScreeningElidedArmTests {
             continuation: { .pure($0 as! UInt64) }
         )
         var distinctRows = Set<UInt64>()
-        let result = ScreeningRunner.run(filtered, screeningBudget: 512, coveringSeed: 0, property: { value in
+        let result = ScreeningPhase.run(filtered, screeningBudget: 512, coveringSeed: 0, property: { value in
             distinctRows.insert(value)
             return true
         })

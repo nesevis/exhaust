@@ -75,7 +75,7 @@ package extension __ExhaustRuntime {
         ledger: inout RunLedger
     ) -> ScreeningOutcome<Output> {
         let skipsBefore = context.skipCount
-        let screeningResult = ScreeningRunner.run(
+        let screeningResult = ScreeningPhase.run(
             context.gen,
             screeningBudget: screeningBudget,
             coveringSeed: coveringSeed,

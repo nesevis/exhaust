@@ -83,8 +83,8 @@ public struct ExhaustReport: Sendable {
         propertyInvocations += 1
     }
 
-    /// Applies screening row counts from the screening runner's summary.
-    package mutating func applyScreeningRows(_ summary: ScreeningRunner.Summary) {
+    /// Applies screening row counts from the screening phase's summary.
+    package mutating func applyScreeningRows(_ summary: ScreeningPhase.Summary) {
         screeningRows = summary.rowAttempts
         screeningRejectedRows = summary.rejectedRows
     }
