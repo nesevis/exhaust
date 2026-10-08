@@ -39,7 +39,7 @@ struct ReorderFinalizationTests {
         }
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = .reorderPass
-        _ = try machine.next()
+        _ = machine.next()
 
         #expect(try machine.next() == nil)
         #expect(propertyCalls == 1)
@@ -80,7 +80,7 @@ struct ReorderFinalizationTests {
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = phase
         clock.expire()
-        _ = try machine.next()
+        _ = machine.next()
 
         #expect(try machine.next() == nil)
         #expect(propertyCalls == (reorderEnabled ? 1 : 0))
@@ -120,7 +120,7 @@ struct ReorderFinalizationTests {
         )
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = .reorderPass
-        _ = try machine.next()
+        _ = machine.next()
         let reordered = try #require(machine.output as? ([UInt64], [UInt64]))
 
         #expect(reordered.0 == [1, 2, 3])
@@ -156,7 +156,7 @@ struct ReorderFinalizationTests {
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         var acceptedDeletion = false
         for _ in 0 ..< 100 {
-            if case .decoded(.deletion, accepted: true) = try machine.next() {
+            if case .decoded(.deletion, accepted: true) = machine.next() {
                 acceptedDeletion = true
                 break
             }
@@ -166,7 +166,7 @@ struct ReorderFinalizationTests {
         #expect(survivors.count == 2)
         #expect(survivors != survivors.sorted())
         clock.expire()
-        _ = try machine.next()
+        _ = machine.next()
 
         #expect(machine.output as? [UInt64] == survivors.sorted())
         #expect(propertyCalls == 2)

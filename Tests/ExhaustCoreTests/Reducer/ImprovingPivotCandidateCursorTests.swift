@@ -71,7 +71,7 @@ struct ImprovingPivotCandidateCursorTests {
         let first = try #require(candidates.first)
         machine.rejectCache.insert(ZobristHash.hash(of: first))
         #expect(machine.hasUnprobedImprovingPivot)
-        let accepted = try machine.runImprovingPivotPass()
+        let accepted = machine.runImprovingPivotPass()
         #expect(accepted == false)
         #expect(propertyCalls == 1)
         #expect(machine.stats.relaxImprovingProbes == 1)

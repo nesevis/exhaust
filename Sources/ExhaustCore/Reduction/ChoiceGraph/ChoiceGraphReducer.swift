@@ -46,14 +46,14 @@ package extension Interpreters {
         output: Output,
         config: ReducerConfiguration,
         property: (Output) -> Bool
-    ) throws -> ReductionOutcome<Output> {
+    ) -> ReductionOutcome<Output> {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
         }
 
-        let outcome = try withoutActuallyEscaping(property) { escapingProperty in
-            try ChoiceGraphScheduler.run(
+        let outcome = withoutActuallyEscaping(property) { escapingProperty in
+            ChoiceGraphScheduler.run(
                 gen: gen,
                 initialTree: tree,
                 initialOutput: output,
@@ -89,14 +89,14 @@ package extension Interpreters {
         output: Output,
         config: ReducerConfiguration,
         property: (Output) -> Bool
-    ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+    ) -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
         }
 
-        let result = try withoutActuallyEscaping(property) { escapingProperty in
-            try ChoiceGraphScheduler.runCollectingStats(
+        let result = withoutActuallyEscaping(property) { escapingProperty in
+            ChoiceGraphScheduler.runCollectingStats(
                 gen: gen,
                 initialTree: tree,
                 initialOutput: output,
@@ -129,7 +129,7 @@ package extension Interpreters {
         tree: ChoiceTree,
         config: ReducerConfiguration,
         property: (Output) -> Bool
-    ) throws -> ReductionOutcome<Output> {
+    ) -> ReductionOutcome<Output> {
         let prefix = ChoiceSequence.flatten(tree)
         guard case let .success(output, _, _) = Materializer.materialize(
             gen, context: .init(
@@ -139,7 +139,7 @@ package extension Interpreters {
         ) else {
             return .failure
         }
-        return try choiceGraphReduce(
+        return choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: output,

@@ -111,17 +111,12 @@ struct ProbeSession {
     // MARK: - Step
 
     /// Advances the session by one encode or decode sub-phase.
-    mutating func step(state: inout some ProbeSessionState) throws -> StepResult {
+    mutating func step(state: inout some ProbeSessionState) -> StepResult {
         switch phase {
             case .encode:
                 return stepEncode(state: &state)
             case .decode:
-                do {
-                    return try stepDecode(state: &state)
-                } catch {
-                    terminateObservation(.interrupted)
-                    throw error
-                }
+                return stepDecode(state: &state)
             case .finished:
                 return .finished
         }
@@ -182,7 +177,7 @@ struct ProbeSession {
 
     // MARK: - Decode
 
-    private mutating func stepDecode(state: inout some ProbeSessionState) throws -> StepResult {
+    private mutating func stepDecode(state: inout some ProbeSessionState) -> StepResult {
         guard let mutation = pendingMutation,
               let selection = pendingDecoderSelection
         else {
@@ -196,7 +191,7 @@ struct ProbeSession {
 
         var filterObservations: [UInt64: FilterObservation] = [:]
 
-        let outcome = try decoder.decodeAny(
+        let outcome = decoder.decodeAny(
             candidate: candidateBuffer,
             gen: state.gen,
             tree: state.tree,
@@ -321,13 +316,13 @@ struct ProbeSession {
     mutating func runToCompletion(
         state: inout some ProbeSessionState,
         deadlineCheck: (() -> Bool)? = nil
-    ) throws -> PassReport {
+    ) -> PassReport {
         while phase != .finished {
             guard deadlineCheck?() != true else {
                 phase = .finished
                 break
             }
-            _ = try step(state: &state)
+            _ = step(state: &state)
         }
         return report()
     }

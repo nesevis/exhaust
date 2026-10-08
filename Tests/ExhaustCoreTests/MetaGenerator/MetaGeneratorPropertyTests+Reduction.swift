@@ -24,7 +24,7 @@ extension MetaGeneratorPropertyTests {
                 guard property(value) == false else {
                     continue
                 }
-                guard case let .reduced(_, _, shrunk) = try? Interpreters.choiceGraphReduce(
+                guard case let .reduced(_, _, shrunk) = Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
                     tally.vacuous += 1
@@ -68,7 +68,7 @@ extension MetaGeneratorPropertyTests {
                     continue
                 }
                 let originalSequence = ChoiceSequence.flatten(tree)
-                guard case let .reduced(shrunkSequence, _, _) = try? Interpreters.choiceGraphReduce(
+                guard case let .reduced(shrunkSequence, _, _) = Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
                     tally.vacuous += 1
@@ -106,7 +106,7 @@ extension MetaGeneratorPropertyTests {
                 guard property(value) == false else {
                     continue
                 }
-                guard case let .reduced(sequence, reducedTree, shrunk) = try? Interpreters.choiceGraphReduce(
+                guard case let .reduced(sequence, reducedTree, shrunk) = Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
                     tally.vacuous += 1
@@ -154,7 +154,7 @@ extension MetaGeneratorPropertyTests {
                 guard property(value) == false else {
                     continue
                 }
-                guard case let .reduced(firstSequence, firstTree, _) = try? Interpreters.choiceGraphReduce(
+                guard case let .reduced(firstSequence, firstTree, _) = Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else {
                     tally.vacuous += 1
@@ -165,10 +165,10 @@ extension MetaGeneratorPropertyTests {
                     tally.vacuous += 1
                     continue
                 }
-                let secondOutcome = try? Interpreters.choiceGraphReduce(
+                let secondOutcome = Interpreters.choiceGraphReduce(
                     gen: gen, tree: firstTree, config: .init(maxStalls: 2), property: property
                 )
-                guard let (secondSequence, _) = secondOutcome?.counterexample else {
+                guard let (secondSequence, _) = secondOutcome.counterexample else {
                     tally.vacuous += 1
                     continue
                 }

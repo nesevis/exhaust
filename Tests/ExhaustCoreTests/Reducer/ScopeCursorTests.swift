@@ -111,12 +111,12 @@ struct ScopeCursorTests {
         machine.sources = [.batchedCrossSequence(BatchedCrossSequenceRemovalSource(graph: machine.graph))]
         machine.phase = .dispatching
         let originalRebuilds = machine.stats.graphStats.fullGraphRebuilds
-        _ = try machine.next()
+        _ = machine.next()
         let transformation = try #require(machine.activeSession?.transformation)
         #expect(removalTargets(of: transformation)?.count == 2)
         var didRebuild = false
         for _ in 0 ..< 100 {
-            if case .rebuilt = try machine.next() {
+            if case .rebuilt = machine.next() {
                 didRebuild = true
                 break
             }

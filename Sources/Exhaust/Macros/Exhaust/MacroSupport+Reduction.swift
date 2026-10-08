@@ -38,88 +38,76 @@ package extension __ExhaustRuntime {
             )
         }
         let reductionStart = monotonicNanoseconds()
-        do {
-            var reducerConfig = context.reductionConfig
-            if let deadline = context.deadlineNanoseconds {
-                let remaining = deadline > reductionStart ? deadline - reductionStart : 1
-                let configured = reducerConfig.wallClockDeadlineNanoseconds
-                reducerConfig.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
-            }
-            reducerConfig.visualize = context.visualize
-            let reduceResult = try context.hasExceededDeadline ? nil : Interpreters.choiceGraphReduceCollectingStats(
-                gen: context.gen,
-                tree: tree,
-                output: value,
-                config: reducerConfig,
-                property: { countingProperty($0) }
-            )
-            if let reduceResult {
-                report.applyReductionStats(reduceResult.stats)
-            } else {
-                report.reductionWasCapped = true
-            }
-            report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
-            recordReductionOutcomes()
-            if case let .reduced(reducedSequence, _, reducedValue)? = reduceResult?.outcome {
-                var failure = PropertyTestFailure(
-                    counterexample: reducedValue,
-                    original: value,
+        var reducerConfig = context.reductionConfig
+        if let deadline = context.deadlineNanoseconds {
+            let remaining = deadline > reductionStart ? deadline - reductionStart : 1
+            let configured = reducerConfig.wallClockDeadlineNanoseconds
+            reducerConfig.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
+        }
+        reducerConfig.visualize = context.visualize
+        let reduceResult = context.hasExceededDeadline ? nil : Interpreters.choiceGraphReduceCollectingStats(
+            gen: context.gen,
+            tree: tree,
+            output: value,
+            config: reducerConfig,
+            property: { countingProperty($0) }
+        )
+        if let reduceResult {
+            report.applyReductionStats(reduceResult.stats)
+        } else {
+            report.reductionWasCapped = true
+        }
+        report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
+        recordReductionOutcomes()
+        if case let .reduced(reducedSequence, _, reducedValue)? = reduceResult?.outcome {
+            var failure = PropertyTestFailure(
+                counterexample: reducedValue,
+                original: value,
 
-                    seed: seed,
-                    iteration: iteration,
-                    phaseBudget: phaseBudget,
-                    blueprint: reducedSequence.shortString,
-                    propertyInvocations: ledger.totalInvocations,
-                    reducedSequence: reducedSequence
-                )
-                failure.replayHint = replayHint
-                failure.reductionNote = ReductionNote(
-                    probes: report.reductionProbes,
-                    invocations: ledger.count(.reduction),
-                    stalledLeafCount: report.stalledLeafCount,
-                    anyAcceptanceOccurred: report.anyAcceptanceEverOccurred,
-                    producedNoImprovement: false,
-                    wasCapped: report.reductionWasCapped
-                )
-                failure.includeDiff = context.includeDiff
-                let rendered = failure.render(format: context.logFormat)
-                report.renderedFailure = rendered
-                report.replaySeed = failure.encodedReplaySeed
-                ExhaustLog.debug(
-                    category: .propertyTest,
-                    event: "reduced_blueprint",
-                    "\(reducedSequence.shortString)"
-                )
-                if let statsAccumulator = context.statsAccumulator {
-                    var representation = ""
-                    customDump(reducedValue, to: &representation, maxDepth: 3)
-                    statsAccumulator.recordReduced(
-                        representation: representation,
-                        tree: .just,
-                        reductionSeconds: report.reductionMilliseconds / 1000
-                    )
-                }
-                if context.suppressIssueReporting == false {
-                    reportError(
-                        rendered,
-                        fileID: context.fileID,
-                        filePath: context.filePath,
-                        line: context.line,
-                        column: context.column
-                    )
-                }
-                return .reduced(reducedValue)
-            }
-        } catch {
-            recordReductionOutcomes()
-            reportError(
-                localizedErrorMessage(error),
-                fileID: context.fileID,
-                filePath: context.filePath,
-                line: context.line,
-                column: context.column
+                seed: seed,
+                iteration: iteration,
+                phaseBudget: phaseBudget,
+                blueprint: reducedSequence.shortString,
+                propertyInvocations: ledger.totalInvocations,
+                reducedSequence: reducedSequence
             )
-            return .reductionError
+            failure.replayHint = replayHint
+            failure.reductionNote = ReductionNote(
+                probes: report.reductionProbes,
+                invocations: ledger.count(.reduction),
+                stalledLeafCount: report.stalledLeafCount,
+                anyAcceptanceOccurred: report.anyAcceptanceEverOccurred,
+                producedNoImprovement: false,
+                wasCapped: report.reductionWasCapped
+            )
+            failure.includeDiff = context.includeDiff
+            let rendered = failure.render(format: context.logFormat)
+            report.renderedFailure = rendered
+            report.replaySeed = failure.encodedReplaySeed
+            ExhaustLog.debug(
+                category: .propertyTest,
+                event: "reduced_blueprint",
+                "\(reducedSequence.shortString)"
+            )
+            if let statsAccumulator = context.statsAccumulator {
+                var representation = ""
+                customDump(reducedValue, to: &representation, maxDepth: 3)
+                statsAccumulator.recordReduced(
+                    representation: representation,
+                    tree: .just,
+                    reductionSeconds: report.reductionMilliseconds / 1000
+                )
+            }
+            if context.suppressIssueReporting == false {
+                reportError(
+                    rendered,
+                    fileID: context.fileID,
+                    filePath: context.filePath,
+                    line: context.line,
+                    column: context.column
+                )
+            }
+            return .reduced(reducedValue)
         }
 
         // Reduction could not improve, or the deadline left no time to start it. Either way, report the original failure.
@@ -231,7 +219,7 @@ package extension __ExhaustRuntime {
         }
         reducerConfig.visualize = visualize
         let hasExceededDeadline = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
-        let reduceResult = try hasExceededDeadline ? nil : Interpreters.choiceGraphReduceCollectingStats(
+        let reduceResult = hasExceededDeadline ? nil : Interpreters.choiceGraphReduceCollectingStats(
             gen: gen,
             tree: tree,
             output: value,

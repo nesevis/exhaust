@@ -19,14 +19,14 @@ extension ReductionMachine {
     /// Runs the bounded numeric pair search as a post-cycle pass. Every accepted probe precedes the current sequence, so it runs even after an earlier post-cycle action has accepted.
     ///
     /// An acceptance invalidates every convergence floor, cached rejection, and bind search history, not only those of the edited pair: the property can couple values the generator treats as independent.
-    mutating func runPairwiseNumericSearch() throws -> Bool {
+    mutating func runPairwiseNumericSearch() -> Bool {
         guard isDeadlineExceeded() == false,
               let pairs = pendingNumericPairs()
         else {
             return false
         }
         exhaustedNumericPairScope = ExhaustedNumericPairScope(base: sequence, pairs: pairs)
-        guard let report = try runPostCycleEncoder(
+        guard let report = runPostCycleEncoder(
             operation: .exchange(.numericPairs(pairs, probeBudget: tuning.pairwiseNumericProbeBudget)),
             estimatedCost: tuning.pairwiseNumericProbeBudget
         ) else {

@@ -98,6 +98,6 @@ private func reduceCollectingStats<Output>(
         collectStats: true,
         property: property
     )
-    while try machine.next() != nil {}
+    while machine.next() != nil {}
     return machine.stats
 }

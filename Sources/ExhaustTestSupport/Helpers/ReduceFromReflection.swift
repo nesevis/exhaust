@@ -18,7 +18,7 @@ package func reduceFromReflection<Output>(
     property: (Output) -> Bool
 ) throws -> Output {
     let tree = try #require(try Interpreters.reflect(gen, with: value))
-    let outcome = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
+    let outcome = Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
     switch outcome {
         case let .reduced(_, _, output): return output
         case let .unreduced(_, _, output): return output

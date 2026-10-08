@@ -104,16 +104,14 @@ extension __ExhaustRuntime {
         generator: Generator<Value>,
         config: Interpreters.ReducerConfiguration,
         property: @escaping @Sendable (Value) -> Bool
-    ) -> (value: Value, stats: ReductionStats?, reduced: Bool) {
-        guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
+    ) -> (value: Value, stats: ReductionStats, reduced: Bool) {
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator,
             tree: tree,
             output: value,
             config: config,
             property: property
-        ) else {
-            return (value, nil, false)
-        }
+        )
         if case let .reduced(_, _, reduced) = result.outcome {
             return (reduced, result.stats, true)
         }
@@ -169,21 +167,20 @@ extension __ExhaustRuntime {
         }
 
         // Pass 1: structural reduction (lane collapse + deletion).
-        if runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
-           let result = try? Interpreters.choiceGraphReduceCollectingStats(
-               gen: generator,
-               tree: currentTree,
-               output: currentOutput,
-               config: .init(
-                   maxStalls: 2,
-                   wallClockDeadlineNanoseconds: remainingBudget(),
-                   enabledEncoders: [.laneCollapse, .deletion],
-                   tuning: noRelax,
-                   probeWrapper: probeWrapper
-               ),
-               property: boolProperty
-           )
-        {
+        if runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true {
+            let result = Interpreters.choiceGraphReduceCollectingStats(
+                gen: generator,
+                tree: currentTree,
+                output: currentOutput,
+                config: .init(
+                    maxStalls: 2,
+                    wallClockDeadlineNanoseconds: remainingBudget(),
+                    enabledEncoders: [.laneCollapse, .deletion],
+                    tuning: noRelax,
+                    probeWrapper: probeWrapper
+                ),
+                property: boolProperty
+            )
             mergedStats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
@@ -201,21 +198,20 @@ extension __ExhaustRuntime {
         }
 
         // Pass 2: value minimization on the structurally reduced sequence.
-        if aborted == false, runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
-           let result = try? Interpreters.choiceGraphReduceCollectingStats(
-               gen: generator,
-               tree: currentTree,
-               output: currentOutput,
-               config: .init(
-                   maxStalls: 2,
-                   wallClockDeadlineNanoseconds: remainingBudget(),
-                   enabledEncoders: [.valueSearch, .floatSearch, .convergenceConfirmation],
-                   tuning: noRelax,
-                   probeWrapper: probeWrapper
-               ),
-               property: boolProperty
-           )
-        {
+        if aborted == false, runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true {
+            let result = Interpreters.choiceGraphReduceCollectingStats(
+                gen: generator,
+                tree: currentTree,
+                output: currentOutput,
+                config: .init(
+                    maxStalls: 2,
+                    wallClockDeadlineNanoseconds: remainingBudget(),
+                    enabledEncoders: [.valueSearch, .floatSearch, .convergenceConfirmation],
+                    tuning: noRelax,
+                    probeWrapper: probeWrapper
+                ),
+                property: boolProperty
+            )
             mergedStats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced

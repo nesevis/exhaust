@@ -59,7 +59,7 @@ struct ReducibleGetSizeTests {
         let (value, tree) = try #require(try interpreter.next())
         try #require(value == 37)
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: tree,
             output: value,

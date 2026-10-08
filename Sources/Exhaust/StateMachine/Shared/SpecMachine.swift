@@ -279,26 +279,25 @@ struct SpecMachine<Backend: StateMachineBackend> {
             enabledEncoders: [.valueSearch, .floatSearch, .deletion, .convergenceConfirmation],
             tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
-        if let reduced = try? Interpreters.choiceGraphReduceCollectingStats(
+        let reduced = Interpreters.choiceGraphReduceCollectingStats(
             gen: setupGen.gen,
             tree: setupTree,
             output: currentStep,
             config: config,
             property: property
-        ) {
-            setupReductionStats = reduced.stats
-            if case let .reduced(_, reducedTree, reducedStep) = reduced.outcome {
-                reducedSetupStep = reducedStep
-                reductionInput.setupTree = reducedTree
-                let repruned = pruneCommands(
-                    setupStep: reducedStep,
-                    taggedCommands: reductionInput.taggedCommands,
-                    commandTree: reductionInput.commandTree,
-                    seed: candidate.provenance.pruningSeed
-                )
-                reductionInput.taggedCommands = repruned.value
-                reductionInput.commandTree = repruned.tree
-            }
+        )
+        setupReductionStats = reduced.stats
+        if case let .reduced(_, reducedTree, reducedStep) = reduced.outcome {
+            reducedSetupStep = reducedStep
+            reductionInput.setupTree = reducedTree
+            let repruned = pruneCommands(
+                setupStep: reducedStep,
+                taggedCommands: reductionInput.taggedCommands,
+                commandTree: reductionInput.commandTree,
+                seed: candidate.provenance.pruningSeed
+            )
+            reductionInput.taggedCommands = repruned.value
+            reductionInput.commandTree = repruned.tree
         }
 
         self.reductionInput = reductionInput

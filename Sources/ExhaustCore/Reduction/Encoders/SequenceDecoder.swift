@@ -61,7 +61,7 @@ enum SequenceDecoder {
         property: (Any) -> Bool,
         filterObservations: inout [UInt64: FilterObservation],
         precomputedHash: UInt64? = nil
-    ) throws -> SequenceDecodingOutcome {
+    ) -> SequenceDecodingOutcome {
         switch self {
             case let .exact(materializePicks, admission):
                 decodeExactAny(

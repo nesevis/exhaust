@@ -296,7 +296,7 @@ struct ShrinkingPropertyTests {
         var reductions = 0
         while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
-            guard case let .reduced(_, _, shrunk) = try Interpreters.choiceGraphReduce(
+            guard case let .reduced(_, _, shrunk) = Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             reductions += 1

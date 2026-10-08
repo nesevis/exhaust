@@ -9,17 +9,17 @@ extension ReductionMachine {
     /// Probes improving pivots without a checkpoint, because every accepted probe already precedes the current sequence.
     ///
     /// - Returns: True if a pivot was accepted.
-    mutating func runImprovingPivotPass() throws -> Bool {
+    mutating func runImprovingPivotPass() -> Bool {
         guard isEncoderEnabled(.branchPivot) else {
             return false
         }
-        return try runImprovingPivotProbes(deadlineCheck: makeDeadlineCheck())
+        return runImprovingPivotProbes(deadlineCheck: makeDeadlineCheck())
     }
 
     /// Runs a structural excursion: checkpoints, applies a shortlex-worsening perturbation, reduces from it, and commits only if the result beats the checkpoint.
     ///
     /// - Returns: True if the excursion produced a net improvement (committed).
-    mutating func runExcursion() throws -> Bool {
+    mutating func runExcursion() -> Bool {
         guard isPostCycleActionEnabled(.excursion), tuning.relaxMaterializationBudget > 0 else {
             return false
         }
@@ -72,7 +72,7 @@ extension ReductionMachine {
             let decoder: SequenceDecoder = .exact(materializePicks: true)
             var filterObservations: [UInt64: FilterObservation] = [:]
 
-            let outcome = try decoder.decodeAny(
+            let outcome = decoder.decodeAny(
                 candidate: candidate,
                 gen: gen,
                 tree: tree,
@@ -188,7 +188,7 @@ extension ReductionMachine {
                     return false
                 }
             )
-            let report = try session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
+            let report = session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
 
             _ = applyPassReport(report)
 
@@ -238,7 +238,7 @@ extension ReductionMachine {
     /// Probes improving pivots at non-minimal content and accepts the first that still fails the property.
     ///
     /// The next cycle minimizes the accepted arm under ordinary scheduling, so no exploitation runs here.
-    private mutating func runImprovingPivotProbes(deadlineCheck: @escaping () -> Bool) throws -> Bool {
+    private mutating func runImprovingPivotProbes(deadlineCheck: @escaping () -> Bool) -> Bool {
         let budget = tuning.relaxImprovingProbeBudget
         guard budget > 0 else {
             return false
@@ -262,7 +262,7 @@ extension ReductionMachine {
             probeCounts.recordEmission()
             let decoder: SequenceDecoder = .exact(materializePicks: true)
             var filterObservations: [UInt64: FilterObservation] = [:]
-            let outcome = try decoder.decodeAny(
+            let outcome = decoder.decodeAny(
                 candidate: candidate,
                 gen: gen,
                 tree: tree,

@@ -312,23 +312,15 @@ extension __ExhaustRuntime {
                 return countingProperty(output) == false
             }
 
-        do {
-            let outcome = try Interpreters.choiceGraphReduce(
-                gen: gen,
-                tree: reduceTree,
-                output: failure.value,
-                config: .init(maxStalls: 2),
-                property: { reductionPredicate($0) == false }
-            )
-            if case let .reduced(reducedSequence, _, reducedValue) = outcome {
-                return (reducedValue, failure.value, reducedSequence, countingProperty.invocations, countingProperty.failures)
-            }
-        } catch {
-            ExhaustLog.error(
-                category: .propertyTest,
-                event: "explore_reduce_error",
-                "\(error)"
-            )
+        let outcome = Interpreters.choiceGraphReduce(
+            gen: gen,
+            tree: reduceTree,
+            output: failure.value,
+            config: .init(maxStalls: 2),
+            property: { reductionPredicate($0) == false }
+        )
+        if case let .reduced(reducedSequence, _, reducedValue) = outcome {
+            return (reducedValue, failure.value, reducedSequence, countingProperty.invocations, countingProperty.failures)
         }
 
         return (failure.value, failure.value, nil, countingProperty.invocations, countingProperty.failures)

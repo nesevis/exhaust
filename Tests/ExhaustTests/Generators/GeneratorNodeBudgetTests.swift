@@ -276,7 +276,7 @@ struct GeneratorNodeBudgetTests {
         let generator = BudgetRose.gen(recursion: 2, .budget(.custom(recursion: 2, nodes: 12)))
         let value = BudgetRose.children([.children([]), .children([])])
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: tree,
             output: value,

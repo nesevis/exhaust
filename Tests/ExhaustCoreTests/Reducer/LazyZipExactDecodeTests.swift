@@ -28,7 +28,7 @@ struct LazyZipExactDecodeTests {
         }
         let generated = try #require(fixture, "No iteration below 200 drew a pair other than nil or (0, 0)")
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: pairGen.gen,
             tree: generated.tree,
             output: generated.value,

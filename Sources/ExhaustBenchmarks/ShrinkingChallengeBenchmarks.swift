@@ -380,7 +380,7 @@ private func registerParser() {
                 invocationCount += 1
                 return property(candidate)
             }
-            let result = try? Interpreters.choiceGraphReduce(
+            let result = Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -388,7 +388,7 @@ private func registerParser() {
                 property: countingProperty
             )
 //            print("\(seed), \(invocationCount)")
-            let output = result?.counterexample?.1 ?? value
+            let output = result.counterexample?.1 ?? value
             let outputSize = parserSize(output)
             sizes.append(outputSize)
             invocations.append(invocationCount)
@@ -487,7 +487,7 @@ private func runReflectableBenchmark<Output>(
             return property(candidate)
         }
         let startTime = monotonicNanoseconds()
-        let result = try? Interpreters.choiceGraphReduce(
+        let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -495,7 +495,7 @@ private func runReflectableBenchmark<Output>(
             property: countingProperty
         )
         let endTime = monotonicNanoseconds()
-        let output = result?.counterexample?.1
+        let output = result.counterexample?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
         results.append(ReductionResult(
@@ -523,7 +523,7 @@ private func runNonReflectableBenchmark<Output>(
             return property(candidate)
         }
         let startTime = monotonicNanoseconds()
-        let result = try? Interpreters.choiceGraphReduce(
+        let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -531,7 +531,7 @@ private func runNonReflectableBenchmark<Output>(
             property: countingProperty
         )
         let endTime = monotonicNanoseconds()
-        let output = result?.counterexample?.1
+        let output = result.counterexample?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
         results.append(ReductionResult(

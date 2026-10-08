@@ -13,7 +13,7 @@ struct BindPivotEncoderTests {
         let generated = try generate(pairGen.gen, seed: pairSeed)
         try #require(generated.value == (1, 0))
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: pairGen.gen,
             tree: generated.tree,
             output: generated.value,
@@ -34,7 +34,7 @@ struct BindPivotEncoderTests {
         let generated = try generate(pairGen.gen, seed: pairSeed)
         try #require(generated.value == (1, 0))
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: pairGen.gen,
             tree: generated.tree,
             output: generated.value,
@@ -53,7 +53,7 @@ struct BindPivotEncoderTests {
         let generated = try generate(gen.gen, seed: pairSeed)
         try #require(generated.value == (1, 0))
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: gen.gen,
             tree: generated.tree,
             output: generated.value,
@@ -71,7 +71,7 @@ struct BindPivotEncoderTests {
         let generated = try generate(countedArrayGen.gen, seed: countedArraySeed)
         try #require(generated.value.0 == 6 && generated.value.1.last == 5)
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: countedArrayGen.gen,
             tree: generated.tree,
             output: generated.value,

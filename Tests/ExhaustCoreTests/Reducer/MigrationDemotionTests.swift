@@ -110,7 +110,7 @@ private func makeMachine(migrationDemotionThreshold: Int) throws -> ReductionMac
 
 private func runReduction(migrationDemotionThreshold: Int) throws -> (machine: ReductionMachine, log: [DispatchRecord]) {
     var machine = try makeMachine(migrationDemotionThreshold: migrationDemotionThreshold)
-    while try machine.next() != nil {}
+    while machine.next() != nil {}
     return (machine, machine.stats.dispatchLog)
 }
 

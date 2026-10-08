@@ -48,7 +48,7 @@ struct BoundArrayShortlexRegressionTests {
             }
 
             let original = ChoiceSequence.flatten(tree)
-            let reduction = try Interpreters.choiceGraphReduceCollectingStats(
+            let reduction = Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,
                 output: value,

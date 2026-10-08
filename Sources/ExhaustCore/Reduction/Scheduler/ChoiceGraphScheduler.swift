@@ -21,7 +21,7 @@ enum ChoiceGraphScheduler {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
-    ) throws -> ReductionOutcome<Output> {
+    ) -> ReductionOutcome<Output> {
         var machine = ReductionMachine(
             gen: gen,
             initialTree: initialTree,
@@ -30,7 +30,7 @@ enum ChoiceGraphScheduler {
             collectStats: false,
             property: property
         )
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
         return machine.typedResult().outcome
     }
 
@@ -41,7 +41,7 @@ enum ChoiceGraphScheduler {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
-    ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+    ) -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         var machine = ReductionMachine(
             gen: gen,
             initialTree: initialTree,
@@ -51,7 +51,7 @@ enum ChoiceGraphScheduler {
             property: property
         )
         var lastStep = monotonicNanoseconds()
-        while let transition = try machine.next() {
+        while let transition = machine.next() {
             let now = monotonicNanoseconds()
             machine.stats.stepTimings.record(transition, elapsed: now - lastStep)
             lastStep = now

@@ -10,7 +10,7 @@ struct ProbeSessionTraceTests {
         fixture.state.rejectCache.insert(ZobristHash.hash(of: ChoiceSequence(choices(2))))
         let recorder = ProbeTraceRecorder()
         var session = fixture.session(recorder: recorder)
-        _ = try session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
 
         #expect(recorder.events == [
             emission(1, value: 2),
@@ -24,7 +24,7 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { _ in true })
         let recorder = ProbeTraceRecorder()
         var session = fixture.session(recorder: recorder)
-        let report = try session.runToCompletion(state: &fixture.state)
+        let report = session.runToCompletion(state: &fixture.state)
 
         #expect(recorder.events == [
             emission(1, value: 2),
@@ -46,8 +46,8 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { _ in false })
         let recorder = ProbeTraceRecorder()
         var session = fixture.session(recorder: recorder)
-        _ = try session.step(state: &fixture.state)
-        _ = try session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
 
         #expect(recorder.events == [
             emission(1, value: 2),
@@ -65,7 +65,7 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var session = fixture.session(recorder: recorder)
         for _ in 0 ..< 4 {
-            _ = try session.step(state: &fixture.state)
+            _ = session.step(state: &fixture.state)
         }
 
         #expect(recorder.events == [
@@ -91,8 +91,8 @@ struct ProbeSessionTraceTests {
         fixture.state.gen = Gen.choose(in: UInt64(0) ... 1).erase()
         let recorder = ProbeTraceRecorder()
         var session = fixture.session(recorder: recorder)
-        _ = try session.step(state: &fixture.state)
-        _ = try session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
 
         #expect(recorder.events == [
             emission(1, value: 2),
@@ -132,7 +132,7 @@ struct ProbeSessionTraceTests {
             hasBind: false,
             observer: { [weak recorder] in recorder?.record($0) }
         )
-        let report = try session.runToCompletion(state: &fixture.state)
+        let report = session.runToCompletion(state: &fixture.state)
 
         #expect(recorder.events == [
             composedEmission(1, value: 3, upstream: 2),
@@ -153,7 +153,7 @@ struct ProbeSessionTraceTests {
         #expect(report.composedUpstreamLifts == 2)
         #expect(report.probeCount == 5)
         #expect(report.anyRequiresRebuild)
-        guard case .finished = try session.step(state: &fixture.state) else {
+        guard case .finished = session.step(state: &fixture.state) else {
             Issue.record("An accepted composition must remain finished")
             return
         }
@@ -174,7 +174,7 @@ struct ProbeSessionTraceTests {
             hasBind: true,
             observer: { [weak recorder] in recorder?.record($0) }
         )
-        let report = try session.runToCompletion(state: &fixture.state)
+        let report = session.runToCompletion(state: &fixture.state)
         let expected = fixture.liftedChoices
 
         #expect(recorder.events == [
@@ -187,7 +187,7 @@ struct ProbeSessionTraceTests {
         #expect(report.anyRequiresRebuild)
         #expect(report.liftMaterializations?.count == 1)
         #expect(report.probeCount == 1)
-        guard case .finished = try session.step(state: &fixture.state) else {
+        guard case .finished = session.step(state: &fixture.state) else {
             Issue.record("An accepted pivot must remain finished")
             return
         }
@@ -209,8 +209,8 @@ struct ProbeSessionTraceTests {
             hasBind: true,
             observer: { [weak recorder] in recorder?.record($0) }
         )
-        _ = try session.step(state: &fixture.state)
-        _ = try session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
 
         #expect(recorder.events == [
             .emitted(1, Array(fixture.scope.baseSequence), .branchSelected(fixture.pickNodeID, 0)),
@@ -281,7 +281,7 @@ struct ProbeSessionTraceTests {
             hasBind: true,
             observer: { [weak recorder] in recorder?.record($0) }
         )
-        let report = try session.runToCompletion(state: &state)
+        let report = session.runToCompletion(state: &state)
         let expected: [ChoiceSequenceValue] = [
             .bind(true),
             .value(.init(choice: ChoiceValue(UInt64(15), tag: .uint64), validRange: 0 ... 100, isRangeExplicit: true)),
@@ -310,7 +310,7 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { _ in true })
         let recorder = ProbeTraceRecorder()
         var session = fixture.session(recorder: recorder)
-        _ = try session.step(state: &fixture.state)
+        _ = session.step(state: &fixture.state)
         _ = session.report()
         _ = session.report()
 
@@ -391,8 +391,8 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var observedSession = observed.session(recorder: recorder)
         var unobservedSession = unobserved.session()
-        let observedReport = try observedSession.runToCompletion(state: &observed.state)
-        let unobservedReport = try unobservedSession.runToCompletion(state: &unobserved.state)
+        let observedReport = observedSession.runToCompletion(state: &observed.state)
+        let unobservedReport = unobservedSession.runToCompletion(state: &unobserved.state)
 
         #expect(Array(observed.state.sequence) == Array(unobserved.state.sequence))
         #expect(observedReport.probeCount == unobservedReport.probeCount)

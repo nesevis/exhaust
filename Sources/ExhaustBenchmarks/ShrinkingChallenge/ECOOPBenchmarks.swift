@@ -197,7 +197,7 @@ private func registerECOOPChallenge<Output>(
             let reduceStart = monotonicNanoseconds()
             // Use the *CollectingStats variants so we can pull
             // `stats.totalMaterializations` for the report. The reduced tuple has the same shape as the plain `*Reduce` return.
-            let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
+            let reduceResult = Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -207,7 +207,7 @@ private func registerECOOPChallenge<Output>(
             let reduceEnd = monotonicNanoseconds()
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
-            let output = reduceResult?.outcome.counterexample?.1 ?? value
+            let output = reduceResult.outcome.counterexample?.1 ?? value
             results.append(SeedResult(
                 seed: seed,
                 generationIterations: generationIterations,
@@ -216,7 +216,7 @@ private func registerECOOPChallenge<Output>(
                 reductionMilliseconds: reductionMs,
                 size: sizeMetric?(output),
                 counterexampleDescription: String(describing: output),
-                stats: reduceResult?.stats
+                stats: reduceResult.stats
             ))
         }
 

@@ -6,7 +6,7 @@ extension ReductionMachine {
     /// Tries `floor - 1` first. If that rejects and `floor - 2` is in range, tries that too (non-monotone gap detection). If either succeeds, the convergence record was stale — clears it so minimization can re-enter for that leaf.
     ///
     /// - Returns: True if any stale floors were found and cleared.
-    mutating func confirmConvergence() throws -> Bool {
+    mutating func confirmConvergence() -> Bool {
         guard isEncoderEnabled(.convergenceConfirmation) else {
             return false
         }
@@ -36,7 +36,7 @@ extension ReductionMachine {
             let minBound: UInt64 = metadata.validRange?.lowerBound ?? 0
             guard origin.bound > minBound else { continue }
 
-            let result = try probeBelow(
+            let result = probeBelow(
                 value: origin.bound - 1,
                 at: range.lowerBound,
                 decoder: decoder,
@@ -51,7 +51,7 @@ extension ReductionMachine {
                     "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
                 ])
             } else if result == .rejected, origin.bound - minBound >= 2, isDeadlineExceeded() == false {
-                let gapResult = try probeBelow(
+                let gapResult = probeBelow(
                     value: origin.bound - 2,
                     at: range.lowerBound,
                     decoder: decoder,
@@ -83,7 +83,7 @@ extension ReductionMachine {
         decoder: SequenceDecoder,
         baseHash: UInt64,
         counts: inout ReductionProbeCounts
-    ) throws -> ProbeResult {
+    ) -> ProbeResult {
         var candidate = sequence
         candidate[sequenceIndex] = candidate[sequenceIndex].withBitPattern(value)
         guard candidate.shortLexPrecedes(sequence) else { return .skipped }
@@ -102,7 +102,7 @@ extension ReductionMachine {
 
         var filterObservations: [UInt64: FilterObservation] = [:]
 
-        let outcome = try decoder.decodeAny(
+        let outcome = decoder.decodeAny(
             candidate: candidate,
             gen: gen,
             tree: tree,

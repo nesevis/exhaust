@@ -304,12 +304,12 @@ package struct ReductionMachine: ProbeSessionState {
     /// Advances one cooperative step, preserving in-flight work in a final report when the deadline expires.
     ///
     /// Checks before starting each step and after it returns. An in-flight materialization or property call completes normally; expiry stops subsequent search work. The enabled final numeric reorder pass still runs to completion after expiry, including its materializations and property calls, to preserve the returned counterexample's presentation.
-    mutating func next() throws -> Transition? {
+    mutating func next() -> Transition? {
         if case .done = phase {
             return nil
         }
         guard isDeadlineExceeded() == false else {
-            return try finishAtDeadline()
+            return finishAtDeadline()
         }
         let transition: Transition? = switch phase {
             case .beginCycle:
@@ -317,20 +317,20 @@ package struct ReductionMachine: ProbeSessionState {
             case .buildSources:
                 stepBuildSources()
             case .dispatching:
-                try stepDispatching()
+                stepDispatching()
             case .endCycle:
                 stepEndCycle()
             case let .postCycle(remaining):
-                try stepPostCycle(remaining: remaining)
+                stepPostCycle(remaining: remaining)
             case .checkTermination:
                 stepCheckTermination()
             case .reorderPass:
-                try stepReorderPass()
+                stepReorderPass()
             case .done:
                 nil
         }
         if isDeadlineExceeded() {
-            _ = try finishAtDeadline()
+            _ = finishAtDeadline()
         }
         return transition
     }
@@ -399,7 +399,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     private mutating func stepPostCycle(
         remaining: [ChoiceGraphScheduler.PostCycleAction]
-    ) throws -> Transition {
+    ) -> Transition {
         guard let action = remaining.first else {
             phase = .checkTermination
             return .cycleEnded(stallBudget: convergence.stallBudget)
@@ -409,25 +409,25 @@ package struct ReductionMachine: ProbeSessionState {
 
         switch action {
             case .confirmConvergence:
-                let anyStale = try confirmConvergence()
+                let anyStale = confirmConvergence()
                 return .convergenceConfirmed(anyStale: anyStale)
             case .relationPass:
-                let accepted = try runRelationPass()
+                let accepted = runRelationPass()
                 return .relationPassCompleted(accepted: accepted)
             case .improvingPivots:
-                let improved = try runImprovingPivotPass()
+                let improved = runImprovingPivotPass()
                 if improved {
                     recordPostCycleAcceptance()
                 }
                 return .improvingPivotsCompleted(improved: improved)
             case .pairwiseNumericPass:
-                return try .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
+                return .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
             case .excursion:
                 // Perturbing away from a counterexample that an earlier action just improved spends budget escaping a local minimum the run may not be in.
                 guard anyAccepted == false else {
                     return .excursionCompleted(improved: false)
                 }
-                let improved = try runExcursion()
+                let improved = runExcursion()
                 if improved {
                     recordPostCycleAcceptance()
                 }
@@ -503,8 +503,8 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Reorder Pass
 
-    private mutating func stepReorderPass() throws -> Transition {
-        let accepted = isEncoderEnabled(.numericReorder) ? try runReorderPass() : false
+    private mutating func stepReorderPass() -> Transition {
+        let accepted = isEncoderEnabled(.numericReorder) ? runReorderPass() : false
         recordStallDiagnostic()
         phase = .done
         return .reorderCompleted(accepted: accepted)
@@ -546,7 +546,7 @@ package struct ReductionMachine: ProbeSessionState {
     /// Applies an interrupted search session exactly once, then runs the enabled final numeric reorder pass without rebuilding candidate sources.
     ///
     /// A pending structural acceptance rebuilds only the graph needed for final reordering and stall diagnostics. The decoded sequence, tree, and output are already committed; cosmetic reordering never needs a graph rebuild after its final value is accepted.
-    mutating func finishAtDeadline() throws -> Transition {
+    mutating func finishAtDeadline() -> Transition {
         stats.reductionWasCapped = true
         if case .done = phase {
             return .terminated
@@ -565,7 +565,7 @@ package struct ReductionMachine: ProbeSessionState {
         }
         pendingReport = nil
         sources = []
-        _ = try stepReorderPass()
+        _ = stepReorderPass()
         return .terminated
     }
 
@@ -594,7 +594,7 @@ package struct ReductionMachine: ProbeSessionState {
         ChoiceGraphScheduler.allValuesConverged(in: sequence, graph: graph)
     }
 
-    private mutating func runReorderPass() throws -> Bool {
+    private mutating func runReorderPass() -> Bool {
         guard let reorderScope = ReorderingQuery.build(graph: graph) else {
             return false
         }
@@ -628,7 +628,7 @@ package struct ReductionMachine: ProbeSessionState {
                 return false
             }
         )
-        let report = try session.runToCompletion(state: &self)
+        let report = session.runToCompletion(state: &self)
 
         rejectCache = savedRejectCache
 

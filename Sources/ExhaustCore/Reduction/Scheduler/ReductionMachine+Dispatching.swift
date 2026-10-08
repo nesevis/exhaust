@@ -7,12 +7,12 @@
 
 extension ReductionMachine {
     /// Routes to the active ``DispatchPhase`` sub-step.
-    mutating func stepDispatching() throws -> Transition {
+    mutating func stepDispatching() -> Transition {
         switch dispatchPhase {
             case .dispatch:
-                return try stepDispatch()
+                return stepDispatch()
             case .probing:
-                return try stepProbing()
+                return stepProbing()
             case .rebuild:
                 return stepRebuild()
         }
@@ -21,7 +21,7 @@ extension ReductionMachine {
     // MARK: - Dispatch
 
     /// Selects the highest-priority source, pulls the next transformation, and resolves the dispatch decision. On ``ChoiceGraphScheduler/DispatchDecision/readyToDispatch(boundValueFingerprint:)``, initializes the encoder and transitions to the ``DispatchPhase/probing`` sub-phase.
-    private mutating func stepDispatch() throws -> Transition {
+    private mutating func stepDispatch() -> Transition {
         guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(sources) else {
             phase = .endCycle
             return .dispatched(decision: .sourceExhausted)
@@ -33,7 +33,7 @@ extension ReductionMachine {
             return .dispatched(decision: .sourceExhausted)
         }
         guard isDeadlineExceeded() == false else {
-            return try finishAtDeadline()
+            return finishAtDeadline()
         }
 
         guard isEncoderEnabled(transformation.operation.encoderName) else {
@@ -72,7 +72,7 @@ extension ReductionMachine {
                 stats.recordMaterializations(classificationMaterializations, at: .classification)
             }
             guard isDeadlineExceeded() == false else {
-                return try finishAtDeadline()
+                return finishAtDeadline()
             }
             guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
                   let classification = updatedMetadata.classification
@@ -99,7 +99,7 @@ extension ReductionMachine {
                 return .dispatched(decision: .rematerialized)
 
             case let .readyToDispatch(boundValueFingerprint):
-                return try beginProbeSession(
+                return beginProbeSession(
                     transformation: transformation,
                     boundValueFingerprint: boundValueFingerprint
                 )
@@ -111,7 +111,7 @@ extension ReductionMachine {
     private mutating func beginProbeSession(
         transformation: GraphTransformation,
         boundValueFingerprint: UInt64?
-    ) throws -> Transition {
+    ) -> Transition {
         let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
         let scope = EncoderInput(
             transformation: transformation,
@@ -162,13 +162,13 @@ extension ReductionMachine {
     // MARK: - Probing
 
     /// Delegates to the active ``ProbeSession`` for one encode or decode sub-phase. On completion, applies the ``PassReport`` and routes to dispatch or rebuild.
-    private mutating func stepProbing() throws -> Transition {
+    private mutating func stepProbing() -> Transition {
         guard var session = activeSession else {
             dispatchPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
         }
 
-        let result = try session.step(state: &self)
+        let result = session.step(state: &self)
         activeSession = session
 
         switch result {

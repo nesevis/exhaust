@@ -138,7 +138,7 @@ private struct SwapFixture {
     mutating func run() throws -> PassReport {
         var session = state.makeSession(for: scope)
         for _ in 0 ..< 100 where session.phase != .finished {
-            _ = try session.step(state: &state)
+            _ = session.step(state: &state)
         }
         sessionFinished = session.phase == .finished
         return session.report()

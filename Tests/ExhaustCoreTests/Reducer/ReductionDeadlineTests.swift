@@ -21,7 +21,7 @@ struct ReductionDeadlineTests {
         }
         machine.phase = phase
         clock.expire()
-        let transition = try machine.next()
+        let transition = machine.next()
         guard case .terminated = transition else {
             Issue.record("Expiry must terminate the machine")
             return
@@ -75,7 +75,7 @@ struct ReductionDeadlineTests {
         try advanceToEncodedProbe(&machine)
         #expect(machine.activeSession?.phase == .decode)
         clock.expire()
-        _ = try machine.next()
+        _ = machine.next()
         #expect(machine.stats.reductionProbes == 1)
         #expect(machine.stats.reductionProbesAccepted == 0)
         #expect(machine.stats.materializationsBySite[.decoder] == nil)
@@ -97,7 +97,7 @@ struct ReductionDeadlineTests {
         let originalRebuilds = machine.stats.graphStats.fullGraphRebuilds
         var reachedAcceptance = false
         for _ in 0 ..< 100 {
-            if case .decoded(_, accepted: true) = try machine.next() {
+            if case .decoded(_, accepted: true) = machine.next() {
                 reachedAcceptance = true
                 break
             }
@@ -105,12 +105,12 @@ struct ReductionDeadlineTests {
         #expect(reachedAcceptance)
         #expect(machine.activeSession?.anyRequiresRebuild == true)
         if reportAlreadyApplied {
-            _ = try machine.next()
+            _ = machine.next()
             #expect(machine.activeSession == nil)
             #expect(machine.pendingReport?.anyRequiresRebuild == true)
         }
         clock.expire()
-        _ = try machine.next()
+        _ = machine.next()
         #expect(machine.passCounter == 1)
         #expect(propertyCalls == 1)
         #expect(machine.stats.reductionProbes == 1)
@@ -265,7 +265,7 @@ struct ReductionDeadlineTests {
         let checkpoint = machine.sequence
         let originalMaterializations = machine.stats.totalMaterializations
         clock.permittedReadsBeforeExpiry = permittedClockReads
-        let improved = try machine.runImprovingPivotPass()
+        let improved = machine.runImprovingPivotPass()
         #expect(improved == false)
         #expect(propertyCalls == 0)
         #expect(machine.sequence == checkpoint)
@@ -302,7 +302,7 @@ struct ReductionDeadlineTests {
         state.rejectCache.insert(ZobristHash.hash(of: rejected))
         var session = state.makeSession(for: scalarScope(state))
         var checks = 0
-        let report = try session.runToCompletion(state: &state, deadlineCheck: {
+        let report = session.runToCompletion(state: &state, deadlineCheck: {
             checks += 1
             return checks > 1
         })
@@ -321,7 +321,7 @@ struct ReductionDeadlineTests {
         }
         var session = state.makeSession(for: scalarScope(state))
         var checks = 0
-        let report = try session.runToCompletion(state: &state, deadlineCheck: {
+        let report = session.runToCompletion(state: &state, deadlineCheck: {
             checks += 1
             return checks > allowedSteps
         })
@@ -394,7 +394,7 @@ private func makeMachine<Output>(
 private func complete(_ machine: inout ReductionMachine) throws -> [ReductionMachine.Transition] {
     var transitions: [ReductionMachine.Transition] = []
     for _ in 0 ..< 1000 {
-        guard let transition = try machine.next() else {
+        guard let transition = machine.next() else {
             return transitions
         }
         transitions.append(transition)
@@ -406,7 +406,7 @@ private func complete(_ machine: inout ReductionMachine) throws -> [ReductionMac
 /// Leaves one emitted probe waiting to decode so the next machine step tests the exact expiry boundary.
 private func advanceToEncodedProbe(_ machine: inout ReductionMachine) throws {
     for _ in 0 ..< 100 {
-        if case .encoded = try machine.next() {
+        if case .encoded = machine.next() {
             return
         }
     }

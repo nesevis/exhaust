@@ -12,7 +12,7 @@ struct ProbeAcceptanceAccountingTests {
             return false
         }
         let baseline = fixture.state.sequence
-        let report = try fixture.session.runToCompletion(state: &fixture.state)
+        let report = fixture.session.runToCompletion(state: &fixture.state)
         let admitted = candidate <= 1
         #expect(propertyCalls == 1)
         #expect(report.probeCount == 1)
@@ -40,7 +40,7 @@ struct ProbeAcceptanceAccountingTests {
             #expect(propertyPasses)
             return true
         }
-        let report = try fixture.session.runToCompletion(state: &fixture.state)
+        let report = fixture.session.runToCompletion(state: &fixture.state)
         #expect(calls == (propertyPasses ? 1 : 0))
         #expect(report.probeCount == 1)
         #expect(report.counts.propertyPassed == (propertyPasses ? 1 : 0))
@@ -59,11 +59,11 @@ struct ProbeAcceptanceAccountingTests {
         var other = ReductionStats()
         for candidate: UInt64 in [0, 1, 2] {
             var fixture = try SingleProbeFixture(candidate: candidate) { _ in false }
-            let report = try fixture.session.runToCompletion(state: &fixture.state)
+            let report = fixture.session.runToCompletion(state: &fixture.state)
             stats.record(report.counts, for: .composed)
         }
         var passing = try SingleProbeFixture(candidate: 0) { _ in true }
-        let report = try passing.session.runToCompletion(state: &passing.state)
+        let report = passing.session.runToCompletion(state: &passing.state)
         other.record(report.counts, for: .composed)
         stats.merge(other)
         #expect(stats.reductionProbes == 4)
@@ -91,7 +91,7 @@ struct ProbeAcceptanceAccountingTests {
         )
         var state = ProbeSessionFixtureState(sequence: sequence, tree: tree, output: [Int64(0), -1, 1], graph: graph, gen: generator.erase(), property: { _ in false })
         var session = state.makeSession(for: scope)
-        let report = try session.runToCompletion(state: &state)
+        let report = session.runToCompletion(state: &state)
         #expect(sequence.shortLexPrecedes(state.sequence))
         #expect(state.output as? [Int64] == [-1, 0, 1])
         #expect(report.anyAccepted)
@@ -107,7 +107,7 @@ struct ProbeAcceptanceAccountingTests {
         let baseline = machine.sequence
         let nodeID = try #require(machine.graph.leafNodes.first)
         machine.graph.convergenceStore[nodeID] = ConvergedOrigin(bound: 1, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
-        let stale = try machine.confirmConvergence()
+        let stale = machine.confirmConvergence()
         #expect(stale == (propertyPasses == false))
         #expect((machine.graph.convergenceStore[nodeID] == nil) == (propertyPasses == false))
         #expect(machine.sequence == baseline)
@@ -133,7 +133,7 @@ struct ProbeAcceptanceAccountingTests {
         let first = candidates.next()
         let perturbation = try #require(first)
         #expect(perturbation.shortLexPrecedes(baseline) == false)
-        let committed = try machine.runExcursion()
+        let committed = machine.runExcursion()
         #expect(committed == false)
         #expect(machine.sequence == baseline)
         #expect(machine.output as? [UInt64] == [10, 80])
@@ -147,7 +147,7 @@ struct ProbeAcceptanceAccountingTests {
     @Test("Improving pivots count only the failing fill they admit")
     func improvingPivotAdmission() throws {
         var machine = try reflectedMachine(generator: twoArms, value: UInt64(250), enabledEncoders: [.branchPivot]) { $0 < 80 }
-        let admitted = try machine.runImprovingPivotPass()
+        let admitted = machine.runImprovingPivotPass()
         #expect(admitted)
         #expect(machine.output as? UInt64 == 100)
         #expect(machine.stats.relaxImprovingProbes == 2)

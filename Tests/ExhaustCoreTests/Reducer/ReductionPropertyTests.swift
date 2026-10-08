@@ -126,7 +126,7 @@ struct ReductionPropertyTests {
             return
         }
 
-        let secondResult = try Interpreters.choiceGraphReduce(
+        let secondResult = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: secondTree,
             output: firstOutput,
@@ -146,7 +146,7 @@ struct ReductionPropertyTests {
 
         let property: (UInt64) -> Bool = { $0 > 0 }
 
-        let result = try Interpreters.choiceGraphReduce(
+        let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: UInt64(0),
