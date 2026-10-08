@@ -10,14 +10,14 @@ package enum FloatShortlex {
     /// Upper bound (2^56) below which a non-negative integral float is treated as "simple" and mapped to its integer value directly, avoiding the transformed exponent/mantissa encoding.
     package static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
 
-    /// Bitmask isolating the 11-bit exponent field of a `Double` bit pattern, forwarded from ``FloatReduction``.
-    package static let exponentMask: UInt64 = FloatReduction.doubleExponentMask
+    /// Bitmask isolating the 11-bit exponent field of a `Double` bit pattern after the mantissa has been shifted out.
+    package static let exponentMask: UInt64 = 0x7FF
 
-    /// Bitmask isolating the 52-bit mantissa field of a `Double` bit pattern, forwarded from ``FloatReduction``.
-    package static let mantissaMask: UInt64 = FloatReduction.doubleMantissaMask
+    /// Bitmask isolating the 52-bit mantissa field of a `Double` bit pattern.
+    package static let mantissaMask: UInt64 = (UInt64(1) << 52) - 1
 
-    /// Exponent bias for IEEE 754 binary64, forwarded from ``FloatReduction`` as `UInt64` for use in shortlex key arithmetic.
-    package static let exponentBias: UInt64 = .init(FloatReduction.doubleExponentBias)
+    /// Exponent bias for IEEE 754 binary64, as `UInt64` for use in shortlex key arithmetic.
+    package static let exponentBias: UInt64 = 1023
 
     /// High bit set on shortlex keys for non-simple floats, ensuring all transformed exponent/mantissa keys sort above the simple integer range.
     package static let nonSimpleTagMask: UInt64 = .init(1) << 63

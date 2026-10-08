@@ -10,15 +10,6 @@ package enum FloatReduction {
     /// Number of mantissa (significand) bits in IEEE 754 binary64, used to extract the fractional part of a `Double` bit pattern during ratio decomposition.
     package static let doubleMantissaBits = 52
 
-    /// Exponent bias for IEEE 754 binary64, subtracted from the stored exponent to recover the true power-of-two scale.
-    package static let doubleExponentBias = 1023
-
-    /// Bitmask isolating the 11-bit exponent field of a `Double` bit pattern after the mantissa has been shifted out.
-    package static let doubleExponentMask: UInt64 = 0x7FF
-
-    /// Bitmask isolating the 52-bit mantissa field of a `Double` bit pattern, used by ``integerRatio(_:)-1grwi`` to separate the fractional significand.
-    package static let doubleMantissaMask: UInt64 = (UInt64(1) << doubleMantissaBits) - 1
-
     /// Number of mantissa (significand) bits in IEEE 754 binary32, used to extract the fractional part of a `Float` bit pattern during ratio decomposition.
     package static let floatMantissaBits = 23
 
@@ -94,19 +85,19 @@ package enum FloatReduction {
 
         let sign: Int64 = value.sign == .minus ? -1 : 1
         let bits = value.magnitude.bitPattern
-        let exponentBits = Int((bits >> doubleMantissaBits) & doubleExponentMask)
-        let mantissa = bits & doubleMantissaMask
+        let exponentBits = Int((bits >> doubleMantissaBits) & FloatShortlex.exponentMask)
+        let mantissa = bits & FloatShortlex.mantissaMask
 
-        guard exponentBits != Int(doubleExponentMask) else { return nil }
+        guard exponentBits != Int(FloatShortlex.exponentMask) else { return nil }
 
         let significand: UInt64
         let exponent: Int
         if exponentBits == 0 {
             significand = mantissa
-            exponent = 1 - doubleExponentBias - doubleMantissaBits
+            exponent = 1 - Int(FloatShortlex.exponentBias) - doubleMantissaBits
         } else {
             significand = (UInt64(1) << doubleMantissaBits) | mantissa
-            exponent = exponentBits - doubleExponentBias - doubleMantissaBits
+            exponent = exponentBits - Int(FloatShortlex.exponentBias) - doubleMantissaBits
         }
 
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
