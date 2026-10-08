@@ -51,7 +51,7 @@ package enum SamplingPhase {
         replayIteration: Int?,
         run: inout PropertyTestRunner.Run<Output>
     ) -> Found<Output>? {
-        let generationPhaseStart = monotonicNanoseconds()
+        let generationPhaseStart = MonotonicClock.nanoseconds()
 
         let laneCount = singleLane ? 1 : max(1, Int(context.parallelLanes))
 
@@ -155,7 +155,7 @@ package enum SamplingPhase {
             .compactMap(\.failure)
             .min(by: { $0.absoluteIteration < $1.absoluteIteration })
 
-        run.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+        run.generationMilliseconds = Double(MonotonicClock.nanoseconds() - generationPhaseStart) / 1_000_000
         guard let failure = winningFailure else {
             if batchResults.contains(where: \.uniqueExhaustionTruncatedRun) {
                 run.diagnostics.append(.uniqueExhaustion(iterations: totalIterations))
@@ -204,7 +204,7 @@ package enum SamplingPhase {
                         failures: 1
                     )
                     let tree = try interpreter.reproduceFailureTree()
-                    run.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+                    run.generationMilliseconds = Double(MonotonicClock.nanoseconds() - generationPhaseStart) / 1_000_000
                     run.diagnostics.append(.filterObservations(interpreter.filterObservations))
 
                     let absoluteIteration = Int(startIndex) + iterations
@@ -220,7 +220,7 @@ package enum SamplingPhase {
             invocations: iterations,
             skips: context.skipCount - skipsBefore
         )
-        run.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+        run.generationMilliseconds = Double(MonotonicClock.nanoseconds() - generationPhaseStart) / 1_000_000
         run.diagnostics.append(.filterObservations(interpreter.filterObservations))
         if interpreter.uniqueExhaustionTruncatedRun {
             run.diagnostics.append(.uniqueExhaustion(iterations: iterations))
@@ -273,14 +273,14 @@ package enum SamplingPhase {
                 var previousTotalAttempts = 0
                 var previousTotalPasses = 0
                 while canceled.isCancelled == false,
-                      deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
+                      deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true
                 {
-                    let generateStart = monotonicNanoseconds()
+                    let generateStart = MonotonicClock.nanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
-                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                    guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                         break
                     }
-                    let generateEnd = monotonicNanoseconds()
+                    let generateEnd = MonotonicClock.nanoseconds()
                     result.iterations += 1
 
                     var currentTotalAttempts = 0
@@ -300,9 +300,9 @@ package enum SamplingPhase {
                         filterRejections = deltaAttempts - deltaPasses
                     }
 
-                    let testStart = monotonicNanoseconds()
+                    let testStart = MonotonicClock.nanoseconds()
                     let passed = property(next)
-                    let testEnd = monotonicNanoseconds()
+                    let testEnd = MonotonicClock.nanoseconds()
 
                     let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
                     let testSeconds = Double(testEnd - testStart) / 1_000_000_000
@@ -330,10 +330,10 @@ package enum SamplingPhase {
                 result.statsLines = statsAccumulator.finalize()
             } else {
                 while canceled.isCancelled == false,
-                      deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
+                      deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true
                 {
                     guard let next = try interpreter.nextValueOnly() else { break }
-                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                    guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                         break
                     }
                     result.iterations += 1

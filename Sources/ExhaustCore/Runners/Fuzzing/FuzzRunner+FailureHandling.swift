@@ -43,7 +43,7 @@ extension FuzzRunner {
                 }
                 faults.inventory.recordUnreduced(
                     symptom: symptom,
-                    timestampNanoseconds: monotonicNanoseconds(),
+                    timestampNanoseconds: MonotonicClock.nanoseconds(),
                     attemptIndex: attemptIndex,
                     countsAsInstance: countsAsInstance
                 )
@@ -58,7 +58,7 @@ extension FuzzRunner {
                         // Divergence on the deferred path: the attempt is already recorded, so the failure is held unreduced rather than dispatched with a placeholder tree.
                         faults.inventory.recordUnreduced(
                             symptom: symptom,
-                            timestampNanoseconds: monotonicNanoseconds(),
+                            timestampNanoseconds: MonotonicClock.nanoseconds(),
                             attemptIndex: attemptIndex,
                             countsAsInstance: countsAsInstance
                         )
@@ -97,7 +97,7 @@ extension FuzzRunner {
         wasEscape: Bool,
         countsAsInstance: Bool
     ) {
-        let reductionStart = monotonicNanoseconds()
+        let reductionStart = MonotonicClock.nanoseconds()
         let reduction = reduceStrategy(tree, value, symptom, Self.reductionProbeWrapper(breadcrumb))
         counts.invocations.record(.reduction, invocations: reduction.propertyInvocations)
         if reduction.escaped {
@@ -158,12 +158,12 @@ extension FuzzRunner {
             symptom: symptom,
             phase: phase,
             origin: origin,
-            timestampNanoseconds: monotonicNanoseconds(),
+            timestampNanoseconds: MonotonicClock.nanoseconds(),
             attemptIndex: attemptIndex,
             unnormalizedResidual: unnormalizedResidual,
             countsAsInstance: countsAsInstance
         )
-        timing.reductionNanoseconds += monotonicNanoseconds() - reductionStart
+        timing.reductionNanoseconds += MonotonicClock.nanoseconds() - reductionStart
         recordLineage(
             gate: wasEscape ? "reduce-escape" : "reduce",
             clusterID: classification.clusterID,
@@ -173,7 +173,7 @@ extension FuzzRunner {
         if classification.isNewCluster {
             forceCheckpoint = true
             // Faults outlive coverage: a target whose last new edge arrives in under a second can still be classifying new clusters twenty seconds later, and stopping on coverage alone loses them.
-            lastNewClusterNanoseconds = monotonicNanoseconds()
+            lastNewClusterNanoseconds = MonotonicClock.nanoseconds()
             if attemptsAtFirstFault == 0 {
                 attemptsAtFirstFault = counts.totalAttempts
             }

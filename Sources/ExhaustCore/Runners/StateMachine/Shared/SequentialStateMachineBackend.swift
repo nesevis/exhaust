@@ -34,7 +34,7 @@ package struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateM
         )
         let deadline = context.config.deadlineNanoseconds
         let commandProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { [property] commands in
-            (deadline.map { monotonicNanoseconds() >= $0 } ?? false) || property(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
+            (deadline.map { MonotonicClock.nanoseconds() >= $0 } ?? false) || property(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
         }
         let (reduced, stats, _) = __ExhaustRuntime.reduceStateMachineCounterexample(
             value: taggedCommands,

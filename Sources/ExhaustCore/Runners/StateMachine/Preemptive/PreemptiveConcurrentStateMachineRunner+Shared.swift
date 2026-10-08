@@ -146,7 +146,7 @@ extension Preemptive {
             case (nil, nil):
                 return true
             case let (observedValue?, replayedValue?):
-                return structurallyEqual(observedValue, replayedValue)
+                return StructuralEquality.structurallyEqual(observedValue, replayedValue)
             default:
                 return false
         }

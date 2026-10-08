@@ -54,7 +54,7 @@ package extension __ExhaustRuntime {
         combine: (ChoiceTree?, Row, ChoiceTree) -> (value: Value, tree: ChoiceTree)?,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
-        guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+        guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
             return .completed(screeningInvocations: 0)
         }
         guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -84,7 +84,7 @@ package extension __ExhaustRuntime {
         var filterLosses = ScreeningFilterLosses()
 
         for tier in tiers {
-            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                 break
             }
             // A replay addresses one tier by length. The others contribute nothing to the target row, so they are skipped wholesale rather than run and discarded.
@@ -134,7 +134,7 @@ package extension __ExhaustRuntime {
             let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
             let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
 
-            while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+            while deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true,
                   tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = nextRow()
             {
                 tierAttempts += 1
@@ -179,7 +179,7 @@ package extension __ExhaustRuntime {
                 if let skipTo, Int(tierIterations) - 1 < skipTo.row {
                     continue
                 }
-                guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                     return .completed(screeningInvocations: totalIterations)
                 }
                 if property(value) == false {

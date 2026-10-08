@@ -28,10 +28,10 @@ package extension Gen {
             kind: .isomorph(
                 forward: { boxed in
                     // Inspected through the erased optional protocol rather than `as? Output?` so the unwrap also holds when `Output` is `Any`, where a conditional cast to `Any?` cannot tell a boxed nil from a boxed value.
-                    guard isNilOptional(boxed) == false else {
+                    guard StructuralEquality.isNilOptional(boxed) == false else {
                         throw GeneratorError.backtrackExhausted
                     }
-                    return unwrapOptional(boxed)
+                    return StructuralEquality.unwrapOptional(boxed)
                 },
                 backward: { value in
                     // Boxing the `.some` as `Any` hands the pick an `Output?` to match against, which is what its arms produce.

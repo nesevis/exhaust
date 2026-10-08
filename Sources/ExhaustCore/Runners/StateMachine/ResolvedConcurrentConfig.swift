@@ -17,7 +17,7 @@ package struct ResolvedConcurrentConfig {
     package var deadlineNanoseconds: UInt64?
 
     package var hasExceededDeadline: Bool {
-        deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+        deadlineNanoseconds.map { MonotonicClock.nanoseconds() >= $0 } ?? false
     }
 
     package var seed: UInt64?

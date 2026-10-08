@@ -265,7 +265,7 @@ package enum ConstantArmReencoder {
         {
             return reflectedEquatable.isEqual(constantEquatable)
         }
-        return structurallyEqual(reflected, constant)
+        return StructuralEquality.structurallyEqual(reflected, constant)
     }
 }
 

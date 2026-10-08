@@ -77,7 +77,7 @@ package enum Materializer {
         context: consuming Context
     ) -> Result<Any> {
         let resolvedFallbackTree = context.rootFallbackTree
-        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         do {
             guard let (value, tree) = try generateRecursive(
@@ -129,7 +129,7 @@ package extension Materializer {
         context.skipTree = true
         context.flatOutput = ChoiceSequence()
         context.flatOutput!.reserveCapacity(Swift.max(64, context.cursor.entryCount))
-        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         do {
             guard let (value, _) = try generateRecursive(

@@ -210,7 +210,7 @@ package struct ReductionMachine: ProbeSessionState {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         collectStats: Bool,
-        currentNanoseconds: @escaping () -> UInt64 = monotonicNanoseconds,
+        currentNanoseconds: @escaping () -> UInt64 = MonotonicClock.nanoseconds,
         property: @escaping (Output) -> Bool
     ) {
         let erasedGen = gen.erase()

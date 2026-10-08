@@ -1,9 +1,9 @@
-////
-////  ChoiceTree+Shortlex.swift
-////  Exhaust
-////
-////  Created by Chris Kolbu on 29/7/2025.
-////
+//
+//  ChoiceTree+Shortlex.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 29/7/2025.
+//
 
 package extension ChoiceTree {
     /// Extracts the ``ChoiceMetadata`` for this tree node, falling back to the first child whose valid range is non-nil for group nodes that lack their own metadata.

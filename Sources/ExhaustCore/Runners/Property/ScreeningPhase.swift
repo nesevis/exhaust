@@ -210,7 +210,7 @@ package enum ScreeningPhase {
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
-        guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+        guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
             return .notApplicable
         }
         guard let plan = plan(gen, screeningBudget: screeningBudget) else {
@@ -227,7 +227,7 @@ package enum ScreeningPhase {
         var rows = Rows(plan: plan, coveringSeed: coveringSeed, skipToRow: skipToRow)
         var summary = Summary()
         var failureObserved = false
-        while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+        while deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true,
               let (rowIndex, row) = rows.next()
         {
             summary.rowAttempts += 1
@@ -235,7 +235,7 @@ package enum ScreeningPhase {
                 summary.rejectedRows += 1
                 continue
             }
-            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                 summary.rejectedRows += 1
                 break
             }
@@ -274,7 +274,7 @@ package enum ScreeningPhase {
         if plan.isExhaustiveCandidate,
            skipToRow == nil,
            failureObserved == false,
-           deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+           deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true,
            summary.rejectedRows == 0,
            UInt64(summary.rowAttempts) >= domainRows,
            UInt64(realizedSequences.count) >= domainRows

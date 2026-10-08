@@ -19,11 +19,11 @@ let intGen = #gen(.int(in: -100 ... 100, scaling: .exponential))
 private final class PropertyTimer: @unchecked Sendable {
     var accumulatedNanos: UInt64 = 0
     @inline(__always) func start() -> UInt64 {
-        monotonicNanoseconds()
+        MonotonicClock.nanoseconds()
     }
 
     @inline(__always) func stop(_ startNanos: UInt64) {
-        accumulatedNanos &+= monotonicNanoseconds() &- startNanos
+        accumulatedNanos &+= MonotonicClock.nanoseconds() &- startNanos
     }
 
     var milliseconds: Double {

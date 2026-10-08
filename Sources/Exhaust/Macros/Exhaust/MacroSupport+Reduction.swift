@@ -32,7 +32,7 @@ package extension __ExhaustRuntime {
         report: inout ExhaustReport,
         ledger: inout RunLedger
     ) throws -> Output? {
-        let reflectStart = monotonicNanoseconds()
+        let reflectStart = MonotonicClock.nanoseconds()
         let skipsBefore = skipCounter?.count ?? 0
 
         guard property(value) == false else {
@@ -65,7 +65,7 @@ package extension __ExhaustRuntime {
             return nil
         }
 
-        let reflectionEnd = monotonicNanoseconds()
+        let reflectionEnd = MonotonicClock.nanoseconds()
 
         var reducerConfig = reductionConfig
         reducerConfig.visualize = visualize
@@ -107,7 +107,7 @@ package extension __ExhaustRuntime {
             failure.includeDiff = includeDiff
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             report.renderedFailure = rendered
-            let reductionEnd = monotonicNanoseconds()
+            let reductionEnd = MonotonicClock.nanoseconds()
             let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
             let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
             let totalMs = Double(reductionEnd - reflectStart) / 1_000_000
@@ -151,7 +151,7 @@ package extension __ExhaustRuntime {
         failure.reductionNote = report.reductionWasCapped ? .timeLimit : .noImprovement
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         report.renderedFailure = rendered
-        let reductionEnd = monotonicNanoseconds()
+        let reductionEnd = MonotonicClock.nanoseconds()
         let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
         let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
         let totalMs = Double(reductionEnd - reflectStart) / 1_000_000

@@ -1,6 +1,6 @@
 /// Tests whether a concurrent execution's observed responses are consistent with some valid sequential ordering.
 ///
-/// The checker enumerates valid interleavings that preserve per-lane command order and measured real-time precedence. For each ordering, it replays the commands via the caller's closures, compares per-step responses via ``structurallyEqual(_:_:)``, and checks the oracle against the concurrent execution's final state. If any ordering produces matching responses and passes the oracle, the execution is linearizable.
+/// The checker enumerates valid interleavings that preserve per-lane command order and measured real-time precedence. For each ordering, it replays the commands via the caller's closures, compares per-step responses via ``StructuralEquality/structurallyEqual(_:_:)``, and checks the oracle against the concurrent execution's final state. If any ordering produces matching responses and passes the oracle, the execution is linearizable.
 ///
 /// Two ordering constraints bound the search. Each lane's own command order is always preserved. When ``ObservedInterval`` timestamps are available, cross-lane returns-before edges are enforced as well: a command whose measured return precedes another command's measured call must be ordered first (Herlihy and Wing's real-time condition). Without the second constraint the checker would accept histories where a lane observes state that a completed command on another lane had already overwritten: a stale read explained away by reordering non-overlapping commands. The intervals also prune the search: every enforced edge removes candidate interleavings from the DFS.
 ///
@@ -272,7 +272,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             case (nil, nil):
                 return true
             case let (observedValue?, replayValue?):
-                return structurallyEqual(observedValue, replayValue)
+                return StructuralEquality.structurallyEqual(observedValue, replayValue)
             default:
                 return false
         }

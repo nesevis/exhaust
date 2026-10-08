@@ -533,7 +533,7 @@ extension Materializer {
                 )
             }
             guard let (value, tree) = armResult else { return nil }
-            if isNilOptional(value), BacktrackAudition.isAbsentArm(arm, in: choices) == false {
+            if StructuralEquality.isNilOptional(value), BacktrackAudition.isAbsentArm(arm, in: choices) == false {
                 context.restore(snapshot)
                 continue
             }
@@ -1161,7 +1161,7 @@ extension Materializer {
             }
             attempts += 1
             // Checked per retry rather than on the element axis: a filter over a scalar inner advances no element index, so the generation deadline's sampled cadence never sees it, and nested filters compound the retry cap rather than sharing it.
-            if context.deadlineNanoseconds > 0, monotonicNanoseconds() > context.deadlineNanoseconds {
+            if context.deadlineNanoseconds > 0, MonotonicClock.nanoseconds() > context.deadlineNanoseconds {
                 throw GeneratorError.generationDeadlineExceeded(
                     seconds: Double(SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds) / 1_000_000_000
                 )

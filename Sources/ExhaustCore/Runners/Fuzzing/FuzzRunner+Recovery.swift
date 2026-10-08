@@ -60,7 +60,7 @@ extension FuzzRunner {
         guard let writer = progressWriter else {
             return
         }
-        let now = monotonicNanoseconds()
+        let now = MonotonicClock.nanoseconds()
         guard forceCheckpoint || now - lastCheckpointNanoseconds >= FuzzTunables.checkpointIntervalNanoseconds else {
             return
         }

@@ -84,7 +84,7 @@ extension ResolvedConcurrentConfig {
     }
 
     static func parse(_ settings: [StateMachineSettings]) -> ParseResult {
-        let runStart = monotonicNanoseconds()
+        let runStart = MonotonicClock.nanoseconds()
         var config = ResolvedConcurrentConfig()
         var invalidSeed: ReplaySeed?
         var clampedCommandLimit: Int?

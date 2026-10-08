@@ -486,7 +486,7 @@ private func runReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        let startTime = monotonicNanoseconds()
+        let startTime = MonotonicClock.nanoseconds()
         let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
@@ -494,7 +494,7 @@ private func runReflectableBenchmark<Output>(
             config: config,
             property: countingProperty
         )
-        let endTime = monotonicNanoseconds()
+        let endTime = MonotonicClock.nanoseconds()
         let output = result.counterexample?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
@@ -522,7 +522,7 @@ private func runNonReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        let startTime = monotonicNanoseconds()
+        let startTime = MonotonicClock.nanoseconds()
         let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
@@ -530,7 +530,7 @@ private func runNonReflectableBenchmark<Output>(
             config: config,
             property: countingProperty
         )
-        let endTime = monotonicNanoseconds()
+        let endTime = MonotonicClock.nanoseconds()
         let output = result.counterexample?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)

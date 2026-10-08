@@ -341,14 +341,14 @@ extension ReductionMachine {
         }
 
         let graphBefore = graph
-        let graphStart = monotonicNanoseconds()
+        let graphStart = MonotonicClock.nanoseconds()
         let diff = rebuildAndUpdateGraph(valueGuardExemptNodeIDs: valueGuardExemptNodeIDs)
         graphIsStripped = latestTreeIsStripped
 
         if let boundRange = boundPositionRange {
             graph.clearConvergence(inPositionRange: boundRange)
         }
-        let graphEnd = monotonicNanoseconds()
+        let graphEnd = MonotonicClock.nanoseconds()
 
         if diff.canReuseStructuralSources {
             let structuralSources = sources.filter { $0.isValueDependent == false }
@@ -379,7 +379,7 @@ extension ReductionMachine {
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         }
-        let sourceEnd = monotonicNanoseconds()
+        let sourceEnd = MonotonicClock.nanoseconds()
 
         if collectStats {
             stats.stepTimings.rebuildGraphNanoseconds += graphEnd - graphStart

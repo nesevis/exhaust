@@ -47,7 +47,7 @@ package extension __ExhaustRuntime {
     ) -> FailureEvidence<Backend.Spec>? {
         let partition = LanePartition(markers: input.map(\.0))
         for _ in 0 ..< PreemptiveConfirmation.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
-            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                 break
             }
             if let confirmed = classifyFailure(

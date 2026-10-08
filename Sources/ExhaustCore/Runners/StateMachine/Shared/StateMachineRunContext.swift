@@ -24,7 +24,7 @@ package struct StateMachineRunContext<Spec: StateMachineSpecBase> {
         guard let deadline = config.deadlineNanoseconds else {
             return ceiling
         }
-        let now = monotonicNanoseconds()
+        let now = MonotonicClock.nanoseconds()
         // Zero disables the reducer's limit, so an expired deadline must use the smallest nonzero budget.
         return min(ceiling, deadline > now ? deadline - now : 1)
     }

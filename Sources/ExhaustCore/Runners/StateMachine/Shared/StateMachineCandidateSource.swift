@@ -202,7 +202,7 @@ extension AnyStateMachineCandidateSource {
                         provenance: .screening(coveringSeed: coveringSeed, tierLength: tierLength, rowInTier: rowInTier)
                     )
                 case let .completed(screeningInvocations):
-                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                    guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                         return nil
                     }
                     // Reaching the row costs exactly row + 1 iterations in a tier-skipping replay, so fewer means the tier's row stream ended first. Returning nil would let a stale regression pin pass as if the failure were fixed.
@@ -211,7 +211,7 @@ extension AnyStateMachineCandidateSource {
                     }
                     return nil
                 case .skipped:
-                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                    guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                         return nil
                     }
                     throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: 0)
@@ -242,7 +242,7 @@ extension AnyStateMachineCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
-            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                 return nil
             }
             guard property(value) == false else {
@@ -270,7 +270,7 @@ extension AnyStateMachineCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
-            guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                 return nil
             }
             guard property(value) == false else {
@@ -348,10 +348,10 @@ extension AnyStateMachineCandidateSource {
         )
         var iteration = 0
         return AnyStateMachineCandidateSource(discoveryMethod: .randomSampling, reportedSeed: seed) {
-            while deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true,
+            while deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true,
                   let value = try interpreter.nextValueOnly()
             {
-                guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+                guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                     return nil
                 }
                 iteration += 1

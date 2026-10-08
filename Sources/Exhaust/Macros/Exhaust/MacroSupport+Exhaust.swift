@@ -255,7 +255,7 @@ public extension __ExhaustRuntime {
         testName: String,
         property: @escaping @Sendable (Output) -> Bool
     ) -> (Output?, String?) {
-        let runStart = monotonicNanoseconds()
+        let runStart = MonotonicClock.nanoseconds()
         var deadlineNanoseconds: UInt64?
         var budget = ExhaustBudget.standard
         var seed: UInt64?
@@ -361,7 +361,7 @@ public extension __ExhaustRuntime {
             var ledger = RunLedger()
             defer {
                 report.applyLedger(ledger)
-                report.hasExceededDeadline = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+                report.hasExceededDeadline = deadlineNanoseconds.map { MonotonicClock.nanoseconds() >= $0 } ?? false
                 onReportClosure?(report)
             }
 

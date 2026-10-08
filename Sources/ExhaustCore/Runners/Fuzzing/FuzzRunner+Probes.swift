@@ -99,7 +99,7 @@ extension FuzzRunner {
             if capturesComparisons {
                 source.beginComparisonCapture()
             }
-            let propertyStart = monotonicNanoseconds()
+            let propertyStart = MonotonicClock.nanoseconds()
             let verdict = judge(
                 value,
                 candidateHash: slot?.candidateHash ?? 0,
@@ -107,7 +107,7 @@ extension FuzzRunner {
                 kind: .search,
                 sequence: slot?.sequence
             )
-            timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
+            timing.propertyNanoseconds += MonotonicClock.nanoseconds() - propertyStart
             if capturesComparisons {
                 source.endComparisonCapture()
                 // One call for the whole harvest: the per-record closure form cost a dictionary lookup and a dynamic exclusivity check on the pool per operand, 7% of a run on a comparison-heavy target.

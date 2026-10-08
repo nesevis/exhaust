@@ -56,7 +56,7 @@ package enum ReductionRunner {
     ) -> Run<Output> {
         var configuration = configuration
         if let runDeadlineNanoseconds {
-            let now = monotonicNanoseconds()
+            let now = MonotonicClock.nanoseconds()
             guard now < runDeadlineNanoseconds else {
                 return Run(
                     sequence: ChoiceSequence.flatten(tree),

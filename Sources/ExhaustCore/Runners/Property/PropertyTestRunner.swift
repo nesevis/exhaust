@@ -57,7 +57,7 @@ package enum PropertyTestRunner {
         }
 
         package var hasExceededDeadline: Bool {
-            deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+            deadlineNanoseconds.map { MonotonicClock.nanoseconds() >= $0 } ?? false
         }
 
         /// The skip count accumulated so far, for phase-delta accounting. Skips land on the shared counter from any lane, so a delta taken outside a concurrent section is exact.
@@ -149,7 +149,7 @@ package enum PropertyTestRunner {
         ledger: RunLedger
     ) -> Run<Output> {
         var run = Run<Output>(ledger: ledger)
-        let phaseTimingStart = monotonicNanoseconds()
+        let phaseTimingStart = MonotonicClock.nanoseconds()
         if let screeningReplayRow {
             let outcome = runScreening(
                 context: context,
@@ -158,7 +158,7 @@ package enum PropertyTestRunner {
                 skipToRow: screeningReplayRow,
                 run: &run
             )
-            let screeningEnd = monotonicNanoseconds()
+            let screeningEnd = MonotonicClock.nanoseconds()
             run.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
             run.totalMilliseconds = run.screeningMilliseconds
             run.ending = .screeningReplay
@@ -177,14 +177,14 @@ package enum PropertyTestRunner {
             )
             switch outcome {
                 case let .counterexample(failure):
-                    let screeningEnd = monotonicNanoseconds()
+                    let screeningEnd = MonotonicClock.nanoseconds()
                     run.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
                     run.totalMilliseconds = run.screeningMilliseconds
                     run.ending = .screeningFailure
                     run.failure = failure
                     return run
                 case .exhaustivePass:
-                    let screeningEnd = monotonicNanoseconds()
+                    let screeningEnd = MonotonicClock.nanoseconds()
                     run.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
                     run.totalMilliseconds = run.screeningMilliseconds
                     run.ending = .screeningExhaustive
@@ -193,7 +193,7 @@ package enum PropertyTestRunner {
                     break
             }
         }
-        let screeningPhaseEndTime = monotonicNanoseconds()
+        let screeningPhaseEndTime = MonotonicClock.nanoseconds()
 
         let baseSeed = seed ?? Xoshiro256().seed
         run.seed = baseSeed
@@ -220,7 +220,7 @@ package enum PropertyTestRunner {
             samplingResult = failure.counterexample
         }
 
-        let endTime = monotonicNanoseconds()
+        let endTime = MonotonicClock.nanoseconds()
         run.screeningMilliseconds = Double(screeningPhaseEndTime - phaseTimingStart) / 1_000_000
         run.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
 
@@ -360,7 +360,7 @@ package enum PropertyTestRunner {
         run: inout Run<Output>
     ) -> Failure<Output> {
         let reductionSkipsBefore = context.skipCount
-        let reductionStart = monotonicNanoseconds()
+        let reductionStart = MonotonicClock.nanoseconds()
         let reduction = ReductionRunner.reduce(
             context.gen,
             tree: tree,
@@ -374,7 +374,7 @@ package enum PropertyTestRunner {
         } else {
             run.reductionWasCapped = true
         }
-        run.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
+        run.reductionMilliseconds = Double(MonotonicClock.nanoseconds() - reductionStart) / 1_000_000
         run.ledger.record(
             .reduction,
             invocations: reduction.propertyInvocations,

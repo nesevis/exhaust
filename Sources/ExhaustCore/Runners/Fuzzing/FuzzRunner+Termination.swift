@@ -15,7 +15,7 @@ extension FuzzRunner {
         if let limit = configuration.attemptLimit, counts.totalAttempts >= limit {
             return .attemptLimitReached
         }
-        if monotonicNanoseconds() - startNanoseconds >= configuration.budgetNanoseconds {
+        if MonotonicClock.nanoseconds() - startNanoseconds >= configuration.budgetNanoseconds {
             return .budgetExhausted
         }
         // Fail fast rather than spend the budget: a run recording nothing is not searching, and the user asked for minutes. The threshold governs only how early the run stops; run() reports coverageUnreachable for any zero-edge run whatever ended it.

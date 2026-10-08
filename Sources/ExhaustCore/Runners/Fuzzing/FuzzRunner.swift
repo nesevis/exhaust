@@ -324,7 +324,7 @@ package final class FuzzRunner<Output> {
     package func run() -> FuzzRunResult {
         // Before the baseline is read and before screening generates a row: the lane's own pre-bracket edges are excluded, not off-lane.
         source.claimLane()
-        startNanoseconds = monotonicNanoseconds()
+        startNanoseconds = MonotonicClock.nanoseconds()
         let offLaneHitsAtStart = source.offLaneHitCount
         setUpPersistence()
 
@@ -381,7 +381,7 @@ package final class FuzzRunner<Output> {
         }
 
         finishPersistence()
-        let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
+        let elapsedNanoseconds = MonotonicClock.nanoseconds() - startNanoseconds
 
         return FuzzRunResult(
             clusters: clusters,
@@ -415,11 +415,11 @@ package final class FuzzRunner<Output> {
     private func measureSearchPhase<Result>(
         _ operation: () -> Result
     ) -> (result: Result, overheadNanoseconds: UInt64) {
-        let phaseStartNanoseconds = monotonicNanoseconds()
+        let phaseStartNanoseconds = MonotonicClock.nanoseconds()
         let propertyStartNanoseconds = timing.propertyNanoseconds
         let reductionStartNanoseconds = timing.reductionNanoseconds
         let result = operation()
-        let phaseNanoseconds = monotonicNanoseconds() - phaseStartNanoseconds
+        let phaseNanoseconds = MonotonicClock.nanoseconds() - phaseStartNanoseconds
         let propertyNanoseconds = timing.propertyNanoseconds - propertyStartNanoseconds
         let reductionNanoseconds = timing.reductionNanoseconds - reductionStartNanoseconds
         let excludedNanoseconds = propertyNanoseconds + reductionNanoseconds
@@ -497,7 +497,7 @@ package final class FuzzRunner<Output> {
                 if samplesSinceNovelty >= configuration.samplingPlateauWindow {
                     return nil
                 }
-                if monotonicNanoseconds() >= backstopNanoseconds {
+                if MonotonicClock.nanoseconds() >= backstopNanoseconds {
                     return nil
                 }
             }
@@ -571,7 +571,7 @@ package final class FuzzRunner<Output> {
             if configuration.stopWhenSaturated, counts.evaluatedSearchCases >= nextSaturationCheckAttempt {
                 nextSaturationCheckAttempt = counts.evaluatedSearchCases + configuration.saturationCheckInterval
                 if isSaturated() {
-                    let plateauNow = monotonicNanoseconds()
+                    let plateauNow = MonotonicClock.nanoseconds()
                     let deadline = startNanoseconds + configuration.budgetNanoseconds
                     return .plateau(unusedNanoseconds: deadline > plateauNow ? deadline - plateauNow : 0)
                 }
@@ -625,7 +625,7 @@ package final class FuzzRunner<Output> {
                         evaluate(candidate)
                     case .exhausted:
                         // A fully enumerated domain with an empty mutable tier has nothing left to produce: the interpreter's stream stays exhausted and tier membership only changes on admissions, which need evaluations. Waiting out the plateau window instead would burn up to half the budget on a hot loop.
-                        let now = monotonicNanoseconds()
+                        let now = MonotonicClock.nanoseconds()
                         let deadline = startNanoseconds + configuration.budgetNanoseconds
                         return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
                     case let .generationError(message):
@@ -1072,7 +1072,7 @@ package final class FuzzRunner<Output> {
     private func noteAdmission(_ admission: CorpusAdmission) {
         // The cumulative record, not the admission masks: `resetNoveltyBaseline()` clears the masks at the screening handover, and a discovery clock driven off them restarts on the first sampling entry to touch an edge screening already covered.
         if case let .admitted(index, _) = admission, corpus.coveredRunFirstEdge(at: index) {
-            lastNewEdgeNanoseconds = monotonicNanoseconds()
+            lastNewEdgeNanoseconds = MonotonicClock.nanoseconds()
         }
         if admission.isAdmitted {
             attemptsSinceAdmission = 0

@@ -37,7 +37,7 @@ struct PipelineDeadlineTests {
 
     @Test("Reflected failures still render when the deadline prevents reduction", .timeLimit(.minutes(1)))
     func reflectedFailureDeadline() throws {
-        let deadline = monotonicNanoseconds() + 1_000_000_000
+        let deadline = MonotonicClock.nanoseconds() + 1_000_000_000
         let (value, report) = run(
             deadline: deadline,
             screening: 0,
@@ -58,7 +58,7 @@ struct PipelineDeadlineTests {
 
     @Test("Parallel sampling drains its in-flight calls before returning", .timeLimit(.minutes(1)))
     func parallelDeadline() throws {
-        let deadline = monotonicNanoseconds() + 1_000_000_000
+        let deadline = MonotonicClock.nanoseconds() + 1_000_000_000
         let completedCalls = SendableBox(0)
         let (value, report) = run(
             deadline: deadline, screening: 0, collectStats: false, lanes: .two
@@ -78,7 +78,7 @@ struct PipelineDeadlineTests {
     @Test("A run completing before its deadline keeps its full sampling budget", .timeLimit(.minutes(1)))
     func completesBeforeDeadline() throws {
         let (value, report) = run(
-            deadline: monotonicNanoseconds() + 60_000_000_000, screening: 0, collectStats: false
+            deadline: MonotonicClock.nanoseconds() + 60_000_000_000, screening: 0, collectStats: false
         ) { _ in true }
         #expect(value == nil)
         #expect(try #require(report).randomSamplingInvocations == 1000)
@@ -100,7 +100,7 @@ struct PipelineDeadlineTests {
 
     @Test("A passing in-flight call finishes before the run stops", .timeLimit(.minutes(1)), arguments: [0, 50], [false, true])
     func deadlineDuringProperty(screening: Int, collectStats: Bool) throws {
-        let deadline = monotonicNanoseconds() + 1_000_000_000
+        let deadline = MonotonicClock.nanoseconds() + 1_000_000_000
         let calls = SendableBox(0)
         let (value, report) = run(deadline: deadline, screening: screening, collectStats: collectStats) { _ in
             calls.withValue { $0 += 1 }
@@ -119,7 +119,7 @@ struct PipelineDeadlineTests {
 
     @Test("A genuine failure survives a deadline without starting reduction", .timeLimit(.minutes(1)))
     func deadlineDuringFailure() throws {
-        let deadline = monotonicNanoseconds() + 1_000_000_000
+        let deadline = MonotonicClock.nanoseconds() + 1_000_000_000
         let (value, report) = run(deadline: deadline, screening: 0, collectStats: false) { _ in
             waitUntilDeadline(deadline)
             return false
@@ -136,7 +136,7 @@ struct PipelineDeadlineTests {
 
     @Test("Reduction uses only the time remaining in the trial", .timeLimit(.minutes(1)))
     func deadlineDuringReduction() throws {
-        let deadline = monotonicNanoseconds() + 1_000_000_000
+        let deadline = MonotonicClock.nanoseconds() + 1_000_000_000
         let calls = SendableBox(0)
         let generator = ReflectiveGenerator<Int>.getSize { .just(Int($0)) }.resize(100)
         let (value, report) = run(
@@ -176,7 +176,7 @@ struct PipelineDeadlineTests {
             .replay(.numeric(42)),
             .onReport { report = $0 },
         ]
-        let now = monotonicNanoseconds()
+        let now = MonotonicClock.nanoseconds()
         settings.append(.deadline(.nanoseconds(deadline > now ? deadline - now : 0)))
         if collectStats {
             settings.append(.collectOpenPBTStats)
@@ -195,9 +195,9 @@ struct PipelineDeadlineTests {
 ///
 /// The run stamps its own deadline later than the test does, when it parses its settings, so returning at the stamped instant can return before the run's real deadline. The margin is 100 ms because under load that gap has been seen to exceed 10 ms.
 ///
-/// This is the file's only sleep. A deadline is compared inline against `monotonicNanoseconds()` and nothing signals a test when it passes, so real time has to elapse. A new deadline test calls this helper rather than adding another `Thread.sleep`.
+/// This is the file's only sleep. A deadline is compared inline against `MonotonicClock.nanoseconds()` and nothing signals a test when it passes, so real time has to elapse. A new deadline test calls this helper rather than adding another `Thread.sleep`.
 private func waitUntilDeadline(_ deadline: UInt64) {
-    let now = monotonicNanoseconds()
+    let now = MonotonicClock.nanoseconds()
     if now < deadline {
         Thread.sleep(forTimeInterval: Double(deadline - now) / 1_000_000_000 + 0.1)
     }

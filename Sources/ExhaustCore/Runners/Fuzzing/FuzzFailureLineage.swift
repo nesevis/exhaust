@@ -63,7 +63,7 @@ package struct FuzzFailureLineage {
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         path = directory + "/failure-lineage-\(ProcessInfo.processInfo.processIdentifier).jsonl"
         self.seed = seed
-        runStartNanoseconds = monotonicNanoseconds()
+        runStartNanoseconds = MonotonicClock.nanoseconds()
     }
 
     /// Writes one row. `parentSequence` and `parentValue` are nil for candidates with no parent (fresh draws, screening rows, whole-value injections). `cluster` is nil when the gate did not reduce. The parent's phase, root phase, and generation say where its lineage began: a mutation-phase root is a fresh draw the mixture admitted.

@@ -139,7 +139,7 @@ package extension __ExhaustRuntime {
 
         // The underlying graph reducer has no abort channel, so an abort is latched here: remaining probes in the in-flight pass report passing (rejecting every candidate) without reaching the backend's property, and the next pass is skipped.
         let boolProperty: @Sendable (Value) -> Bool = { commands in
-            guard aborted == false, runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
+            guard aborted == false, runDeadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                 return true
             }
             switch property(commands) {
