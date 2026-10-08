@@ -10,11 +10,17 @@
 /// Priority inspection must not advance enumeration. Batched removal sources advertise the next bisection continuation; the scheduler rebuilds sources after invalidating acceptances instead of advancing the old cursor. Each conformer must declare its invalidation policy explicitly. Invalidation metadata describes the whole prepared source and remains available after exhaustion.
 protocol CandidateSource: ScopeCursor where Scope == GraphTransformation {
     var peekPriority: DispatchPriority? { get }
+    var prefersInitialDispatch: Bool { get }
     var isValueDependent: Bool { get }
     var isPermutationSource: Bool { get }
 }
 
 extension CandidateSource {
+    /// Allows a source to request one initial probe before ordinary yield ordering resumes.
+    var prefersInitialDispatch: Bool {
+        false
+    }
+
     /// Leaf-kind changes invalidate value-dependent scopes and sibling-shape groups, even when node identities remain stable.
     var canReuseAfterLeafKindChange: Bool {
         isValueDependent == false && isPermutationSource == false
@@ -65,6 +71,11 @@ enum AnyCandidateSource {
 }
 
 extension AnyCandidateSource: CandidateSource {
+    var prefersInitialDispatch: Bool {
+        guard case let .batchedCrossSequence(source) = self else { return false }
+        return source.prefersInitialDispatch
+    }
+
     var peekPriority: DispatchPriority? {
         switch self {
             case let .sorted(source):

@@ -12,7 +12,7 @@ enum RemovalScope {
     /// Remove elements from one or more sequences. Subsumes both single-parent removal and aligned removal across sibling sequences.
     case elements(ElementRemovalScope)
 
-    /// Remove a structural subtree (bind subtree, zip child, or other compound element in the deletion antichain).
+    /// Remove a structural subtree (bind subtree, zip child, or other compound element).
     case subtree(nodeID: Int, yield: Int)
 
     /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
@@ -24,7 +24,7 @@ enum RemovalScope {
 
 /// Scope for element removal across one or more sequences.
 ///
-/// Each ``SequenceRemovalTarget`` identifies a parent sequence and the element node IDs to remove from it. A single-target scope is the common case (removal within one sequence). Multi-target scopes enable cross-sequence batched removal for antichain-independent sequences.
+/// Each ``SequenceRemovalTarget`` identifies a parent sequence and the element node IDs to remove from it. A single-target scope is the common case (removal within one sequence). Multi-target scopes enable cross-sequence batched removal for compatible sequences.
 struct ElementRemovalScope {
     /// Per-sequence removal targets.
     let targets: [SequenceRemovalTarget]
@@ -339,7 +339,7 @@ struct PermutationScope: Sendable {
 
 // MARK: - Migration Scopes
 
-/// Defines the scope of an element migration between antichain-independent sequences.
+/// Defines the scope of an element migration between compatible sequences.
 ///
 /// Migration prepends all elements from an earlier sequence to a later sequence, preserving their relative order. Removing the source sequence's markers makes the choice sequence strictly shorter.
 ///

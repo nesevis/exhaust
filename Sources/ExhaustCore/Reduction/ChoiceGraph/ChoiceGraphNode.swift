@@ -56,7 +56,7 @@ package struct ChoiceGraphNode: Sendable {
 ///
 /// ## bind Dependency node with two children: inner (value-producing) and bound (structure depends on inner). The bound subtree is a dynamic region rebuilt when the inner value changes (unless structurally constant).
 ///
-/// ## zip Parallel composition. Children are structurally independent — no ordering constraint. Defines the independence structure for antichain computation.
+/// ## zip Parallel composition. Children are structurally independent — no ordering constraint. Provides sibling contexts for coordinated deletion and value reduction.
 ///
 /// ## sequence Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materializer derives actual length from element count, not from the length generator's output.
 ///

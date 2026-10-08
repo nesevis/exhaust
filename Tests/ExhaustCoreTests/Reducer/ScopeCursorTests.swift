@@ -156,6 +156,15 @@ struct ScopeCursorTests {
             .sorted(SortedCandidateSource([highest, lowest])),
         ]
 
+        #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 0)
+        #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 0)
+        let initial = try #require(nextScope(from: &sources[0]))
+        #expect(initial.priority == generatedPriority)
+        let initialTargets = try #require(removalTargets(of: initial))
+        #expect(initialTargets.count == 2)
+        #expect(initialTargets.map(\.elementNodeIDs.count) == [4, 2])
+        #expect(sources[0].prefersInitialDispatch == false)
+
         #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 1)
         #expect(ChoiceGraphScheduler.highestPrioritySourceIndex(sources) == 1)
         let emitted = try #require(nextScope(from: &sources[1]))

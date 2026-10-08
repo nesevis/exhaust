@@ -71,6 +71,7 @@ enum ChoiceGraphScheduler {
         var bestPriority: DispatchPriority?
         for index in sources.indices {
             guard let priority = sources[index].peekPriority else { continue }
+            if sources[index].prefersInitialDispatch { return index }
             if let currentBest = bestPriority {
                 if priority > currentBest {
                     bestIndex = index

@@ -27,7 +27,7 @@ enum DependencyReachability {
 
     /// Finds candidate nodes reachable from the source while excluding the source itself, even when dependency edges form a cycle.
     ///
-    /// The deletion antichain uses one traversal per source to build its restricted reachability relation without computing a full transitive closure.
+    /// Dependency caches use one traversal per source to discover candidate relationships without computing a full transitive closure.
     ///
     /// - Complexity: O(V + E) in the visited dependency subgraph.
     static func reachableNodes(from source: Int, within candidates: Set<Int>, adjacency: [[Int]]) -> Set<Int> {

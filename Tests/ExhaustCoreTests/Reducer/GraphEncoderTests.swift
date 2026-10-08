@@ -13,8 +13,8 @@ import Testing
 struct GraphEncoderTests {
     // MARK: - GraphStructuralEncoder (Removal)
 
-    @Test("Removal encoder removes members of the deletion antichain")
-    func removalEncoderRemovesAntichainMembers() {
+    @Test("Removal encoder deletes sequence elements")
+    func removalEncoderDeletesSequenceElements() {
         let seq1 = ChoiceTree.sequence(
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),

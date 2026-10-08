@@ -12,9 +12,9 @@
 /// ## Edge Layers
 ///
 /// - **Dependency** (directed): bind-inner → bound content. Ordering constraint — parent before child. Topological sort and reachability operate here.
-/// - **Containment** (directed, no ordering constraint): parent → child in the tree. Defines independence structure for antichain computation.
+/// - **Containment** (directed, no ordering constraint): parent → child in the tree. Lets deletion traversal prefer outer sequences and prune descendants whose containing elements are removed.
 /// - **Self-similarity** (undirected): between active pick nodes with matching fingerprint. Substitution candidates.
-/// - **Type-compatibility** (undirected): between antichain members with compatible types. Redistribution candidates. Computed on demand as a non-caching computed property.
+/// - **Type-compatibility** (undirected): between compatible value leaves in a sequence-sibling or zip cross-slot context. Redistribution candidates. Computed on demand as a non-caching computed property.
 ///
 /// ## Lifecycle
 ///

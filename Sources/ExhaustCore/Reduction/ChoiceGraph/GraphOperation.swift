@@ -30,7 +30,7 @@ enum GraphOperation {
     /// Reorder children at a node for shortlex improvement.
     case permute(PermutationScope)
 
-    /// Move elements between antichain-independent sequences to improve shortlex ordering.
+    /// Move elements between dependency-independent sequences to improve shortlex ordering.
     case migrate(MigrationScope)
 
     /// Reorder sequence elements into natural numeric order as a final canonicalization pass.

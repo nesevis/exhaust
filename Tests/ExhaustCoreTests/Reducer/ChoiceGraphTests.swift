@@ -3,8 +3,8 @@
 //  Exhaust
 //
 
-import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 // MARK: - ChoiceGraph Construction Tests
 
@@ -268,9 +268,9 @@ struct ChoiceGraphTests {
 
     // MARK: - Query Tests
 
-    @Test("Deletion antichain excludes individual leaf nodes")
-    func deletionAntichainExcludesLeaves() {
-        // `#gen(.int(), .int(), .int())`. The lanes are tuple slots, not sequence elements, so none of them is deletable and the antichain is empty.
+    @Test("Deletion selection excludes leaves outside sequences")
+    func deletionSelectionExcludesStandaloneLeaves() {
+        // `#gen(.int(), .int(), .int())`. The lanes are tuple slots, not sequence elements, so none of them is deletable and there is no deletion plan.
         let tree = ChoiceTree.group([
             .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
             .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10)),
@@ -279,12 +279,13 @@ struct ChoiceGraphTests {
 
         let graph = ChoiceGraph.build(from: tree)
 
-        #expect(graph.deletionAntichain.isEmpty)
+        var cursor = TreeDeletionSelection.Cursor(graph: graph)
+        #expect(cursor.next() == nil)
     }
 
-    /// The positive control for `deletionAntichainExcludesLeaves`. Without it an empty antichain reads as a pass whatever the reason, which is how the exclusion test came to assert nothing.
-    @Test("Deletion antichain holds the elements of a sequence, leaves included")
-    func deletionAntichainHoldsSequenceElements() {
+    /// The positive control for ``deletionSelectionExcludesStandaloneLeaves``. It verifies that sequence elements remain deletable even when each element is a bare leaf.
+    @Test("Deletion selection includes sequence elements, leaves included")
+    func deletionSelectionIncludesSequenceElements() throws {
         // `.int().array()`. The elements are what array reduction removes, so they are candidates even though each is a bare leaf.
         let tree = ChoiceTree.sequence(
             elements: [
@@ -296,14 +297,18 @@ struct ChoiceGraphTests {
         )
 
         let graph = ChoiceGraph.build(from: tree)
-        let antichain = graph.deletionAntichain
+        var cursor = TreeDeletionSelection.Cursor(graph: graph)
+        let next = cursor.next()
+        let plan = try #require(next)
+        let target = plan.target
 
-        #expect(antichain.count == 3)
-        for nodeID in antichain {
+        #expect(target.elementNodeIDs.count == 3)
+        #expect(cursor.next() == nil)
+        for nodeID in target.elementNodeIDs {
             guard let parentID = graph.nodes[nodeID].parent,
                   case .sequence = graph.nodes[parentID].kind
             else {
-                Issue.record("Antichain member \(nodeID) should hang off the sequence")
+                Issue.record("Deletion target \(nodeID) should hang off the sequence")
                 return
             }
         }

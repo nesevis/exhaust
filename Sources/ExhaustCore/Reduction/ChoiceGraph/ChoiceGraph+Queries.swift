@@ -33,60 +33,6 @@ package extension ChoiceGraph {
     }
 }
 
-// MARK: - Containment Queries
-
-package extension ChoiceGraph {
-    /// Maximum antichain over deletable structural boundary nodes via Dilworth's theorem.
-    ///
-    /// A node is deletable if it is a child of a sequence node (an element that can be removed when the sequence's length constraint permits). Nodes whose parent is a zip are tuple slots and cannot be deleted. The root node and individual chooseBits leaves are also excluded.
-    ///
-    /// Computes the optimal maximum antichain using Hopcroft-Karp bipartite matching on the reachability relation restricted to the candidate set, then extracts the antichain via Konig's theorem. For the typical deletion candidate set (5-15 nodes), this runs in microseconds.
-    ///
-    /// - SeeAlso: ``BipartiteMatching``
-    var deletionAntichain: [Int] {
-        let candidateIDs = liveNodeIDs.filter { nodeID in
-            let node = nodes[nodeID]
-            guard let parentID = node.parent else { return false }
-            guard case .sequence = nodes[parentID].kind else { return false }
-            return true
-        }
-
-        guard candidateIDs.isEmpty == false else { return [] }
-
-        // Map candidate node IDs to dense indices for the bipartite graph.
-        let candidateCount = candidateIDs.count
-        var idToIndex = [Int: Int]()
-        for (index, nodeID) in candidateIDs.enumerated() {
-            idToIndex[nodeID] = index
-        }
-
-        // Build reachability restricted to the candidate set via on-demand DFS from each candidate. O(K · (V + E)) where K is the candidate count — much cheaper than the former O(V · E) eager transitive closure when K << V.
-        let candidateIDSet = Set(candidateIDs)
-        var reachability = [Int: Set<Int>]()
-        reachability.reserveCapacity(candidateCount)
-        for (sourceIndex, sourceID) in candidateIDs.enumerated() {
-            let reached = DependencyReachability.reachableNodes(from: sourceID, within: candidateIDSet, adjacency: dependencyAdjacency)
-            var targetIndices = Set<Int>()
-            for targetID in reached {
-                if let targetIndex = idToIndex[targetID] {
-                    targetIndices.insert(targetIndex)
-                }
-            }
-            if targetIndices.isEmpty == false {
-                reachability[sourceIndex] = targetIndices
-            }
-        }
-
-        let antichainIndices = BipartiteMatching.maximumAntichain(
-            nodeCount: candidateCount,
-            reachability: reachability
-        )
-
-        // Map back to node IDs.
-        return antichainIndices.map { candidateIDs[$0] }
-    }
-}
-
 // MARK: - Structural Fingerprint
 
 package extension ChoiceGraph {

@@ -20,7 +20,7 @@ package struct DependencyEdge: Equatable, Sendable {
 
 /// Directed edge from a parent node to a child in the containment tree.
 ///
-/// Connects zip → children, sequence → elements, pick → branches (active and inactive), bind → inner and bound. The direction is hierarchical (parent → child) but carries no dependency semantics — siblings are structurally independent. The containment layer defines the independence structure for antichain computation.
+/// Connects zip → children, sequence → elements, pick → branches (active and inactive), bind → inner and bound. The direction is hierarchical (parent → child) but carries no dependency semantics — siblings are structurally independent. Deletion traversal uses nesting to prune descendants of removed elements.
 package struct ContainmentEdge: Equatable, Sendable {
     /// Node ID of the parent.
     package let source: Int

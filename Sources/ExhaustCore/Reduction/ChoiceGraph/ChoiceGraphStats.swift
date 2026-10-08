@@ -31,9 +31,6 @@ package struct ChoiceGraphStats: Sendable {
     /// Total nodes rebuilt across all dynamic region rebuilds.
     package var dynamicRegionNodesRebuilt: Int
 
-    /// Number of sequence-element nodes in the deletion antichain at initial graph construction.
-    package var deletionAntichainSize: Int
-
     /// Number of full ``ChoiceGraph/build(from:)`` rebuilds triggered by structural acceptances during reduction.
     package var fullGraphRebuilds: Int
 
@@ -48,7 +45,6 @@ package struct ChoiceGraphStats: Sendable {
         inactiveNodeCount = 0
         dynamicRegionRebuilds = 0
         dynamicRegionNodesRebuilt = 0
-        deletionAntichainSize = 0
         fullGraphRebuilds = 0
     }
 
@@ -61,7 +57,6 @@ package struct ChoiceGraphStats: Sendable {
         typeCompatibilityEdgeCount = other.typeCompatibilityEdgeCount
         activeNodeCount = other.activeNodeCount
         inactiveNodeCount = other.inactiveNodeCount
-        deletionAntichainSize = other.deletionAntichainSize
         fullGraphRebuilds += other.fullGraphRebuilds
         dynamicRegionRebuilds += other.dynamicRegionRebuilds
         dynamicRegionNodesRebuilt += other.dynamicRegionNodesRebuilt
@@ -79,7 +74,6 @@ package struct ChoiceGraphStats: Sendable {
         stats.typeCompatibilityEdgeCount = TypeCompatibilityCursor(graph: graph).edgeCount
         stats.activeNodeCount = graph.nodes.count(where: { $0.positionRange != nil })
         stats.inactiveNodeCount = graph.nodes.count(where: { $0.positionRange == nil })
-        stats.deletionAntichainSize = graph.deletionAntichain.count
         return stats
     }
 }

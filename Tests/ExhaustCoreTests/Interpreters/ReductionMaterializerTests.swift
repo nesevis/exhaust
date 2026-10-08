@@ -641,6 +641,82 @@ struct ReductionMaterializerTests {
 
         #expect(value == originalValue)
     }
+
+    // MARK: - Bind-dependent sequence prefixes
+
+    @Test("Lowering a length-only bind retains the old element prefix")
+    func lengthOnlyBindRetainsPrefix() throws {
+        let generator = Gen.choose(in: UInt64(1) ... 5).bindReified { length in
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: length)
+        }
+        let original = bindSequenceFixture(control: 3, elements: [8, 7, 6], elementMaximum: 10)
+        let reduced = try materializeReducedControl(generator, original: original, control: 1)
+        #expect(reduced == [8])
+
+        let candidate = replacingControl(in: original, with: 1)
+        guard case .rejected = Materializer.materialize(generator, context: .init(prefix: candidate, mode: .exact)) else {
+            Issue.record("Exact replay must reject the old three-element count against the new fixed length of one")
+            return
+        }
+    }
+
+    @Test("Lowering a bind inner can increase the bound sequence length")
+    func inverseLengthDependencyAddsElements() throws {
+        let generator = Gen.choose(in: UInt64(1) ... 5).bindReified { control in
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 6 - control)
+        }
+        let original = bindSequenceFixture(control: 3, elements: [8, 7, 6], elementMaximum: 10)
+        let reduced = try materializeReducedControl(generator, original: original, control: 1)
+        #expect(reduced.count == 5)
+        #expect(Array(reduced.prefix(3)) == [8, 7, 6])
+    }
+
+    /// Uses the same guided prefix and parent fallback as a reducer bind lift, then checks exact replay of the repaired history.
+    private func materializeReducedControl(
+        _ generator: Generator<[UInt64]>,
+        original: ChoiceTree,
+        control: UInt64
+    ) throws -> [UInt64] {
+        let candidate = replacingControl(in: original, with: control)
+        let result = Materializer.materialize(generator, context: .init(
+            prefix: candidate,
+            mode: .guided(seed: 0, fallbackTree: original),
+            fallbackTree: original,
+            materializePicks: true
+        ))
+        guard case let .success(value, tree, _) = result else {
+            throw ExactMaterializationFixtureError.rejectedValue
+        }
+        let replay = Materializer.materialize(generator, context: .init(prefix: ChoiceSequence(tree), mode: .exact))
+        guard case let .success(replayedValue, _, _) = replay else {
+            throw ExactMaterializationFixtureError.rejectedValue
+        }
+        #expect(replayedValue == value)
+        return value
+    }
+
+    /// Replaces the first value entry, which is the fixture's bind inner.
+    private func replacingControl(in tree: ChoiceTree, with control: UInt64) -> ChoiceSequence {
+        var candidate = ChoiceSequence(tree)
+        let position = candidate.firstIndex { entry in
+            if case .value = entry { return true }
+            return false
+        }!
+        candidate[position] = .value(.init(choice: ChoiceValue(control, tag: .uint64), validRange: 1 ... 5, isRangeExplicit: true))
+        return candidate
+    }
+
+    /// Pins the fallback's previous length and element range for a changed bind control.
+    private func bindSequenceFixture(control: UInt64, elements: [UInt64], elementMaximum: UInt64) -> ChoiceTree {
+        .bind(
+            fingerprint: 17,
+            inner: .choice(ChoiceValue(control, tag: .uint64), .init(validRange: 1 ... 5, isRangeExplicit: true)),
+            bound: .sequence(
+                elements: elements.map { .choice(ChoiceValue($0, tag: .uint64), .init(validRange: 0 ... elementMaximum, isRangeExplicit: true)) },
+                metadata: .init(validRange: UInt64(elements.count) ... UInt64(elements.count), isRangeExplicit: true)
+            )
+        )
+    }
 }
 
 private enum ExactMaterializationFixtureError: Error {

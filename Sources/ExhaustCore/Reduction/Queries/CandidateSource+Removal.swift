@@ -5,71 +5,29 @@
 
 // MARK: - Batched Cross-Sequence Removal Source
 
-/// Emits a single scope that removes deletable elements from all antichain-independent sequences simultaneously, then bisects on rejection.
+/// Attempts compatible sequences at their range minima first, then bisects the target list on rejection.
 ///
-/// The deletion antichain identifies element nodes that are pairwise independent (no containment or dependency path). Grouping these by parent sequence yields a set of independent sequences. The first probe attempts to remove all deletable elements from every independent sequence at once. On rejection, the target list is bisected and each half is tried independently.
+/// Tree traversal prefers outer sequences, prunes descendants inside deleted elements, and excludes targets invalidated by a changed bind inner. The initial all-sequence probe requires draining the selection cursor, but its compact plans share graph child storage and defer element-ID expansion until a scope is emitted.
 ///
 /// A structural acceptance rebuilds the source collection. Advancing this cursor therefore means the previous scope did not accept, so its range can be bisected without explicit feedback.
 ///
 /// Runs before the emptying builder — a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
 struct BatchedCrossSequenceRemovalSource {
-    /// Each entry represents one independent sequence with its deletable elements and yield.
-    private let sequences: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)]
+    private let plans: [TreeDeletionSelection.Plan]
     /// Stack of index ranges to try. Continuing after an unsuccessful scope appends its two halves.
     private var pendingRanges: [(start: Int, end: Int)]
     /// The last emitted range, bisected if this cursor is advanced again.
     private var lastEmittedRange: (start: Int, end: Int)?
     private var exhausted: Bool
     private var cachedPriority: DispatchPriority?
+    private(set) var prefersInitialDispatch: Bool
 
     init(graph: ChoiceGraph) {
-        // Group antichain members by parent sequence.
-        var parentToElements: [Int: [Int]] = [:]
-        for nodeID in graph.deletionAntichain {
-            guard let parentID = graph.nodes[nodeID].parent else { continue }
-            guard case .sequence = graph.nodes[parentID].kind else { continue }
-            parentToElements[parentID, default: []].append(nodeID)
-        }
-
-        // For each independent sequence parent, gather ALL deletable elements (not just antichain members — the antichain tells us which sequences are independent, but within each sequence we want to remove as many elements as the length constraint permits).
-        var entries: [(target: SequenceRemovalTarget, deletableCount: Int, yield: Int)] = []
-        for (parentID, _) in parentToElements.sorted(by: { $0.key < $1.key }) {
-            guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
-            let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
-            let deletable = metadata.elementCount - minLength
-            guard deletable > 0 else { continue }
-
-            // Collect children ordered by position, take the last `deletable` elements (tail-anchored removal is the default for batch deletion).
-            let allChildren = graph.nodes[parentID].children
-            var childrenWithPosition: [(nodeID: Int, lowerBound: Int)] = []
-            for childID in allChildren {
-                guard let range = graph.nodes[childID].positionRange else { continue }
-                childrenWithPosition.append((nodeID: childID, lowerBound: range.lowerBound))
-            }
-            childrenWithPosition.sort { $0.lowerBound < $1.lowerBound }
-            let deletableChildren = Array(childrenWithPosition.suffix(deletable))
-
-            let yield = deletableChildren.reduce(0) { total, child in
-                total + (graph.nodes[child.nodeID].positionRange?.count ?? 0)
-            }
-
-            entries.append((
-                target: SequenceRemovalTarget(
-                    sequenceNodeID: parentID,
-                    elementNodeIDs: deletableChildren.map { $0.nodeID }
-                ),
-                deletableCount: deletable,
-                yield: yield
-            ))
-        }
-
-        // Sort by yield descending so the bisection halves are balanced by impact.
-        entries.sort { $0.yield > $1.yield }
-
-        sequences = entries
+        plans = Self.treePlans(graph: graph)
+        let count = plans.count
         // Only useful when there are at least two independent sequences to batch.
-        if entries.count >= 2 {
-            pendingRanges = [(start: 0, end: entries.count)]
+        if count >= 2 {
+            pendingRanges = [(start: 0, end: count)]
             lastEmittedRange = nil
             exhausted = false
         } else {
@@ -78,7 +36,19 @@ struct BatchedCrossSequenceRemovalSource {
             exhausted = true
         }
         cachedPriority = nil
+        prefersInitialDispatch = count >= 2
         recomputePriority()
+    }
+
+    /// Drains lightweight plans for the initial all-sequence probe without expanding their element-ID arrays.
+    private static func treePlans(graph: ChoiceGraph) -> [TreeDeletionSelection.Plan] {
+        var cursor = TreeDeletionSelection.Cursor(graph: graph)
+        var entries: [TreeDeletionSelection.Plan] = []
+        while let plan = cursor.next() {
+            entries.append(plan)
+        }
+        entries.sort { $0.yield > $1.yield }
+        return entries
     }
 
     var peekPriority: DispatchPriority? {
@@ -93,7 +63,7 @@ struct BatchedCrossSequenceRemovalSource {
         if let range = pendingRanges.last {
             var totalYield = 0
             for index in range.start ..< range.end {
-                totalYield += sequences[index].yield
+                totalYield += plans[index].yield
             }
             cachedPriority = DispatchPriority(
                 structuralBenefit: totalYield,
@@ -113,7 +83,7 @@ struct BatchedCrossSequenceRemovalSource {
             let mid = emitted.start + count / 2
             var firstHalfYield = 0
             for index in emitted.start ..< mid {
-                firstHalfYield += sequences[index].yield
+                firstHalfYield += plans[index].yield
             }
             cachedPriority = DispatchPriority(
                 structuralBenefit: firstHalfYield,
@@ -128,6 +98,7 @@ struct BatchedCrossSequenceRemovalSource {
 
     /// Continuing the same graph snapshot bisects the previous unsuccessful scope; accepted structural edits discard this cursor.
     mutating func next() -> GraphTransformation? {
+        prefersInitialDispatch = false
         guard exhausted == false else {
             return nil
         }
@@ -149,17 +120,18 @@ struct BatchedCrossSequenceRemovalSource {
         }
         lastEmittedRange = range
 
-        let slice = sequences[range.start ..< range.end]
-        let targets = slice.map { $0.target }
+        let indices = range.start ..< range.end
+        let targets = plans[indices].map { $0.target }
         var totalYield = 0
         var maxElementYield = 0
         var maxBatch = 0
-        for entry in slice {
-            totalYield += entry.yield
-            if entry.yield > maxElementYield {
-                maxElementYield = entry.yield
+        for index in indices {
+            let entryYield = plans[index].yield
+            totalYield += entryYield
+            if entryYield > maxElementYield {
+                maxElementYield = entryYield
             }
-            maxBatch += entry.deletableCount
+            maxBatch += plans[index].deletableCount
         }
 
         let scope = ElementRemovalScope(

@@ -8,6 +8,8 @@ A failing test case has two independent aspects: its *shape* (how many values ex
 
 Each cycle prioritises simplifying the shape: removing elements, flattening branches, shortening sequences. Once the shape settles, it simplifies the values within it, driving values toward semantic simplicity.
 
+The first cross-sequence deletion proposal tries to reduce compatible sequences to their minimum allowed lengths together. Selection visits outer sequences before their descendants, skips descendants that disappear with a deletion, and separates edits that would change a bind inner and its current bound output. If the proposal is rejected, the reducer tries smaller groups of sequences; per-sequence deletion sources remain available.
+
 This repeats until neither makes progress. When both stall, the reducer searches for cases where a structural change and a value change must happen together for either to succeed. This is rarer, but without it the reducer would stop short of many true minima.
 
 ## Worked example: large union list
