@@ -8,10 +8,12 @@
         ///
         /// Swift cannot catch an `NSException`: one that unwinds through Swift frames reaches `swift_unexpectedError` and aborts. A caught non-Objective-C exception is reported as an `NSException` named `ExhaustCaughtNonObjCException`. See `ExhaustObjCSupport.h`.
         ///
+        /// The parameter is `@convention(block)` so the closure-to-block conversion happens in the caller's frame, which the exception never unwinds. Converting inside this function puts the conversion's cleanup in a frame the `@catch` unwinds past, and a caught exception then leaves `#explore(time:)` recording no coverage for the rest of the run.
+        ///
         /// - Returns: `true` if `block` completed, `false` if it raised. On `false`, `caught` holds the exception.
         @discardableResult
         package static func run(
-            _ block: () -> Void,
+            _ block: @convention(block) () -> Void,
             _ caught: inout NSException?
         ) -> Bool {
             exhaust_runCatchingObjCException(block, &caught)
