@@ -99,18 +99,24 @@ enum NumericJointQuery {
         var calculations = 0
         repeat {
             calculations += 1
+            guard frontier[indices[0]].stalled else { continue }
+            var gridWork = 1
+            for (offset, index) in indices.enumerated() {
+                let entry = frontier[index]
+                gridWork *= offset == 0 ? entry.simplifyingSamples.count : entry.compensatingSamples.count
+            }
+            guard gridWork > 0, gridWork <= workLimit else { continue }
             let entries = indices.map { frontier[$0] }
             let samples = entries.enumerated().map { index, entry in
                 index == 0 ? entry.simplifyingSamples : entry.compensatingSamples
             }
-            let gridWork = samples.reduce(1) { $0 * $1.count }
             let leaves = entries.map(\.leaf)
             let ratioProposals = NumericCommonDivisorProposal.rescalings(for: leaves)
             let extraWork = ratioProposals.count { proposal in
                 samples.indices.allSatisfy { samples[$0].contains(proposal.patterns[$0]) } == false
             }
             let estimatedWork = gridWork + extraWork
-            if entries[0].stalled, gridWork > 0, estimatedWork <= workLimit {
+            if estimatedWork <= workLimit {
                 var couplingCount = 0
                 var sharedContextCount = 0
                 for first in leaves.indices {

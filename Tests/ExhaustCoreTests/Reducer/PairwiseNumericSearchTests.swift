@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Pairwise numeric search")
 struct PairwiseNumericSearchTests {
-    @Test("Numeric candidates satisfy their domain contract", arguments: [
+    @Test("Numeric candidates satisfy their domain contract and preserve joint palette order", arguments: [
         TypeTag.int, .int8, .int16, .int32, .int64,
         .uint, .uint8, .uint16, .uint32, .uint64, .float16, .float, .double,
     ])
@@ -35,7 +35,8 @@ struct PairwiseNumericSearchTests {
             let base = ChoiceSequence(.choice(choice, .init(validRange: lower ... upper, isRangeExplicit: true)))
             return [false, true].allSatisfy { simplifying in
                 let candidates = NumericPairCandidates.values(for: leaf, simplifying: simplifying)
-                return candidates.count <= NumericPairCandidates.maximumSamples
+                return NumericPairCandidates.jointValues(for: leaf, simplifying: simplifying) == Self.uncappedJointValues(for: leaf, simplifying: simplifying)
+                    && candidates.count <= NumericPairCandidates.maximumSamples
                     && Set(candidates).count == candidates.count
                     && candidates.allSatisfy { pattern in
                         let value = ChoiceValue(pattern, tag: tag)
@@ -448,6 +449,41 @@ struct PairwiseNumericSearchTests {
 
     private enum RecordingFailure: Error {
         case missingStart
+    }
+
+    /// Reconstructs the original proposal stream, applying the six-value cap only after admission and deduplication.
+    private static func uncappedJointValues(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
+        let zero = leaf.choice.tag.simplestBitPattern
+        let current = leaf.choice.bitPattern64
+        let target = leaf.choice.reductionTarget(in: leaf.range)
+        let half = current >= zero ? zero + (current - zero) / 2 : zero - (zero - current) / 2
+        var proposals = [target, half, min(current, target) + (max(current, target) - min(current, target)) / 2]
+        func appendMagnitude(_ magnitude: UInt64) {
+            let (positive, overflow) = zero.addingReportingOverflow(magnitude)
+            if overflow == false { proposals.append(positive) }
+            if leaf.choice.tag.isSigned, zero >= magnitude { proposals.append(zero - magnitude) }
+        }
+        for magnitude: UInt64 in [1, 2, 3] {
+            appendMagnitude(magnitude)
+        }
+        for delta: UInt64 in [1, 2, 4] {
+            let (raised, overflow) = current.addingReportingOverflow(delta)
+            if overflow == false { proposals.append(raised) }
+            if current >= delta { proposals.append(current - delta) }
+        }
+        for exponent in 0 ..< 8 {
+            appendMagnitude((UInt64(1) << exponent) - 1)
+            appendMagnitude(UInt64(1) << exponent)
+        }
+        var visited: Set<UInt64> = []
+        let admitted = proposals.filter { pattern in
+            let value = ChoiceValue(pattern, tag: leaf.choice.tag)
+            return pattern != current && leaf.range.contains(pattern) && visited.insert(pattern).inserted
+                && (leaf.choice.tag.isFloatingPoint == false || value.decodedDoubleValue.isFinite)
+                && (simplifying == false || value.shortlexKey < leaf.choice.shortlexKey
+                    || (value.shortlexKey == leaf.choice.shortlexKey && pattern < current))
+        }
+        return Array(admitted.prefix(NumericPairCandidates.maximumJointSamples))
     }
 
     private static func markConverged(_ nodeID: Int, in graph: inout ChoiceGraph) {

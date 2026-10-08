@@ -98,7 +98,7 @@ struct NumericJointSearchCursor {
             let last = diagonal - prefix.reduce(0, +)
             let indices = prefix + [last]
             advancePrefix()
-            guard (0 ..< 6).contains(last),
+            guard (0 ..< NumericPairCandidates.maximumJointSamples).contains(last),
                   indices.allSatisfy({ $0 == 0 }) == false,
                   indices.allSatisfy({ $0 == 1 }) == false
             else { continue }
@@ -110,7 +110,7 @@ struct NumericJointSearchCursor {
     private mutating func advancePrefix() {
         for index in prefix.indices.reversed() {
             prefix[index] += 1
-            if prefix[index] < 6 { return }
+            if prefix[index] < NumericPairCandidates.maximumJointSamples { return }
             prefix[index] = 0
         }
         diagonal += 1

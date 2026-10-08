@@ -286,6 +286,25 @@ struct StagedJointSearchTests {
         #expect(candidate.shortLexPrecedes(base))
     }
 
+    @Test("Early discovery rejections still consume the bounded combination prefix", arguments: [3, 4])
+    func rejectedCombinationPrefix(arity: Int) {
+        var graph = ChoiceGraph.build(from: unsignedTree(values: [0, 3, 3, 3, 3, 3], range: 0 ... 3))
+        markConverged(&graph)
+        var frontier = NumericJointQuery.frontier(graph: graph, gate: .init(baseBudget: 15))
+        let rejected = NumericJointQuery.build(frontier: frontier, graph: graph, arity: arity, workLimit: 4096, calculationLimit: 10, scopeLimit: 30)
+        #expect(rejected.calculations == 10)
+        #expect(rejected.groups.isEmpty)
+        let firstEligible = NumericJointQuery.build(frontier: frontier, graph: graph, arity: arity, workLimit: 4096, calculationLimit: 11, scopeLimit: 30)
+        #expect(firstEligible.calculations == 11)
+        #expect(firstEligible.groups.count == 1)
+        #expect(firstEligible.groups.first?.leaves.map(\.nodeID) == Array(frontier[1 ... arity].map(\.leaf.nodeID)))
+        let source = frontier[1]
+        frontier[1] = .init(leaf: source.leaf, stalled: source.stalled, span: source.span, simplifyingSamples: [], compensatingSamples: source.compensatingSamples)
+        let emptyPalette = NumericJointQuery.build(frontier: frontier, graph: graph, arity: arity, workLimit: 4096, calculationLimit: 11, scopeLimit: 30)
+        #expect(emptyPalette.calculations == 11)
+        #expect(emptyPalette.groups.isEmpty)
+    }
+
     @Test("Retained grids fit the total work limit rather than only a per-group limit", arguments: [3, 4])
     func totalScopeWork(arity: Int) {
         let tree = unsignedTree(values: Array(repeating: 3, count: 6), range: 0 ... 3)
@@ -312,6 +331,7 @@ struct StagedJointSearchTests {
         }
         #expect(emitted == bounded.estimatedWork)
         let belowOne = NumericJointQuery.build(frontier: frontier, graph: graph, arity: arity, workLimit: perGroup - 1, calculationLimit: 512, scopeLimit: 30)
+        #expect(belowOne.calculations == allGroups)
         #expect(belowOne.groups.isEmpty)
         #expect(belowOne.estimatedWork == 0)
     }

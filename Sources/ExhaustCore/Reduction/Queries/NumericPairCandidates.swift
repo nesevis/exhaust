@@ -3,6 +3,7 @@
 /// Search coordinates stay separate from numeric arithmetic: integer offsets are exact, while float proposals use semantic values and representable neighbors.
 enum NumericPairCandidates {
     static let maximumSamples = 64
+    static let maximumJointSamples = 6
 
     /// Samples the target, local changes, boundaries, and successively subdivided intervals without assuming a monotone property.
     ///
@@ -23,7 +24,7 @@ enum NumericPairCandidates {
 
     /// Keeps higher-order grids small while trying targets, coherent halving, local compensation, and simple magnitudes before widening. These are proposals, not an exhaustive domain or a monotonicity assumption.
     static func jointValues(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
-        var samples = CandidateSamples(leaf: leaf, simplifying: simplifying)
+        var samples = CandidateSamples(leaf: leaf, simplifying: simplifying, maximumSamples: maximumJointSamples)
         samples.append(samples.target)
         let zero = leaf.choice.tag.simplestBitPattern
         let current = leaf.choice.bitPattern64
@@ -33,37 +34,44 @@ enum NumericPairCandidates {
         let upper = max(current, samples.target)
         samples.append(lower + (upper - lower) / 2)
         for magnitude: UInt64 in [1, 2, 3] {
+            guard samples.isFull == false else { return samples.candidates }
             let (positive, overflow) = zero.addingReportingOverflow(magnitude)
             if overflow == false { samples.append(positive) }
             if leaf.choice.tag.isSigned, zero >= magnitude { samples.append(zero - magnitude) }
         }
         samples.appendNeighbors()
         samples.appendIntegerMagnitudes()
-        return Array(samples.candidates.prefix(6))
+        return samples.candidates
     }
 }
 
 // MARK: - Candidate Samples
 
-/// Collects distinct admissible bit patterns in proposal order, up to ``NumericPairCandidates/maximumSamples``.
+/// Collects distinct admissible bit patterns in proposal order up to the caller's sample limit.
 private struct CandidateSamples {
     let leaf: NumericPairQuery.Leaf
     let simplifying: Bool
     let current: UInt64
     let target: UInt64
+    let maximumSamples: Int
     private(set) var candidates: [UInt64] = []
     private var visited: Set<UInt64> = []
 
-    init(leaf: NumericPairQuery.Leaf, simplifying: Bool) {
+    var isFull: Bool {
+        candidates.count >= maximumSamples
+    }
+
+    init(leaf: NumericPairQuery.Leaf, simplifying: Bool, maximumSamples: Int = NumericPairCandidates.maximumSamples) {
         self.leaf = leaf
         self.simplifying = simplifying
         current = leaf.choice.bitPattern64
         target = leaf.choice.reductionTarget(in: leaf.range)
+        self.maximumSamples = maximumSamples
     }
 
     /// Records a pattern the first time it is proposed. A pattern that fails admission is still marked visited, so it is never reconsidered.
     mutating func append(_ pattern: UInt64) {
-        guard candidates.count < NumericPairCandidates.maximumSamples,
+        guard isFull == false,
               pattern != current,
               leaf.range.contains(pattern),
               visited.insert(pattern).inserted
@@ -83,6 +91,7 @@ private struct CandidateSamples {
     /// Bit-pattern steps of one, two, and four in each direction.
     mutating func appendNeighbors() {
         for delta: UInt64 in [1, 2, 4] {
+            guard isFull == false else { return }
             let (raised, overflow) = current.addingReportingOverflow(delta)
             if overflow == false {
                 append(raised)
@@ -121,6 +130,7 @@ private struct CandidateSamples {
         let zero = tag.simplestBitPattern
         for exponent in 0 ..< 8 {
             for magnitude in [(UInt64(1) << exponent) - 1, UInt64(1) << exponent] {
+                guard isFull == false else { return }
                 let (positive, overflow) = zero.addingReportingOverflow(magnitude)
                 if overflow == false {
                     append(positive)
@@ -142,8 +152,8 @@ private struct CandidateSamples {
         var intervals = [interval]
         var intervalIndex = 0
         while intervalIndex < intervals.count,
-              intervalIndex < NumericPairCandidates.maximumSamples * 4,
-              candidates.count < NumericPairCandidates.maximumSamples
+              intervalIndex < maximumSamples * 4,
+              isFull == false
         {
             let range = intervals[intervalIndex]
             intervalIndex += 1
