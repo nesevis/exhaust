@@ -453,8 +453,8 @@ package extension Materializer {
         var nextReseedIndex = 0
         /// Avoids loading the usually empty range array at every pick and leaf. This flag must stay equivalent to `nextReseedIndex < reseedRanges.count` after initialization and each successful entry.
         var hasPendingReseed = false
-        /// Set only on ``ConstantArmReencoder``'s capture replay.
-        var constantArmCapture: ConstantArmCapture?
+        /// Called for each committed pick whose branch an exact replay reads from the prefix. Backtrack picks and unselected branches are not reported.
+        var observePrefixPick: ((PrefixPickObservation) -> Void)?
 
         /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
         @inline(__always)
@@ -523,5 +523,17 @@ extension Materializer {
         let flatCount: Int
         let filterObservations: [UInt64: FilterObservation]
         let decodingReport: DecodingReport?
+    }
+}
+
+// MARK: - Prefix Pick Observation
+
+extension Materializer {
+    /// A committed pick whose branch an exact replay read from the prefix, reported through ``Context/observePrefixPick``.
+    struct PrefixPickObservation {
+        /// Sequence index of the consumed branch entry.
+        let branchIndex: Int
+        let choices: ContiguousArray<ReflectiveOperation.PickTuple>
+        let selectedIndex: Int
     }
 }

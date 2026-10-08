@@ -62,9 +62,18 @@ package enum ConstantArmReencoder {
             return nil
         }
 
-        let capture = ConstantArmCapture()
+        var capturedSites: [Materializer.PrefixPickObservation] = []
         var captureContext = Materializer.Context(prefix: sequence, mode: .exact, skipTree: true, collectDecodingReport: false)
-        captureContext.constantArmCapture = capture
+        // Only non-backtracking picks can hold constant arms that need re-encoding or exclusion.
+        captureContext.observePrefixPick = { observation in
+            guard observation.choices.count >= 2,
+                  observation.choices[0].isBacktrack == false,
+                  observation.choices[0].isFailable == false
+            else {
+                return
+            }
+            capturedSites.append(observation)
+        }
         materializations += 1
         guard case let .success(originalOutput, _, _) = Materializer.materializeAny(gen, context: captureContext) else {
             return nil
@@ -73,7 +82,7 @@ package enum ConstantArmReencoder {
         var candidate = sequence
         var excludedPivots: Set<ExcludedPivot> = []
         // Descending, so a splice never shifts a site still to be processed.
-        let sites = capture.sites
+        let sites = capturedSites
             .filter { eligibleIndices.contains($0.branchIndex) }
             .sorted { $0.branchIndex > $1.branchIndex }
         guard sites.isEmpty == false else {
@@ -220,7 +229,7 @@ package enum ConstantArmReencoder {
     ///
     /// Reflects through the arm, because reflecting through the pick returns the constant arm itself when it is declared first. A decomposition counts only if its value equals the constant: backward maps can decompose values they cannot produce.
     private static func reproducingSibling(
-        for site: ConstantArmSite,
+        for site: Materializer.PrefixPickObservation,
         constantIndex: Int,
         constantValue: Any
     ) -> (sibling: ReflectiveOperation.PickTuple, armEntries: ChoiceSequence)? {
@@ -356,35 +365,4 @@ private enum ArmDomain: Hashable {
     case nestedPick(fingerprint: UInt64, branchCount: UInt64)
     case bind(fingerprint: UInt64)
     case constant
-}
-
-/// An active pick recorded during the capture replay.
-struct ConstantArmSite {
-    let branchIndex: Int
-    let choices: ContiguousArray<ReflectiveOperation.PickTuple>
-    let selectedIndex: Int
-}
-
-/// Collects active pick sites during one exact replay. A class, so the materializer can append through its by-value context.
-final class ConstantArmCapture {
-    private(set) var sites: [ConstantArmSite] = []
-
-    /// Records a non-backtracking pick whose constant arms may need re-encoding or exclusion.
-    func record(
-        branchIndex: Int,
-        choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        selectedIndex: Int
-    ) {
-        guard choices.count >= 2,
-              choices[0].isBacktrack == false,
-              choices[0].isFailable == false
-        else {
-            return
-        }
-        sites.append(ConstantArmSite(
-            branchIndex: branchIndex,
-            choices: choices,
-            selectedIndex: selectedIndex
-        ))
-    }
 }

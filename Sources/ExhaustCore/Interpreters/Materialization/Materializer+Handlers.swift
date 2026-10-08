@@ -253,12 +253,12 @@ extension Materializer {
                 }
                 let exactIndex = Int(prefixBranch.id)
                 selectedChoice = exactIndex < choices.count ? choices[exactIndex] : nil
-                if let constantArmCapture = context.constantArmCapture, exactIndex < choices.count {
-                    constantArmCapture.record(
+                if let observePrefixPick = context.observePrefixPick, exactIndex < choices.count {
+                    observePrefixPick(PrefixPickObservation(
                         branchIndex: context.cursor.position - 1,
                         choices: choices,
                         selectedIndex: exactIndex
-                    )
+                    ))
                 }
 
             case .guided:
