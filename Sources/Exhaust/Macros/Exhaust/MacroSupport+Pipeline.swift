@@ -1,459 +1,112 @@
-// Pipeline phases for `__exhaust`: screening and sampling orchestration.
+// Test-framework side of the `__exhaust` pipeline: lane suppression, diagnostic reporting, and failure rendering around ``PropertyTestRunner``.
 
-import CustomDump
 import ExhaustCore
 import Foundation
 import IssueReporting
 
-#if canImport(XCTest) && canImport(ObjectiveC)
-    @preconcurrency @_weakLinked import XCTest
-#elseif canImport(XCTest)
-    @preconcurrency import XCTest
-#endif
-
 package extension __ExhaustRuntime {
-    // MARK: - Pipeline Context
+    // MARK: - Lane Suppression
 
-    /// Bundles parameters shared across screening, sampling, and reduction phases.
-    struct PipelineContext<Output> {
-        let gen: Generator<Output>
-        let property: @Sendable (Output) -> Bool
-        let samplingBudget: UInt64
-        let reductionConfig: Interpreters.ReducerConfiguration
-        let visualize: Bool
-        let suppressIssueReporting: Bool
-        let includeDiff: Bool
-        let parallelLanes: UInt8
-        let logFormat: LogFormat
-        let fileID: StaticString
-        let filePath: StaticString
-        let line: UInt
-        let column: UInt
-        let statsAccumulator: OpenPBTStatsAccumulator?
-        let skipCounter: SkipCounter?
-
-        /// The run's absorbed-issue ledger when the caller runs under a suppression scope, or nil for a `Bool` property, which runs without one.
-        ///
-        /// Present only to reach the sampling lanes: a lane runs on a `concurrentPerform` worker, which inherits neither the scope nor the issue sink bound around the run.
-        let absorbedIssues: AbsorbedIssues?
-
-        /// The absolute monotonic deadline resolved from `.deadline`, or nil for the usual iteration budget.
-        var deadlineNanoseconds: UInt64?
-
-        var hasExceededDeadline: Bool {
-            deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
-        }
-
-        /// The skip count accumulated so far, for phase-delta accounting. Skips land on the shared counter from any lane, so a delta taken outside a concurrent section is exact.
-        var skipCount: Int {
-            skipCounter?.count ?? 0
-        }
-    }
-
-    /// Represents the outcome of the screening phase: failure found, exhaustive pass, or proceed to sampling.
-    enum ScreeningOutcome<Output> {
-        case counterexample(Output)
-        case exhaustivePass
-        case proceed
-    }
-
-    /// Represents the outcome of the reduction phase: reduced counterexample or unreduced original.
-    enum ReduceOutcome<Output> {
-        case reduced(Output)
-        case unreduced(Output)
-    }
-
-    // MARK: - Screening Phase
-
-    /// Runs the structured covering array phase, returning early on first failure.
-    static func runScreeningPhase<Output>(
-        context: PipelineContext<Output>,
-        screeningBudget: UInt64,
-        coveringSeed: UInt64,
-        skipToRow: Int? = nil,
-        report: inout ExhaustReport,
-        ledger: inout RunLedger
-    ) -> ScreeningOutcome<Output> {
-        let skipsBefore = context.skipCount
-        let screeningResult = ScreeningPhase.run(
-            context.gen,
-            screeningBudget: screeningBudget,
-            coveringSeed: coveringSeed,
-            skipToRow: skipToRow,
-            deadlineNanoseconds: context.deadlineNanoseconds,
-            property: context.property,
-            onExample: context.statsAccumulator.map { accumulator in
-                { value, tree, passed in
-                    var representation = ""
-                    customDump(value, to: &representation, maxDepth: 3)
-                    accumulator.record(representation: representation, passed: passed, tree: tree, phase: .screening)
-                }
-            }
-        )
-        report.applyScreeningRows(screeningResult.summary)
-        let screeningFailures = switch screeningResult {
-            case .failure:
-                1
-            case .exhaustive, .partial, .notApplicable:
-                0
-        }
-        ledger.record(
-            .screening,
-            invocations: screeningResult.summary.propertyInvocations,
-            skips: context.skipCount - skipsBefore,
-            failures: screeningFailures
-        )
-        // A replay that never tested its addressed row would otherwise complete as a quiet pass, which reads as "fixed" when it means "not reproduced". The value covering array is budget-coupled, so a budget change since discovery can end the row stream before the row.
-        if let skipToRow, screeningFailures == 0, screeningResult.summary.propertyInvocations == 0 {
-            reportError(
-                "Screening replay never tested row \(skipToRow + 1): the covering array under the current budget ends before it. Run value screening replays under the budget the failure was discovered with.",
-                fileID: context.fileID,
-                filePath: context.filePath,
-                line: context.line,
-                column: context.column
-            )
-        }
-        switch screeningResult {
-            case let .failure(value, tree, rowOrdinal, _, strength, rows, parameters, totalSpace, kind):
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "screening_failure",
-                    metadata: [
-                        "row_ordinal": "\(rowOrdinal)",
-                        "strength": "\(strength)",
-                        "covering_rows": "\(rows)",
-                        "screening_rows": "\(report.screeningRows)",
-                        "property_invocations": "\(report.screeningInvocations)",
-                        "rejected_rows": "\(report.screeningRejectedRows)",
-                        "parameters": "\(parameters)",
-                        "total_space": "\(totalSpace)",
-                        "kind": kind,
-                    ]
-                )
-                let reductionTree = switch Materializer.materialize(
-                    context.gen, context: .init(
-                        prefix: ChoiceSequence.flatten(tree), mode: .exact, fallbackTree: tree, materializePicks: true
-                    )
-                ) {
-                    case let .success(_, rematerialized, _):
-                        rematerialized
-                    case .rejected, .failed:
-                        tree
-                }
-                let screeningReplaySeed = ReplaySeed.Resolved.valueScreening(seed: coveringSeed, row: rowOrdinal - 1).encoded
-                report.replaySeed = screeningReplaySeed
-                let result = reduceAndReport(
-                    context: context,
-                    value: value,
-                    tree: reductionTree,
-                    seed: nil,
-                    iteration: rowOrdinal,
-                    phaseBudget: screeningBudget,
-                    replayHint: "Reproduce: .replay(\"\(screeningReplaySeed)\")",
-                    report: &report,
-                    ledger: &ledger
-                )
-                switch result {
-                    case let .reduced(counterexample):
-                        return .counterexample(counterexample)
-                    case let .unreduced(counterexample):
-                        return .counterexample(counterexample)
-                }
-
-            case let .exhaustive(summary):
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "tway_coverage",
-                    metadata: [
-                        "exhaustive": "true",
-                        "screening_rows": "\(summary.rowAttempts)",
-                        "property_invocations": "\(summary.propertyInvocations)",
-                        "rejected_rows": "\(summary.rejectedRows)",
-                    ]
-                )
-                let passMetadata = [
-                    "screening_rows": "\(summary.rowAttempts)",
-                    "property_invocations": "\(summary.propertyInvocations)",
-                    "rejected_rows": "\(summary.rejectedRows)",
-                ]
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "property_passed",
-                    metadata: passMetadata
-                )
-                return .exhaustivePass
-
-            case let .partial(summary, strength, rows, parameters, totalSpace, kind):
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "tway_coverage",
-                    metadata: [
-                        "strength": "\(strength)",
-                        "covering_rows": "\(rows)",
-                        "screening_rows": "\(summary.rowAttempts)",
-                        "property_invocations": "\(summary.propertyInvocations)",
-                        "rejected_rows": "\(summary.rejectedRows)",
-                        "total_space": "\(totalSpace)",
-                        "parameters": "\(parameters)",
-                        "exhaustive": "false",
-                        "kind": kind,
-                    ]
-                )
-                return .proceed
-
-            case .notApplicable:
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "screening_not_applicable",
-                    "Generator not analyzable for screening"
-                )
-                return .proceed
-        }
-    }
-
-    // MARK: - Sampling Batch
-
-    /// Outcome of a single sampling batch (sequential or one lane of a parallel run).
-    struct BatchResult<Output> {
-        var failure: (value: Output, tree: ChoiceTree, absoluteIteration: Int)?
-        var iterations: Int = 0
-        var filterObservations: [UInt64: FilterObservation] = [:]
-        var statsLines: [OpenPBTStatsLine] = []
-        var error: (any Error)?
-        var uniqueExhaustionTruncatedRun = false
-    }
-
-    /// Runs a contiguous range of sampling iterations, returning the first failure (if any).
+    /// Runs each parallel sampling lane under its own suppression scope, so a worker thread absorbs and records what the run's own scope cannot reach.
     ///
-    /// Used by both the sequential and parallel sampling paths. Each call creates its own ``ValueAndChoiceTreeInterpreter`` covering indices `startIndex ..< startIndex + count`, with an independent PRNG derived from `baseSeed`.
+    /// A known-issue scope and the issue sink are both task-local, and a `concurrentPerform` worker inherits neither: without this an assertion the detection rewrite never saw would record against no test at all, and Exhaust's own reports from the lane would misroute the way they do on any GCD worker. Each lane's sink is collected rather than replayed on the lane, because replaying belongs on the thread that started the lanes, in ``lanesJoined()``.
     ///
-    /// - Parameters:
-    ///   - gen: The generator to sample from.
-    ///   - property: The property to check each generated value against.
-    ///   - baseSeed: Root seed for per-run PRNG derivation. All lanes share the same base seed.
-    ///   - startIndex: Absolute run index for the first iteration in this batch.
-    ///   - count: Number of iterations to run in this batch.
-    ///   - lane: Batch index for stats attribution, or `nil` for sequential runs.
-    ///   - statsPropertyName: Property name passed to the per-batch ``OpenPBTStatsAccumulator``, or `nil` to skip stats collection.
-    ///   - canceled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
-    ///   - deadlineNanoseconds: Absolute monotonic deadline shared by the run's lanes, or nil for no time limit.
-    private static func runSamplingBatch<Output>( // swiftlint:disable:this function_body_length
-        gen: Generator<Output>,
-        property: @Sendable (Output) -> Bool,
-        baseSeed: UInt64,
-        startIndex: UInt64,
-        count: UInt64,
-        lane: Int?,
-        statsPropertyName: String?,
-        canceled: some CancellationFlag,
-        deadlineNanoseconds: UInt64?
-    ) -> BatchResult<Output> {
-        var result = BatchResult<Output>()
-        let statsAccumulator: OpenPBTStatsAccumulator? = statsPropertyName.map {
-            OpenPBTStatsAccumulator(propertyName: $0, lane: lane)
+    /// Only a run with an absorbed-issue ledger gets one. A `Bool` property runs without a suppression scope, and adding one to its lanes would swallow issues that currently surface.
+    final class AbsorbedIssueLaneScope: SamplingLaneScope {
+        private let ledger: AbsorbedIssues
+        private let sinks = SendableBox<[DeferredIssueSink]>([])
+
+        init(ledger: AbsorbedIssues) {
+            self.ledger = ledger
         }
-        var interpreter = ValueAndChoiceTreeInterpreter(
-            gen,
-            materializePicks: statsAccumulator != nil,
-            seed: baseSeed,
-            maxRuns: startIndex + count,
-            initialRunIndex: startIndex
-        )
-        do {
-            if let statsAccumulator {
-                var previousTotalAttempts = 0
-                var previousTotalPasses = 0
-                while canceled.isCancelled == false,
-                      deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
-                {
-                    let generateStart = monotonicNanoseconds()
-                    guard let (next, tree) = try interpreter.next() else { break }
-                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
-                        break
-                    }
-                    let generateEnd = monotonicNanoseconds()
-                    result.iterations += 1
 
-                    var currentTotalAttempts = 0
-                    var currentTotalPasses = 0
-                    for (_, observation) in interpreter.filterObservations {
-                        currentTotalAttempts += observation.attempts
-                        currentTotalPasses += observation.passes
-                    }
-                    let deltaAttempts = currentTotalAttempts - previousTotalAttempts
-                    let deltaPasses = currentTotalPasses - previousTotalPasses
-                    previousTotalAttempts = currentTotalAttempts
-                    previousTotalPasses = currentTotalPasses
-                    var filterAttempts: Int?
-                    var filterRejections: Int?
-                    if deltaAttempts > 0 {
-                        filterAttempts = deltaAttempts
-                        filterRejections = deltaAttempts - deltaPasses
-                    }
-
-                    let testStart = monotonicNanoseconds()
-                    let passed = property(next)
-                    let testEnd = monotonicNanoseconds()
-
-                    let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
-                    let testSeconds = Double(testEnd - testStart) / 1_000_000_000
-                    var representation = ""
-                    customDump(next, to: &representation, maxDepth: 3)
-                    if let rejections = filterRejections, rejections > 0 {
-                        statsAccumulator.recordDiscards(count: rejections, phase: .random)
-                    }
-                    statsAccumulator.record(
-                        representation: representation,
-                        passed: passed,
-                        tree: tree,
-                        phase: .random,
-                        generateSeconds: generateSeconds,
-                        testSeconds: testSeconds,
-                        filterAttempts: filterAttempts,
-                        filterRejections: filterRejections
-                    )
-
-                    if passed == false {
-                        let absoluteIteration = Int(startIndex) + result.iterations
-                        result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        canceled.isCancelled = true
-                        break
-                    }
-                }
-                result.statsLines = statsAccumulator.finalize()
-            } else {
-                while canceled.isCancelled == false,
-                      deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true
-                {
-                    guard let next = try interpreter.nextValueOnly() else { break }
-                    guard deadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true else {
-                        break
-                    }
-                    result.iterations += 1
-
-                    if property(next) == false {
-                        let absoluteIteration = Int(startIndex) + result.iterations
-                        let tree = try interpreter.reproduceFailureTree()
-                        result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        canceled.isCancelled = true
-                        break
-                    }
-                }
+        package func run<Result>(_ body: () -> Result) -> Result {
+            let sink = DeferredIssueSink()
+            sinks.withValue { $0.append(sink) }
+            return DeferredIssueSink.$current.withValue(sink) {
+                ledger.absorbing(body)
             }
-        } catch {
-            result.error = error
         }
 
-        result.filterObservations = interpreter.filterObservations
-        result.uniqueExhaustionTruncatedRun = interpreter.uniqueExhaustionTruncatedRun
-        return result
+        package func lanesJoined() {
+            for sink in sinks.value {
+                sink.replay()
+            }
+        }
     }
 
-    // MARK: - Single-Lane Fast Path
+    // MARK: - Diagnostics
 
-    /// Tight generation loop for single-lane, no-stats runs.
-    ///
-    /// Bypasses the ``BatchResult`` / ``runSamplingBatch`` / merge machinery to avoid heap allocations and per-iteration indirection that are only needed for parallel or stats-collecting runs.
-    private static func runSingleLaneSampling<Output>(
-        context: PipelineContext<Output>,
-        baseSeed: UInt64,
-        replayIteration: Int?,
-        generationPhaseStart: UInt64,
-        report: inout ExhaustReport,
-        ledger: inout RunLedger
-    ) -> Output? {
-        let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
-        let maxRuns = replayIteration.map { UInt64($0) } ?? context.samplingBudget
-        var interpreter = ValueAndChoiceTreeInterpreter(
-            context.gen,
-            materializePicks: false,
-            seed: baseSeed,
-            maxRuns: maxRuns,
-            initialRunIndex: startIndex
-        )
-        var iterations = 0
-        let skipsBefore = context.skipCount
-
-        do {
-            while context.hasExceededDeadline == false, let next = try interpreter.nextValueOnly() {
-                guard context.hasExceededDeadline == false else {
-                    break
-                }
-                iterations += 1
-                if context.property(next) == false {
-                    // Sampling outcomes are recorded before reduction runs so reduction-phase skips stay out of the sampling delta.
-                    ledger.record(
-                        .sampling,
-                        invocations: iterations,
-                        skips: context.skipCount - skipsBefore,
-                        failures: 1
+    /// Reports the runner's diagnostics in the order the phases produced them, recording their effects in the report.
+    static func reportDiagnostics( // swiftlint:disable:this function_parameter_count
+        _ diagnostics: [PropertyTestRunner.Diagnostic],
+        samplingBudget: UInt64,
+        suppressIssueReporting: Bool,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
+        report: inout ExhaustReport
+    ) {
+        for diagnostic in diagnostics {
+            switch diagnostic {
+                case let .generationError(error):
+                    report.generationErrorOccurred = true
+                    reportError(
+                        localizedErrorMessage(error),
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
                     )
-                    let tree = try interpreter.reproduceFailureTree()
-                    report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-                    emitFilterWarnings(interpreter.filterObservations, context: context)
-
-                    let absoluteIteration = Int(startIndex) + iterations
-                    let result = reduceAndReport(
-                        context: context,
-                        value: next,
-                        tree: tree,
-                        seed: baseSeed,
-                        iteration: absoluteIteration,
-                        phaseBudget: context.samplingBudget,
-                        replayHint: nil,
-                        report: &report,
-                        ledger: &ledger
+                case let .filterObservations(observations):
+                    emitFilterWarnings(observations, suppressIssueReporting: suppressIssueReporting)
+                case let .uniqueExhaustion(iterations):
+                    recordUniqueExhaustion(
+                        iterations: iterations,
+                        samplingBudget: samplingBudget,
+                        suppressIssueReporting: suppressIssueReporting,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                        report: &report
                     )
-                    switch result {
-                        case let .reduced(counterexample):
-                            return counterexample
-                        case let .unreduced(counterexample):
-                            return counterexample
-                    }
-                }
+                case let .screeningReplayRowNotTested(row):
+                    reportError(
+                        "Screening replay never tested row \(row + 1): the covering array under the current budget ends before it. Run value screening replays under the budget the failure was discovered with.",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
             }
-        } catch {
-            report.generationErrorOccurred = true
-            reportError(
-                localizedErrorMessage(error),
-                fileID: context.fileID,
-                filePath: context.filePath,
-                line: context.line,
-                column: context.column
-            )
         }
-
-        ledger.record(
-            .sampling,
-            invocations: iterations,
-            skips: context.skipCount - skipsBefore
-        )
-        report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-        emitFilterWarnings(interpreter.filterObservations, context: context)
-        if interpreter.uniqueExhaustionTruncatedRun {
-            recordUniqueExhaustion(iterations: iterations, context: context, report: &report)
-        }
-        return nil
     }
 
     /// Records a unique-exhaustion truncation in the report and surfaces it as a warning.
     ///
     /// Exhaustion inside the interpreter only logs at warning level, which the default configuration never prints, so a run that executed a fraction of its budget would otherwise pass with no signal.
-    private static func recordUniqueExhaustion(
+    private static func recordUniqueExhaustion( // swiftlint:disable:this function_parameter_count
         iterations: Int,
-        context: PipelineContext<some Any>,
+        samplingBudget: UInt64,
+        suppressIssueReporting: Bool,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
         report: inout ExhaustReport
     ) {
         report.runTruncatedByUniqueExhaustion = true
-        let message = "A unique site exhausted its retry budget after \(iterations) of \(context.samplingBudget) sampling iterations. The remaining iterations did not run."
+        let message = "A unique site exhausted its retry budget after \(iterations) of \(samplingBudget) sampling iterations. The remaining iterations did not run."
         report.uniqueExhaustionWarning = message
-        if context.suppressIssueReporting == false {
+        if suppressIssueReporting == false {
             reportWarning(
                 message,
-                fileID: context.fileID,
-                filePath: context.filePath,
-                line: context.line,
-                column: context.column
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
             )
         }
     }
@@ -461,9 +114,9 @@ package extension __ExhaustRuntime {
     /// Emits filter validity warnings when the rejection rate exceeds 98%.
     private static func emitFilterWarnings(
         _ observations: [UInt64: FilterObservation],
-        context: PipelineContext<some Any>
+        suppressIssueReporting: Bool
     ) {
-        guard context.suppressIssueReporting == false else { return }
+        guard suppressIssueReporting == false else { return }
         for (_, observation) in observations where observation.attempts >= 20 {
             if observation.validityRate < 0.02, let location = observation.sourceLocation {
                 reportWarning(
@@ -477,192 +130,86 @@ package extension __ExhaustRuntime {
         }
     }
 
-    // MARK: - Sampling Phase
+    // MARK: - Failure Reporting
 
-    /// Runs one sampling lane under its own suppression scope, so a worker thread absorbs and records what the run's own scope cannot reach.
+    /// Renders a failure into the report and reports it, unless issue reporting is suppressed.
     ///
-    /// A known-issue scope and the issue sink are both task-local, and a `concurrentPerform` worker inherits neither: without this an assertion the detection rewrite never saw would record against no test at all, and Exhaust's own reports from the lane would misroute the way they do on any GCD worker. The lane's sink is collected rather than replayed here, because replaying it belongs on the thread that started the lanes.
-    ///
-    /// Runs `body` directly when the caller has no ledger. A `Bool` property runs without a suppression scope, and adding one here would swallow issues that currently surface.
-    private static func withLaneSuppression<Result>(
-        _ ledger: AbsorbedIssues?,
-        collectingSinksInto sinks: SendableBox<[DeferredIssueSink]>,
-        _ body: () -> Result
-    ) -> Result {
-        guard let ledger else { return body() }
-
-        let sink = DeferredIssueSink()
-        sinks.withValue { $0.append(sink) }
-        return DeferredIssueSink.$current.withValue(sink) {
-            ledger.absorbing(body)
+    /// Reads the report's reduction statistics, so the run's statistics must already be applied, and the run's ledger for invocation totals.
+    static func reportFailure<Output>( // swiftlint:disable:this function_parameter_count
+        _ failure: PropertyTestRunner.Failure<Output>,
+        ledger: RunLedger,
+        includeDiff: Bool,
+        logFormat: LogFormat,
+        suppressIssueReporting: Bool,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
+        report: inout ExhaustReport
+    ) {
+        var replayHint: String?
+        if let screeningReplaySeed = failure.screeningReplaySeed {
+            report.replaySeed = screeningReplaySeed
+            replayHint = "Reproduce: .replay(\"\(screeningReplaySeed)\")"
         }
-    }
+        let rendered: String
+        if failure.improved, let reducedSequence = failure.reducedSequence {
+            var testFailure = PropertyTestFailure(
+                counterexample: failure.counterexample,
+                original: failure.original,
 
-    /// Runs the random sampling phase after screening completes.
-    ///
-    /// When `context.parallelLanes` is greater than one, splits the budget across multiple GCD threads (one per lane). Otherwise runs sequentially.
-    static func runSamplingPhase<Output>( // swiftlint:disable:this function_body_length
-        context: PipelineContext<Output>,
-        seed: UInt64?,
-        replayIteration: Int? = nil,
-        report: inout ExhaustReport,
-        ledger: inout RunLedger
-    ) -> Output? {
-        let generationPhaseStart = monotonicNanoseconds()
-
-        let baseSeed = seed ?? Xoshiro256().seed
-        report.seed = baseSeed
-
-        let laneCount = seed == nil ? max(1, Int(context.parallelLanes)) : 1
-
-        if laneCount <= 1, context.statsAccumulator == nil {
-            return runSingleLaneSampling(
-                context: context,
-                baseSeed: baseSeed,
-                replayIteration: replayIteration,
-                generationPhaseStart: generationPhaseStart,
-                report: &report,
-                ledger: &ledger
+                seed: failure.seed,
+                iteration: failure.iteration,
+                phaseBudget: failure.phaseBudget,
+                blueprint: reducedSequence.shortString,
+                propertyInvocations: ledger.totalInvocations,
+                reducedSequence: reducedSequence
             )
-        }
-
-        let baseIterationsPerLane = context.samplingBudget / UInt64(laneCount)
-        let remainder = context.samplingBudget - baseIterationsPerLane * UInt64(laneCount)
-        let statsPropertyName: String? = context.statsAccumulator != nil
-            ? "\(context.fileID)"
-            : nil
-
-        let skipsBefore = context.skipCount
-        let batchResults: [BatchResult<Output>]
-        if laneCount <= 1 {
-            let replayStartIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
-            let singleResult = runSamplingBatch(
-                gen: context.gen,
-                property: context.property,
-                baseSeed: baseSeed,
-                startIndex: replayStartIndex,
-                count: context.samplingBudget,
-                lane: nil,
-                statsPropertyName: statsPropertyName,
-                canceled: UnsafeSendableBox(false),
-                deadlineNanoseconds: context.deadlineNanoseconds
+            testFailure.replayHint = replayHint
+            testFailure.reductionNote = ReductionNote(
+                probes: report.reductionProbes,
+                invocations: ledger.count(.reduction),
+                stalledLeafCount: report.stalledLeafCount,
+                anyAcceptanceOccurred: report.anyAcceptanceEverOccurred,
+                producedNoImprovement: false,
+                wasCapped: report.reductionWasCapped
             )
-            batchResults = [singleResult]
+            testFailure.includeDiff = includeDiff
+            rendered = testFailure.render(format: logFormat)
+            report.renderedFailure = rendered
+            report.replaySeed = testFailure.encodedReplaySeed
         } else {
-            let canceled = SendableBox(false)
-            nonisolated(unsafe) let unsafeContext = context
-
-            let resultStorage = SendableBox<[BatchResult<Output>?]>(
-                Array(repeating: nil, count: laneCount)
+            // Reduction could not improve, or the deadline left no time to start it. Either way, report the original failure.
+            var testFailure = PropertyTestFailure(
+                counterexample: failure.counterexample,
+                original: nil as Output?,
+                seed: failure.seed,
+                iteration: failure.iteration,
+                phaseBudget: failure.phaseBudget,
+                blueprint: nil,
+                propertyInvocations: ledger.totalInvocations
             )
-            let laneSinks = SendableBox<[DeferredIssueSink]>([])
-            DispatchQueue.concurrentPerform(iterations: laneCount) { laneIndex in
-                let startIndex = UInt64(laneIndex) * baseIterationsPerLane
-                let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
-                nonisolated(unsafe) let batchResult = withLaneSuppression(
-                    unsafeContext.absorbedIssues,
-                    collectingSinksInto: laneSinks
-                ) {
-                    runSamplingBatch(
-                        gen: unsafeContext.gen,
-                        property: unsafeContext.property,
-                        baseSeed: baseSeed,
-                        startIndex: startIndex,
-                        count: iterationsForLane,
-                        lane: laneIndex,
-                        statsPropertyName: statsPropertyName,
-                        canceled: canceled,
-                        deadlineNanoseconds: unsafeContext.deadlineNanoseconds
-                    )
-                }
-                resultStorage.withValue { $0[laneIndex] = batchResult }
-            }
-            for sink in laneSinks.value {
-                sink.replay()
-            }
-            batchResults = resultStorage.value.compactMap(\.self)
+            testFailure.replayHint = replayHint
+            testFailure.reductionNote = ReductionNote(
+                probes: report.reductionProbes,
+                invocations: ledger.count(.reduction),
+                stalledLeafCount: report.stalledLeafCount,
+                anyAcceptanceOccurred: report.anyAcceptanceEverOccurred,
+                producedNoImprovement: true,
+                wasCapped: report.reductionWasCapped
+            )
+            rendered = testFailure.render(format: logFormat)
+            report.renderedFailure = rendered
+            report.replaySeed = testFailure.encodedReplaySeed
         }
-
-        // Merge filter observations and emit warnings.
-        var mergedFilterObservations: [UInt64: FilterObservation] = [:]
-        for batch in batchResults {
-            for (fingerprint, observation) in batch.filterObservations {
-                mergedFilterObservations[fingerprint, default: FilterObservation()].merge(observation)
-            }
-        }
-        if context.suppressIssueReporting == false {
-            for (_, observation) in mergedFilterObservations where observation.attempts >= 20 {
-                if observation.validityRate < 0.02, let location = observation.sourceLocation {
-                    reportWarning(
-                        "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
-                        fileID: location.fileID,
-                        filePath: location.filePath,
-                        line: location.line,
-                        column: location.column
-                    )
-                }
-            }
-        }
-
-        // Merge stats lines into the parent accumulator.
-        if let statsAccumulator = context.statsAccumulator {
-            for batch in batchResults {
-                statsAccumulator.appendLines(batch.statsLines)
-            }
-        }
-
-        // Report first error from any batch.
-        for batch in batchResults {
-            if let error = batch.error {
-                report.generationErrorOccurred = true
-                reportError(
-                    localizedErrorMessage(error),
-                    fileID: context.fileID,
-                    filePath: context.filePath,
-                    line: context.line,
-                    column: context.column
-                )
-            }
-        }
-
-        // Find the failure with the lowest absolute iteration (deterministic winner).
-        // The skip delta is taken after all lanes have joined, so it is exact even though lanes share one counter. Each lane stops at its first failure, so failing invocations equal failing lanes.
-        let totalIterations = batchResults.reduce(0) { $0 + $1.iterations }
-        ledger.record(
-            .sampling,
-            invocations: totalIterations,
-            skips: context.skipCount - skipsBefore,
-            failures: batchResults.count(where: { $0.failure != nil })
-        )
-        let winningFailure = batchResults
-            .compactMap(\.failure)
-            .min(by: { $0.absoluteIteration < $1.absoluteIteration })
-
-        guard let failure = winningFailure else {
-            report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-            if batchResults.contains(where: \.uniqueExhaustionTruncatedRun) {
-                recordUniqueExhaustion(iterations: totalIterations, context: context, report: &report)
-            }
-            return nil
-        }
-
-        report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
-        let result = reduceAndReport(
-            context: context,
-            value: failure.value,
-            tree: failure.tree,
-            seed: baseSeed,
-            iteration: failure.absoluteIteration,
-            phaseBudget: context.samplingBudget,
-            replayHint: nil,
-            report: &report,
-            ledger: &ledger
-        )
-        switch result {
-            case let .reduced(counterexample):
-                return counterexample
-            case let .unreduced(counterexample):
-                return counterexample
+        if suppressIssueReporting == false {
+            reportError(
+                rendered,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
         }
     }
 }

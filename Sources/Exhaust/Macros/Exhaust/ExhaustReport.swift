@@ -89,6 +89,26 @@ public struct ExhaustReport: Sendable {
         screeningRejectedRows = summary.rejectedRows
     }
 
+    /// Applies what a ``PropertyTestRunner`` run recorded: screening rows, the sampling seed, reduction statistics, and phase timings.
+    package mutating func apply(_ run: PropertyTestRunner.Run<some Any>) {
+        if let screeningSummary = run.screeningSummary {
+            applyScreeningRows(screeningSummary)
+        }
+        if let seed = run.seed {
+            self.seed = seed
+        }
+        if let reductionStats = run.reductionStats {
+            applyReductionStats(reductionStats)
+        }
+        if run.reductionWasCapped {
+            reductionWasCapped = true
+        }
+        screeningMilliseconds = run.screeningMilliseconds
+        generationMilliseconds = run.generationMilliseconds
+        reductionMilliseconds = run.reductionMilliseconds
+        totalMilliseconds = run.totalMilliseconds
+    }
+
     /// Projects invocation counts from a ``RunLedger``.
     ///
     /// Diagnostic reruns happen after the pipeline has finished its ledger, so ``diagnosticInvocations`` is not a ledger projection: it accumulates through ``recordDiagnosticInvocation()`` and is preserved here, which keeps this method safe to call in any order relative to diagnostic reruns.
