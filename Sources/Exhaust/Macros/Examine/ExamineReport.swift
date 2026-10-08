@@ -407,7 +407,7 @@ private extension Generator where Operation == ReflectiveOperation {
         var uniqueSequenceHashes: Set<UInt64> = []
         var storedTrees: [ChoiceTree] = []
         storedTrees.reserveCapacity(samples)
-        let startNanoseconds = monotonicNanoseconds()
+        let startNanoseconds = MonotonicClock.nanoseconds()
 
         var iterator = ValueAndChoiceTreeInterpreter(
             self,
@@ -419,9 +419,9 @@ private extension Generator where Operation == ReflectiveOperation {
         var generationNanoseconds: UInt64 = 0
 
         for sampleIndex in 0 ..< samples {
-            let genStart = monotonicNanoseconds()
+            let genStart = MonotonicClock.nanoseconds()
             guard let (value, tree) = try? iterator.next() else { continue }
-            generationNanoseconds += monotonicNanoseconds() - genStart
+            generationNanoseconds += MonotonicClock.nanoseconds() - genStart
             report.valuesGenerated += 1
             storedTrees.append(tree)
 
@@ -455,7 +455,7 @@ private extension Generator where Operation == ReflectiveOperation {
         report.representativeTree = Self.medianComplexityTree(from: storedTrees)
 
         let nanosecondsPerSecond = 1_000_000_000.0
-        let totalElapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
+        let totalElapsedNanoseconds = MonotonicClock.nanoseconds() - startNanoseconds
         report.elapsedTime = Double(totalElapsedNanoseconds) / nanosecondsPerSecond
         report.generationTime = Double(generationNanoseconds) / nanosecondsPerSecond
 

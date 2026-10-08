@@ -115,28 +115,16 @@ public extension __ExhaustRuntime {
         return ExhaustLog.withConfiguration(suppress.logConfiguration(minimumLevel: logLevel, format: logFormat)) {
             let result: DirectedExploreResult<Output>
             do {
-                result = try { () throws -> DirectedExploreResult<Output> in
-                    if shouldParallelize, seed == nil, namedDirections.count > 1 {
-                        return try runParallelExplore(
-                            gen: gen,
-                            property: property,
-                            directions: namedDirections,
-                            hitsPerDirection: budget.hitsPerDirection,
-                            maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
-                            seed: seed
-                        )
-                    }
-                    var runner = DirectedExploreRunner(
-                        gen: gen,
-                        property: property,
-                        directions: namedDirections,
-                        hitsPerDirection: budget.hitsPerDirection,
-                        maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
-                        seed: seed,
-                        regressionSeeds: regressionSeeds
-                    )
-                    return try runner.run()
-                }()
+                result = try runExplore(
+                    gen: gen,
+                    property: property,
+                    directions: namedDirections,
+                    hitsPerDirection: budget.hitsPerDirection,
+                    maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
+                    seed: seed,
+                    regressionSeeds: regressionSeeds,
+                    parallelize: shouldParallelize
+                )
             } catch {
                 reportError(
                     "Generator failed during exploration: \(error)",

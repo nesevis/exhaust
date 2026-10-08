@@ -59,7 +59,7 @@ struct ReducibleGetSizeTests {
         let (value, tree) = try #require(try interpreter.next())
         try #require(value == 37)
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: tree,
             output: value,
@@ -99,7 +99,7 @@ struct ReducibleGetSizeTests {
             #expect(replayed.0 == 37)
             #expect(replayed.2 == 37)
             let materialized: (value: (UInt64, UInt64, UInt64), tree: ChoiceTree) = try #require(
-                ScreeningRunner.materializeRow(
+                ScreeningPhase.materializeRow(
                     generator.erase(), row: row, rowIndex: Int(valueIndex), profile: profile, needsTree: true
                 )
             )

@@ -44,7 +44,7 @@ package enum SharedInterpreterHelpers {
     @inline(__always)
     static func checkGenerationDeadline(_ deadlineNanoseconds: UInt64, elementIndex: Int) throws {
         guard elementIndex & 1023 == 0, deadlineNanoseconds > 0 else { return }
-        guard monotonicNanoseconds() > deadlineNanoseconds else { return }
+        guard MonotonicClock.nanoseconds() > deadlineNanoseconds else { return }
         throw GeneratorError.generationDeadlineExceeded(
             seconds: Double(perValueGenerationBudgetNanoseconds) / 1_000_000_000
         )

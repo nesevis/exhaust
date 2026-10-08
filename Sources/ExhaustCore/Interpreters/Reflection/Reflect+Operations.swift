@@ -134,7 +134,7 @@ extension Interpreters {
         }
         // On a backtrack node only the framework-built absent arm may record an outer nil: a user arm that reflects nil is a withdrawn arm, and exact materialization rejects a recorded arm that replays nil. An always node has no absent arm and cannot have produced nil at all.
         let candidates: ContiguousArray<ReflectiveOperation.PickTuple>
-        if choices[0].isBacktrack, isNilOptional(finalOutput) {
+        if choices[0].isBacktrack, StructuralEquality.isNilOptional(finalOutput) {
             guard let absent = BacktrackAudition.absentArm(in: choices) else {
                 return []
             }
@@ -159,7 +159,7 @@ extension Interpreters {
                         .contains(convertible.bitPattern64) ?? false
                 } else {
                     // Compare the first candidate's value directly rather than through `value` (an `Any?`): re-boxing that optional channel as `Any` wraps a nil candidate in an artifact `.some` layer, which makes the nil branch spuriously match `.some(nil)` outputs and vice versa.
-                    isPicked = reflectionPaths.first.map { structurallyEqual($0.value, finalOutput) } ?? false
+                    isPicked = reflectionPaths.first.map { StructuralEquality.structurallyEqual($0.value, finalOutput) } ?? false
                 }
 
                 var results: [ArmReflection] = []
@@ -457,7 +457,7 @@ extension Interpreters {
                     let boundGenerator = try forward(innerResult.value)
                     let boundResults = try reflectRecursive(boundGenerator, onFinalOutput: finalOutput, context: context)
                     return boundResults.compactMap { boundResult -> (value: Any, path: [ChoiceTree])? in
-                        guard structurallyEqual(boundResult.value, finalOutput) else {
+                        guard StructuralEquality.structurallyEqual(boundResult.value, finalOutput) else {
                             return nil
                         }
                         let innerTree = innerResult.path.count == 1

@@ -6,7 +6,7 @@ struct ImprovingPivotRelaxTests {
     @Test("A counterexample in the later arm reduces to the earlier arm's threshold", arguments: [UInt64(1), 150, 200], [UInt64(3), 11, 42])
     func reducesAcrossArms(threshold: UInt64, seed: UInt64) throws {
         var machine = try makeMachine(threshold: threshold, seed: seed, improvingProbeBudget: SchedulerTuning().relaxImprovingProbeBudget)
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
         #expect(machine.output as? UInt64 == threshold)
         #expect(machine.stats.relaxImprovingAcceptances == 1)
     }
@@ -14,14 +14,14 @@ struct ImprovingPivotRelaxTests {
     @Test("An improving pivot accepted on the last stall is still minimized", arguments: [UInt64(3), 11, 42])
     func acceptedPivotIsMinimizedOnTheLastStall(seed: UInt64) throws {
         var machine = try makeMachine(threshold: 150, seed: seed, improvingProbeBudget: 2, maxStalls: 1)
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
         #expect(machine.output as? UInt64 == 150)
     }
 
     @Test("Without an improving probe budget the counterexample stays in the arm it was found in", arguments: [UInt64(3), 11, 42])
     func budgetZeroStaysInArm(seed: UInt64) throws {
         var machine = try makeMachine(threshold: 1, seed: seed, improvingProbeBudget: 0)
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
         #expect(machine.output as? UInt64 == 300)
         #expect(machine.stats.relaxImprovingProbes == 0)
     }
@@ -29,7 +29,7 @@ struct ImprovingPivotRelaxTests {
     @Test("A pivot whose minimal content fails is taken by the guarded encoder, not the relax round", arguments: [UInt64(3), 11, 42])
     func minimalContentNeedsNoImprovingProbe(seed: UInt64) throws {
         var machine = try makeMachine(threshold: 0, seed: seed, improvingProbeBudget: SchedulerTuning().relaxImprovingProbeBudget)
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
         #expect(machine.output as? UInt64 == 0)
         #expect(machine.stats.relaxImprovingProbes == 0)
     }

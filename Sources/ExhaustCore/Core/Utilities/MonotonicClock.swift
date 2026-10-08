@@ -1,0 +1,31 @@
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#elseif canImport(WinSDK)
+    import WinSDK
+#endif
+
+/// Reads the platform's monotonic clock.
+package enum MonotonicClock {
+    /// Returns the current monotonic time in nanoseconds.
+    package static func nanoseconds() -> UInt64 {
+        #if canImport(Darwin)
+            clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        #elseif canImport(Glibc) || canImport(Musl)
+            var ts = timespec()
+            clock_gettime(CLOCK_MONOTONIC, &ts)
+            return UInt64(ts.tv_sec) &* 1_000_000_000 &+ UInt64(ts.tv_nsec)
+        #elseif canImport(WinSDK)
+            var counter = LARGE_INTEGER()
+            var frequency = LARGE_INTEGER()
+            QueryPerformanceCounter(&counter)
+            QueryPerformanceFrequency(&frequency)
+            return UInt64(counter.QuadPart) &* 1_000_000_000 / UInt64(frequency.QuadPart)
+        #else
+            0
+        #endif
+    }
+}

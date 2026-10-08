@@ -109,7 +109,7 @@ struct GeneratorDerivationTests {
             }
         }
         let counterexample = try #require(found)
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: counterexample.tree,
             output: counterexample.value,
@@ -184,7 +184,7 @@ struct GeneratorDerivationTests {
             }
         }
         let counterexample = try #require(found)
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: counterexample.tree,
             output: counterexample.value,

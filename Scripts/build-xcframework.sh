@@ -201,15 +201,22 @@ collect() {
     # ComparisonRuntime.swift and TracePCGuardCoverageSource.swift call), whose objects land in a
     # sibling .build directory. They must be archived alongside ExhaustCore's own, or the shipped
     # library carries unresolved exhaust_cmp_* and exhaust_tpg_* symbols and every binary consumer
-    # fails to link. This is ExhaustCore's only cross-target dependency; add another glob here if that
-    # ever changes.
+    # fails to link. The ExhaustObjCSupport Objective-C target (the NSException guard behind
+    # runCatchingObjCException) is archived the same way; without it exhaust_runCatchingObjCException
+    # is unresolved. These are ExhaustCore's only cross-target dependencies; add another glob here if
+    # that ever changes.
     if ! compgen -G "${build_products}/ExhaustCoverageRuntime.build/*.o" > /dev/null; then
         echo "error: no ExhaustCoverageRuntime objects at ${build_products}/ExhaustCoverageRuntime.build/ — libExhaustCore.a would ship with undefined exhaust_cmp_* and exhaust_tpg_* symbols." >&2
         exit 1
     fi
+    if ! compgen -G "${build_products}/ExhaustObjCSupport.build/*.o" > /dev/null; then
+        echo "error: no ExhaustObjCSupport objects at ${build_products}/ExhaustObjCSupport.build/ — libExhaustCore.a would ship with an undefined exhaust_runCatchingObjCException symbol." >&2
+        exit 1
+    fi
     ar rcs "${dest}/libExhaustCore.a" \
         "${build_products}/ExhaustCore.build/"*.o \
-        "${build_products}/ExhaustCoverageRuntime.build/"*.o
+        "${build_products}/ExhaustCoverageRuntime.build/"*.o \
+        "${build_products}/ExhaustObjCSupport.build/"*.o
 
     # Compiled module (binary .swiftmodule)
     cp "${build_products}/Modules/ExhaustCore.swiftmodule" \
@@ -249,14 +256,19 @@ collect_xros() {
 
     mkdir -p "${dest}/ExhaustCore.swiftmodule"
 
-    # See collect(): ExhaustCoverageRuntime's objects must ship alongside ExhaustCore's.
+    # See collect(): ExhaustCoverageRuntime's and ExhaustObjCSupport's objects must ship alongside ExhaustCore's.
     if ! compgen -G "${build_products}/ExhaustCoverageRuntime.build/*.o" > /dev/null; then
         echo "error: no ExhaustCoverageRuntime objects at ${build_products}/ExhaustCoverageRuntime.build/ — libExhaustCore.a would ship with undefined exhaust_cmp_* and exhaust_tpg_* symbols." >&2
         exit 1
     fi
+    if ! compgen -G "${build_products}/ExhaustObjCSupport.build/*.o" > /dev/null; then
+        echo "error: no ExhaustObjCSupport objects at ${build_products}/ExhaustObjCSupport.build/ — libExhaustCore.a would ship with an undefined exhaust_runCatchingObjCException symbol." >&2
+        exit 1
+    fi
     ar rcs "${dest}/libExhaustCore.a" \
         "${build_products}/ExhaustCore.build/"*.o \
-        "${build_products}/ExhaustCoverageRuntime.build/"*.o
+        "${build_products}/ExhaustCoverageRuntime.build/"*.o \
+        "${build_products}/ExhaustObjCSupport.build/"*.o
 
     cp "${build_products}/Modules/ExhaustCore.swiftmodule" \
        "${dest}/ExhaustCore.swiftmodule/${arch_qualifier}.swiftmodule"

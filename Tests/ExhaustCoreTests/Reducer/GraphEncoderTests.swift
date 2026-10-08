@@ -337,7 +337,7 @@ struct ChoiceGraphReducerIntegrationTests {
         let (value, tree) = try #require(try iterator.next())
         try #require(value > 10)
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: gen,
             tree: tree,
             output: value,

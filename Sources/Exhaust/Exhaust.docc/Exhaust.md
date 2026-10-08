@@ -120,16 +120,16 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 ### State Machine Configuration
 
-- ``StateMachineSpec``
-- ``AsyncStateMachineSpec``
-- ``StateMachineSpecBase``
+- ``ExhaustCore/StateMachineSpec``
+- ``ExhaustCore/AsyncStateMachineSpec``
+- ``ExhaustCore/StateMachineSpecBase``
 - ``StateMachineSettings``
-- ``ExecutionModel``
-- ``SearchableExecutionModel``
-- ``ConcurrencyLevel``
-- ``StateMachineSkip``
-- ``StateMachineCheckFailure``
-- ``CommandResponse``
+- ``ExhaustCore/ExecutionModel``
+- ``ExhaustCore/SearchableExecutionModel``
+- ``ExhaustCore/ConcurrencyLevel``
+- ``ExhaustCore/StateMachineSkip``
+- ``ExhaustCore/StateMachineCheckFailure``
+- ``ExhaustCore/CommandResponse``
 
 ### Results and Reports
 
@@ -143,9 +143,9 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``WarmupStats``
 - ``ExamineReport``
 - ``ExamineFailure``
-- ``StateMachineResult``
-- ``StateMachineDiscoveryMethod``
-- ``TraceStep``
+- ``ExhaustCore/StateMachineResult``
+- ``ExhaustCore/StateMachineDiscoveryMethod``
+- ``ExhaustCore/TraceStep``
 
 ### Swift Testing Traits
 

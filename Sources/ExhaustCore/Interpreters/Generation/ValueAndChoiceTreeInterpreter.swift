@@ -95,7 +95,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
-        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         defer {
             context.runs += 1
@@ -164,7 +164,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
-        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         defer {
             context.runs += 1
@@ -230,7 +230,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
-        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         defer { context.runs += 1 }
         do {
@@ -277,7 +277,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let failingRunIndex = context.runs - 1
         context.prng = Xoshiro256.derive(from: context.baseSeed, at: failingRunIndex)
         // Refresh the deadline: the absolute deadline armed for the original generation has been ticking through the property invocation, and a stale one could expire immediately.
-        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         let savedRuns = context.runs
         context.runs = failingRunIndex
@@ -694,7 +694,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             guard let result = try generateRecursiveAny(arm.generator, context: &context) else {
                 throw GeneratorError.choiceTreeConstructionFailed
             }
-            if isNilOptional(result.0) {
+            if StructuralEquality.isNilOptional(result.0) {
                 context.restore(snapshot)
             } else {
                 winner = (arm, result)

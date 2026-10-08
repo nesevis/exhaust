@@ -171,7 +171,7 @@ final class BoundedQueueSpec {
 }
 ```
 
-The setup method runs once on every fresh spec instance, before any command, on every execution model. Its values replay from seeds and reduce with the counterexample: reduction first minimises the setup value with the command sequence held fixed, then reduces the commands with the setup held fixed, so Exhaust reports the failure at the simplest configuration that still fails. The reduced value is available programmatically as ``StateMachineResult/setup``, and the trace renders it ahead of the commands:
+The setup method runs once on every fresh spec instance, before any command, on every execution model. Its values replay from seeds and reduce with the counterexample: reduction first minimises the setup value with the command sequence held fixed, then reduces the commands with the setup held fixed, so Exhaust reports the failure at the simplest configuration that still fails. The reduced value is available programmatically as ``ExhaustCore/StateMachineResult/setup``, and the trace renders it ahead of the commands:
 
 ```
 1. configure(capacity: 1, preload: []) (setup)

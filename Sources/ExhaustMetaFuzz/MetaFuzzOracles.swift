@@ -516,7 +516,7 @@ extension MetaFuzz {
         _ fuzzCase: MetaFuzzCase
     ) throws {
         let originalSequence = ChoiceSequence.flatten(tree)
-        let outcome = try? Interpreters.choiceGraphReduce(
+        let outcome = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -552,7 +552,7 @@ extension MetaFuzz {
             case .rejected, .failed:
                 throw ReductionClosedLoopViolation("reduced sequence failed to materialize for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
-        let secondOutcome = try? Interpreters.choiceGraphReduce(
+        let secondOutcome = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: reducedTree,
             output: shrunk,

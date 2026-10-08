@@ -105,6 +105,6 @@ private struct WindowFixture {
             graph: graph,
             warmStartRecords: [:]
         ))
-        return try session.runToCompletion(state: &state)
+        return session.runToCompletion(state: &state)
     }
 }

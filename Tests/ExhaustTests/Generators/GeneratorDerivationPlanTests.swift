@@ -201,7 +201,7 @@ struct GeneratorDerivationPlanTests {
         let generator = ReflectiveGenerator<PlanArrayTree>.derived(.budget(.custom(recursion: 2, nodes: 100)))
         let value: PlanArrayTree = .children([.children([]), .children([])])
         let tree = try #require(try Interpreters.reflect(generator.gen, with: value))
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: generator.gen,
             tree: tree,
             output: value,

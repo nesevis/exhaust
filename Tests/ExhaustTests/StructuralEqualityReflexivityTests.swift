@@ -24,7 +24,7 @@ struct StructuralEqualityReflexivityTests {
         let shapeGen = #gen(.oneOf(payloadFreeGen, scalarGen, pairGen, listGen, groupGen))
 
         #exhaust(shapeGen) { shape in
-            structurallyEqual(shape, shape)
+            StructuralEquality.structurallyEqual(shape, shape)
         }
     }
 }

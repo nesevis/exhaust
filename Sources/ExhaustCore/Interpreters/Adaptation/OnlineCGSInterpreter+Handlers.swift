@@ -542,7 +542,7 @@ extension OnlineCGSInterpreter {
             guard let value = try ValueInterpreter<Any>.generateRecursiveAny(arm.generator, context: &context) else {
                 return nil
             }
-            if isNilOptional(value) {
+            if StructuralEquality.isNilOptional(value) {
                 context.restore(snapshot)
             } else {
                 winner = value

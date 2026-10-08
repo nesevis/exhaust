@@ -331,7 +331,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             guard let value = try generateRecursiveAny(arm.generator, context: &context) else {
                 return nil
             }
-            if isNilOptional(value) {
+            if StructuralEquality.isNilOptional(value) {
                 context.restore(snapshot)
             } else {
                 winner = value

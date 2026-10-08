@@ -66,7 +66,7 @@ struct LaneCollapseEncoderTests {
             enabledEncoders: [.laneCollapse]
         )
 
-        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false }
+        let result = Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config) { _ in false }
         if case .reduced = result {
             Issue.record("Reducer should not improve when nothing can be changed")
         }

@@ -140,7 +140,7 @@ struct PairwiseNumericSearchTests {
             collectStats: true,
             property: { $0.0 * weight + $0.1 + $0.2 != 50 }
         )
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
         let result = try #require(machine.output as? (Int, Int, Int))
         #expect(result.0 == 0 && result.1 == 0 && result.2 == 50)
         #expect((machine.stats.encoderCounts[.pairwiseNumericSearch]?.accepted ?? 0) > 0)
@@ -218,7 +218,7 @@ struct PairwiseNumericSearchTests {
         machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
-        let accepted = try machine.runPairwiseNumericSearch()
+        let accepted = machine.runPairwiseNumericSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Double, Double))
         #expect(result.0 == 0 && result.1 == 8 * scale)
@@ -242,7 +242,7 @@ struct PairwiseNumericSearchTests {
         machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
-        let accepted = try machine.runPairwiseNumericSearch()
+        let accepted = machine.runPairwiseNumericSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Int8, UInt64))
         #expect(Int(result.0) * -3 + Int(result.1) == 9)
@@ -275,7 +275,7 @@ struct PairwiseNumericSearchTests {
         let fullBudget = SchedulerTuning().boundValueBaseBudget
         #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) < fullBudget)
         #expect(machine.graph.convergenceStore[source] == nil)
-        let accepted = try machine.runPairwiseNumericSearch()
+        let accepted = machine.runPairwiseNumericSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Int, Int))
         #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) == fullBudget)

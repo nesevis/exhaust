@@ -15,10 +15,10 @@ Run a state machine spec against a stateful system.
 | Parameter | Description |
 |---|---|
 | `specType` | The `@StateMachine` spec class to run. |
-| `mode` | An ``ExecutionModel``: `.sequential`, `.tasks`, or `.threads`. |
+| `mode` | An ``ExhaustCore/ExecutionModel``: `.sequential`, `.tasks`, or `.threads`. |
 | `settings` | Variadic ``StateMachineSettings`` values: command limit, budget, lanes, replay, timeout, suppression. |
 
-Returns a ``StateMachineResult`` with the reduced command sequence and trace on failure, or `nil` if all sequences pass.
+Returns a ``ExhaustCore/StateMachineResult`` with the reduced command sequence and trace on failure, or `nil` if all sequences pass.
 
 For the full guide, see <doc:StateMachineTesting>.
 
@@ -32,4 +32,4 @@ For the full guide, see <doc:StateMachineTesting>.
 }
 ```
 
-That mode is experimental, requires coverage instrumentation on the target under test, and returns a ``FuzzReport`` instead of a ``StateMachineResult``. See <doc:MacroExplore> for the parameters and <doc:CoverageGuidedFuzzing> for the full guide.
+That mode is experimental, requires coverage instrumentation on the target under test, and returns a ``FuzzReport`` instead of a ``ExhaustCore/StateMachineResult``. See <doc:MacroExplore> for the parameters and <doc:CoverageGuidedFuzzing> for the full guide.

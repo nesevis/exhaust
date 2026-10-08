@@ -8,11 +8,11 @@ struct MetaFuzzSizeScreeningTests {
     func rawSizeRecipe(seed: UInt64) throws {
         let fixture = try #require(metaFuzzOperationFixtures.first { $0.name == "getSize" })
         let generator = buildGenerator(from: fixture.recipe)
-        let plan = try #require(ScreeningRunner.plan(generator, screeningBudget: 512))
+        let plan = try #require(ScreeningPhase.plan(generator, screeningBudget: 512))
         #expect(plan.parameterCount == 1)
         #expect(plan.domainSizes == [101])
         var values: [Int] = []
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator,
             screeningBudget: 512,
             coveringSeed: seed,
@@ -82,7 +82,7 @@ struct MetaFuzzSizeScreeningTests {
         #expect(metadata.isPinnedToSize == true)
         #expect(ChoiceTreeAnalysis.analyze(publicGenerator.gen) == nil)
         var propertyCalls = 0
-        let screening = ScreeningRunner.run(publicGenerator.gen, screeningBudget: 512, coveringSeed: 42) { _ in
+        let screening = ScreeningPhase.run(publicGenerator.gen, screeningBudget: 512, coveringSeed: 42) { _ in
             propertyCalls += 1
             return true
         }

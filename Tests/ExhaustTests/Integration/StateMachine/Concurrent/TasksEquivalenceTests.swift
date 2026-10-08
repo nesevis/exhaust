@@ -16,7 +16,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 1), .store(value: 1)),
             (ScheduleMarker(rawValue: 2), .store(value: 2)),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { LastWriteRegisterSpec() },
@@ -37,7 +37,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 2), .store(value: 2)),
             (ScheduleMarker(rawValue: 1), .store(value: 1)),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { LastWriteRegisterSpec() },
@@ -58,7 +58,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 1), .increment),
             (ScheduleMarker(rawValue: 2), .increment),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { RacyCounterSpec() },
@@ -82,7 +82,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 2), .append(value: 1)),
             (ScheduleMarker(rawValue: 1), .append(value: 2)),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { AscendingLogSpec() },
@@ -103,7 +103,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 1), .increment),
             (ScheduleMarker(rawValue: 2), .increment),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { RespondingRacyCounterSpec() },
@@ -127,7 +127,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 1), .increment),
             (ScheduleMarker(rawValue: 2), .increment),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { BlindlyJudgedCounterSpec() },
@@ -148,7 +148,7 @@ struct TasksEquivalenceTests {
             (ScheduleMarker(rawValue: 1), .increment),
             (ScheduleMarker(rawValue: 2), .increment),
         ]
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: taggedCommands,
             setupStep: nil,
             specInit: { UnjudgedCounterSpec() },

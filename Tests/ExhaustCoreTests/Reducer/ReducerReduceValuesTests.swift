@@ -108,7 +108,7 @@ struct ReducerReduceValuesTests {
         // Property always passes — no reduction possible
         let property: (UInt64) -> Bool = { _ in true }
 
-        let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
+        let result = Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
         if case .reduced = result {
             Issue.record("Property always passes — reduction should not find an improvement")
         }

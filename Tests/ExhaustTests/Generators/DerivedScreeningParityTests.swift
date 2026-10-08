@@ -112,7 +112,7 @@ struct DerivedScreeningParityTests {
         #expect(values.contains { $0.tree.depth == 0 })
         #expect(values.allSatisfy { $0.tree.depth <= ceiling })
         #expect(values.allSatisfy { $0.tree.nodes <= maximumNodes })
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             drawn.gen,
             screeningBudget: 200,
             coveringSeed: 42,
@@ -147,10 +147,10 @@ struct DerivedScreeningParityTests {
         let recursive = ScreeningRecursive.gen(.budget(.custom(recursion: 5, nodes: 32))).resize(size)
         let payload = #gen(recursive) { ScreeningRecursiveEnvelope.tree($0) }
         let generator = ReflectiveGenerator<ScreeningRecursiveEnvelope>.oneOf(payload, .just(.empty))
-        let plan = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+        let plan = try #require(ScreeningPhase.plan(generator.gen, screeningBudget: 200))
         #expect(plan.parameterCount == 1)
         var controls: [[UInt64]] = []
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator.gen,
             screeningBudget: 200,
             coveringSeed: 42,
@@ -189,7 +189,7 @@ struct DerivedScreeningParityTests {
         let seeds = #gen(.uint64())
         #exhaust(seeds, .budget(.extensive)) { seed in
             let before = try screeningSamplingValues(generator, seed: seed)
-            _ = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+            _ = try #require(ScreeningPhase.plan(generator.gen, screeningBudget: 200))
             let after = try screeningSamplingValues(generator, seed: seed)
             #expect(before == after)
         }
@@ -212,19 +212,19 @@ private func expectScreeningParity<Value: Equatable>(
     _ derived: ReflectiveGenerator<Value>,
     _ handwritten: ReflectiveGenerator<Value>
 ) throws {
-    let expectedPlan = try #require(ScreeningRunner.plan(handwritten.gen, screeningBudget: 200))
-    let actualPlan = try #require(ScreeningRunner.plan(derived.gen, screeningBudget: 200))
+    let expectedPlan = try #require(ScreeningPhase.plan(handwritten.gen, screeningBudget: 200))
+    let actualPlan = try #require(ScreeningPhase.plan(derived.gen, screeningBudget: 200))
     #expect(actualPlan.domainSizes == expectedPlan.domainSizes)
     #expect(actualPlan.parameterCount == expectedPlan.parameterCount)
     #expect(actualPlan.kind == expectedPlan.kind)
     for seed in [UInt64(0), 42, 1337] {
         var expectedRows: [Value] = []
         var actualRows: [Value] = []
-        let expected = ScreeningRunner.run(handwritten.gen, screeningBudget: 200, coveringSeed: seed) { value in
+        let expected = ScreeningPhase.run(handwritten.gen, screeningBudget: 200, coveringSeed: seed) { value in
             expectedRows.append(value)
             return true
         }
-        let actual = ScreeningRunner.run(derived.gen, screeningBudget: 200, coveringSeed: seed) { value in
+        let actual = ScreeningPhase.run(derived.gen, screeningBudget: 200, coveringSeed: seed) { value in
             actualRows.append(value)
             return true
         }
@@ -244,8 +244,8 @@ private func matchingScreeningRows<Value: Equatable>(
     _ handwritten: ReflectiveGenerator<Value>,
     expectedParameters: Int
 ) throws -> [Value] {
-    let expectedPlan = try #require(ScreeningRunner.plan(handwritten.gen, screeningBudget: 200))
-    let actualPlan = try #require(ScreeningRunner.plan(derived.gen, screeningBudget: 200))
+    let expectedPlan = try #require(ScreeningPhase.plan(handwritten.gen, screeningBudget: 200))
+    let actualPlan = try #require(ScreeningPhase.plan(derived.gen, screeningBudget: 200))
     #expect(expectedPlan.parameterCount == expectedParameters)
     #expect(actualPlan.parameterCount == expectedParameters)
     #expect(actualPlan.domainSizes == expectedPlan.domainSizes)
@@ -254,11 +254,11 @@ private func matchingScreeningRows<Value: Equatable>(
     for seed in [UInt64(0), 42, 1337] {
         var expectedRows: [Value] = []
         var actualRows: [Value] = []
-        let expected = ScreeningRunner.run(handwritten.gen, screeningBudget: 200, coveringSeed: seed) { value in
+        let expected = ScreeningPhase.run(handwritten.gen, screeningBudget: 200, coveringSeed: seed) { value in
             expectedRows.append(value)
             return true
         }
-        let actual = ScreeningRunner.run(derived.gen, screeningBudget: 200, coveringSeed: seed) { value in
+        let actual = ScreeningPhase.run(derived.gen, screeningBudget: 200, coveringSeed: seed) { value in
             actualRows.append(value)
             return true
         }

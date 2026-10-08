@@ -13,7 +13,7 @@ struct SchedulerDecisionTests {
         let gen = Gen.choose(in: UInt64(0) ... 100)
         let (value, tree) = try generate(gen, seed: 42)
 
-        let result = try Interpreters.choiceGraphReduce(
+        let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
@@ -75,7 +75,7 @@ struct SchedulerDecisionTests {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 1 ... 10)
         let (value, tree) = try generate(gen, seed: 42)
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: gen,
             tree: tree,
             output: value,

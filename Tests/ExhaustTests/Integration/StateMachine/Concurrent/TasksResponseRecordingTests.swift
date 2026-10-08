@@ -12,7 +12,7 @@ struct TasksResponseRecordingTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Responses are recorded against the lane that ran the command")
     func responsesAreRecordedAgainstTheLaneThatRanTheCommand() {
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: [
                 (.prefix, .append(value: 1)),
                 (ScheduleMarker(rawValue: 1), .append(value: 2)),
@@ -46,7 +46,7 @@ struct TasksResponseRecordingTests {
     @Test("A command that skips records a skipped outcome")
     func aCommandThatSkipsRecordsASkippedOutcome() throws {
         // Lane a is drained first and the log starts empty, so `removeLast` reaches its guard before anything has been appended.
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: [
                 (ScheduleMarker(rawValue: 1), .removeLast),
                 (ScheduleMarker(rawValue: 2), .append(value: 5)),
@@ -70,7 +70,7 @@ struct TasksResponseRecordingTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Call and return indices are drawn from one strictly increasing counter")
     func callAndReturnIndicesAreDrawnFromOneStrictlyIncreasingCounter() throws {
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: [
                 (.prefix, .append(value: 1)),
                 (ScheduleMarker(rawValue: 1), .appendAfterSuspending(value: 2)),
@@ -98,7 +98,7 @@ struct TasksResponseRecordingTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("A command parked at a suspension point records a range containing the command drained inside it")
     func aCommandParkedAtASuspensionPointRecordsARangeContainingTheCommandDrainedInsideIt() throws {
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: [
                 (ScheduleMarker(rawValue: 1), .appendAfterSuspending(value: 1)),
                 (ScheduleMarker(rawValue: 2), .append(value: 2)),
@@ -121,7 +121,7 @@ struct TasksResponseRecordingTests {
     @Test("Commands that never overlap record disjoint ranges")
     func commandsThatNeverOverlapRecordDisjointRanges() throws {
         // Neither body suspends, so each lane task runs to completion in the single job the drain loop gives it.
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: [
                 (ScheduleMarker(rawValue: 1), .append(value: 1)),
                 (ScheduleMarker(rawValue: 2), .append(value: 2)),

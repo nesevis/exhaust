@@ -1,0 +1,87 @@
+/// Runs spec probes sequentially where all markers are `.prefix`.
+///
+/// Used when the spec's execution model is sequential (no concurrency mode selected). The entry point injects a sync or async execution closure at construction time.
+package struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBackend {
+    let property: @Sendable (SpecCandidateValue<Spec>) -> Bool
+    let finalize: (SpecCandidateValue<Spec>) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
+
+    package init(
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
+        finalize: @escaping (SpecCandidateValue<Spec>) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
+    ) {
+        self.property = property
+        self.finalize = finalize
+    }
+
+    package func probe(
+        _ candidate: SpecCandidateValue<Spec>,
+        context _: StateMachineRunContext<Spec>
+    ) -> ProbeOutcome {
+        property(candidate) ? .pass : .fail
+    }
+
+    package func reduce(
+        setupStep: Spec.SetupStep?,
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
+        tree: ChoiceTree,
+        context: StateMachineRunContext<Spec>
+    ) -> StateMachineReduction<Spec.Command> {
+        // Every encoder is enabled. The concurrent passes restrict theirs because each probe there is costly, but a sequential probe is a single replay, and arguments coupled across commands (one key used by several commands) only reduce with encoders such as lockstep
+        let config = Interpreters.ReducerConfiguration(
+            maxStalls: 2,
+            wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
+            tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
+        )
+        let deadline = context.config.deadlineNanoseconds
+        let commandProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { [property] commands in
+            (deadline.map { MonotonicClock.nanoseconds() >= $0 } ?? false) || property(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
+        }
+        let (reduced, stats, _) = __ExhaustRuntime.reduceStateMachineCounterexample(
+            value: taggedCommands,
+            tree: tree,
+            generator: context.state.sequenceGen,
+            config: config,
+            property: commandProperty
+        )
+        return StateMachineReduction(finalInput: reduced, stats: stats, timedOut: false)
+    }
+
+    package func buildResult(
+        setupStep: Spec.SetupStep?,
+        reduced: [(ScheduleMarker, Spec.Command)],
+        originalCommands: [Spec.Command]?,
+        provenance: StateMachineCandidateProvenance,
+        iteration: Int,
+        context: StateMachineRunContext<Spec>
+    ) -> (result: StateMachineResult<Spec>, issueMessage: String) {
+        let outcome = finalize(SpecCandidateValue(setupStep: setupStep, taggedCommands: reduced))
+        let commands = reduced.map(\.1)
+        let discoveryMethod = provenance.discoveryMethod
+
+        let result = StateMachineResult<Spec>(
+            commands: commands,
+            originalCommands: originalCommands,
+            setup: setupStep,
+            trace: outcome.trace,
+            systemUnderTest: outcome.systemUnderTest,
+            seed: provenance.resultSeed,
+            replaySeed: provenance.encodeReplaySeed(iteration: iteration),
+            discoveryMethod: discoveryMethod
+        )
+
+        let issueMessage: String = context.config.suppressIssueReporting
+            ? ""
+            : __ExhaustRuntime.renderFailure(
+                result,
+                failureInfo: __ExhaustRuntime.StateMachineFailureInfo(
+                    originalCommands: originalCommands,
+                    discoveryMethod: discoveryMethod,
+                    iteration: context.state.failureContext.iteration,
+                    budget: context.state.failureContext.budget
+                ),
+                failureDescription: outcome.failureDescription
+            )
+
+        return (result, issueMessage)
+    }
+}

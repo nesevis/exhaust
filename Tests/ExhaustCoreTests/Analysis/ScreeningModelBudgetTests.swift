@@ -6,13 +6,13 @@ import Testing
 struct ScreeningModelBudgetTests {
     @Test("The model budget scales the row budget and saturates on overflow")
     func modelBudgetScalesAndSaturates() {
-        #expect(ScreeningRunner.modelBudget(for: 200) == 200 * ScreeningRunner.modelOverprovisionFactor)
-        #expect(ScreeningRunner.modelBudget(for: .max) == .max)
+        #expect(ScreeningPhase.modelBudget(for: 200) == 200 * ScreeningPhase.modelOverprovisionFactor)
+        #expect(ScreeningPhase.modelBudget(for: .max) == .max)
     }
 
     @Test("A solo string generator is screenable at standard budget")
     func soloStringScreensAtStandardBudget() {
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             Gen.string(length: 0 ... 20).gen,
             screeningBudget: 200,
             coveringSeed: 0,
@@ -29,7 +29,7 @@ struct ScreeningModelBudgetTests {
     @Test("String x int keeps the composite slot at standard budget")
     func stringByIntKeepsCompositeAtStandardBudget() {
         let generator = Gen.zip(Gen.string(length: 0 ... 20).gen, Gen.choose(in: 0 ... 1000))
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator,
             screeningBudget: 200,
             coveringSeed: 0,
@@ -48,7 +48,7 @@ struct ScreeningModelBudgetTests {
         let upperDate = lowerDate.addingTimeInterval(86400 * 365)
         let dateGen = Gen.date(between: lowerDate ... upperDate, interval: DateStride.hours(1)).gen
         let generator = Gen.zip(Gen.arrayOf(dateGen, within: 0 ... 5), Gen.choose(in: 0 ... 1000))
-        let result = ScreeningRunner.run(
+        let result = ScreeningPhase.run(
             generator,
             screeningBudget: 200,
             coveringSeed: 0,
@@ -66,7 +66,7 @@ struct ScreeningModelBudgetTests {
         /// Domain 256 against budget 100: without rotation every run tests the same 100 values and the tail is permanently untestable.
         func observedValues(coveringSeed: UInt64) -> Set<Int> {
             var values = Set<Int>()
-            let result = ScreeningRunner.run(
+            let result = ScreeningPhase.run(
                 Gen.choose(in: 0 ... 255),
                 screeningBudget: 100,
                 coveringSeed: coveringSeed,

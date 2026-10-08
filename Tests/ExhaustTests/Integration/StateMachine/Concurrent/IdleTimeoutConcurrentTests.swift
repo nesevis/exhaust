@@ -75,7 +75,7 @@ struct IdleTimeoutConcurrentTests {
         let commands: [(ScheduleMarker, SleepingSpec.Command)] = [
             (ScheduleMarker(rawValue: 1), .doSleep),
         ]
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: commands,
             setupStep: nil,
             specInit: {
@@ -101,7 +101,7 @@ struct IdleTimeoutConcurrentTests {
             (ScheduleMarker(rawValue: 1), .wait),
         ]
         let result = await __ExhaustRuntime.dispatchToGCD {
-            drainSchedule(
+            CooperativeScheduler.drainSchedule(
                 taggedCommands: commands,
                 setupStep: nil,
                 specInit: {
@@ -141,7 +141,7 @@ struct IdleTimeoutConcurrentTests {
             (.prefix, .wait),
         ]
         let result = await __ExhaustRuntime.dispatchToGCD {
-            drainSchedule(
+            CooperativeScheduler.drainSchedule(
                 taggedCommands: commands,
                 setupStep: nil,
                 specInit: {

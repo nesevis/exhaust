@@ -380,7 +380,7 @@ private func registerParser() {
                 invocationCount += 1
                 return property(candidate)
             }
-            let result = try? Interpreters.choiceGraphReduce(
+            let result = Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -388,7 +388,7 @@ private func registerParser() {
                 property: countingProperty
             )
 //            print("\(seed), \(invocationCount)")
-            let output = result?.counterexample?.1 ?? value
+            let output = result.counterexample?.1 ?? value
             let outputSize = parserSize(output)
             sizes.append(outputSize)
             invocations.append(invocationCount)
@@ -486,16 +486,16 @@ private func runReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        let startTime = monotonicNanoseconds()
-        let result = try? Interpreters.choiceGraphReduce(
+        let startTime = MonotonicClock.nanoseconds()
+        let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
             config: config,
             property: countingProperty
         )
-        let endTime = monotonicNanoseconds()
-        let output = result?.counterexample?.1
+        let endTime = MonotonicClock.nanoseconds()
+        let output = result.counterexample?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
         results.append(ReductionResult(
@@ -522,16 +522,16 @@ private func runNonReflectableBenchmark<Output>(
             invocationCount += 1
             return property(candidate)
         }
-        let startTime = monotonicNanoseconds()
-        let result = try? Interpreters.choiceGraphReduce(
+        let startTime = MonotonicClock.nanoseconds()
+        let result = Interpreters.choiceGraphReduce(
             gen: gen,
             tree: tree,
             output: value,
             config: config,
             property: countingProperty
         )
-        let endTime = monotonicNanoseconds()
-        let output = result?.counterexample?.1
+        let endTime = MonotonicClock.nanoseconds()
+        let output = result.counterexample?.1
         let milliseconds = Double(endTime - startTime) / 1_000_000.0
         let description = output.map { String(describing: $0) } ?? String(describing: value)
         results.append(ReductionResult(
@@ -599,7 +599,7 @@ private func screeningFindsFailure<Output>(
     gen: Generator<Output>,
     property: @escaping (Output) -> Bool
 ) -> Bool {
-    let result = ScreeningRunner.run(gen, screeningBudget: 200, coveringSeed: 0, property: property)
+    let result = ScreeningPhase.run(gen, screeningBudget: 200, coveringSeed: 0, property: property)
     if case .failure = result { return true }
     return false
 }

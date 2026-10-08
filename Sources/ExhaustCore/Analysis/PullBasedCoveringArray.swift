@@ -34,7 +34,7 @@
 // MARK: - Pull-Based Covering Array Generator
 
 //
-// This generator is NOT on a production path. Production screening uses `BalancedCoveringArrayGenerator` at strength 2 (see `ScreeningRunner.swift:111`). `PullBasedCoveringArrayGenerator` implements higher interaction strengths (3, 4) and is retained for tests, benchmarks, and future strength-3+ work.
+// This generator is NOT on a production path. Production screening uses `BalancedCoveringArrayGenerator` at strength 2 (see `ScreeningPhase.swift:111`). `PullBasedCoveringArrayGenerator` implements higher interaction strengths (3, 4) and is retained for tests, benchmarks, and future strength-3+ work.
 
 /// Pull-based covering array generator that emits one row at a time via ``next()``.
 ///

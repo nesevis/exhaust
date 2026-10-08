@@ -255,7 +255,7 @@ public extension __ExhaustRuntime {
         testName: String,
         property: @escaping @Sendable (Output) -> Bool
     ) -> (Output?, String?) {
-        let runStart = monotonicNanoseconds()
+        let runStart = MonotonicClock.nanoseconds()
         var deadlineNanoseconds: UInt64?
         var budget = ExhaustBudget.standard
         var seed: UInt64?
@@ -361,7 +361,7 @@ public extension __ExhaustRuntime {
             var ledger = RunLedger()
             defer {
                 report.applyLedger(ledger)
-                report.hasExceededDeadline = deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+                report.hasExceededDeadline = deadlineNanoseconds.map { MonotonicClock.nanoseconds() >= $0 } ?? false
                 onReportClosure?(report)
             }
 
@@ -398,24 +398,23 @@ public extension __ExhaustRuntime {
                 }
             }
 
-            let context = PipelineContext(
+            var samplingReductionConfig = reductionConfig
+            samplingReductionConfig.visualize = visualize
+            let context = PropertyTestRunner.Context(
                 gen: gen,
                 property: property,
                 samplingBudget: samplingBudget,
-                reductionConfig: reductionConfig,
-                visualize: visualize,
-                suppressIssueReporting: suppress.issueReporting,
-                includeDiff: includeDiff,
+                reductionConfig: samplingReductionConfig,
                 parallelLanes: parallelLanes,
-
-                logFormat: logFormat,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column,
                 statsAccumulator: statsAccumulator,
+                laneStatsPropertyName: "\(fileID)",
                 skipCounter: skipCounter,
-                absorbedIssues: absorbedIssues,
+                laneScope: absorbedIssues.map { AbsorbedIssueLaneScope(ledger: $0) },
+                representation: { value in
+                    var representation = ""
+                    customDump(value, to: &representation, maxDepth: 3)
+                    return representation
+                },
                 deadlineNanoseconds: deadlineNanoseconds
             )
 
@@ -450,48 +449,31 @@ public extension __ExhaustRuntime {
                 }
             }
 
-            let phaseTimingStart = monotonicNanoseconds()
-            if let screeningReplayRow {
-                let outcome: ScreeningOutcome<Output> = runScreeningPhase(
-                    context: context,
-                    screeningBudget: UInt64(budget.screeningBudget),
-                    coveringSeed: coveringSeed,
-                    skipToRow: screeningReplayRow,
-                    report: &report,
-                    ledger: &ledger
-                )
-                switch outcome {
-                    case let .counterexample(value):
-                        let screeningEnd = monotonicNanoseconds()
-                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.screeningMilliseconds
-                        return (value, report.replaySeed)
-                    case .exhaustivePass, .proceed:
-                        let screeningEnd = monotonicNanoseconds()
-                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.screeningMilliseconds
-                        return (nil, nil)
-                }
-            } else if screeningBudget == 0 {
-                ExhaustLog.notice(category: .propertyTest, event: "screening_skipped", "Screening phase skipped")
-            } else {
-                let outcome: ScreeningOutcome<Output> = runScreeningPhase(
-                    context: context,
-                    screeningBudget: screeningBudget,
-                    coveringSeed: coveringSeed,
-                    report: &report,
-                    ledger: &ledger
-                )
-                switch outcome {
-                    case let .counterexample(value):
-                        let screeningEnd = monotonicNanoseconds()
-                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.screeningMilliseconds
-                        return (value, report.replaySeed)
-                    case .exhaustivePass:
-                        let screeningEnd = monotonicNanoseconds()
-                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.screeningMilliseconds
+            let run = PropertyTestRunner.run(
+                context: context,
+                screeningBudget: screeningBudget,
+                screeningReplayRow: screeningReplayRow,
+                replayScreeningBudget: UInt64(budget.screeningBudget),
+                coveringSeed: coveringSeed,
+                seed: seed,
+                replayIteration: replayIteration,
+                ledger: ledger
+            )
+            ledger = run.ledger
+            report.apply(run)
+            reportDiagnostics(
+                run.diagnostics,
+                samplingBudget: samplingBudget,
+                suppressIssueReporting: suppress.issueReporting,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                report: &report
+            )
+            guard let failure = run.failure else {
+                switch run.ending {
+                    case .screeningExhaustive:
                         reportSkipsAndPointlessRun(
                             totalPropertyCalls: ledger.totalInvocations,
                             ledger: ledger,
@@ -502,69 +484,35 @@ public extension __ExhaustRuntime {
                             column: column,
                             report: &report
                         )
-                        return (nil, nil)
-                    case .proceed:
+                    case .sampling(passedWithinDeadline: true) where replayIteration == nil:
+                        reportSkipsAndPointlessRun(
+                            totalPropertyCalls: ledger.totalInvocations,
+                            ledger: ledger,
+                            suppressIssueReporting: suppress.issueReporting,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            report: &report
+                        )
+                    case .screeningReplay, .screeningFailure, .sampling:
                         break
                 }
+                return (nil, nil)
             }
-            let screeningPhaseEndTime = monotonicNanoseconds()
-
-            let samplingResult = runSamplingPhase(
-                context: context,
-                seed: seed,
-                replayIteration: replayIteration,
-                report: &report,
-                ledger: &ledger
+            reportFailure(
+                failure,
+                ledger: ledger,
+                includeDiff: includeDiff,
+                logFormat: logFormat,
+                suppressIssueReporting: suppress.issueReporting,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                report: &report
             )
-
-            let endTime = monotonicNanoseconds()
-            report.screeningMilliseconds = Double(screeningPhaseEndTime - phaseTimingStart) / 1_000_000
-            report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
-
-            if samplingResult == nil, context.hasExceededDeadline == false {
-                report.generationMilliseconds = Double(endTime - screeningPhaseEndTime) / 1_000_000
-                let totalPropertyCalls = report.propertyInvocations
-                var passMetadata = [
-                    "iterations": "\(samplingBudget)",
-                    "property_invocations": "\(totalPropertyCalls)",
-                ]
-                if report.screeningRows > 0 {
-                    passMetadata["screening_rows"] = "\(report.screeningRows)"
-                    passMetadata["screening_rejections"] = "\(report.screeningRejectedRows)"
-                    passMetadata["screening_invocations"] = "\(report.screeningInvocations)"
-                    passMetadata["random_invocations"] = "\(report.randomSamplingInvocations)"
-                }
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "property_passed",
-                    metadata: passMetadata
-                )
-                if replayIteration == nil {
-                    reportSkipsAndPointlessRun(
-                        totalPropertyCalls: ledger.totalInvocations,
-                        ledger: ledger,
-                        suppressIssueReporting: suppress.issueReporting,
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column,
-                        report: &report
-                    )
-                }
-            }
-
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "phase_timing",
-                metadata: [
-                    "screening_ms": String(format: "%.1f", report.screeningMilliseconds),
-                    "generation_ms": String(format: "%.1f", report.generationMilliseconds),
-                    "reduction_ms": String(format: "%.1f", report.reductionMilliseconds),
-                    "total_ms": String(format: "%.1f", report.totalMilliseconds),
-                ]
-            )
-
-            return (samplingResult, report.replaySeed)
+            return (failure.counterexample, report.replaySeed)
         }
     }
 

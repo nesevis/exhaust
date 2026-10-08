@@ -29,7 +29,13 @@ let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
         name: "ExhaustCore",
-        dependencies: ["ExhaustCoverageRuntime"],
+        dependencies: [
+            "ExhaustCoverageRuntime",
+            .target(
+                name: "ExhaustObjCSupport",
+                condition: .when(platforms: [.macOS, .iOS, .macCatalyst, .tvOS, .watchOS, .visionOS])
+            ),
+        ],
         swiftSettings: strictConcurrencySettings + [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
         ],
@@ -116,10 +122,6 @@ let package = Package(
                 "ExhaustCore",
                 "ExhaustGenerators",
                 .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
-                .target(
-                    name: "ExhaustObjCSupport",
-                    condition: .when(platforms: [.macOS, .iOS, .macCatalyst, .tvOS, .watchOS, .visionOS])
-                ),
                 .product(name: "IssueReporting", package: "swift-issue-reporting"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
             ],

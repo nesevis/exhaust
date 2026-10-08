@@ -1,0 +1,539 @@
+//
+//  Materializer.swift
+//  Exhaust
+//
+
+/// Replays a candidate ``ChoiceSequence`` through a generator to produce a fresh ``ChoiceTree`` with current metadata.
+///
+/// Two modes:
+/// - **Exact**: every value comes from the prefix. Out-of-range values reject the candidate.
+/// - **Guided**: three-tier resolution — prefix first, then fallback tree, then PRNG. Values that fit the new domain are carried forward unchanged; values that don't fall back to the next tier.
+///
+/// Always materializes all branch alternatives at pick sites so structural encoders can see inactive candidates. The result omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata.
+package enum Materializer {
+    /// Returns the active generation size for a materialization call, preferring the innermost `.resize` override before the persistent `context.size` baseline.
+    @inline(__always)
+    static func currentSize(_ context: inout Context) -> UInt64 {
+        if let override = context.sizeOverride {
+            return override
+        }
+        return context.size
+    }
+
+    /// Controls how values are resolved at each choice point.
+    public enum Mode {
+        /// Replay all values from prefix. Reject out-of-range inner values, clamp bound values.
+        /// No cursor suspension for binds.
+        case exact
+
+        /// Three-tiered resolution: prefix → fallback → PRNG. Clamp to range. Cursor suspension at bind sites.
+        case guided(seed: UInt64, fallbackTree: ChoiceTree?,
+                    maximizeBoundRegionIndices: Set<Int>? = nil)
+    }
+
+    /// Result of a reduction materialization attempt.
+    ///
+    /// All cases carry an optional ``DecodingReport`` containing resolution tier counts and per-fingerprint filter observations from the materialization pass.
+    public enum Result<Output> {
+        /// Materialization succeeded with a value and fresh tree.
+        case success(value: Output, tree: ChoiceTree, decodingReport: DecodingReport?)
+        /// Exact mode: the candidate is invalid, either out of range or a structural mismatch.
+        case rejected(decodingReport: DecodingReport?)
+        /// Generation or user-supplied operation failure that is not an invalid exact candidate.
+        case failed(decodingReport: DecodingReport?)
+    }
+
+    /// Materialize a generator using the given prefix and mode.
+    ///
+    /// - Parameters:
+    ///   - gen: The generator to materialize.
+    ///   - context: One-shot execution state, including the prefix and resolution policy.
+    /// - Returns: A `Result` containing the output value and fresh tree on success.
+    public static func materialize<Output>(
+        _ gen: Generator<Output>,
+        context: consuming Context
+    ) -> Result<Output> {
+        // Generic public entry point — erases the input generator and casts the result back to ``Output`` at the boundary, delegating to the non-generic ``materializeAny``. Hot-path callers (schedulers, decoders) should hold an already-erased ``AnyGenerator`` and call ``materializeAny`` directly to avoid the per-call erasure cost.
+        let anyResult = materializeAny(
+            gen.erase(),
+            context: consume context
+        )
+        switch anyResult {
+            case let .success(value, tree, report):
+                // swiftlint:disable:next force_cast
+                return .success(value: value as! Output, tree: tree, decodingReport: report)
+            case let .rejected(report):
+                return .rejected(decodingReport: report)
+            case let .failed(report):
+                return .failed(decodingReport: report)
+        }
+    }
+
+    /// Materializes a value from an already-erased generator and a choice-sequence prefix.
+    ///
+    /// Accepts ``AnyGenerator`` to avoid per-output-type metadata lookups inside the recursive engine. Typed callers can use ``materialize(_:context:)``. The context is consumed once; construct a fresh context for each replay.
+    public static func materializeAny(
+        _ gen: AnyGenerator,
+        context: consuming Context
+    ) -> Result<Any> {
+        let resolvedFallbackTree = context.rootFallbackTree
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+
+        do {
+            guard let (value, tree) = try generateRecursive(
+                gen, with: (), context: &context, fallbackTree: resolvedFallbackTree
+            ) else {
+                var report = context.decodingReport
+                report?.filterObservations = context.filterObservations
+                return context.mode == .exact ? .rejected(decodingReport: report) : .failed(decodingReport: report)
+            }
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .success(value: value, tree: tree, decodingReport: report)
+        } catch is RejectionError {
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .rejected(decodingReport: report)
+        } catch {
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .failed(decodingReport: report)
+        }
+    }
+}
+
+// MARK: - Flat Emission
+
+package extension Materializer {
+    /// Result of a flat-emission materialization: the value and the flattened sequence, with no `ChoiceTree`.
+    enum FlatResult {
+        /// Materialization succeeded with a value and the sequence the equivalent tree would flatten to.
+        case success(value: Any, sequence: ChoiceSequence, decodingReport: DecodingReport?)
+        /// Exact mode: out-of-range or structural mismatch; the candidate is invalid.
+        case rejected(decodingReport: DecodingReport?)
+        /// Generation or user-supplied operation failure that is not an invalid exact candidate.
+        case failed(decodingReport: DecodingReport?)
+    }
+
+    /// Materializes a value from an already-erased generator, emitting the flattened `ChoiceSequence` directly during the walk instead of building a `ChoiceTree`.
+    ///
+    /// The returned sequence is entry-for-entry identical to `ChoiceSequence.flatten` of the tree that `materializeAny` would produce for the same inputs, and cursor and PRNG consumption match exactly, so a later tree-building rematerialization with the same inputs reproduces this result. Use this when the caller needs the sequence (deduplication, hashing, corpus identity) but not the tree; rebuild the tree on demand with `materializeAny`.
+    ///
+    /// Non-selected pick branches are never emitted, so the context must have pick materialization disabled. This entry point enables flat emission regardless of the context's tree-emission setting.
+    static func materializeAnyFlat(
+        _ gen: AnyGenerator,
+        context: consuming Context
+    ) -> FlatResult {
+        precondition(context.materializePicks == false, "Flat emission cannot materialize unselected branches")
+        let resolvedFallbackTree = context.rootFallbackTree
+        context.skipTree = true
+        context.flatOutput = ChoiceSequence()
+        context.flatOutput!.reserveCapacity(Swift.max(64, context.cursor.entryCount))
+        context.deadlineNanoseconds = MonotonicClock.nanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+
+        do {
+            guard let (value, _) = try generateRecursive(
+                gen, with: (), context: &context, fallbackTree: resolvedFallbackTree
+            ) else {
+                var report = context.decodingReport
+                report?.filterObservations = context.filterObservations
+                return context.mode == .exact ? .rejected(decodingReport: report) : .failed(decodingReport: report)
+            }
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .success(value: value, sequence: context.flatOutput ?? ChoiceSequence(), decodingReport: report)
+        } catch is RejectionError {
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .rejected(decodingReport: report)
+        } catch {
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .failed(decodingReport: report)
+        }
+    }
+}
+
+// MARK: - Internal Types
+
+extension Materializer {
+    /// Sentinel thrown when exact mode encounters an out-of-range inner value or exhausted prefix.
+    struct RejectionError: Error {}
+
+    /// Internal mode enum — includes `.generate` for non-selected branch materialization.
+    enum InternalMode: Equatable {
+        /// Exact: reject out-of-range inner values, clamp bound values, no cursor suspension.
+        case exact
+        /// Guided: tiered resolution (prefix → fallback → PRNG), cursor suspension at binds.
+        case guided
+        /// Pure PRNG generation — used when no prefix or fallback is available.
+        case generate
+        /// Deterministic minimization — used for non-selected branches at pick sites. Produces the shortlex-simplest content so that pivot candidates start from a minimal baseline.
+        case minimize
+    }
+}
+
+extension Materializer.Mode {
+    var internalMode: Materializer.InternalMode {
+        switch self {
+            case .exact: .exact
+            case .guided: .guided
+        }
+    }
+}
+
+// MARK: - Recursive Engine
+
+extension Materializer {
+    /// Split a fallback tree into callee and continuation portions for non-group operations.
+    @inline(__always)
+    static func decomposeNonGroupFallback(
+        _ tree: ChoiceTree?
+    ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
+        guard let tree else { return (nil, nil) }
+        if case let .group(children, _, isZip: false) = tree, children.count == 2 {
+            // A tagged zip is one callee, and two branch alternatives are one pick. Neither shape is the untagged callee/continuation pair emitted by runContinuation.
+            if case .branch = children[0], case .branch = children[1] {
+                return (tree, nil)
+            }
+            return (children[0], children[1])
+        }
+        return (tree, nil)
+    }
+
+    static func generateRecursive(
+        _ gen: AnyGenerator,
+        with inputValue: Any,
+        context: inout Context,
+        fallbackTree: ChoiceTree? = nil
+    ) throws -> (Any, ChoiceTree)? {
+        // A pick's reseed span includes its branch body and continuation, so suspend the cursor for the whole walk. Leaf reseeding is scoped inside resolveChooseBits and ends before its continuation. Enclosing wrappers must not take a reseed from a site at the same cursor position.
+        if case .impure(.pick, _) = gen, context.enterReseedIfTargeted() {
+            defer { context.cursor.suspended = false }
+            return try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: nil)
+        }
+        // Fuse switch to avoid overhead of copying `operation`
+        switch gen {
+            case let .pure(value):
+                context.emitFlat(.just)
+                return (value, .just)
+
+            case let .impure(.contramap(_, nextGen), continuation):
+                // Transparent: no callee tree node — fallback passes through.
+                return try handleContramap(
+                    nextGen, continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: fallbackTree,
+                    continuationFallback: nil
+                )
+
+            case let .impure(.prune(nextGen), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handlePrune(
+                    nextGen, continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.pick(choices, _), continuation) where choices[0].isBacktrack:
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handleBacktrack(
+                    choices,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.pick(choices, totalWeight), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handlePick(
+                    choices, totalWeight: totalWeight,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.chooseBits(min, max, tag, isRangeExplicit, scaling, typeTagPayload), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handleChooseBits(
+                    min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit,
+                    scaling: scaling, typeTagPayload: typeTagPayload,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.sequence(lengthGen, elementGen, elementBatch), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handleSequence(
+                    lengthGen: lengthGen, elementGen: elementGen, elementBatch: elementBatch,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.zip(generators, _), continuation):
+                let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
+                // The prefix labels the zip, so this returns nil anywhere other than a real zip site and no shape heuristic is needed to decide whether to trust it.
+                let prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
+                if let fallbackTree,
+                   case let .group(children, _, isZip: false) = fallbackTree, children.count == 2,
+                   case let .group(inner, _, true) = children[0], inner.count == generators.count
+                {
+                    // `group[zipCallee, continuation]`: an untagged wrapper whose first child is the tagged zip. Before the tag this reading was indistinguishable from a zip whose own first child happened to be a two-child group.
+                    (calleeFallback, continuationFallback) = (children[0], children[1])
+                } else {
+                    calleeFallback = fallbackTree
+                    continuationFallback = nil
+                }
+                return try handleZip(
+                    generators, continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
+                    prefixChildEnds: prefixChildEnds
+                )
+
+            case let .impure(.just(value), continuation):
+                let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                let calleeStart = context.flatCount
+                context.emitFlat(.just)
+                return try runContinuation(
+                    result: value, calleeChoiceTree: .just, calleeStart: calleeStart,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, continuationFallback: continuationFallback
+                )
+
+            case let .impure(.getSize, continuation):
+                // Prefer the active resize scope. Outside a resize, use context.size
+                // (default 100 = max) so size-scaled generators expose their full
+                // range. The fallback tree's `.getSize` is unreliable because
+                // reflected trees may store a small size that narrows the range and
+                // destroys values through clamping.
+                let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                let size = currentSize(&context)
+                // Flat emission keeps the real .getSize leaf (it emits no entries and costs one box) so the bind handler can still detect getSize-binds and emit group markers for them.
+                let calleeTree: ChoiceTree = context.skipTree && context.emitsFlat == false ? .just : .getSize(size)
+                return try runContinuation(
+                    result: size, calleeChoiceTree: calleeTree, calleeStart: context.flatCount,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, continuationFallback: continuationFallback
+                )
+
+            case let .impure(.resize(newSize, gen), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handleResize(
+                    newSize: newSize, gen: gen,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.filter(gen, fingerprint, filterType, predicate, sourceLocation), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handleFilter(
+                    gen, fingerprint: fingerprint, filterType: filterType,
+                    predicate: predicate, sourceLocation: sourceLocation,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.classify(gen, _, _), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handlePassthrough(
+                    gen, continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.unique(gen, _, _), continuation):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handlePassthrough(
+                    gen, continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
+            case let .impure(.transform(kind, inner), continuation):
+                return try handleTransform(
+                    kind: kind, inner: inner,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, fallbackTree: fallbackTree
+                )
+        }
+    }
+
+    // MARK: - Run Continuation
+
+    @inline(__always)
+    static func runContinuation(
+        result: Any,
+        calleeChoiceTree: ChoiceTree,
+        calleeStart: Int,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: Any,
+        context: inout Context,
+        continuationFallback: ChoiceTree? = nil
+    ) throws -> (Any, ChoiceTree)? {
+        let nextGen = try continuation(result)
+
+        if context.skipTree {
+            if case let .pure(value) = nextGen {
+                // Flat emission preserves the callee tree so bind can distinguish `.getSize` inners; other callees are dummies either way.
+                return (value, context.emitsFlat ? calleeChoiceTree : .just)
+            }
+            // A non-pure continuation means the tree path would wrap [callee, continuation] in a pair group, whose open marker precedes entries that are already emitted. Everything after calleeStart is exactly the callee's span (nothing else has been appended since it finished), so the insert shifts only that span.
+            if context.emitsFlat {
+                context.flatOutput!.insert(.group(true), at: calleeStart)
+            }
+            if let (continuationResult, _) = try generateRecursive(
+                nextGen, with: inputValue, context: &context,
+                fallbackTree: continuationFallback
+            ) {
+                context.emitFlat(.group(false))
+                return (continuationResult, .just)
+            }
+            return nil
+        }
+
+        // A pure continuation makes no choices and contributes no structure, so the result tree is exactly the callee's; recursing into the pure generator only produced a synthetic .just to discard. Past this check the continuation is always impure, so the group wrap is unconditional.
+        if case let .pure(value) = nextGen {
+            return (value, calleeChoiceTree)
+        }
+        if let (continuationResult, innerChoiceTree) = try generateRecursive(
+            nextGen, with: inputValue, context: &context,
+            fallbackTree: continuationFallback
+        ) {
+            return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
+        }
+        return nil
+    }
+}
+
+// MARK: - Context
+
+package extension Materializer {
+    /// Owns one materialization's policy and mutable traversal state. Entry points consume it so cursor and PRNG state cannot accidentally be reused across attempts.
+    struct Context: ~Copyable {
+        /// Retains the resolved root fallback; recursive handlers receive the relevant subtree separately.
+        var rootFallbackTree: ChoiceTree?
+        var cursor: Cursor
+        var prng: Xoshiro256
+        var mode: InternalMode
+        var size: UInt64
+        var sizeOverride: UInt64?
+        /// A terminal lift's active-history ceiling. Unselected branches and speculative backtrack arms do not inherit it.
+        var sequenceCeiling = SequenceCeiling(maximumCount: nil)
+        /// Tracks nesting depth inside reified bind's bound regions.
+        /// Used in exact mode: `boundDepth > 0` → clamp; `boundDepth == 0` → reject.
+        var boundDepth: Int = 0
+        var maximizeBoundRegionIndices: Set<Int>?
+        /// When `false`, pick sites skip non-selected branch materialization.
+        /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
+        var materializePicks: Bool = false
+        /// Keeps depth policy consistent between analyzed paths and branches first reached by a screening row.
+        var shouldUseMaximumDepthForScreening: Bool = false
+        /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materializes with the real tree only after the property fails.
+        var skipTree: Bool = false
+        /// Flat-emission buffer. When non-nil, the walk appends each node's flattened entries here in exactly `ChoiceSequence.flatten` order, so the caller gets the sequence without building a tree. Requires `skipTree` (handlers must not also build real nodes) and `materializePicks == false` (flatten only emits the selected branch). Handlers still return trees, but they are dummies, except `.getSize` leaves, which survive so the bind handler can choose group markers over bind markers.
+        var flatOutput: ChoiceSequence?
+        /// Suppresses flat emission for sub-walks whose trees the tree path discards: a sequence's generate-mode length walk and the metamorphic inner walk (which bulk-appends its flattened real tree instead).
+        var flatEmissionSuspended: Bool = false
+        /// Accumulates per-coordinate resolution tier data for guided mode.
+        /// Accumulates per-coordinate resolution tier data for guided mode.
+        /// `nil` for exact mode and pure-generate mode.
+        var decodingReport: DecodingReport?
+        /// Per-fingerprint filter predicate observations accumulated during this materialization.
+        var filterObservations: [UInt64: FilterObservation] = [:]
+        /// Absolute instant after which materialization gives up, or zero for an unbounded walk.
+        ///
+        /// The generation-side deadline samples on element index, which retry loops never advance: a filter over a scalar can spin ``__ExhaustRuntime/maxFilterRuns`` times without passing a single checkpoint, and nested filters multiply that. Retry counts do not compose, so the bound that does has to be a clock.
+        var deadlineNanoseconds: UInt64 = 0
+        /// Disjoint spans of the prefix, ascending, that a value reseed asked to draw fresh. Consumed in order at pick dispatch or leaf value resolution.
+        var reseedRanges: [ClosedRange<Int>] = []
+        var nextReseedIndex = 0
+        /// Avoids loading the usually empty range array at every pick and leaf. This flag must stay equivalent to `nextReseedIndex < reseedRanges.count` after initialization and each successful entry.
+        var hasPendingReseed = false
+        /// Called for each committed pick whose branch an exact replay reads from the prefix. Backtrack picks and unselected branches are not reported.
+        var observePrefixPick: ((PrefixPickObservation) -> Void)?
+
+        /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
+        @inline(__always)
+        mutating func enterReseedIfTargeted() -> Bool {
+            guard hasPendingReseed,
+                  cursor.suspended == false,
+                  cursor.isAtStart(of: reseedRanges[nextReseedIndex])
+            else {
+                return false
+            }
+            cursor.jump(past: reseedRanges[nextReseedIndex])
+            nextReseedIndex += 1
+            hasPendingReseed = nextReseedIndex < reseedRanges.count
+            cursor.suspended = true
+            return true
+        }
+
+        /// Whether flat emission is active right now (a buffer exists and no discarded-tree sub-walk has suspended it).
+        @inline(__always)
+        var emitsFlat: Bool {
+            flatOutput != nil && flatEmissionSuspended == false
+        }
+
+        /// The current flat-buffer length, which is the index the next emitted entry will occupy. Handlers snapshot this before walking their callee so `runContinuation` can retro-insert the pair-group open marker.
+        @inline(__always)
+        var flatCount: Int {
+            flatOutput?.count ?? 0
+        }
+
+        /// Appends one entry to the flat buffer when emission is active.
+        @inline(__always)
+        mutating func emitFlat(_ entry: ChoiceSequenceValue) {
+            if emitsFlat {
+                flatOutput!.append(entry)
+            }
+        }
+
+        // MARK: - Backtrack audition rollback
+
+        func auditionSnapshot() -> AuditionSnapshot {
+            AuditionSnapshot(
+                cursor: cursor.checkpoint,
+                flatCount: flatCount,
+                filterObservations: filterObservations,
+                decodingReport: decodingReport
+            )
+        }
+
+        mutating func restore(_ snapshot: AuditionSnapshot) {
+            cursor.rewind(to: snapshot.cursor)
+            if let emitted = flatOutput?.count, emitted > snapshot.flatCount {
+                flatOutput!.removeLast(emitted - snapshot.flatCount)
+            }
+            filterObservations = snapshot.filterObservations
+            decodingReport = snapshot.decodingReport
+        }
+    }
+}
+
+// MARK: - Audition Snapshot
+
+extension Materializer {
+    /// The context state a failed backtrack arm must not leave behind: what it read from the prefix, what it emitted to the flat buffer, and what it observed. The PRNG is excluded so the next draw is independent of the failed attempt.
+    struct AuditionSnapshot {
+        let cursor: CursorCheckpoint
+        let flatCount: Int
+        let filterObservations: [UInt64: FilterObservation]
+        let decodingReport: DecodingReport?
+    }
+}
+
+// MARK: - Prefix Pick Observation
+
+extension Materializer {
+    /// A committed pick whose branch an exact replay read from the prefix, reported through ``Context/observePrefixPick``.
+    struct PrefixPickObservation {
+        /// Sequence index of the consumed branch entry.
+        let branchIndex: Int
+        let choices: ContiguousArray<ReflectiveOperation.PickTuple>
+        let selectedIndex: Int
+    }
+}

@@ -63,16 +63,16 @@ struct DerivedContainerScreeningCoverageTests {
         for (name, source) in variants {
             let generator = source.resize(100)
             let before = try containerSamplingValues(generator)
-            let plan = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+            let plan = try #require(ScreeningPhase.plan(generator.gen, screeningBudget: 200))
             #expect(plan.domainSizes == [21], "\(name)")
             for seed in [UInt64(1), 42, 1337] {
                 var expected: [[ContainerScreeningElement]] = []
-                let reference = ScreeningRunner.run(handwritten.resize(100).gen, screeningBudget: 200, coveringSeed: seed) {
+                let reference = ScreeningPhase.run(handwritten.resize(100).gen, screeningBudget: 200, coveringSeed: seed) {
                     expected.append($0)
                     return true
                 }
                 var actual: [[ContainerScreeningElement]] = []
-                let result = ScreeningRunner.run(
+                let result = ScreeningPhase.run(
                     generator.gen,
                     screeningBudget: 200,
                     coveringSeed: seed,
@@ -104,7 +104,7 @@ struct DerivedContainerScreeningCoverageTests {
                 #expect(result.summary.rejectedRows == 0)
                 #expect(actual == expected, "\(name), seed \(seed)")
                 var valueOnly: [[ContainerScreeningElement]] = []
-                let withoutTrees = ScreeningRunner.run(generator.gen, screeningBudget: 200, coveringSeed: seed) {
+                let withoutTrees = ScreeningPhase.run(generator.gen, screeningBudget: 200, coveringSeed: seed) {
                     valueOnly.append($0)
                     return true
                 }
@@ -120,7 +120,7 @@ struct DerivedContainerScreeningCoverageTests {
         let dependent = ReflectiveGenerator<Bool>.bool().bound(forward: { .just($0) }, backward: { $0 })
         let element = #gen(dependent, .bool()) { ContainerScreeningElement(first: $0, second: $1) }
         let generator = ReflectiveGenerator<[ContainerScreeningElement]>.array(element, length: 0 ... 2)
-        let plan = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+        let plan = try #require(ScreeningPhase.plan(generator.gen, screeningBudget: 200))
         #expect(plan.domainSizes == [7])
         let values = try containerScreeningValues(generator, label: "opaque-dependent-element")
         #expect(Set(values.filter { $0.count == 1 }.map { $0[0].second }) == Set([false, true]))
@@ -145,7 +145,7 @@ struct DerivedContainerScreeningCoverageTests {
         #expect(values.allSatisfy { $0.count <= 2 && $0.allSatisfy { $0.count <= 2 } })
         let outerLengths = Set(values.map { $0.count }).sorted()
         #expect(outerLengths == [0, 1, 2])
-        let plan = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+        let plan = try #require(ScreeningPhase.plan(generator.gen, screeningBudget: 200))
         #expect(plan.domainSizes == [3])
     }
 
@@ -184,10 +184,10 @@ private func containerScreeningValues<Value>(
     expectedRows: Int? = nil
 ) throws -> [Value] {
     let generator = source.resize(100)
-    _ = try #require(ScreeningRunner.plan(generator.gen, screeningBudget: 200))
+    _ = try #require(ScreeningPhase.plan(generator.gen, screeningBudget: 200))
     var values: [Value] = []
     for seed in [UInt64(1), 42, 1337] {
-        let result = ScreeningRunner.run(generator.gen, screeningBudget: 200, coveringSeed: seed) { value in
+        let result = ScreeningPhase.run(generator.gen, screeningBudget: 200, coveringSeed: seed) { value in
             values.append(value)
             return true
         }

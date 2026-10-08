@@ -31,14 +31,14 @@ extension ReplayCorpusTests {
     @Test("Materialized screening rows replay exactly and agree with value-only emission")
     func materializedScreeningRowsReplay() throws {
         for fixture in MaterializerReplayFixture.all {
-            let plan = try #require(ScreeningRunner.plan(fixture.generator.gen, screeningBudget: 8))
+            let plan = try #require(ScreeningPhase.plan(fixture.generator.gen, screeningBudget: 8))
             let erased = fixture.generator.gen.erase()
             for seed in ReplayCorpusEntry.seeds {
-                var rows = ScreeningRunner.Rows(plan: plan, coveringSeed: seed, skipToRow: nil)
+                var rows = ScreeningPhase.Rows(plan: plan, coveringSeed: seed, skipToRow: nil)
                 var materializedRows = 0
                 while let (index, row) = rows.next() {
                     materializedRows += 1
-                    let materialized: (value: (Int, Bool), tree: ChoiceTree)? = ScreeningRunner.materializeRow(
+                    let materialized: (value: (Int, Bool), tree: ChoiceTree)? = ScreeningPhase.materializeRow(
                         erased,
                         row: row,
                         rowIndex: index,
@@ -46,7 +46,7 @@ extension ReplayCorpusTests {
                         needsTree: true
                     )
                     let (expected, tree) = try #require(materialized)
-                    let valueOnly: (value: (Int, Bool), tree: ChoiceTree)? = ScreeningRunner.materializeRow(
+                    let valueOnly: (value: (Int, Bool), tree: ChoiceTree)? = ScreeningPhase.materializeRow(
                         erased,
                         row: row,
                         rowIndex: index,

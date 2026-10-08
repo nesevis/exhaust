@@ -40,7 +40,7 @@ struct DispatchLogTests {
             property: property
         )
         machine.collectDiagnostics = true
-        while try machine.next() != nil {}
+        while machine.next() != nil {}
 
         let log = machine.stats.dispatchLog
         #expect(log.isEmpty == false)
@@ -94,7 +94,7 @@ struct DispatchLogTests {
         }
         let (value, tree) = try #require(found)
 
-        let result = try Interpreters.choiceGraphReduceCollectingStats(
+        let result = Interpreters.choiceGraphReduceCollectingStats(
             gen: gen,
             tree: tree,
             output: value,

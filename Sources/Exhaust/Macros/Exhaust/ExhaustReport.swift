@@ -83,10 +83,30 @@ public struct ExhaustReport: Sendable {
         propertyInvocations += 1
     }
 
-    /// Applies screening row counts from the screening runner's summary.
-    package mutating func applyScreeningRows(_ summary: ScreeningRunner.Summary) {
+    /// Applies screening row counts from the screening phase's summary.
+    package mutating func applyScreeningRows(_ summary: ScreeningPhase.Summary) {
         screeningRows = summary.rowAttempts
         screeningRejectedRows = summary.rejectedRows
+    }
+
+    /// Applies what a ``PropertyTestRunner`` run recorded: screening rows, the sampling seed, reduction statistics, and phase timings.
+    package mutating func apply(_ run: PropertyTestRunner.Run<some Any>) {
+        if let screeningSummary = run.screeningSummary {
+            applyScreeningRows(screeningSummary)
+        }
+        if let seed = run.seed {
+            self.seed = seed
+        }
+        if let reductionStats = run.reductionStats {
+            applyReductionStats(reductionStats)
+        }
+        if run.reductionWasCapped {
+            reductionWasCapped = true
+        }
+        screeningMilliseconds = run.screeningMilliseconds
+        generationMilliseconds = run.generationMilliseconds
+        reductionMilliseconds = run.reductionMilliseconds
+        totalMilliseconds = run.totalMilliseconds
     }
 
     /// Projects invocation counts from a ``RunLedger``.

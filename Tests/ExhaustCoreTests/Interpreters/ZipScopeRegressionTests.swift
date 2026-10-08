@@ -68,7 +68,7 @@ struct ZipScopeRegressionTests {
             guard property(value) == false else {
                 continue
             }
-            guard case let .reduced(sequence, reducedTree, shrunk) = try Interpreters.choiceGraphReduce(
+            guard case let .reduced(sequence, reducedTree, shrunk) = Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else {
                 continue

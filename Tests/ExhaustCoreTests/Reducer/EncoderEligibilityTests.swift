@@ -82,7 +82,7 @@ struct EncoderEligibilityTests {
         machine.phase = .endCycle
         let rebuilds = machine.stats.graphStats.fullGraphRebuilds
         #expect(machine.hasUnprobedImprovingPivot == false)
-        _ = try machine.next()
+        _ = machine.next()
         guard case .checkTermination = machine.phase else {
             Issue.record("Disabled probe actions must not enter the post-cycle queue")
             return
@@ -104,7 +104,7 @@ struct EncoderEligibilityTests {
         }
         let baseline = machine.sequence
         #expect(machine.hasUnprobedImprovingPivot == enabled)
-        let accepted = try machine.runImprovingPivotPass()
+        let accepted = machine.runImprovingPivotPass()
         #expect(accepted == enabled)
         #expect(machine.sequence.shortLexPrecedes(baseline) == enabled)
         #expect(machine.stats.relaxImprovingAcceptances == (enabled ? 1 : 0))
@@ -216,7 +216,7 @@ struct EncoderEligibilityTests {
         let nextCandidate = candidates.next()
         let perturbation = try #require(nextCandidate)
         #expect(perturbation.shortLexPrecedes(baseline) == false, "The fixture must start with a worsening donor substitution")
-        let committed = try machine.runExcursion()
+        let committed = machine.runExcursion()
         #expect(committed == allowValueSearch)
         #expect(machine.sequence.shortLexPrecedes(baseline) == allowValueSearch)
         #expect(Set(machine.stats.encoderCounts.keys).isSubset(of: enabled))
@@ -289,7 +289,7 @@ private func reflectedMachine<Output>(
 /// Bounds the fixture's state-machine work without relying on a wall-clock timeout.
 private func finish(_ machine: inout ReductionMachine) throws {
     for _ in 0 ..< 10000 {
-        guard try machine.next() != nil else {
+        guard machine.next() != nil else {
             return
         }
     }
