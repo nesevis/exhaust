@@ -63,7 +63,11 @@ final class StateMachineRunState<Spec: StateMachineSpecBase> {
     /// The generator used to prune and reduce the discovered candidate. The machine replaces this with the candidate's own generator before reduction so the choice sequence stays consistent with the candidate's tree.
     var sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     let runStopwatch = Stopwatch()
-    var report = ExhaustReport()
+    var screeningMilliseconds: Double = 0
+    var reductionMilliseconds: Double = 0
+    /// The merged statistics of every reduction the run performed, or nil when none ran.
+    var reductionStats: ReductionStats?
+    var reductionWasCapped = false
     var ledger = RunLedger()
     var deferredIssues: [String] = []
     var failureContext = __ExhaustRuntime.FailureContext()

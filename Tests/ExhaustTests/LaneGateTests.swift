@@ -1,3 +1,4 @@
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust

@@ -27,6 +27,26 @@ public struct StateMachineResult<Spec: StateMachineSpecBase> {
 
     /// How the failing example was discovered.
     public let discoveryMethod: StateMachineDiscoveryMethod
+
+    package init(
+        commands: [Spec.Command],
+        originalCommands: [Spec.Command]?,
+        setup: Spec.SetupStep?,
+        trace: [TraceStep],
+        systemUnderTest: Spec.SystemUnderTest?,
+        seed: UInt64?,
+        replaySeed: String?,
+        discoveryMethod: StateMachineDiscoveryMethod
+    ) {
+        self.commands = commands
+        self.originalCommands = originalCommands
+        self.setup = setup
+        self.trace = trace
+        self.systemUnderTest = systemUnderTest
+        self.seed = seed
+        self.replaySeed = replaySeed
+        self.discoveryMethod = discoveryMethod
+    }
 }
 
 /// Describes how a failing spec example was found.
@@ -60,6 +80,12 @@ public struct TraceStep: CustomStringConvertible, Sendable {
 
     /// What happened when this step executed.
     public let outcome: Outcome
+
+    package init(index: Int, command: String, outcome: Outcome) {
+        self.index = index
+        self.command = command
+        self.outcome = outcome
+    }
 
     /// The outcome of executing a single command step.
     public enum Outcome: Equatable, Sendable {

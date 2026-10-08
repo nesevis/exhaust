@@ -672,7 +672,7 @@ public extension __ExhaustRuntime {
         { value in
             var verdict = FuzzVerdict.pass
             var caught: NSException?
-            let completed = runCatchingObjCException({
+            let completed = ObjCExceptionGuard.run({
                 do {
                     verdict = try property(value) ? .pass : .fail(.returnedFalse)
                 } catch {
@@ -693,7 +693,7 @@ public extension __ExhaustRuntime {
         { value in
             var verdict = FuzzVerdict.pass
             var caught: NSException?
-            let completed = runCatchingObjCException({
+            let completed = ObjCExceptionGuard.run({
                 do {
                     try detection(value)
                 } catch {

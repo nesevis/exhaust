@@ -251,7 +251,7 @@ extension __ExhaustRuntime {
 @discardableResult
 private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
     var exception: NSException?
-    return runCatchingObjCException(body, &exception)
+    return ObjCExceptionGuard.run(body, &exception)
 }
 
 // MARK: - Checker
@@ -308,7 +308,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
                 rendezvous.arriveAndWait()
                 var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
-                let succeeded = runCatchingObjCException({
+                let succeeded = ObjCExceptionGuard.run({
                     for laneIndex in laneIndices {
                         if commandFailed.value {
                             break
@@ -396,7 +396,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         }
         var matched = false
         var exception: NSException?
-        let completed = runCatchingObjCException({
+        let completed = ObjCExceptionGuard.run({
             for command in prefix {
                 do {
                     try witnessSpec.run(command)

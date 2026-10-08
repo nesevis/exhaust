@@ -402,7 +402,7 @@ private func makeConfig(
     var config = ResolvedConcurrentConfig()
     config.budget = .custom(screening: 0, sampling: 10)
     config.suppress.issueReporting = true
-    config.onReportClosure = onReport
+    config.setOnReport(onReport)
     return config
 }
 

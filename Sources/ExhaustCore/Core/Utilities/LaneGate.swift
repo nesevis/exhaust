@@ -1,4 +1,3 @@
-import ExhaustCore
 import Foundation
 
 /// A process-global budget over the GCD lanes Exhaust's concurrent runners occupy at once.
@@ -10,21 +9,21 @@ import Foundation
 /// - Important: The gate is **async-only**: it exposes a suspending ``acquire(_:)`` and never blocks a caller's thread. A blocking acquire was tried and removed — a synchronous `@Test` runs on the cooperative pool, so blocking it starved the pool that admitted runs need to service their `blockingAwait` continuations, deadlocking the suite. Sync `.threads` specs reach the gate through the same non-blocking `acquire`: their `#execute` dispatch is `async` (`__runStateMachineDispatch` is `async`), so the synchronous machine runs on a GCD worker via `dispatchToGCD` and acquires without ever blocking a cooperative thread.
 ///
 /// - Note: This is a `final class` guarded by an `NSLock` rather than an `actor` because ``release(_:)`` is called from synchronous contexts (inside the `dispatchToGCD` GCD closure, a `() -> Result`), which an actor's async-only surface cannot serve. Marked `@unchecked Sendable` because the mutable state, `free` and `waiters`, is read and written from many threads (async acquirers, and releasers on GCD workers); every access is serialized under `lock`, so the state is never touched concurrently.
-final class LaneGate: @unchecked Sendable {
+package final class LaneGate: @unchecked Sendable {
     /// The default lane budget. Bounds concurrent preemptive runs to ~`limit`/(N+1) so their lanes are not starved on a constrained runner, while staying under the 64-thread per-queue GCD wall. Overridable via ``environmentOverrideKey``.
-    static let defaultLimit = 32
+    package static let defaultLimit = 32
 
     /// The smallest budget that can satisfy every reservation: the largest single request is a `.threads` run at the highest ``ConcurrencyLevel`` plus its coordinator lane. Derived rather than hardcoded so a new `ConcurrencyLevel` case raises the floor automatically.
-    static let reservationFloor = LaneReservation.threads(ConcurrencyLevel.allCases.map(\.rawValue).max() ?? 1)
+    package static let reservationFloor = LaneReservation.threads(ConcurrencyLevel.allCases.map(\.rawValue).max() ?? 1)
 
     /// Environment override for ``limit``, read once at init. Mirrors NIO's `NIO_SINGLETON_BLOCKING_POOL_THREAD_COUNT` convention.
-    static let environmentOverrideKey = "EXHAUST_LANE_LIMIT"
+    package static let environmentOverrideKey = "EXHAUST_LANE_LIMIT"
 
     /// The process-global gate every gated concurrent runner acquires from.
-    static let shared = LaneGate()
+    package static let shared = LaneGate()
 
     /// The maximum number of lanes handed out at once. Immutable after init.
-    let limit: Int
+    package let limit: Int
 
     private let lock = NSLock()
 
@@ -41,7 +40,7 @@ final class LaneGate: @unchecked Sendable {
     }
 
     /// Creates a gate with an explicit budget, clamped up to ``reservationFloor``. Tests construct their own small-budget instances through this rather than touching ``shared``.
-    init(limit: Int) {
+    package init(limit: Int) {
         let clamped = max(limit, Self.reservationFloor)
         self.limit = clamped
         free = clamped
@@ -58,7 +57,7 @@ final class LaneGate: @unchecked Sendable {
     /// A request larger than ``limit`` is clamped to it rather than parked. Without the clamp such a request can never be satisfied, because `free` never exceeds `limit`. And since ``release(_:)`` admits in FIFO order and stops at the first waiter that does not fit, one oversized request would hold the queue against every later run for the life of the process. Clamping degrades that run to "takes the whole budget" instead. ``release(_:)`` applies the same clamp so the accounting balances.
     ///
     /// Cancellation is not handled: a unit test is never canceled, and the async entries reach the gate through a non-cancelable `dispatchToGCD` hop, so a parked continuation is always eventually resumed on admission.
-    func acquire(_ count: Int) async {
+    package func acquire(_ count: Int) async {
         let wanted = admissible(count)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             lock.lock()
@@ -77,7 +76,7 @@ final class LaneGate: @unchecked Sendable {
     /// Returns `count` lanes to the budget and admits as many waiting runs as now fit, in FIFO order.
     ///
     /// Admission stops at the first waiter that does not fit, so a large request holds the line against later small ones. Continuations are resumed outside the lock, since a resume can run arbitrary code.
-    func release(_ count: Int) {
+    package func release(_ count: Int) {
         var resumptions: [CheckedContinuation<Void, Never>] = []
         lock.lock()
         free += admissible(count)
@@ -97,12 +96,12 @@ final class LaneGate: @unchecked Sendable {
 
 extension LaneGate {
     /// Lanes currently available. For tests asserting the atomic-`N` accounting.
-    var freeCount: Int {
+    package var freeCount: Int {
         lock.withLocking { free }
     }
 
     /// Number of runs waiting for admission. For tests that must observe a waiter has parked before proceeding.
-    var waiterCount: Int {
+    package var waiterCount: Int {
         lock.withLocking { waiters.count }
     }
 }
@@ -112,20 +111,20 @@ extension LaneGate {
 /// The lane count each gated concurrent entry reserves from the ``LaneGate``.
 ///
 /// Centralized so the `+1` on the `.threads` path lives in one commented place rather than as a magic number at each dispatch site.
-enum LaneReservation {
+package enum LaneReservation {
     /// The `.threads` reservation (sync and async): one lane per concurrency level, plus one for the coordinator GCD worker parked on `group.wait` while the level lanes run.
-    static func threads(_ level: Int) -> Int {
+    package static func threads(_ level: Int) -> Int {
         level + 1
     }
 
     /// The reservation for a run with no lane fan-out: cooperative `.tasks`, the sequential-async spec, and async `#exhaust`/`#explore`, which occupy a single coordinator worker.
-    static let single = 1
+    package static let single = 1
 
     /// The reservation for a coverage-guided fuzz run: one lane for the exploration loop, which runs reductions inline.
-    static let fuzz = 1
+    package static let fuzz = 1
 
     /// The reservation for an async property run: the coordinator worker, widened to the `.parallelize` lane count when the sampling phase fans out via `concurrentPerform` (the coordinator doubles as one of the lanes, so no `+1`).
-    static func property(parallelLanes: Int) -> Int {
+    package static func property(parallelLanes: Int) -> Int {
         max(single, parallelLanes)
     }
 }

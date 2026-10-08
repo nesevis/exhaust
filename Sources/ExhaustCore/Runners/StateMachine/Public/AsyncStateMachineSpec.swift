@@ -1,7 +1,6 @@
 // Defines the protocol that `@StateMachine`-annotated types conform to.
 //
 // The macro synthesizes conformance. Users never implement this directly.
-import ExhaustCore
 import Foundation
 
 /// Drives spec tests with any asynchronous member, under every execution mode.
@@ -54,7 +53,7 @@ public extension AsyncStateMachineSpec {
     /// Applies a setup step to this instance, reporting the error it threw rather than propagating it.
     ///
     /// The async twin of ``StateMachineSpec/applySetup(_:)``, and the one place runner code applies setup. A nil step is a no-op, so callers never branch on whether the spec has a `@Setup` method.
-    internal func applySetup(_ step: SetupStep?) async -> (any Error)? {
+    package func applySetup(_ step: SetupStep?) async -> (any Error)? {
         guard let step else {
             return nil
         }
@@ -69,7 +68,7 @@ public extension AsyncStateMachineSpec {
     /// Constructs a fresh spec instance and applies its setup step, if it has one.
     ///
     /// The async twin of the ``StateMachineSpec`` construction funnel: once setup exists, no runner may call `Self()` directly. The instance is always returned, alongside the setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
-    internal static func makeSpec(setupStep: SetupStep?) async -> (spec: Self, setupError: (any Error)?) {
+    package static func makeSpec(setupStep: SetupStep?) async -> (spec: Self, setupError: (any Error)?) {
         let spec = Self()
         return await (spec, spec.applySetup(setupStep))
     }
@@ -81,7 +80,7 @@ public extension AsyncStateMachineSpec {
     /// - Parameters:
     ///   - specInit: A factory that creates a fresh spec instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
     ///   - idleTimeoutMilliseconds: Idle bound for the blocking drain loop, or `nil` to wait unbounded.
-    internal static func skipIdentifier(
+    package static func skipIdentifier(
         specInit: @escaping () -> Self,
         idleTimeoutMilliseconds: Int? = nil
     ) -> @Sendable (SetupStep?, [Command]) -> Set<Int> {

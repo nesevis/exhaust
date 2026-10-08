@@ -125,7 +125,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         switch source.discoveryMethod {
             case .screening:
                 phase = .screening
-                context.state.report.screeningMilliseconds += elapsed
+                context.state.screeningMilliseconds += elapsed
             case .randomSampling, .smokeTest, .replay:
                 phase = .sampling
         }
@@ -333,7 +333,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         // The shared invocation counter hides per-probe verdicts, so only the reduction phase total is meaningful here (see ``RunLedger``).
         context.state.ledger.record(.reduction, invocations: reductionInvocations)
         let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
-        context.state.report.reductionMilliseconds = reductionElapsed
+        context.state.reductionMilliseconds = reductionElapsed
         context.state.failureContext.reductionInvocations = reductionInvocations
         let collectedStats = [setupReductionStats, reduction?.stats].compactMap(\.self)
         if collectedStats.isEmpty == false {
@@ -341,10 +341,10 @@ struct SpecMachine<Backend: StateMachineBackend> {
             for stats in collectedStats {
                 mergedStats.merge(stats)
             }
-            context.state.report.applyReductionStats(mergedStats)
+            context.state.reductionStats = mergedStats
         }
         if context.config.hasExceededDeadline {
-            context.state.report.reductionWasCapped = true
+            context.state.reductionWasCapped = true
         }
 
         phase = .assemble
@@ -385,12 +385,17 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     @discardableResult
     private mutating func stepFinalize() -> Transition? {
-        context.state.report.applyLedger(context.state.ledger)
-        context.state.report.hasExceededDeadline = context.config.hasExceededDeadline
-        if let onReport = context.config.onReportClosure {
-            context.state.report.seed = reportedSeed
-            context.state.report.totalMilliseconds = context.state.runStopwatch.elapsedMilliseconds
-            onReport(context.state.report)
+        if let onRunRecord = context.config.onRunRecord {
+            onRunRecord(StateMachineRunRecord(
+                ledger: context.state.ledger,
+                hasExceededDeadline: context.config.hasExceededDeadline,
+                seed: reportedSeed,
+                totalMilliseconds: context.state.runStopwatch.elapsedMilliseconds,
+                screeningMilliseconds: context.state.screeningMilliseconds,
+                reductionMilliseconds: context.state.reductionMilliseconds,
+                reductionStats: context.state.reductionStats,
+                reductionWasCapped: context.state.reductionWasCapped
+            ))
         }
         phase = .done
         return nil
@@ -529,13 +534,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         }
         // Filter losses are legitimate domain narrowing: a warning, never an error. A found failure supersedes the coverage concern, so a red run reports one issue, not two: a reproduced regression failure returns above without the warning, and a sampling failure gates it here.
         if result == nil, let losses = filterLosses.value, config.suppress.issueReporting == false {
-            reportWarning(
-                losses.warningMessage,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+            config.reportWarning?(losses.warningMessage, fileID, filePath, line, column)
         }
         return (result, deferredIssues)
     }

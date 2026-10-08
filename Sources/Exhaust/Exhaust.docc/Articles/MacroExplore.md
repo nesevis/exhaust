@@ -65,7 +65,7 @@ Requires coverage instrumentation on the target under test. Returns a ``FuzzRepo
 | Parameter | Description |
 |---|---|
 | `specType` | The `@StateMachine` spec to run. |
-| `mode` | A ``SearchableExecutionModel``: `.sequential` or `.tasks`. Coverage-guided search cannot use `.threads`. |
+| `mode` | A ``ExhaustCore/SearchableExecutionModel``: `.sequential` or `.tasks`. Coverage-guided search cannot use `.threads`. |
 | `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(5)`). |
 | `settings` | Variadic ``StateMachineFuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`, `.parallelize(lanes:)`. |
 

@@ -2,63 +2,57 @@
 import ExhaustCore
 
 /// Flattened configuration produced by parsing a `[StateMachineSettings]` array for a concurrent spec. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
-struct ResolvedConcurrentConfig {
-    /// The largest `.commandLimit` a run accepts. Covering-array construction cost grows superlinearly with sequence length: an explicit `.commandLimit(20000)` on a passing sequential spec exceeded a 2-minute limit on a 5+5 budget where the raw command executions cost milliseconds. Parse clamps larger values here and records the request in ``ParseResult/clampedCommandLimit`` for the entry point to warn about, mirroring how `.tasks` caps its own estimate at 40.
-    static let maxCommandLimit = 200
-
-    var commandLimit: Int?
-    var concurrencyLevel: Int = 2
-    var budget: ExhaustBudget = .standard
-    /// Absolute monotonic deadline, preserved when the config is copied for regression replays.
-    var deadlineNanoseconds: UInt64?
-
-    var hasExceededDeadline: Bool {
-        deadlineNanoseconds.map { monotonicNanoseconds() >= $0 } ?? false
+extension ResolvedConcurrentConfig {
+    /// Creates a configuration at the ``ExhaustBudget/standard`` budget that reports warnings through the test framework.
+    init() {
+        self.init(
+            screeningBudget: ExhaustBudget.standard.screeningBudget,
+            samplingBudget: ExhaustBudget.standard.samplingBudget
+        )
+        reportWarning = { message, fileID, filePath, line, column in
+            Exhaust.reportWarning(message, fileID: fileID, filePath: filePath, line: line, column: column)
+        }
     }
 
-    var seed: UInt64?
-    var replayIteration: Int?
-    /// The screening row to replay, addressed tier-locally: the sequence length identifying the tier and the 0-based row within its covering array.
-    var screeningReplay: (tierLength: Int, row: Int)?
-    /// Seeds the SCA covering array. A screening replay carries it in the seed string, a sampling replay reuses its PRNG seed so a bare seed pins the whole pipeline, and a fresh run draws one, so successive runs screen different regions of the command space instead of the same rows.
-    var coveringSeed: UInt64 = Xoshiro256().seed
-    static let defaultIdleTimeout = 2000
-    var idleTimeoutMilliseconds: Int = defaultIdleTimeout
-    var suppress = SuppressFlags()
-    var onReportClosure: ((ExhaustReport) -> Void)?
-    var logLevel: LogLevel = .error
-
-    /// Whether the run performs the full SCA screening sweep. Targeted replays (a sampling iteration or a screening row) skip it: they must reproduce one failure, and a fresh sweep could surface an unrelated one first. A bare seed is not a targeted replay — it promises the whole pipeline deterministically under that seed, so it keeps the sweep, pinned through ``coveringSeed``.
-    var shouldRunScreening: Bool {
-        replayIteration == nil
-            && screeningReplay == nil
-            && budget.screeningBudget > 0
+    /// Both phase budgets as an ``ExhaustBudget``. Reading it returns the equivalent `.custom` budget.
+    var budget: ExhaustBudget {
+        get {
+            .custom(screening: screeningBudget, sampling: samplingBudget)
+        }
+        set {
+            screeningBudget = newValue.screeningBudget
+            samplingBudget = newValue.samplingBudget
+        }
     }
 
-    /// Normalized idle timeout: `nil` when the configured value is non-positive or sentinel-large (``Int/max``), meaning "wait unbounded". Used by the preemptive checkers to distinguish a real timeout from an intentionally disabled one.
-    var resolvedIdleTimeoutMilliseconds: Int? {
-        (idleTimeoutMilliseconds > 0 && idleTimeoutMilliseconds < Int.max) ? idleTimeoutMilliseconds : nil
+    /// The suppression flags, read from and written to the three suppression values.
+    var suppress: SuppressFlags {
+        get {
+            var flags = SuppressFlags()
+            flags.issueReporting = suppressIssueReporting
+            flags.logs = suppressLogs
+            flags.attachments = suppressAttachments
+            return flags
+        }
+        set {
+            suppressIssueReporting = newValue.issueReporting
+            suppressLogs = newValue.logs
+            suppressAttachments = newValue.attachments
+        }
     }
 
-    /// Log configuration derived from the resolved settings, shared by all concurrent entry points.
-    var logConfiguration: ExhaustLog.Configuration {
-        suppress.logConfiguration(minimumLevel: logLevel)
+    /// Delivers each finished run's report to `onReport`, built from the run's record.
+    mutating func setOnReport(_ onReport: ((ExhaustReport) -> Void)?) {
+        onRunRecord = onReport.map { onReport in
+            { record in
+                onReport(ExhaustReport(stateMachineRun: record))
+            }
+        }
     }
 
     /// Extracts log configuration from raw settings.
     static func logConfiguration(from settings: [StateMachineSettings]) -> ExhaustLog.Configuration {
         parse(settings).config.logConfiguration
-    }
-
-    /// Pushes the deadline back by `nanoseconds`, so that span does not count against the run's budget.
-    ///
-    /// ``parse(_:)`` stamps the deadline when it reads the settings, which is before the run is admitted at the ``LaneGate``. Time parked there is spent queueing behind other runs rather than probing, so the runners discount it once they hold their lanes. Without the discount a run admitted late reports a deadline it never got to use, having executed nothing.
-    ///
-    /// A deadline already saturated at ``UInt64/max`` stays there, and a run with no deadline is unaffected.
-    mutating func postponeDeadline(by nanoseconds: UInt64) {
-        guard let deadline = deadlineNanoseconds else { return }
-        let (postponed, overflow) = deadline.addingReportingOverflow(nanoseconds)
-        deadlineNanoseconds = overflow ? .max : postponed
     }
 
     mutating func applySuppress(_ option: SuppressOption) {
@@ -79,7 +73,7 @@ struct ResolvedConcurrentConfig {
             column: UInt
         ) {
             guard let requested = clampedCommandLimit else { return }
-            reportWarning(
+            Exhaust.reportWarning(
                 ".commandLimit(\(requested)) exceeds the supported maximum of \(ResolvedConcurrentConfig.maxCommandLimit) and was clamped. Covering-array construction cost grows superlinearly with sequence length, so longer sequences spend their budget building coverage rows instead of executing commands.",
                 fileID: fileID,
                 filePath: filePath,
@@ -94,6 +88,7 @@ struct ResolvedConcurrentConfig {
         var config = ResolvedConcurrentConfig()
         var invalidSeed: ReplaySeed?
         var clampedCommandLimit: Int?
+        var onReport: ((ExhaustReport) -> Void)?
         for setting in settings {
             switch setting {
                 case let .parallelize(level):
@@ -131,7 +126,7 @@ struct ResolvedConcurrentConfig {
                 case let .suppress(option):
                     config.applySuppress(option)
                 case let .onReport(closure):
-                    config.onReportClosure = config.onReportClosure.map { chained in
+                    onReport = onReport.map { chained in
                         { report in
                             chained(report)
                             closure(report)
@@ -146,6 +141,7 @@ struct ResolvedConcurrentConfig {
                     config.logLevel = level
             }
         }
+        config.setOnReport(onReport)
 
         #if canImport(Testing)
             // Adopt a suite-level `.budget` trait when no inline `.budget` was passed, matching the sequential resolver. Without this, all three concurrent runners silently ignore a budget set via a Swift Testing trait.
@@ -159,5 +155,26 @@ struct ResolvedConcurrentConfig {
         config.budget.preconditionValid()
 
         return ParseResult(config: config, invalidReplaySeed: invalidSeed, clampedCommandLimit: clampedCommandLimit)
+    }
+}
+
+// MARK: - Report
+
+extension ExhaustReport {
+    /// Builds the report for a finished state machine run.
+    init(stateMachineRun record: StateMachineRunRecord) {
+        self.init()
+        screeningMilliseconds = record.screeningMilliseconds
+        reductionMilliseconds = record.reductionMilliseconds
+        if let reductionStats = record.reductionStats {
+            applyReductionStats(reductionStats)
+        }
+        if record.reductionWasCapped {
+            reductionWasCapped = true
+        }
+        applyLedger(record.ledger)
+        hasExceededDeadline = record.hasExceededDeadline
+        seed = record.seed
+        totalMilliseconds = record.totalMilliseconds
     }
 }
