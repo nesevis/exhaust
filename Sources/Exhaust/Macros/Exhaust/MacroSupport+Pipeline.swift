@@ -57,11 +57,10 @@ package extension __ExhaustRuntime {
         case proceed
     }
 
-    /// Represents the outcome of the reduction phase: reduced counterexample, unreduced original, or error.
+    /// Represents the outcome of the reduction phase: reduced counterexample or unreduced original.
     enum ReduceOutcome<Output> {
         case reduced(Output)
         case unreduced(Output)
-        case reductionError
     }
 
     // MARK: - Screening Phase
@@ -159,8 +158,6 @@ package extension __ExhaustRuntime {
                         return .counterexample(counterexample)
                     case let .unreduced(counterexample):
                         return .counterexample(counterexample)
-                    case .reductionError:
-                        return .proceed
                 }
 
             case let .exhaustive(summary):
@@ -412,8 +409,6 @@ package extension __ExhaustRuntime {
                             return counterexample
                         case let .unreduced(counterexample):
                             return counterexample
-                        case .reductionError:
-                            return next
                     }
                 }
             }
@@ -668,8 +663,6 @@ package extension __ExhaustRuntime {
                 return counterexample
             case let .unreduced(counterexample):
                 return counterexample
-            case .reductionError:
-                return failure.value
         }
     }
 }
