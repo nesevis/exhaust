@@ -115,14 +115,16 @@ extension __ExhaustRuntime {
 
         // Reduce the first failure found, if any.
         if let failure = firstFailure {
-            let reducedResult = reduceExploreFailure(
+            let reducedResult = ExploreReduction.reduce(
                 gen: gen,
                 property: property,
                 directions: directions,
-                failure: failure
+                value: failure.value,
+                tree: failure.tree,
+                matchingDirections: failure.matchingDirections
             )
 
-            let reducedDirections = classifyExploreValue(reducedResult.counterexample, directions: directions)
+            let reducedDirections = ExploreReduction.classify(reducedResult.counterexample, directions: directions)
             mergedLedger.record(
                 .reduction,
                 invocations: reducedResult.reductionInvocations,
@@ -216,7 +218,7 @@ extension __ExhaustRuntime {
 
             result.directedSamplingSamples += 1
 
-            let matching = classifyExploreValue(value, directions: directions)
+            let matching = ExploreReduction.classify(value, directions: directions)
             result.coOccurrence.recordSample(matchingDirections: matching)
 
             for directionIndex in matching {
@@ -247,81 +249,5 @@ extension __ExhaustRuntime {
         }
 
         return result
-    }
-
-    // MARK: - Classification
-
-    static func classifyExploreValue<Output>(
-        _ value: Output,
-        directions: [(name: String, predicate: (Output) -> Bool)]
-    ) -> [Int] {
-        var matching = [Int]()
-        for index in 0 ..< directions.count where directions[index].predicate(value) {
-            matching.append(index)
-        }
-        return matching
-    }
-
-    // MARK: - Reduction
-
-    /// Rematerializes the failure's choice tree with pick metadata, then runs the choice-graph reducer with a direction-preserving predicate.
-    static func reduceExploreFailure<Output>(
-        gen: Generator<Output>,
-        property: @escaping (Output) -> Bool,
-        directions: [(name: String, predicate: (Output) -> Bool)],
-        failure: (value: Output, tree: ChoiceTree, matchingDirections: [Int])
-    ) -> (
-        counterexample: Output,
-        original: Output,
-        reducedSequence: ChoiceSequence?,
-        reductionInvocations: Int,
-        reductionFailures: Int
-    ) {
-        let fullTree = Materializer.materialize(
-            gen,
-            context: .init(
-                prefix: ChoiceSequence.flatten(failure.tree),
-                mode: .exact,
-                fallbackTree: failure.tree,
-                materializePicks: true
-            )
-        )
-        let reductionTree: ChoiceTree? = switch fullTree {
-            case let .success(_, rematerialized, _):
-                rematerialized
-            case .rejected, .failed:
-                nil
-        }
-
-        guard let reduceTree = reductionTree else {
-            return (failure.value, failure.value, nil, 0, 0)
-        }
-
-        let countingProperty = PropertyOutcomeCounter(property)
-        let reductionPredicate: (Output) -> Bool = failure.matchingDirections.isEmpty
-            ? { output in
-                countingProperty(output) == false
-            }
-            : { output in
-                for directionIndex in failure.matchingDirections
-                    where directions[directionIndex].predicate(output) == false
-                {
-                    return false
-                }
-                return countingProperty(output) == false
-            }
-
-        let run = ReductionRunner.reduce(
-            gen,
-            tree: reduceTree,
-            value: failure.value,
-            configuration: .init(maxStalls: 2),
-            property: { reductionPredicate($0) == false }
-        )
-        if run.improved {
-            return (run.value, failure.value, run.sequence, countingProperty.invocations, countingProperty.failures)
-        }
-
-        return (failure.value, failure.value, nil, countingProperty.invocations, countingProperty.failures)
     }
 }

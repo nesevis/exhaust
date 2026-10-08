@@ -249,7 +249,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                             "direction": directions[directionIndex].name,
                         ]
                     )
-                    let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
+                    let reduced = reduce(value: value, tree: tunedTree, matchingDirections: matching)
                     let reducedDirections = classify(reduced.counterexample)
                     return assembleResult(
                         state: state, failure: reduced, matchingDirections: reducedDirections,
@@ -307,7 +307,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             if propertyHolds == false {
                 state.ledger.record(.directedSampling, .fail)
                 let tunedTree = try passInterpreter.reproduceFailureTree()
-                let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
+                let reduced = reduce(value: value, tree: tunedTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
                 return assembleResult(
                     state: state, failure: reduced, matchingDirections: reducedDirections,
@@ -320,91 +320,20 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
         return nil
     }
 
-    // MARK: - Rematerialization
-
-    private func reduceFromTunedTree(
-        value: Output,
-        tunedTree: ChoiceTree,
-        matchingDirections: [Int]
-    ) -> ReducedFailure<Output> {
-        let fullTree = Materializer.materialize(
-            gen,
-            context: .init(
-                prefix: ChoiceSequence.flatten(tunedTree),
-                mode: .exact,
-                fallbackTree: tunedTree,
-                materializePicks: true
-            )
-        )
-        let reductionTree: ChoiceTree? = switch fullTree {
-            case let .success(_, rematerialized, _): rematerialized
-            case .rejected, .failed: nil
-        }
-        return reduce(value: value, tree: reductionTree, matchingDirections: matchingDirections)
-    }
-
-    // MARK: - Classification
+    // MARK: - Classification and Reduction
 
     private func classify(_ value: Output) -> [Int] {
-        var matching = [Int]()
-        for index in 0 ..< directions.count where directions[index].predicate(value) {
-            matching.append(index)
-        }
-        return matching
+        ExploreReduction.classify(value, directions: directions)
     }
 
-    // MARK: - Reduction
-
-    private func reduce(
-        value: Output,
-        tree: ChoiceTree?,
-        matchingDirections: [Int]
-    ) -> ReducedFailure<Output> {
-        guard let reduceTree = tree else {
-            return ReducedFailure(
-                counterexample: value,
-                original: value,
-                reducedSequence: nil,
-                reductionInvocations: 0,
-                reductionFailures: 0
-            )
-        }
-
-        let countingProperty = PropertyOutcomeCounter(property)
-        let reductionPredicate: (Output) -> Bool = matchingDirections.isEmpty
-            ? { output in
-                countingProperty(output) == false
-            }
-            : { [directions] output in
-                for directionIndex in matchingDirections where directions[directionIndex].predicate(output) == false {
-                    return false
-                }
-                return countingProperty(output) == false
-            }
-
-        let run = ReductionRunner.reduce(
-            gen,
-            tree: reduceTree,
+    private func reduce(value: Output, tree: ChoiceTree, matchingDirections: [Int]) -> ReducedFailure<Output> {
+        ExploreReduction.reduce(
+            gen: gen,
+            property: property,
+            directions: directions,
             value: value,
-            configuration: .init(maxStalls: 2),
-            property: { reductionPredicate($0) == false }
-        )
-        if run.improved {
-            return ReducedFailure(
-                counterexample: run.value,
-                original: value,
-                reducedSequence: run.sequence,
-                reductionInvocations: countingProperty.invocations,
-                reductionFailures: countingProperty.failures
-            )
-        }
-
-        return ReducedFailure(
-            counterexample: value,
-            original: value,
-            reducedSequence: nil,
-            reductionInvocations: countingProperty.invocations,
-            reductionFailures: countingProperty.failures
+            tree: tree,
+            matchingDirections: matchingDirections
         )
     }
 
@@ -464,15 +393,6 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
 }
 
 // MARK: - Supporting types
-
-private struct ReducedFailure<Output> {
-    var counterexample: Output
-    var original: Output
-    var reducedSequence: ChoiceSequence?
-    var reductionInvocations: Int
-    /// Probes whose property invocation reproduced the failure, disjoint from direction-mismatched probes (which never invoke the property).
-    var reductionFailures: Int
-}
 
 /// Result of a directed exploration run.
 package struct DirectedExploreResult<Output> {
