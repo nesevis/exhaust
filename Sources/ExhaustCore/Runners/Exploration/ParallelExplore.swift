@@ -24,9 +24,44 @@ extension __ExhaustRuntime {
         }
     }
 
+    /// Runs `#explore` with directions: concurrent per-direction lanes when parallelization is requested and can help, otherwise the sequential ``DirectedExploreRunner``.
+    ///
+    /// Parallel lanes need more than one direction to split across, and a replay (a fixed `seed`) always runs sequentially for deterministic reproduction. Regression seeds replay only on the sequential runner.
+    package static func runExplore<Output>( // swiftlint:disable:this function_parameter_count
+        gen: Generator<Output>,
+        property: @escaping (Output) -> Bool,
+        directions: [(name: String, predicate: (Output) -> Bool)],
+        hitsPerDirection: Int,
+        maxAttemptsPerDirection: Int,
+        seed: UInt64?,
+        regressionSeeds: [UInt64],
+        parallelize: Bool
+    ) throws -> DirectedExploreResult<Output> {
+        if parallelize, seed == nil, directions.count > 1 {
+            return try runParallelExplore(
+                gen: gen,
+                property: property,
+                directions: directions,
+                hitsPerDirection: hitsPerDirection,
+                maxAttemptsPerDirection: maxAttemptsPerDirection,
+                seed: seed
+            )
+        }
+        var runner = DirectedExploreRunner(
+            gen: gen,
+            property: property,
+            directions: directions,
+            hitsPerDirection: hitsPerDirection,
+            maxAttemptsPerDirection: maxAttemptsPerDirection,
+            seed: seed,
+            regressionSeeds: regressionSeeds
+        )
+        return try runner.run()
+    }
+
     // swiftlint:disable:next function_body_length
     /// Runs all direction tuning and sampling lanes concurrently via ``DispatchQueue.concurrentPerform``, merges per-lane results, and reduces the first failure found (if any).
-    package static func runParallelExplore<Output>(
+    static func runParallelExplore<Output>(
         gen: Generator<Output>,
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],

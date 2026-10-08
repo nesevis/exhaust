@@ -50,3 +50,32 @@ package struct FuzzPersistenceContext {
         return nil
     }
 }
+
+// MARK: - Call-Site Context
+
+package extension __ExhaustRuntime {
+    /// Builds the crash-recovery context for one `#explore(time:)` call site: `<base>/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
+    ///
+    /// The base directory is the system temporary directory, or `EXHAUST_STATE_DIR` when set for CI and for the trap probe, which needs the parent process to know where the crashed child's state landed. `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
+    ///
+    /// - Note: The store is keyed by file and line only, so two processes fuzzing the same test concurrently stomp each other's checkpoints and can misread each other's breadcrumbs as their own crash. Documented in the crash-recovery article; callers who overlap runs of one test point each process at its own `EXHAUST_STATE_DIR`.
+    static func makeFuzzPersistenceContext(
+        fileID: StaticString,
+        line: UInt,
+        baseDirectory: URL? = nil
+    ) -> FuzzPersistenceContext {
+        let base = baseDirectory
+            ?? ProcessInfo.processInfo.environment["EXHAUST_STATE_DIR"].map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.temporaryDirectory
+        let fileIDText = "\(fileID)"
+        let module = fileIDText.split(separator: "/").first.map(String.init) ?? "UnknownModule"
+        let file = fileIDText.split(separator: "/").last.map(String.init) ?? "UnknownFile"
+        let store = FuzzProgressStore(
+            baseDirectory: base,
+            module: module,
+            testIdentifier: "\(file)-L\(line)"
+        )
+        let resumeEnabled = ProcessInfo.processInfo.environment["EXHAUST_RESUME"] != "0"
+        return FuzzPersistenceContext(store: store, resumeEnabled: resumeEnabled)
+    }
+}

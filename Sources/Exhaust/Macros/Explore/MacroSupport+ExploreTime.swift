@@ -19,29 +19,6 @@ import IssueReporting
     #endif
 #endif
 
-/// Detects the one clean-signal violation the runtime can see without guessing: two coverage-guided runs in flight at once.
-///
-/// The isolation a `time:` run needs is documented and is the caller's to arrange, because nothing in-process can tell whether another test is executing instrumented code. Two concurrent fuzz runs are different: each one zeroes the process-global counters at the start of every attempt, so they erase each other's measurements, and the runner can count itself. Left undetected the symptom is a search that wanders and a report whose numbers are fiction, with nothing a reader would recognize as wrong.
-enum FuzzRunExclusion {
-    private static let isRunInFlight = SendableBox(false)
-
-    /// Claims the process's coverage counters for one run. The caller owes a matching ``endRun()`` only when this returns true; a false return means another run holds the claim and nothing was acquired.
-    static func tryBeginRun() -> Bool {
-        isRunInFlight.withValue { isInFlight in
-            guard isInFlight == false else {
-                return false
-            }
-            isInFlight = true
-            return true
-        }
-    }
-
-    /// Releases a finished run's claim. Paired with every ``tryBeginRun()`` that returned true.
-    static func endRun() {
-        isRunInFlight.value = false
-    }
-}
-
 public extension __ExhaustRuntime {
     // MARK: - Entry-Point Driver
 
@@ -472,126 +449,59 @@ public extension __ExhaustRuntime {
             )
         }
 
-        var configuration = FuzzRunnerConfiguration(budgetNanoseconds: budgetNanoseconds, seed: seed)
-        configuration.stopOnFirstFault = parsed.failFast
-        if parsed.skipScreening {
-            configuration.skipScreening = true
-        }
-        if parsed.stopWhenSaturated {
-            configuration.stopWhenSaturated = true
-        }
-        // The benchmark arm: read once at run start, release builds included, since the measurement venue is a release binary. Setting the variable is the explicit opt-in; a malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
-        if let experimentValue = ProcessInfo.processInfo.environment["EXHAUST_FUZZ_EXPERIMENT"] {
-            do {
-                configuration.experiments = try FuzzExperiments.parse(environmentValue: experimentValue)
-            } catch {
-                return .empty(termination: .invalidConfiguration(String(describing: error)), seed: seed)
-            }
-        }
-
-        // The whole-value operand reconstructor, derived from the output type's OperandReconstructable conformance and gated on reflectivity: a non-reflective generator means reflection cannot place a reconstructed value. A reflective composite (a struct) has no whole-type conformance, so this is nil there and the field graft handles it instead.
-        let reflectionReconstructor = generatorIsReflective
-            ? OperandReconstruction.reconstructor(for: Output.self)
-            : nil
-        // Injection activates on the presence of trace-cmp instrumentation, not a knob: comparand substitution places operands directly into a parent's flat sequence and needs no reflection, so every run can use a harvested operand, and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires. The reflective paths (whole-value through the reconstructor, composites through the field graft) additionally require a reflective generator, gated by their own capability flags.
-
-        // A live source always enables comparison-operand harvesting: the drain is a no-op without trace-cmp instrumentation, and comparand substitution can place operands on any generator.
-        let resolvedSource: (any CoverageSource)?
-        switch coverage {
-            case .production:
-                switch FuzzInstrumentationCheck.productionSource(harvestsComparisons: true) {
-                    case let .source(source):
-                        resolvedSource = source
-                    case .notInstrumented:
-                        resolvedSource = nil
-                    case let .conflict(guardEdges, counterEdges):
-                        return .empty(
-                            termination: .invalidConfiguration(
-                                mixedRecorderMessage(guardEdges: guardEdges, counterEdges: counterEdges)
-                            ),
-                            seed: seed
-                        )
-                }
-            case .none:
-                resolvedSource = nil
-            case let .injected(injected):
-                resolvedSource = injected
-        }
-        guard let source = resolvedSource else {
-            return .empty(termination: .instrumentationMissing, seed: seed)
-        }
-
-        if let persistence {
-            configuration.persistence = persistence
-            if let document = persistence.resumeDocument {
-                // A resumed run continues the logical run: the remaining slice of the declared budget, straight into the mutation phase.
-                //
-                // Both phases are skipped for any resume document, including one whose predecessor died partway through screening. Nothing records how far screening got, so the only two options are to skip all of it or to redo all of it, and skipping is the better of the two: the restored corpus already holds the admissions from the rows that ran, and redoing would spend the remaining slice re-deriving them before the mutation phase starts. The cost is that rows after the crash point go untested in this run.
-                //
-                // A run resumes because something ended the predecessor abnormally, which is a defect the user is expected to fix rather than a state to search from repeatedly, so the untested tail is accepted rather than engineered around. Persisting a screening cursor and restarting at it is the fix if that assumption stops holding.
-                let consumed = document.metadata.consumedNanoseconds
-                configuration.budgetNanoseconds = budgetNanoseconds > consumed ? budgetNanoseconds - consumed : 0
-                configuration.skipScreening = true
-                configuration.skipSampling = true
-            }
-        }
-        configure?(&configuration)
-
-        let needsExclusiveCounters = source.requiresExclusiveProcess
-        if needsExclusiveCounters, FuzzRunExclusion.tryBeginRun() == false {
-            return .empty(
-                termination: .invalidConfiguration(
-                    "Another coverage-guided run is already in flight in this process. Both zero the same instrumented counters at the start of every attempt, so neither can attribute coverage to its own inputs. Run the target with `swift test --no-parallel`, or filter the run down to a single fuzz test."
-                ),
-                seed: seed
+        let options = FuzzSession.Options(
+            budgetNanoseconds: budgetNanoseconds,
+            seed: seed,
+            stopOnFirstFault: parsed.failFast,
+            skipScreening: parsed.skipScreening,
+            stopWhenSaturated: parsed.stopWhenSaturated,
+            logConfiguration: ExhaustLog.Configuration(
+                isEnabled: suppressLogs == false,
+                minimumLevel: logLevel,
+                format: .keyValue
             )
-        }
-        defer {
-            if needsExclusiveCounters {
-                FuzzRunExclusion.endRun()
-            }
-        }
-
-        let logConfiguration = ExhaustLog.Configuration(
-            isEnabled: suppressLogs == false,
-            minimumLevel: logLevel,
-            format: .keyValue
         )
-        let result = ExhaustLog.withConfiguration(logConfiguration) {
-            let runner = FuzzRunner(
-                gen: gen,
-                property: property,
-                source: source,
-                configuration: configuration,
-                hooks: hooks,
-                reflectionReconstructor: reflectionReconstructor,
-                // The graft only reaches a zip-shaped generator, so gate it on that static shape here — a non-composite generator otherwise materializes a parent every attempt before discovering it.
-                graftReflective: generatorIsReflective && Interpreters.isZipShaped(gen),
-                renderValue: { value in
-                    var description = ""
-                    customDump(value, to: &description, maxDepth: 3)
-                    return description
+        let outcome = FuzzSession.run(
+            gen: gen,
+            generatorIsReflective: generatorIsReflective,
+            options: options,
+            source: coverage,
+            configure: configure,
+            hooks: hooks,
+            persistence: persistence,
+            renderValue: { value in
+                var description = ""
+                customDump(value, to: &description, maxDepth: 3)
+                return description
+            },
+            property: property
+        )
+        switch outcome {
+            case let .completed(result, resumed):
+                var report = FuzzReport(result: result, symbolizeEdges: coverage.isProduction)
+                if resumed {
+                    report.recordCrashResume()
                 }
-            )
-            let result = runner.run()
-            if result.clusters.isEmpty {
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "explore_time_no_failures",
-                    metadata: [
-                        "attempts": "\(result.counts.totalAttempts)",
-                        "covered_edges": "\(result.coveredEdgeCount)",
-                        "seed": "\(result.seed)",
-                    ]
+                return report
+            case let .invalidExperiment(error):
+                return .empty(termination: .invalidConfiguration(String(describing: error)), seed: seed)
+            case let .mixedRecorders(guardEdges, counterEdges):
+                return .empty(
+                    termination: .invalidConfiguration(
+                        mixedRecorderMessage(guardEdges: guardEdges, counterEdges: counterEdges)
+                    ),
+                    seed: seed
                 )
-            }
-            return result
+            case .instrumentationMissing:
+                return .empty(termination: .instrumentationMissing, seed: seed)
+            case .anotherRunInFlight:
+                return .empty(
+                    termination: .invalidConfiguration(
+                        "Another coverage-guided run is already in flight in this process. Both zero the same instrumented counters at the start of every attempt, so neither can attribute coverage to its own inputs. Run the target with `swift test --no-parallel`, or filter the run down to a single fuzz test."
+                    ),
+                    seed: seed
+                )
         }
-        var report = FuzzReport(result: result, symbolizeEdges: coverage.isProduction)
-        if configuration.persistence?.resumeDocument != nil {
-            report.recordCrashResume()
-        }
-        return report
     }
 
     // MARK: - Crash Recovery
@@ -612,31 +522,6 @@ public extension __ExhaustRuntime {
             column: column
         )
         return persistence
-    }
-
-    /// Builds the crash-recovery context for one `#explore(time:)` call site: `<base>/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
-    ///
-    /// The base directory is the system temporary directory, or `EXHAUST_STATE_DIR` when set for CI and for the trap probe, which needs the parent process to know where the crashed child's state landed. `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
-    ///
-    /// - Note: The store is keyed by file and line only, so two processes fuzzing the same test concurrently stomp each other's checkpoints and can misread each other's breadcrumbs as their own crash. Documented in the crash-recovery article; callers who overlap runs of one test point each process at its own `EXHAUST_STATE_DIR`.
-    package static func makeFuzzPersistenceContext(
-        fileID: StaticString,
-        line: UInt,
-        baseDirectory: URL? = nil
-    ) -> FuzzPersistenceContext {
-        let base = baseDirectory
-            ?? ProcessInfo.processInfo.environment["EXHAUST_STATE_DIR"].map { URL(fileURLWithPath: $0) }
-            ?? FileManager.default.temporaryDirectory
-        let fileIDText = "\(fileID)"
-        let module = fileIDText.split(separator: "/").first.map(String.init) ?? "UnknownModule"
-        let file = fileIDText.split(separator: "/").last.map(String.init) ?? "UnknownFile"
-        let store = FuzzProgressStore(
-            baseDirectory: base,
-            module: module,
-            testIdentifier: "\(file)-L\(line)"
-        )
-        let resumeEnabled = ProcessInfo.processInfo.environment["EXHAUST_RESUME"] != "0"
-        return FuzzPersistenceContext(store: store, resumeEnabled: resumeEnabled)
     }
 
     /// Records the crash finding from a resumed run — never silent, never suppressed. The trapping candidate itself usually died before corpus admission, so the report names its mutation parent from the snapshot when one exists.
