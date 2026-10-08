@@ -90,19 +90,22 @@ struct GraphEncoderTests {
 
     // MARK: - GraphStructuralEncoder (Migration)
 
-    @Test("Migration encoder merges sibling sequences and removes the empty source")
+    @Test("Migration encoder merges sibling sequences in order and removes the empty source")
     func migrationMergesSiblingSequencesAndShortens() throws {
         // Two sibling sequences under an outer sequence node — the sequence-of-sequences shape used by NestedLists and LargeUnionList.
         let inner1 = ChoiceTree.sequence(
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let inner2 = ChoiceTree.sequence(
             elements: [
-                .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+                .choice(ChoiceValue(6 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
             metadata: .init(validRange: nil, isRangeExplicit: false)
         )
@@ -177,6 +180,26 @@ struct GraphEncoderTests {
         #expect(candidateBuffer.count < sequence.count)
         // And it must shortlex-precede the original.
         #expect(candidateBuffer.shortLexPrecedes(sequence))
+        #expect(candidateBuffer.count == sequence.count - 2)
+        #expect(candidateBuffer.compactMap { $0.value?.choice.bitPattern64 } == [1, 2, 3, 4, 5, 6])
+        guard case let .sequenceElementsMigrated(_, _, _, insertionOffset) = probe else {
+            Issue.record("Expected a migration mutation")
+            return
+        }
+        #expect(insertionOffset == inner2Range.lowerBound + 1)
+
+        let generator = Gen.arrayOf(
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 3 ... 6),
+            within: 1 ... 2
+        )
+        guard case let .success(value, _, _) = Materializer.materialize(
+            generator,
+            context: .init(prefix: candidateBuffer, mode: .exact)
+        ) else {
+            Issue.record("The merged sequence must rematerialize exactly")
+            return
+        }
+        #expect(value == [[1, 2, 3, 4, 5, 6]])
     }
 
     @Test("Minimization encoder emits convergence records")

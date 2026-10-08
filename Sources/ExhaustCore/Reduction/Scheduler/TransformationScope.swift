@@ -341,7 +341,7 @@ struct PermutationScope: Sendable {
 
 /// Defines the scope of an element migration between antichain-independent sequences.
 ///
-/// Migration moves elements from an earlier sequence to a later sequence to improve shortlex ordering. The source sequence becomes shorter (improving shortlex at earlier positions). The receiver sequence absorbs the elements.
+/// Migration prepends all elements from an earlier sequence to a later sequence, preserving their relative order. Removing the source sequence's markers makes the choice sequence strictly shorter.
 ///
 /// This is a pure structural operation: the graph specifies exactly which elements to move and where. One scope = one probe.
 struct MigrationScope {
@@ -357,7 +357,7 @@ struct MigrationScope {
     /// Position ranges of the elements being moved.
     let elementPositionRanges: [ClosedRange<Int>]
 
-    /// Position range of the receiver sequence (elements are appended after its current content).
+    /// Position range of the receiver sequence (elements are inserted immediately after its opening marker).
     let receiverPositionRange: ClosedRange<Int>
 
     /// When the migration empties the source entirely and the source is a child of a parent sequence, this holds the parent's node ID. The validity check constrains the parent's minimum length rather than the source's.

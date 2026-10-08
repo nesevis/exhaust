@@ -19,11 +19,11 @@ extension GraphStructuralEncoder {
             sourceSeqID: scope.sourceSequenceNodeID,
             receiverSeqID: scope.receiverSequenceNodeID,
             movedNodeIDs: scope.elementNodeIDs,
-            insertionOffset: scope.receiverPositionRange.upperBound
+            insertionOffset: scope.receiverPositionRange.lowerBound + 1
         )
     }
 
-    /// Moves all elements from the source sequence into the receiver and removes the now-empty source's full extent.
+    /// Prepends the earlier source's elements to the receiver so merging preserves their relative order, then removes the source's full extent.
     private func buildMigrationCandidate(
         scope: MigrationScope,
         sequence: ChoiceSequence,
@@ -45,7 +45,7 @@ extension GraphStructuralEncoder {
         var removalExhaustRangeSet = ExhaustRangeSet<Int>()
         removalExhaustRangeSet.insert(contentsOf: sourceFullRange.lowerBound ..< sourceFullRange.upperBound + 1)
 
-        let insertionPoint = scope.receiverPositionRange.upperBound
+        let insertionPoint = scope.receiverPositionRange.lowerBound + 1
         let removedBeforeInsertion = sourceFullRange.upperBound < insertionPoint
             ? sourceFullRange.count
             : 0
