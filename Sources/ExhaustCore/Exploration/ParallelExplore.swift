@@ -1,6 +1,5 @@
 // Parallel explore: per-direction CGS tuning lanes via GCD concurrentPerform.
 
-import ExhaustCore
 import Foundation
 
 extension __ExhaustRuntime {
@@ -27,7 +26,7 @@ extension __ExhaustRuntime {
 
     // swiftlint:disable:next function_body_length
     /// Runs all direction tuning and sampling lanes concurrently via ``DispatchQueue.concurrentPerform``, merges per-lane results, and reduces the first failure found (if any).
-    static func runParallelExplore<Output>(
+    package static func runParallelExplore<Output>(
         gen: Generator<Output>,
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],
