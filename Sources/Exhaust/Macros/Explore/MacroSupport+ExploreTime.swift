@@ -5,10 +5,6 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-#if canImport(ObjectiveC)
-    import ExhaustObjCSupport
-#endif
-
 #if canImport(XCTest) && canImport(ObjectiveC)
     @preconcurrency @_weakLinked import XCTest
 #elseif canImport(XCTest)
@@ -791,7 +787,7 @@ public extension __ExhaustRuntime {
         { value in
             var verdict = FuzzVerdict.pass
             var caught: NSException?
-            let completed = exhaust_runCatchingObjCException({
+            let completed = runCatchingObjCException({
                 do {
                     verdict = try property(value) ? .pass : .fail(.returnedFalse)
                 } catch {
@@ -812,7 +808,7 @@ public extension __ExhaustRuntime {
         { value in
             var verdict = FuzzVerdict.pass
             var caught: NSException?
-            let completed = exhaust_runCatchingObjCException({
+            let completed = runCatchingObjCException({
                 do {
                     try detection(value)
                 } catch {

@@ -6,10 +6,6 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-#if canImport(ObjectiveC)
-    import ExhaustObjCSupport
-#endif
-
 // MARK: - Async Entry Point
 
 package extension __ExhaustRuntime {
@@ -175,7 +171,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
             group.enter()
             DispatchQueue.global().async {
                 var exception: NSException?
-                let succeeded = exhaust_runCatchingObjCException({
+                let succeeded = runCatchingObjCException({
                     let responses: [ObservedResponse<Spec.Command>]? = awaitOrTimeout("lane") {
                         // Rendezvous inside the bridged task rather than at the top of the GCD block, so the per-lane drain-loop setup skew is also absorbed before the first command. On the macOS 15+ drain-loop path the task runs on this lane's own GCD thread, so the spin never occupies the cooperative pool.
                         rendezvous.arriveAndWait()
@@ -277,7 +273,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         nonisolated(unsafe) let unsafeConcurrent = concurrentSpec
         var matched = false
         var exception: NSException?
-        let completed = exhaust_runCatchingObjCException({
+        let completed = runCatchingObjCException({
             let result: Bool? = awaitOrTimeout("witness") {
                 guard await unsafeWitness.applySetup(setupStep) == nil else {
                     return false
@@ -331,7 +327,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         var failed = false
         var timedOut = false
         nonisolated(unsafe) let spec = spec
-        exhaust_runCatchingObjCException({
+        runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
                 guard await spec.applySetup(setupStep) == nil else {
                     return false
@@ -374,7 +370,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         var timedOut = false
         nonisolated(unsafe) let concurrentSpec = concurrentSpec
         nonisolated(unsafe) let sequentialSpec = sequentialSpec
-        exhaust_runCatchingObjCException({
+        runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
                 func run(_ indices: [Int], on spec: Spec) async -> Bool {
                     for index in indices {
@@ -464,7 +460,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
             // Skip identification replays the commands on a fresh spec via a blocking drain, outside the ObjC guard that wraps lane execution. A synchronously-thrown NSException would otherwise propagate out of the drain and abort, so degrade to "no skips identified" (pruning becomes a no-op and the actual execution catches and reports it).
             var skipped: Set<Int> = []
             var exception: NSException?
-            let completed = exhaust_runCatchingObjCException({
+            let completed = runCatchingObjCException({
                 skipped = rawIdentifySkips(candidate.setupStep, candidate.taggedCommands.map(\.1))
             }, &exception)
             return completed ? skipped : []

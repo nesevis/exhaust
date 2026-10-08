@@ -7,10 +7,6 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-#if canImport(ObjectiveC)
-    import ExhaustObjCSupport
-#endif
-
 // MARK: - Runner Entry Point
 
 package extension __ExhaustRuntime {
@@ -255,7 +251,7 @@ extension __ExhaustRuntime {
 @discardableResult
 private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
     var exception: NSException?
-    return exhaust_runCatchingObjCException(body, &exception)
+    return runCatchingObjCException(body, &exception)
 }
 
 // MARK: - Checker
@@ -312,7 +308,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
                 rendezvous.arriveAndWait()
                 var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
-                let succeeded = exhaust_runCatchingObjCException({
+                let succeeded = runCatchingObjCException({
                     for laneIndex in laneIndices {
                         if commandFailed.value {
                             break
@@ -400,7 +396,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         }
         var matched = false
         var exception: NSException?
-        let completed = exhaust_runCatchingObjCException({
+        let completed = runCatchingObjCException({
             for command in prefix {
                 do {
                     try witnessSpec.run(command)
