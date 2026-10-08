@@ -16,6 +16,15 @@
         ) -> Bool {
             exhaust_runCatchingObjCException(block, &caught)
         }
+
+        /// Runs `block` inside the Objective-C `@try`/`@catch` and discards any caught exception. Use when only whether `block` completed matters.
+        ///
+        /// - Returns: `true` if `block` completed, `false` if it raised.
+        @discardableResult
+        package static func run(_ block: () -> Void) -> Bool {
+            var exception: NSException?
+            return run(block, &exception)
+        }
     }
 #else
     /// Stand-in for Foundation's `NSException`, which swift-corelibs-foundation does not provide. Callers only store and nil-check caught exceptions, and on platforms without an Objective-C runtime none can ever be raised, so no instance is ever created.
@@ -33,6 +42,13 @@
         ) -> Bool {
             block()
             return true
+        }
+
+        /// Runs the block directly and reports success, matching the Objective-C overload that discards the exception.
+        @discardableResult
+        package static func run(_ block: () -> Void) -> Bool {
+            var exception: NSException?
+            return run(block, &exception)
         }
     }
 #endif

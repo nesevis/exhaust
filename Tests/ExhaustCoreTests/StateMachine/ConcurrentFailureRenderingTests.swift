@@ -1,7 +1,6 @@
-import ExhaustCore
 import ExhaustTestSupport
 import Testing
-@testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Concurrent failure rendering", .serialized, .tags(.stateMachine))
 struct ConcurrentFailureRenderingTests {

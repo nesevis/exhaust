@@ -1,10 +1,9 @@
 // SCA (Sequence Covering Array) screening phase for spec testing.
-import ExhaustCore
 import Foundation
 
 // MARK: - Shared SCA Row Loop
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Candidate rows the SCA row loop lost to filter rejection, with the observations naming the filters. Losses are legitimate domain narrowing; the pipeline reports them as a warning so the reduced coverage stays visible.
     struct ScreeningFilterLosses {
         var rowsLost = 0
@@ -272,7 +271,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Pick Analysis
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
     static func extractPickChoices(
         from gen: Generator<some Any>

@@ -1,9 +1,7 @@
-import ExhaustCore
-
 /// Defines the per-probe operations that differ between the synchronous and async preemptive runners.
 ///
 /// Conformers are captured into the `@Sendable` property closure handed to the SCA screening and reduction passes, so they must be `Sendable`. Both current conformers store only an `Int?` timeout, so the requirement is trivially satisfied.
-protocol PreemptiveBackend<Spec>: Sendable {
+package protocol PreemptiveBackend<Spec>: Sendable {
     associatedtype Spec: StateMachineSpecBase
 
     /// Builds the skip-identifier closure used to prune precondition-failing commands before reduction. The two backends construct it differently (a static identifier versus a `specInit`-seeded async bridge). The setup step is applied before the replay, or the identification would run against an unconfigured SUT.

@@ -1,9 +1,7 @@
-import ExhaustCore
-
 /// How a candidate was discovered, carrying the seed material each discovery method actually produces.
 ///
 /// Merging the seed into the discovery case makes the unrepresentable states unconstructible: a screening candidate cannot lack its replay address, and no other candidate can carry one.
-enum StateMachineCandidateProvenance {
+package enum StateMachineCandidateProvenance {
     /// An SCA screening row: the covering array seed whose row stream produced it, the sequence length of the tier it came from, and the 0-based row within that tier.
     case screening(coveringSeed: UInt64, tierLength: Int, rowInTier: Int)
     /// The fixed seed-0 sequential probe.
@@ -13,7 +11,7 @@ enum StateMachineCandidateProvenance {
     /// A sampling replay with the given PRNG seed.
     case replay(seed: UInt64)
 
-    var discoveryMethod: StateMachineDiscoveryMethod {
+    package var discoveryMethod: StateMachineDiscoveryMethod {
         switch self {
             case .screening: .screening
             case .smokeTest: .smokeTest
@@ -39,7 +37,7 @@ enum StateMachineCandidateProvenance {
     /// The seed for ``StateMachineResult/seed``: only those a sampling replay can consume.
     ///
     /// A screening candidate is addressed by covering array row and a smoke test is a hardcoded zero. Neither addresses a point in a PRNG stream, so neither belongs in ``StateMachineResult/seed``. The screening address still reaches the user through ``StateMachineResult/replaySeed``.
-    var resultSeed: UInt64? {
+    package var resultSeed: UInt64? {
         switch self {
             case .screening, .smokeTest: nil
             case let .randomSampling(seed), let .replay(seed): seed
@@ -66,7 +64,7 @@ enum StateMachineCandidateProvenance {
 }
 
 /// Carries a failing candidate from a source to the ``SpecMachine`` for reduction.
-struct StateMachineCandidate<Spec: StateMachineSpecBase> {
+package struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     /// The full generated candidate: the setup step ahead of the tagged command sequence.
     let value: SpecCandidateValue<Spec>
     /// The full candidate tree. For a with-setup spec the root is the zip group; the machine decomposes it before pruning and reduction.
@@ -76,24 +74,38 @@ struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     let iteration: Int
     let provenance: StateMachineCandidateProvenance
 
+    package init(
+        value: SpecCandidateValue<Spec>,
+        tree: ChoiceTree,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        iteration: Int,
+        provenance: StateMachineCandidateProvenance
+    ) {
+        self.value = value
+        self.tree = tree
+        self.sequenceGen = sequenceGen
+        self.iteration = iteration
+        self.provenance = provenance
+    }
+
     var discoveryMethod: StateMachineDiscoveryMethod {
         provenance.discoveryMethod
     }
 }
 
 /// Thrown by the screening replay source when its addressed covering array row cannot be reproduced, which means the spec's command domain no longer matches the one the seed was recorded against.
-struct ScreeningReplayRowUnreachable: Error, CustomStringConvertible {
+package struct ScreeningReplayRowUnreachable: Error, CustomStringConvertible {
     let row: Int
     let tierLength: Int
     let rowsProduced: Int
 
-    var description: String {
+    package var description: String {
         "screening replay never reached row \(row + 1) of the length-\(tierLength) tier (the tier produced \(rowsProduced) row\(rowsProduced == 1 ? "" : "s")); the spec or its command domain has changed since the seed was recorded"
     }
 }
 
 /// Produces failing candidates for the ``SpecMachine``, owning its iteration state internally.
-struct AnyStateMachineCandidateSource<Spec: StateMachineSpecBase> {
+package struct AnyStateMachineCandidateSource<Spec: StateMachineSpecBase> {
     /// Which discovery phase this source represents. The machine attributes the source's invocations and wall time to the matching report bucket whether or not the source yields a candidate, so a phase that runs and passes is still counted.
     let discoveryMethod: StateMachineDiscoveryMethod
     /// The PRNG seed to surface in ``ExhaustReport/seed``, or `nil` for phases with no replayable seed (screening, smoke).
@@ -101,7 +113,7 @@ struct AnyStateMachineCandidateSource<Spec: StateMachineSpecBase> {
     let resolvedReplaySeed: ReplaySeed.Resolved?
     private let produceNext: () throws -> StateMachineCandidate<Spec>?
 
-    init(
+    package init(
         discoveryMethod: StateMachineDiscoveryMethod = .randomSampling,
         reportedSeed: UInt64? = nil,
         resolvedReplaySeed: ReplaySeed.Resolved? = nil,

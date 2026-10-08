@@ -1,20 +1,26 @@
-import ExhaustCore
-
 /// Runs spec probes sequentially where all markers are `.prefix`.
 ///
 /// Used when the spec's execution model is sequential (no concurrency mode selected). The entry point injects a sync or async execution closure at construction time.
-struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBackend {
+package struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBackend {
     let property: @Sendable (SpecCandidateValue<Spec>) -> Bool
     let finalize: (SpecCandidateValue<Spec>) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
 
-    func probe(
+    package init(
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
+        finalize: @escaping (SpecCandidateValue<Spec>) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
+    ) {
+        self.property = property
+        self.finalize = finalize
+    }
+
+    package func probe(
         _ candidate: SpecCandidateValue<Spec>,
         context _: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
         property(candidate) ? .pass : .fail
     }
 
-    func reduce(
+    package func reduce(
         setupStep: Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
@@ -40,7 +46,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
         return StateMachineReduction(finalInput: reduced, stats: stats, timedOut: false)
     }
 
-    func buildResult(
+    package func buildResult(
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
@@ -63,7 +69,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
             discoveryMethod: discoveryMethod
         )
 
-        let issueMessage: String = context.config.suppress.issueReporting
+        let issueMessage: String = context.config.suppressIssueReporting
             ? ""
             : __ExhaustRuntime.renderFailure(
                 result,

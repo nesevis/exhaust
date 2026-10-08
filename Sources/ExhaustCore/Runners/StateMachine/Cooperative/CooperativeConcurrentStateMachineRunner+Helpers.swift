@@ -1,10 +1,9 @@
 // Sequential oracle for concurrent spec testing.
-import ExhaustCore
 
 // MARK: - Sequential Oracle
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Captures the SUT and model state after a sequential (race-free) replay of the failing command sequence. Provides the "expected" baseline in failure reports so the user can see what the system should have produced without the interleaving.
     struct SequentialOracleResult<Spec: AsyncStateMachineSpec> {
         var systemUnderTest: Spec.SystemUnderTest

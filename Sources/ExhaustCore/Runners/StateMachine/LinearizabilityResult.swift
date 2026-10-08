@@ -41,24 +41,26 @@ package struct ResponseWitness {
     }
 }
 
-/// Resolves a core checker result into a ``LinearizabilityResult``, mapping the checker's positional witness back to the originating lane's ``ScheduleMarker/rawValue``.
-package func makeLinearizabilityResult(
-    _ coreResult: LinearizabilityChecker.Result,
-    laneObservations: [[ObservedResponse<some Any>]]
-) -> LinearizabilityResult {
-    switch coreResult {
-        case .linearizable:
-            return .linearizable
-        case .abandoned:
-            return .abandoned
-        case let .notLinearizable(witness, failureDescription):
-            guard let witness,
-                  witness.laneIndex < laneObservations.count,
-                  witness.commandIndex < laneObservations[witness.laneIndex].count
-            else {
-                return .notLinearizable(witness: nil, failureDescription: failureDescription)
-            }
-            let response = laneObservations[witness.laneIndex][witness.commandIndex]
-            return .notLinearizable(witness: ResponseWitness(lane: response.lane, index: witness.commandIndex), failureDescription: failureDescription)
+package extension LinearizabilityJudgement {
+    /// Resolves a core checker result into a ``LinearizabilityResult``, mapping the checker's positional witness back to the originating lane's ``ScheduleMarker/rawValue``.
+    static func makeLinearizabilityResult(
+        _ coreResult: LinearizabilityChecker.Result,
+        laneObservations: [[ObservedResponse<some Any>]]
+    ) -> LinearizabilityResult {
+        switch coreResult {
+            case .linearizable:
+                return .linearizable
+            case .abandoned:
+                return .abandoned
+            case let .notLinearizable(witness, failureDescription):
+                guard let witness,
+                      witness.laneIndex < laneObservations.count,
+                      witness.commandIndex < laneObservations[witness.laneIndex].count
+                else {
+                    return .notLinearizable(witness: nil, failureDescription: failureDescription)
+                }
+                let response = laneObservations[witness.laneIndex][witness.commandIndex]
+                return .notLinearizable(witness: ResponseWitness(lane: response.lane, index: witness.commandIndex), failureDescription: failureDescription)
+        }
     }
 }

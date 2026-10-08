@@ -13,7 +13,7 @@ struct CooperativeSchedulerTests {
             (.prefix, .increment),
             (.prefix, .decrement),
         ]
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: commands,
             setupStep: nil,
             specInit: { NonAtomicCounterSpec() },

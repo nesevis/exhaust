@@ -1,17 +1,15 @@
-import ExhaustCore
-
 /// Runs spec probes via preemptive concurrent execution on real GCD threads.
 ///
 /// Generic over ``PreemptiveBackend``, which has synchronous (``PreemptiveChecker``) and async (``AsyncPreemptiveChecker``) conformers. The backend adapts the existing per-probe execution and linearizability checking into the ``StateMachineBackend`` protocol so the ``SpecMachine`` can drive the preemptive pipeline identically to the cooperative and sequential paths.
-struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBackend {
-    typealias Spec = Inner.Spec
+package struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBackend {
+    package typealias Spec = Inner.Spec
 
     let inner: Inner
     let concurrencyLevel: Int
 
     // MARK: - Probe
 
-    func probe(
+    package func probe(
         _ candidate: SpecCandidateValue<Spec>,
         context _: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
@@ -32,7 +30,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
 
     // MARK: - Reduce
 
-    func reduce(
+    package func reduce(
         setupStep: Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
@@ -99,7 +97,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
 
     // MARK: - Build Result
 
-    func buildResult(
+    package func buildResult(
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
@@ -140,7 +138,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
             context.state.failureContext.linearizabilityWitness = evidence.witness
         }
 
-        let issueMessage: String = context.config.suppress.issueReporting
+        let issueMessage: String = context.config.suppressIssueReporting
             ? ""
             : __ExhaustRuntime.renderPreemptiveFailure(reduced, setupSteps: setupSteps, context: context.state.failureContext)
 

@@ -1,5 +1,3 @@
-import ExhaustCore
-
 // MARK: - StateMachine Machine
 
 /// Pulls candidates from prioritized sources, dispatches to a ``StateMachineBackend`` for probing, and reduces the first failure found.
@@ -11,7 +9,7 @@ import ExhaustCore
 ///     // handle transition
 /// }
 /// ```
-struct SpecMachine<Backend: StateMachineBackend> {
+package struct SpecMachine<Backend: StateMachineBackend> {
     let backend: Backend
     let context: StateMachineRunContext<Backend.Spec>
     var sources: [AnyStateMachineCandidateSource<Backend.Spec>]
@@ -25,27 +23,37 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     var candidate: StateMachineCandidate<Backend.Spec>?
     /// The setup step as reduction left it. Seeded from the candidate and replaced by the setup pass, so it outlives ``reductionInput`` and is what the assembled result reports.
-    var reducedSetupStep: Backend.Spec.SetupStep?
+    package var reducedSetupStep: Backend.Spec.SetupStep?
     /// The decomposed halves the reduction passes edit, or nil when the candidate tree could not be decomposed. Each pass reads it and writes it back; nothing reads `candidate.tree` after ``stepPrune()``.
-    var reductionInput: ReductionInput?
-    var setupReductionStats: ReductionStats?
+    package var reductionInput: ReductionInput?
+    package var setupReductionStats: ReductionStats?
     var reduction: StateMachineReduction<Backend.Spec.Command>?
     var preReductionInvocations: Int = 0
     var reductionStopwatch: Stopwatch?
-    var result: StateMachineResult<Backend.Spec>?
+    package var result: StateMachineResult<Backend.Spec>?
+
+    package init(
+        backend: Backend,
+        context: StateMachineRunContext<Backend.Spec>,
+        sources: [AnyStateMachineCandidateSource<Backend.Spec>]
+    ) {
+        self.backend = backend
+        self.context = context
+        self.sources = sources
+    }
 
     /// The candidate decomposed into its setup and command children, which reduction is free to edit.
     ///
     /// `setupTree` is nil for zero-setup specs, whose candidate tree IS the command tree. The whole value is nil when a with-setup candidate tree does not have the expected zip-group root: reducing such a tree would let structural encoders reach the setup subtree, so ``stepPrune()`` reports the candidate unreduced instead and the reduction passes never run.
-    struct ReductionInput {
+    package struct ReductionInput {
         var setupTree: ChoiceTree?
-        var taggedCommands: [(ScheduleMarker, Backend.Spec.Command)]
+        package var taggedCommands: [(ScheduleMarker, Backend.Spec.Command)]
         var commandTree: ChoiceTree
     }
 
     // MARK: - Step
 
-    mutating func next() -> Transition? {
+    package mutating func next() -> Transition? {
         switch phase {
             case .pullSource:
                 return stepPullSource()
@@ -143,8 +151,8 @@ struct SpecMachine<Backend: StateMachineBackend> {
         context.state.failureContext.originalCount = candidate.value.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
         context.state.failureContext.budget = candidate.discoveryMethod == .screening
-            ? context.config.budget.screeningBudget
-            : context.config.budget.samplingBudget
+            ? context.config.screeningBudget
+            : context.config.samplingBudget
         context.state.failureContext.sequencesTested = discoveryInvocations
     }
 
@@ -422,7 +430,7 @@ extension SpecMachine {
 
 extension SpecMachine {
     /// Describes what happened during a single ``next()`` step, returned to the caller for logging or diagnostics.
-    enum Transition: Equatable {
+    package enum Transition: Equatable {
         case sourceExhausted
         case sourceError(String)
         case candidateFound(discoveryMethod: StateMachineDiscoveryMethod, commandCount: Int)
@@ -439,7 +447,7 @@ extension SpecMachine {
 /// Drives a ``SpecMachine`` through its phases, handling regression replay and the main run.
 ///
 /// Each entry point (sequential, cooperative, preemptive) constructs a pipeline once and calls ``runWithRegressions(config:regressionSeeds:mainRunSmokeSource:)`` to run the full pipeline. The pipeline drives ``SpecMachine/next()`` directly rather than using a blind loop, so each transition is available for logging and diagnostics.
-struct SpecPipeline<Backend: StateMachineBackend> {
+package struct SpecPipeline<Backend: StateMachineBackend> {
     let backend: Backend
     let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
     let commandGen: Generator<Backend.Spec.Command>
@@ -455,7 +463,37 @@ struct SpecPipeline<Backend: StateMachineBackend> {
     let line: UInt
     let column: UInt
 
-    func run(
+    package init(
+        backend: Backend,
+        sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>,
+        commandGen: Generator<Backend.Spec.Command>,
+        commandLimit: Int,
+        concurrencyLevel: Int?,
+        identifySkips: @escaping @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>,
+        property: @escaping @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool,
+        invocationCounter: UnsafeSendableBox<Int>,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) {
+        self.backend = backend
+        self.sequenceGen = sequenceGen
+        self.commandGen = commandGen
+        self.commandLimit = commandLimit
+        self.concurrencyLevel = concurrencyLevel
+        self.identifySkips = identifySkips
+        self.property = property
+        self.invocationCounter = invocationCounter
+        self.sequenceGenForLength = sequenceGenForLength
+        self.fileID = fileID
+        self.filePath = filePath
+        self.line = line
+        self.column = column
+    }
+
+    package func run(
         config: ResolvedConcurrentConfig,
         smokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil,
         onFilterLosses: ((__ExhaustRuntime.ScreeningFilterLosses) -> Void)? = nil
@@ -499,7 +537,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         return (machine.result, runContext.state.deferredIssues)
     }
 
-    func runWithRegressions(
+    package func runWithRegressions(
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
         mainRunSmokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
@@ -533,7 +571,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
             deferredIssues.append("The spec was never executed: the screening and sampling budgets are both zero, so this test asserts nothing.")
         }
         // Filter losses are legitimate domain narrowing: a warning, never an error. A found failure supersedes the coverage concern, so a red run reports one issue, not two: a reproduced regression failure returns above without the warning, and a sampling failure gates it here.
-        if result == nil, let losses = filterLosses.value, config.suppress.issueReporting == false {
+        if result == nil, let losses = filterLosses.value, config.suppressIssueReporting == false {
             config.reportWarning?(losses.warningMessage, fileID, filePath, line, column)
         }
         return (result, deferredIssues)

@@ -2,9 +2,9 @@
 
 import ExhaustCore
 @_exported import protocol ExhaustCore.AsyncStateMachineSpec
-@_exported import struct ExhaustCore.CoOccurrenceMatrix
 @_exported import struct ExhaustCore.CommandResponse
 @_exported import enum ExhaustCore.ConcurrencyLevel
+@_exported import struct ExhaustCore.CoOccurrenceMatrix
 @_exported import enum ExhaustCore.ExecutionModel
 @_exported import struct ExhaustCore.FilterObservation
 @_exported import struct ExhaustCore.FilterSourceLocation

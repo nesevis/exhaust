@@ -1,8 +1,7 @@
 // Candidate source construction for spec machine runs.
-import ExhaustCore
 import Foundation
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Builds a sequential property for the smoke source: runs commands in order, checks invariants after each step.
     ///
     /// Shared by all spec backends. The sync variant handles `StateMachineSpec`; the async variant bridges through `_blockingAwaitSemaphore`. Both are used as the smoke source's property closure and as the sequential backend's probe property.
@@ -74,7 +73,7 @@ extension __ExhaustRuntime {
     }
 }
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Builds the prioritized source array for a spec machine run.
     ///
     /// Source order matches the design document: screening replay, sampling replay, smoke, screening, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
@@ -104,7 +103,7 @@ extension __ExhaustRuntime {
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 // The budget no longer gates reaching the row (the replay caps its tier at the row itself); it only decides which tiers get built. Flooring at the nominal budget keeps every merged tier's share positive, so the addressed tier always exists.
-                screeningBudget: max(UInt64(config.budget.screeningBudget), SequenceCoveringArray.nominalDomainBudget),
+                screeningBudget: max(UInt64(config.screeningBudget), SequenceCoveringArray.nominalDomainBudget),
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
                 deadlineNanoseconds: config.deadlineNanoseconds,
@@ -131,7 +130,7 @@ extension __ExhaustRuntime {
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                screeningBudget: UInt64(config.budget.screeningBudget),
+                screeningBudget: UInt64(config.screeningBudget),
                 coveringSeed: config.coveringSeed,
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
@@ -147,7 +146,7 @@ extension __ExhaustRuntime {
             sources.append(.sampling(
                 sequenceGen: sequenceGen,
                 seed: seed,
-                samplingBudget: UInt64(config.budget.samplingBudget),
+                samplingBudget: UInt64(config.samplingBudget),
                 deadlineNanoseconds: config.deadlineNanoseconds,
                 property: property
             ))
@@ -240,12 +239,12 @@ extension __ExhaustRuntime {
 /// An independent block of covering array factors belonging to a different generator than the screening row's.
 ///
 /// The factors join the row's covering array so interactions between the two blocks are covered, but the block's slice of each row is replayed through its own generator rather than folded into the row's fallback tree.
-struct ScreeningLeadingFactors {
-    let domainSizes: [UInt64]
-    let buildTree: (CoveringArrayRow) -> ChoiceTree?
+package struct ScreeningLeadingFactors {
+    package let domainSizes: [UInt64]
+    package let buildTree: (CoveringArrayRow) -> ChoiceTree?
 }
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Builds the sequential command-sequence generator: up to `commandLimit` commands at constant scaling, each tagged with `ScheduleMarker.prefix`.
     ///
     /// Shared by plain `#execute`'s sequential entry points and the `time:` spec adapter, so the sequence shape (length range, scaling, marker tagging) cannot drift between the modes.
@@ -253,7 +252,12 @@ extension __ExhaustRuntime {
         commandGen: ReflectiveGenerator<Command>,
         commandLimit: Int
     ) -> Generator<[(ScheduleMarker, Command)]> {
-        commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen.map { commands in
+        let length = 0 ... commandLimit
+        return Gen.arrayOf(
+            commandGen.gen,
+            within: UInt64(length.lowerBound) ... UInt64(length.upperBound),
+            scaling: .constant
+        ).map { commands in
             commands.map { (ScheduleMarker.prefix, $0) }
         }
     }

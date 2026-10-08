@@ -17,7 +17,7 @@ struct ActorSystemUnderTestTasksTests {
             (ScheduleMarker(rawValue: 1), .withdraw),
             (ScheduleMarker(rawValue: 2), .withdraw),
         ]
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: commands,
             setupStep: nil,
             specInit: { ReentrantBudgetSpec() },
@@ -37,7 +37,7 @@ struct ActorSystemUnderTestTasksTests {
             (ScheduleMarker(rawValue: 1), .withdraw),
             (ScheduleMarker(rawValue: 2), .withdraw),
         ]
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: commands,
             setupStep: nil,
             specInit: { AtomicBudgetSpec() },

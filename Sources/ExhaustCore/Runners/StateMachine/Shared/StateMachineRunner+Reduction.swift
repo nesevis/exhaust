@@ -1,8 +1,7 @@
 // Reduction and skip-aware pruning shared by the spec backends.
-import ExhaustCore
 import Foundation
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Removes elements at the given indices from `.sequence` nodes in the choice tree.
     ///
     /// Walks the tree recursively, pruning indexed elements from the first sequence node encountered and updating its stored length. Used by the skip-pruning pass to excise commands whose preconditions were not met before handing the tree to the reducer.
@@ -49,7 +48,7 @@ extension __ExhaustRuntime {
     }
 }
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree.
     ///
     /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree and the tree is rematerialized. When `requireFailurePreserved` is `true`, the rematerialized value is returned only if it still fails the property; otherwise the originals are returned unchanged. When `false`, the rematerialized value is returned whenever materialization succeeds, without re-checking the property.
@@ -232,7 +231,7 @@ extension __ExhaustRuntime {
     }
 }
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     enum StateMachineProbeVerdict<Evidence> {
         case pass
         case fail(Evidence)
@@ -241,13 +240,13 @@ extension __ExhaustRuntime {
     }
 
     struct ConcurrentTwoPassResult<Value, Evidence> {
-        let value: Value
-        let tree: ChoiceTree
+        package let value: Value
+        package let tree: ChoiceTree
         /// The reducer's own choice sequence for `value` — the one that reproduces it through `.exact` materialization. `ChoiceSequence.flatten(tree)` is not guaranteed to, because the reducer canonicalizes at init; consumers on the `(sequence, tree, value)` path must carry this instead of re-flattening.
-        let sequence: ChoiceSequence
-        let stats: ReductionStats
-        let lastEvidence: Evidence?
+        package let sequence: ChoiceSequence
+        package let stats: ReductionStats
+        package let lastEvidence: Evidence?
         /// Whether the property aborted reduction. Backends surface this as ``StateMachineReduction/timedOut``.
-        let aborted: Bool
+        package let aborted: Bool
     }
 }

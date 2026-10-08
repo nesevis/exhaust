@@ -1,10 +1,8 @@
 // Formats failure reports for both the sequential and concurrent spec runners.
 //
 // The concurrent path (FailureContext, renderFailure(_:trace:context:), renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:failureDescription:), StateMachineFailureInfo) renders a re-executed trace from a discovered command sequence.
-import CustomDump
-import ExhaustCore
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Suffix appended to the lane command (in both the command partition and the execution trace) whose observed response no valid sequential ordering reproduces.
     static let linearizabilityWitnessMarker = "  ← no sequential ordering reproduces this response"
 
@@ -182,7 +180,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Sequential Failure Rendering
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Formats a ``StateMachineResult`` and its associated failure metadata into a human-readable failure message.
     static func renderFailure<Spec: StateMachineSpecBase>(
         _ result: StateMachineResult<Spec>,
@@ -231,7 +229,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Sequential Failure Metadata
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Captures the original command sequence and the discovery method for a spec failure, used by ``renderFailure(_:failureInfo:failureDescription:)`` to build failure reports.
     ///
     /// The sequential twin of ``FailureContext``. Both carry the header's iteration and budget so the two renderers report a failure's position in the run identically; a reader comparing a `.sequential` report against a `.threads` one should not have to learn two headers.
@@ -244,5 +242,17 @@ extension __ExhaustRuntime {
         var iteration: Int
         /// The budget `iteration` counts against, which is the screening budget for a screening candidate and the sampling budget otherwise. Populated from the same values ``FailureContext`` reports, so neither renderer re-derives the rule.
         var budget: Int
+
+        package init(
+            originalCommands: [Command]?,
+            discoveryMethod: StateMachineDiscoveryMethod,
+            iteration: Int,
+            budget: Int
+        ) {
+            self.originalCommands = originalCommands
+            self.discoveryMethod = discoveryMethod
+            self.iteration = iteration
+            self.budget = budget
+        }
     }
 }

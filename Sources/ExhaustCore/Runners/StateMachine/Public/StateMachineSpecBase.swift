@@ -1,4 +1,3 @@
-
 public extension __ExhaustRuntime {
     /// Stands in as ``StateMachineSpecBase/SetupStep`` for a spec that declares no `@Setup` method.
     ///

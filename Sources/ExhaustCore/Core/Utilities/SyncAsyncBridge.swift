@@ -3,7 +3,7 @@ import Foundation
 /// How long a timed-out bounded await drains for after cancelling, before calling the work escaped. Matches the cooperative runner's own cancellation drain: a task that honours cancellation returns on its next suspension point, which is immediate on this lane.
 private let boundedAwaitCancellationDrainMilliseconds = 5
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Blocks the calling thread until an async closure completes and returns its result.
     ///
     /// On macOS 15+ / iOS 18+, the async work runs directly on the calling thread via a ``TaskExecutor``-based drain loop. This avoids the cooperative thread pool entirely, preventing starvation when many tests run in parallel on machines with few cores.
@@ -19,7 +19,7 @@ extension __ExhaustRuntime {
     ///     return spec.value
     /// }
     /// ```
-    package static func blockingAwait<Result>(
+    static func blockingAwait<Result>(
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
@@ -32,7 +32,7 @@ extension __ExhaustRuntime {
     /// What a bounded bridge call produced, or why it produced nothing.
     ///
     /// A bare optional cannot carry the distinction the caller needs: work that stopped when asked and work that is still running are both "no result", and only the second one goes on consuming the process and recording coverage against whatever runs next.
-    package enum BoundedAwaitOutcome<Success> {
+    enum BoundedAwaitOutcome<Success> {
         /// The work finished within the bound.
         case completed(Success)
 
@@ -66,7 +66,7 @@ extension __ExhaustRuntime {
     /// Like ``blockingAwait(_:)`` but gives up if the work makes no progress within `idleTimeoutMilliseconds`, cancelling it and reporting whether the cancellation took.
     ///
     /// Use when the awaited work may suspend onto a foreign executor (the main actor, a custom-executor actor, the global pool, `Task.sleep`, or I/O bridged through a continuation that resumes elsewhere). Such a continuation never returns to this single drain lane, so the unbounded ``blockingAwait(_:)`` would park the calling thread indefinitely. The bound mirrors the cooperative scheduler's idle timeout: the drain-loop path measures time since the last drained job (so legitimately long-but-active work does not trip it); the semaphore fallback measures total wall-clock.
-    package static func blockingAwait<Result>(
+    static func blockingAwait<Result>(
         idleTimeoutMilliseconds: Int,
         _ work: @Sendable @escaping () async -> Result
     ) -> BoundedAwaitOutcome<Result> {
@@ -176,7 +176,7 @@ extension __ExhaustRuntime {
     }
 
     /// Creates a cooperative-pool task and sleeps the calling thread until it completes. The unbounded form; ``_blockingAwaitSemaphoreBounded(timeoutMilliseconds:_:)`` is the one that can give up.
-    package static func _blockingAwaitSemaphore<Result>(
+    static func _blockingAwaitSemaphore<Result>(
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         let box = UnsafeSendableBox<Result?>(nil)

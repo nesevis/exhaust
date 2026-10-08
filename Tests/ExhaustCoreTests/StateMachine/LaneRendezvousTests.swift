@@ -1,7 +1,6 @@
-import ExhaustCore
 import Foundation
 import Testing
-@testable import Exhaust
+@testable import ExhaustCore
 
 /// Deterministic logic tests for ``LaneRendezvous``.
 ///

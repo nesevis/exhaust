@@ -1,7 +1,5 @@
-import ExhaustCore
-
 /// Outcome of a single backend probe, consumed by the ``SpecMachine`` to decide the next phase.
-enum ProbeOutcome {
+package enum ProbeOutcome {
     case pass
     case fail
     case timeout
@@ -10,7 +8,7 @@ enum ProbeOutcome {
 /// Dispatches probing, reduction, and result assembly to an execution-model-specific strategy.
 ///
 /// The ``SpecMachine`` dispatches to the backend without knowing whether execution is sequential, cooperative, or preemptive.
-protocol StateMachineBackend<Spec>: SendableMetatype {
+package protocol StateMachineBackend<Spec>: SendableMetatype {
     associatedtype Spec: StateMachineSpecBase
 
     /// Executes a candidate (the setup step, then the tagged commands) and returns whether it passed, failed, or timed out.
@@ -61,17 +59,27 @@ extension StateMachineBackend {
 }
 
 /// Carries the reduced command sequence and reduction statistics from a backend's ``StateMachineBackend/reduce(taggedCommands:tree:context:)`` call.
-struct StateMachineReduction<Command> {
+package struct StateMachineReduction<Command> {
     let finalInput: [(ScheduleMarker, Command)]
     let stats: ReductionStats?
-    let timedOut: Bool
+    package let timedOut: Bool
+
+    package init(
+        finalInput: [(ScheduleMarker, Command)],
+        stats: ReductionStats?,
+        timedOut: Bool
+    ) {
+        self.finalInput = finalInput
+        self.stats = stats
+        self.timedOut = timedOut
+    }
 }
 
 extension Array {
     /// Returns a copy with all prefix-marked commands before lane commands, preserving the relative order within each group.
     ///
     /// Reduction can place prefix markers after lane markers in the array. Without normalization, the oracle replays commands in an order the concurrent execution never used, and the reported command list disagrees with the trace.
-    func prefixFirstOrder<Command>() -> Self where Element == (ScheduleMarker, Command) {
+    package func prefixFirstOrder<Command>() -> Self where Element == (ScheduleMarker, Command) {
         filter(\.0.isPrefix) + filter { $0.0.isPrefix == false }
     }
 }

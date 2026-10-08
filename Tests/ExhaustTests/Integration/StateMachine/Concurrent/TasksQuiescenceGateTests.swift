@@ -56,7 +56,7 @@ struct TasksQuiescenceGateTests {
             (ScheduleMarker(rawValue: 1), .skipAfterSuspending),
             (ScheduleMarker(rawValue: 2), .increment),
         ]
-        let result = drainSchedule(
+        let result = CooperativeScheduler.drainSchedule(
             taggedCommands: commands,
             setupStep: nil,
             specInit: { LostUpdateCounterSpec() },

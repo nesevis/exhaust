@@ -99,7 +99,7 @@ struct SpecMachineTests {
 
         while machine.next() != nil {}
 
-        #expect(context.state.report.propertyInvocations > 0)
+        #expect(context.state.ledger.totalInvocations > 0)
     }
 
     @Test("Each source's invocations are attributed to its bucket, including a passing source")
@@ -118,10 +118,10 @@ struct SpecMachineTests {
         while machine.next() != nil {}
 
         // The screening source passed but its 5 probes are still counted; sampling's 3 land in their own bucket; reduction adds the StubBackend's 2.
-        #expect(context.state.report.screeningInvocations == 5)
-        #expect(context.state.report.randomSamplingInvocations == 3)
-        #expect(context.state.report.reductionInvocations == 2)
-        #expect(context.state.report.propertyInvocations == 10)
+        #expect(context.state.ledger.count(.screening) == 5)
+        #expect(context.state.ledger.count(.sampling) == 3)
+        #expect(context.state.ledger.count(.reduction) == 2)
+        #expect(context.state.ledger.totalInvocations == 10)
     }
 
     @Test("A sampling-only run attributes no wall time to the screening phase")
@@ -134,7 +134,7 @@ struct SpecMachineTests {
 
         while machine.next() != nil {}
 
-        #expect(context.state.report.screeningMilliseconds == 0)
+        #expect(context.state.screeningMilliseconds == 0)
     }
 
     @Test("Report seed comes from the sampling source even when the run passes")

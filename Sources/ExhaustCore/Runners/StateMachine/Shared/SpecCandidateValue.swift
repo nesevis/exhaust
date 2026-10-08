@@ -1,14 +1,17 @@
-import ExhaustCore
-
 /// Carries one generated spec candidate through the pipeline: the setup step ahead of the tagged command sequence.
 ///
 /// `setupStep` is nil for specs without a `@Setup` method, matching the at-most-one method the macro enforces and the ``StateMachineResult/setup`` the user reads. The step never enters `taggedCommands`, so lane partitioning, skip indices, and per-element segments keep their command-array index bases.
-struct SpecCandidateValue<Spec: StateMachineSpecBase>: Sendable {
-    var setupStep: Spec.SetupStep?
-    var taggedCommands: [(ScheduleMarker, Spec.Command)]
+package struct SpecCandidateValue<Spec: StateMachineSpecBase>: Sendable {
+    package var setupStep: Spec.SetupStep?
+    package var taggedCommands: [(ScheduleMarker, Spec.Command)]
+
+    package init(setupStep: Spec.SetupStep?, taggedCommands: [(ScheduleMarker, Spec.Command)]) {
+        self.setupStep = setupStep
+        self.taggedCommands = taggedCommands
+    }
 }
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Builds the full candidate generator from the command-sequence generator, routing on the spec's `setupGenerator`.
     ///
     /// The two paths are deliberately different shapes. With setup, the candidate is a zip of the setup step ahead of the command sequence, so setup lives in the choice tree and reduces. Without setup, the candidate MUST be a pure `.map` over the command-sequence generator: a zip against a trivial generator would emit a marker into the flat choice sequence, shifting every index and invalidating every recorded regression seed for every existing spec.
@@ -27,7 +30,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Candidate Tree Decomposition
 
-extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Splits a with-setup candidate tree into its setup and command children.
     ///
     /// `Gen.zip` materializes as `.group([setupTree, commandTree], isOpaque: false)` and the candidate's outer `.map` is tree-transparent, so the root of a with-setup candidate tree is exactly that two-child group. Returns `nil` when the shape does not match; callers must degrade safely (skip reduction) rather than operate on a tree they cannot decompose.

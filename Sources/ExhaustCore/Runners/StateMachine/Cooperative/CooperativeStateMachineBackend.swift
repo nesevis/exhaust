@@ -1,21 +1,31 @@
-import ExhaustCore
-
-/// Runs spec probes via cooperative concurrent execution through ``drainSchedule(taggedCommands:setupStep:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``.
+/// Runs spec probes via cooperative concurrent execution through ``CooperativeScheduler/drainSchedule(taggedCommands:setupStep:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``.
 ///
 /// Async-only because `.tasks` requires ``AsyncStateMachineSpec``. The drain loop is synchronous on the calling GCD thread, so ``probe(_:context:)`` returns without async bridging.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachineBackend {
+package struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachineBackend {
     let specInit: () -> Spec
     let concurrencyLevel: Int
     let idleTimeoutMilliseconds: Int
     /// Interleaving searches this run abandoned for exceeding their replay budget, counted so the runner can warn about probes it passed without judging.
     var searchAbandonments = UnsafeSendableBox(0)
 
-    func probe(
+    package init(
+        specInit: @escaping () -> Spec,
+        concurrencyLevel: Int,
+        idleTimeoutMilliseconds: Int,
+        searchAbandonments: UnsafeSendableBox<Int> = UnsafeSendableBox(0)
+    ) {
+        self.specInit = specInit
+        self.concurrencyLevel = concurrencyLevel
+        self.idleTimeoutMilliseconds = idleTimeoutMilliseconds
+        self.searchAbandonments = searchAbandonments
+    }
+
+    package func probe(
         _ candidate: SpecCandidateValue<Spec>,
         context _: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
-        let result = drainAndJudge(
+        let result = CooperativeScheduler.drainAndJudge(
             taggedCommands: candidate.taggedCommands,
             setupStep: candidate.setupStep,
             specInit: specInit,
@@ -30,7 +40,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         return result.passed ? .pass : .fail
     }
 
-    func reduce(
+    package func reduce(
         setupStep: Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
@@ -62,7 +72,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         return StateMachineReduction(finalInput: result.value, stats: result.stats, timedOut: result.aborted)
     }
 
-    func buildResult(
+    package func buildResult(
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
@@ -74,7 +84,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         let discoveryMethod = provenance.discoveryMethod
 
         // The reported run's own judgement is not tallied: this is a re-run of a sequence the pipeline has already judged, and counting it twice would overstate how much of the search budget the run spent.
-        let traceResult = drainAndJudge(
+        let traceResult = CooperativeScheduler.drainAndJudge(
             taggedCommands: reduced,
             setupStep: setupStep,
             specInit: specInit,
@@ -120,9 +130,9 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         }
         context.state.failureContext.judgementDescription = traceResult.judgementDescription
         context.state.failureContext.linearizabilityWitness = traceResult.linearizabilityWitness
-        context.state.failureContext.laneResponseValues = laneResponseValues(traceResult.laneResponses)
+        context.state.failureContext.laneResponseValues = CooperativeScheduler.laneResponseValues(traceResult.laneResponses)
 
-        let issueMessage: String = context.config.suppress.issueReporting
+        let issueMessage: String = context.config.suppressIssueReporting
             ? ""
             : __ExhaustRuntime.renderFailure(
                 reduced,
@@ -136,17 +146,19 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
 
 // MARK: - Helpers
 
-/// Groups observed responses by the lane marker the report prints, so each lane command can be annotated with what it answered.
-///
-/// Returns nil when no lane recorded anything, which keeps the annotation out of reports that have nothing to annotate. A lane's array is a prefix of its commands — the drain stops at the first failure and a failed command has no response — so positional indexing never shifts an annotation onto the wrong command.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private func laneResponseValues(
-    _ laneResponses: [[ObservedResponse<some Any>]]
-) -> [UInt8: [String?]]? {
-    let recorded = laneResponses.joined()
-    guard recorded.isEmpty == false else {
-        return nil
+extension CooperativeScheduler {
+    /// Groups observed responses by the lane marker the report prints, so each lane command can be annotated with what it answered.
+    ///
+    /// Returns nil when no lane recorded anything, which keeps the annotation out of reports that have nothing to annotate. A lane's array is a prefix of its commands — the drain stops at the first failure and a failed command has no response — so positional indexing never shifts an annotation onto the wrong command.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    fileprivate static func laneResponseValues(
+        _ laneResponses: [[ObservedResponse<some Any>]]
+    ) -> [UInt8: [String?]]? {
+        let recorded = laneResponses.joined()
+        guard recorded.isEmpty == false else {
+            return nil
+        }
+        return Dictionary(grouping: recorded, by: \.lane)
+            .mapValues { $0.map(\.outcome.displayValue) }
     }
-    return Dictionary(grouping: recorded, by: \.lane)
-        .mapValues { $0.map(\.outcome.displayValue) }
 }
