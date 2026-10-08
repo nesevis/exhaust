@@ -382,18 +382,18 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                 return countingProperty(output) == false
             }
 
-        let outcome = Interpreters.choiceGraphReduce(
-            gen: gen,
+        let run = ReductionRunner.reduce(
+            gen,
             tree: reduceTree,
-            output: value,
-            config: .init(maxStalls: 2),
+            value: value,
+            configuration: .init(maxStalls: 2),
             property: { reductionPredicate($0) == false }
         )
-        if case let .reduced(reducedSequence, _, reducedValue) = outcome {
+        if run.improved {
             return ReducedFailure(
-                counterexample: reducedValue,
+                counterexample: run.value,
                 original: value,
-                reducedSequence: reducedSequence,
+                reducedSequence: run.sequence,
                 reductionInvocations: countingProperty.invocations,
                 reductionFailures: countingProperty.failures
             )

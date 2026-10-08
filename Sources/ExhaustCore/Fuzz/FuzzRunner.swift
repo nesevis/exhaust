@@ -296,33 +296,20 @@ package final class FuzzRunner<Output> {
             }
             var configuration = reducerConfiguration
             configuration.probeWrapper = probeWrapper
-            let result = Interpreters.choiceGraphReduceCollectingStats(
-                gen: gen,
+            let run = ReductionRunner.reduce(
+                gen,
                 tree: tree,
-                output: value,
-                config: configuration,
+                value: value,
+                configuration: configuration,
                 property: boolProperty
             )
-            let propertyInvocations = result.stats.reductionProbesWherePropertyPassed
-                + result.stats.reductionProbesWherePropertyFailed
-            switch result.outcome {
-                case let .reduced(sequence, reducedTree, output), let .unreduced(sequence, reducedTree, output):
-                    return FuzzReductionResult(
-                        sequence: sequence,
-                        tree: reducedTree,
-                        value: output,
-                        propertyInvocations: propertyInvocations,
-                        escaped: escaped.value
-                    )
-                case .failure:
-                    return FuzzReductionResult(
-                        sequence: ChoiceSequence.flatten(tree),
-                        tree: tree,
-                        value: value,
-                        propertyInvocations: propertyInvocations,
-                        escaped: escaped.value
-                    )
-            }
+            return FuzzReductionResult(
+                sequence: run.sequence,
+                tree: run.tree,
+                value: run.value,
+                propertyInvocations: run.propertyInvocations,
+                escaped: escaped.value
+            )
         }
     }
 

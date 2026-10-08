@@ -105,17 +105,14 @@ extension __ExhaustRuntime {
         config: Interpreters.ReducerConfiguration,
         property: @escaping @Sendable (Value) -> Bool
     ) -> (value: Value, stats: ReductionStats, reduced: Bool) {
-        let result = Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
+        let run = ReductionRunner.reduce(
+            generator,
             tree: tree,
-            output: value,
-            config: config,
+            value: value,
+            configuration: config,
             property: property
         )
-        if case let .reduced(_, _, reduced) = result.outcome {
-            return (reduced, result.stats, true)
-        }
-        return (value, result.stats, false)
+        return (run.improved ? run.value : value, run.stats, run.improved)
     }
 
     /// Reduces a concurrent spec counterexample in two passes: structural (lane collapse + deletion) then value minimization.
@@ -132,14 +129,6 @@ extension __ExhaustRuntime {
         probeWrapper: ProbeWrapper? = nil,
         property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
     ) -> ConcurrentTwoPassResult<Value, Evidence> {
-        func remainingBudget() -> UInt64 {
-            guard let deadline = runDeadlineNanoseconds else {
-                return deadlineNanoseconds
-            }
-            let now = monotonicNanoseconds()
-            let remaining = deadline > now ? deadline - now : 1
-            return deadlineNanoseconds == 0 ? remaining : min(deadlineNanoseconds, remaining)
-        }
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         var currentOutput = output
         var currentTree = tree
@@ -167,59 +156,63 @@ extension __ExhaustRuntime {
         }
 
         // Pass 1: structural reduction (lane collapse + deletion).
-        if runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true {
-            let result = Interpreters.choiceGraphReduceCollectingStats(
-                gen: generator,
-                tree: currentTree,
-                output: currentOutput,
-                config: .init(
-                    maxStalls: 2,
-                    wallClockDeadlineNanoseconds: remainingBudget(),
-                    enabledEncoders: [.laneCollapse, .deletion],
-                    tuning: noRelax,
-                    probeWrapper: probeWrapper
-                ),
-                property: boolProperty
-            )
-            mergedStats.merge(result.stats)
-            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
-                currentOutput = reduced
-                currentTree = reducedTree
-                currentSequence = sequence
-                if case let .success(value, tree, _) = Materializer.materialize(
-                    generator, context: .init(
-                        prefix: sequence, mode: .exact
-                    )
-                ) {
-                    currentOutput = value
-                    currentTree = tree
-                }
+        let structuralRun = ReductionRunner.reduce(
+            generator,
+            tree: currentTree,
+            value: currentOutput,
+            configuration: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: deadlineNanoseconds,
+                enabledEncoders: [.laneCollapse, .deletion],
+                tuning: noRelax,
+                probeWrapper: probeWrapper
+            ),
+            runDeadlineNanoseconds: runDeadlineNanoseconds,
+            property: boolProperty
+        )
+        if structuralRun.started {
+            mergedStats.merge(structuralRun.stats)
+        }
+        if structuralRun.improved {
+            currentOutput = structuralRun.value
+            currentTree = structuralRun.tree
+            currentSequence = structuralRun.sequence
+            if case let .success(value, tree, _) = Materializer.materialize(
+                generator, context: .init(
+                    prefix: structuralRun.sequence, mode: .exact
+                )
+            ) {
+                currentOutput = value
+                currentTree = tree
             }
         }
 
         // Pass 2: value minimization on the structurally reduced sequence.
-        if aborted == false, runDeadlineNanoseconds.map({ monotonicNanoseconds() < $0 }) ?? true {
-            let result = Interpreters.choiceGraphReduceCollectingStats(
-                gen: generator,
+        if aborted == false {
+            let valueRun = ReductionRunner.reduce(
+                generator,
                 tree: currentTree,
-                output: currentOutput,
-                config: .init(
+                value: currentOutput,
+                configuration: .init(
                     maxStalls: 2,
-                    wallClockDeadlineNanoseconds: remainingBudget(),
+                    wallClockDeadlineNanoseconds: deadlineNanoseconds,
                     enabledEncoders: [.valueSearch, .floatSearch, .convergenceConfirmation],
                     tuning: noRelax,
                     probeWrapper: probeWrapper
                 ),
+                runDeadlineNanoseconds: runDeadlineNanoseconds,
                 property: boolProperty
             )
-            mergedStats.merge(result.stats)
-            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
-                currentOutput = reduced
-                currentTree = reducedTree
-                currentSequence = sequence
+            if valueRun.started {
+                mergedStats.merge(valueRun.stats)
+            }
+            if valueRun.improved {
+                currentOutput = valueRun.value
+                currentTree = valueRun.tree
+                currentSequence = valueRun.sequence
                 if case let .success(value, tree, _) = Materializer.materialize(
                     generator, context: .init(
-                        prefix: sequence, mode: .exact
+                        prefix: valueRun.sequence, mode: .exact
                     )
                 ) {
                     currentOutput = value

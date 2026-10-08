@@ -312,15 +312,15 @@ extension __ExhaustRuntime {
                 return countingProperty(output) == false
             }
 
-        let outcome = Interpreters.choiceGraphReduce(
-            gen: gen,
+        let run = ReductionRunner.reduce(
+            gen,
             tree: reduceTree,
-            output: failure.value,
-            config: .init(maxStalls: 2),
+            value: failure.value,
+            configuration: .init(maxStalls: 2),
             property: { reductionPredicate($0) == false }
         )
-        if case let .reduced(reducedSequence, _, reducedValue) = outcome {
-            return (reducedValue, failure.value, reducedSequence, countingProperty.invocations, countingProperty.failures)
+        if run.improved {
+            return (run.value, failure.value, run.sequence, countingProperty.invocations, countingProperty.failures)
         }
 
         return (failure.value, failure.value, nil, countingProperty.invocations, countingProperty.failures)
