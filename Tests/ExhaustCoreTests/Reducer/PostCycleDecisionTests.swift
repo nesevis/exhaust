@@ -209,13 +209,13 @@ struct PostCycleDecisionTests {
                 allConverged: true,
                 improved: false,
                 structurallyImproved: false,
-                shouldAttemptNumericPairs: true
+                shouldAttemptStagedJoint: true
             ),
             stallBudget: 4,
             maxStalls: 4,
             deferBindInner: false
         )
-        #expect(evaluation.actions == [.confirmConvergence, .relationPass, .pairwiseNumericPass, .excursion])
+        #expect(evaluation.actions == [.confirmConvergence, .relationPass, .stagedJointPass, .excursion])
         let numericOnly = ChoiceGraphScheduler.evaluatePostCycle(
             outcome: .init(
                 anyAccepted: false,
@@ -224,13 +224,13 @@ struct PostCycleDecisionTests {
                 allConverged: false,
                 improved: false,
                 structurallyImproved: false,
-                shouldAttemptNumericPairs: true
+                shouldAttemptStagedJoint: true
             ),
             stallBudget: 4,
             maxStalls: 4,
             deferBindInner: false
         )
-        #expect(numericOnly.actions == [.pairwiseNumericPass])
+        #expect(numericOnly.actions == [.stagedJointPass])
     }
 
     // MARK: - Helpers
@@ -254,8 +254,7 @@ struct PostCycleDecisionTests {
                 hasUnprobedImprovingPivot: hasUnprobedImprovingPivot,
                 allConverged: allConverged,
                 improved: improved,
-                structurallyImproved: structurallyImproved,
-                shouldAttemptNumericPairs: false
+                structurallyImproved: structurallyImproved
             ),
             stallBudget: stallBudget,
             maxStalls: maxStalls,

@@ -349,7 +349,8 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
         isRangeExplicit: true,
         typeTagPayload: .character(
             problematicIndices: srs.problematicIndices,
-            simplifications: srs.simplifications
+            simplifications: srs.simplifications,
+            domain: srs.domainIdentity
         )
     )
     let indexGen = Generator<UInt64>.impure(operation: operation) { result in

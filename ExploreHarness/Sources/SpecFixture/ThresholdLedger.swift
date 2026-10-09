@@ -20,7 +20,7 @@
 //
 // ## Blind-Improbability Math
 //
-// Exact DP over the three-command uniform chain (state: capped balance): per attempt, threshold 40 fires at 8.6e-3 for a 40-command sequence (3.4e-3 averaged over the uniform 0...40 length draw) — deliberately mutation-assemblable, the "no differential expected" control of MX4 prediction 1. Threshold 90 fires at 1.3e-6 (3.0e-7 averaged) — the length-hostile configuration. Both constants are the design document's own; the MX1g calibration sweep finalizes them.
+// Exact DP over the three-command uniform chain (state: capped balance): per attempt, threshold 40 fires at 8.6e-3 for a 40-command sequence (3.4e-3 averaged over the uniform 0...40 length draw) — deliberately mutation-assemblable, a control where no differential is expected. Threshold 90 fires at 1.3e-6 (3.0e-7 averaged) — the length-hostile configuration. The calibration sweep checks both constants.
 //
 // Pinned baselines (MX1g, 2026-07-12, seeds 1-20, 10 s, defaults, .commandLimit(40)): threshold 40 flat 17/20, threshold 90 flat 0/20, threshold 90 laddered 19/20.
 

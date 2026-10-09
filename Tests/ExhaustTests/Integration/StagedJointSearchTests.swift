@@ -1,8 +1,8 @@
 import Exhaust
 import Testing
 
-@Suite("Pairwise numeric search integration")
-struct PairwiseNumericSearchIntegrationTests {
+@Suite("Staged joint search integration")
+struct StagedJointSearchIntegrationTests {
     @Test("Weighted equality reaches its smallest tuple", arguments: [1, 2, 3, 5, 10])
     func weightedEquality(source: Int) throws {
         let result = #exhaust(

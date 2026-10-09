@@ -638,24 +638,26 @@ private func printTimingReport(name: String, results: [SeedResult]) {
 
     var totalSrc: UInt64 = 0
     var totalDisp: UInt64 = 0
+    var totalPassApply: UInt64 = 0
     var totalEnc: UInt64 = 0
     var totalDec: UInt64 = 0
     var totalReb: UInt64 = 0
     var totalCC: UInt64 = 0
     var totalRlx: UInt64 = 0
     var totalRel: UInt64 = 0
-    var totalNumericPairs: UInt64 = 0
+    var totalStagedJoint: UInt64 = 0
     var totalReord: UInt64 = 0
     for timing in timingResults {
         totalSrc += timing.buildSources
         totalDisp += timing.dispatch
+        totalPassApply += timing.passApply
         totalEnc += timing.encode
         totalDec += timing.decode
         totalReb += timing.rebuild
         totalCC += timing.convergenceConfirmation
         totalRlx += timing.relaxRound
         totalRel += timing.relationPass
-        totalNumericPairs += timing.pairwiseNumericPass
+        totalStagedJoint += timing.stagedJointPass
         totalReord += timing.reorder
     }
     var totalRebGraph: UInt64 = 0
@@ -665,8 +667,8 @@ private func printTimingReport(name: String, results: [SeedResult]) {
         totalRebSource += timing.rebuildSourceNanoseconds
     }
     let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
-    let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalRel + totalNumericPairs + totalReord
-    print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) rel=\(toMs(totalRel)) pairs=\(toMs(totalNumericPairs)) reord=\(toMs(totalReord))")
+    let totalNs = totalSrc + totalDisp + totalPassApply + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalRel + totalStagedJoint + totalReord
+    print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) apply=\(toMs(totalPassApply)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) rel=\(toMs(totalRel)) staged=\(toMs(totalStagedJoint)) reord=\(toMs(totalReord))")
     let allStats = results.compactMap(\.stats)
     let improvingProbes = allStats.reduce(0) { $0 + $1.relaxImprovingProbes }
     let improvingAcceptances = allStats.reduce(0) { $0 + $1.relaxImprovingAcceptances }

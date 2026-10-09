@@ -41,7 +41,9 @@ extension ProbeSessionState {
 /// Drives the encode-decode loop for a single encoder pass.
 ///
 /// Constructed by the machine when dispatch selects an encoder. Advanced by ``step(state:)`` (one sub-phase per call) or ``runToCompletion(state:deadlineCheck:)`` (loops step internally). Produces a ``PassReport`` when finished via ``report()``.
-struct ProbeSession {
+///
+/// Retains one pass's mutable encoder and reusable candidate buffer across cooperative steps. Hosts borrow the session reference while lending their state, keeping its fields in place and allowing sparse probes to reuse one candidate buffer.
+final class ProbeSession {
     // MARK: - Phase
 
     /// Tracks the session's position within the encode-decode cycle.
@@ -70,6 +72,7 @@ struct ProbeSession {
     private let hasBind: Bool
 
     private var candidateBuffer: ChoiceSequence
+    private var previousSparseProbe: SparseEncoderProbe?
     private var lastProbeAccepted: Bool = false
 
     private var pendingMutation: ProjectedMutation?
@@ -111,7 +114,7 @@ struct ProbeSession {
     // MARK: - Step
 
     /// Advances the session by one encode or decode sub-phase.
-    mutating func step(state: inout some ProbeSessionState) -> StepResult {
+    func step(state: inout some ProbeSessionState) -> StepResult {
         switch phase {
             case .encode:
                 return stepEncode(state: &state)
@@ -124,13 +127,35 @@ struct ProbeSession {
 
     // MARK: - Encode
 
-    private mutating func stepEncode(state: inout some ProbeSessionState) -> StepResult {
-        guard let mutation = encoder.nextProbe(
-            into: &candidateBuffer,
-            lastAccepted: lastProbeAccepted
-        ) else {
+    /// Emits one probe, checking its cached hash before writing sparse edits or selecting a decoder.
+    private func stepEncode(state: inout some ProbeSessionState) -> StepResult {
+        guard let prepared = encoder.prepareProbe(into: &candidateBuffer, lastAccepted: lastProbeAccepted) else {
             phase = .finished
             return .finished
+        }
+        let mutation: EncoderProbe
+        let probeHash: UInt64
+        let cacheHit: Bool
+        switch consume prepared {
+            case let .materialized(preparedMutation):
+                mutation = preparedMutation
+                probeHash = ZobristHash.incrementalHash(baseHash: baseHash, baseSequence: state.sequence, probe: candidateBuffer)
+                cacheHit = state.rejectCache.contains(probeHash)
+                previousSparseProbe = nil
+            case let .sparse(probe, baseSequence):
+                mutation = probe.mutation
+                probeHash = probe.hash(baseHash: baseHash, baseSequence: baseSequence)
+                cacheHit = state.rejectCache.contains(probeHash)
+                // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
+                if cacheHit == false || observer != nil {
+                    if let previousSparseProbe {
+                        previousSparseProbe.restore(into: &candidateBuffer, baseSequence: baseSequence)
+                    } else {
+                        candidateBuffer = baseSequence
+                    }
+                    probe.write(into: &candidateBuffer)
+                    previousSparseProbe = probe
+                }
         }
 
         counts.recordEmission()
@@ -142,12 +167,7 @@ struct ProbeSession {
             observer(.emitted(probeID: nextProbeID, sequence: candidateBuffer, mutation: mutation))
         }
 
-        let probeHash = ZobristHash.incrementalHash(
-            baseHash: baseHash,
-            baseSequence: state.sequence,
-            probe: candidateBuffer
-        )
-        if state.rejectCache.contains(probeHash) {
+        if cacheHit {
             counts.recordCacheRejection()
             terminateObservation(.cacheRejected)
             return .encoded(encoder: encoder.name, cacheHit: true)
@@ -177,7 +197,8 @@ struct ProbeSession {
 
     // MARK: - Decode
 
-    private mutating func stepDecode(state: inout some ProbeSessionState) -> StepResult {
+    /// Decodes the pending probe, records its terminal outcome, and commits candidates admitted by the encoder.
+    private func stepDecode(state: inout some ProbeSessionState) -> StepResult {
         guard let mutation = pendingMutation,
               let selection = pendingDecoderSelection
         else {
@@ -270,7 +291,7 @@ struct ProbeSession {
     }
 
     /// Completes an observed probe once, including when a caller stops with decoding still pending.
-    private mutating func terminateObservation(
+    private func terminateObservation(
         _ disposition: ProbeDisposition,
         materializationAttempts: Int = 0
     ) {
@@ -288,7 +309,7 @@ struct ProbeSession {
     // MARK: - Report
 
     /// Produces the pass report by flushing partial convergence and snapshotting all counters.
-    mutating func report() -> PassReport {
+    func report() -> PassReport {
         terminateObservation(.interrupted)
         encoder.flushPartialConvergence()
 
@@ -313,7 +334,7 @@ struct ProbeSession {
     /// Stops before the next encode or decode step when the deadline expires, reporting all work already performed.
     ///
     /// Checking every step also bounds runs consisting entirely of cache rejections. A pending undecoded probe is interrupted by ``report()``; an in-flight decode completes before the next check.
-    mutating func runToCompletion(
+    func runToCompletion(
         state: inout some ProbeSessionState,
         deadlineCheck: (() -> Bool)? = nil
     ) -> PassReport {

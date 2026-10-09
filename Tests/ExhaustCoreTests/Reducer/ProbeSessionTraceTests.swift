@@ -9,7 +9,7 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { _ in true })
         fixture.state.rejectCache.insert(ZobristHash.hash(of: ChoiceSequence(choices(2))))
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
 
         #expect(recorder.events == [
@@ -23,7 +23,7 @@ struct ProbeSessionTraceTests {
     func propertyPasses() throws {
         var fixture = try Fixture(property: { _ in true })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         let report = session.runToCompletion(state: &fixture.state)
 
         #expect(recorder.events == [
@@ -45,7 +45,7 @@ struct ProbeSessionTraceTests {
     func enlargingCommit() throws {
         var fixture = try Fixture(property: { _ in false })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
         _ = session.step(state: &fixture.state)
 
@@ -63,7 +63,7 @@ struct ProbeSessionTraceTests {
     func acceptedCommit() throws {
         var fixture = try Fixture(property: { _ in false })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         for _ in 0 ..< 4 {
             _ = session.step(state: &fixture.state)
         }
@@ -90,7 +90,7 @@ struct ProbeSessionTraceTests {
         })
         fixture.state.gen = Gen.choose(in: UInt64(0) ... 1).erase()
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
         _ = session.step(state: &fixture.state)
 
@@ -107,7 +107,7 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { ($0 as? UInt64) != 0 })
         let downstream = try Fixture(value: 2, property: { _ in true })
         let recorder = ProbeTraceRecorder()
-        var encoder = EncoderDispatch.composed(GraphComposedEncoder(
+        var encoder = EncoderDispatch(GraphComposedEncoder(
             name: .composed,
             makeProposals: domainLeafProposals,
             policy: CompositionPolicy(
@@ -120,11 +120,11 @@ struct ProbeSessionTraceTests {
             ),
             lift: { _, fallbackTree in fallbackTree },
             downstreamFactory: { _, _, _ in
-                .stage(encoder: .composed(domainFixtureEncoder()), scope: downstream.scope)
+                .stage(encoder: .init(domainFixtureEncoder()), scope: downstream.scope)
             }
         ))
         encoder.start(scope: fixture.scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -166,7 +166,7 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var encoder = ChoiceGraphScheduler.makeBindPivotEncoder(gen: fixture.state.gen)
         encoder.start(scope: fixture.scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -199,9 +199,9 @@ struct ProbeSessionTraceTests {
         var fixture = try pivotFixture()
         let recorder = ProbeTraceRecorder()
         let original = fixture.scope.tree
-        var encoder = EncoderDispatch.composed(BindPivotSearch.makeEncoder(lift: { _, _ in original }))
+        var encoder = EncoderDispatch(BindPivotSearch.makeEncoder(lift: { _, _ in original }))
         encoder.start(scope: fixture.scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -273,7 +273,7 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var encoder = ChoiceGraphScheduler.makeBoundExchangeEncoder(gen: generator)
         encoder.start(scope: scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: scope.transformation,
             boundValueFingerprint: nil,
@@ -309,7 +309,7 @@ struct ProbeSessionTraceTests {
     func pendingProbeInterrupted() throws {
         var fixture = try Fixture(property: { _ in true })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
         _ = session.report()
         _ = session.report()
@@ -324,9 +324,9 @@ struct ProbeSessionTraceTests {
     @Test("Lifted operations retain their decoder and acceptance policies")
     func separateDecoderAndAcceptanceContracts() {
         let encoders: [(EncoderDispatch, Bool, AcceptanceHandling)] = [
-            (.composed(BoundExchangeSearch.makeEncoder(lift: { _, _ in nil })), true, .refreshAndIdle),
-            (.composed(BindPivotSearch.makeEncoder(lift: { _, _ in nil })), false, .applyMutation),
-            (.binarySearch(GraphBinarySearchEncoder()), false, .applyMutation),
+            (.init(BoundExchangeSearch.makeEncoder(lift: { _, _ in nil })), true, .refreshAndIdle),
+            (.init(BindPivotSearch.makeEncoder(lift: { _, _ in nil })), false, .applyMutation),
+            (.init(GraphBinarySearchEncoder()), false, .applyMutation),
         ]
         for (encoder, requiresExact, acceptance) in encoders {
             #expect(encoder.requiresExactDecoder == requiresExact)
@@ -360,7 +360,7 @@ struct ProbeSessionTraceTests {
         ]
         for name in [EncoderName.composed, .bindPivot, .boundExchange] {
             for (requiresExact, acceptance) in policies {
-                let encoder = EncoderDispatch.composed(GraphComposedEncoder(
+                let encoder = EncoderDispatch(GraphComposedEncoder(
                     name: name,
                     makeProposals: { _ in nil },
                     policy: CompositionPolicy(
@@ -559,7 +559,7 @@ private struct Fixture {
     }
 
     func session(recorder: ProbeTraceRecorder? = nil) -> ProbeSession {
-        var encoder = EncoderDispatch.composed(domainFixtureEncoder())
+        var encoder = EncoderDispatch(domainFixtureEncoder())
         encoder.start(scope: scope)
         return ProbeSession(
             encoder: encoder,

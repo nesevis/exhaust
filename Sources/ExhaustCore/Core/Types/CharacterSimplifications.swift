@@ -13,6 +13,8 @@ import Foundation
 ///
 /// Candidates come from the transitive closure of case mapping (upper, lower, and case-insensitive folding) and decomposition (NFD and NFKD), taking each scalar of every transformed form. Combining marks are dropped: decomposition separates them from their base letter, and they often sit below the precomposed letter in index order, but replacing a letter with a bare mark is never a useful proposal. Each source keeps only candidates that are members of the range set and have a strictly lower index, sorted ascending so the first accepted candidate is the simplest reachable one.
 ///
+/// The UTF-8 width minimums U+0080, U+0800, and U+10000 also have the minimums of every shorter width as explicit simplifications. These entries use the same domain and index filtering as case/decomposition forms.
+///
 /// Sources cover the blocks where counterexample text plausibly lands: Latin, IPA, Greek, and Cyrillic; Latin Extended Additional and Greek Extended; Latin ligatures; fullwidth forms; and mathematical alphanumerics. CJK compatibility forms and the remaining scripts hold most of Unicode's simplifiable scalars but are left out to keep the table at a few thousand entries.
 @usableFromInline
 package struct CharacterSimplifications: Sendable {
@@ -85,15 +87,18 @@ package struct CharacterSimplifications: Sendable {
     /// Source scalar ranges covered by the table, ascending and disjoint so that sources come out in index order.
     private static let coveredRanges: [ClosedRange<UInt32>] = [
         0x0000 ... 0x052F, // Latin, IPA, Greek, and Cyrillic
+        0x0800 ... 0x0800, // Three-byte UTF-8 minimum
         0x1E00 ... 0x1FFF, // Latin Extended Additional and Greek Extended
         0xFB00 ... 0xFB06, // Latin ligatures
         0xFF00 ... 0xFFEF, // Fullwidth and halfwidth forms
+        0x10000 ... 0x10000, // Four-byte UTF-8 minimum
         0x1D400 ... 0x1D7FF, // Mathematical alphanumerics
     ]
 
-    /// Every source scalar in ``coveredRanges``, sorted, paired with the non-mark scalars reachable from it by repeated case mapping and decomposition. Computed once and shared by every range set.
+    /// Every source scalar in ``coveredRanges``, sorted, paired with its case/decomposition forms or explicit width-minimum simplifications. Computed once and shared by every range set.
     private static let simplerForms: [(Unicode.Scalar, [Unicode.Scalar])] = {
         var table: [(Unicode.Scalar, [Unicode.Scalar])] = []
+        let widthMinimums: [UInt32] = [0, 0x80, 0x800, 0x10000]
         for value in coveredRanges.joined() {
             guard let source = Unicode.Scalar(value) else {
                 continue
@@ -106,6 +111,9 @@ package struct CharacterSimplifications: Sendable {
                         frontier.append(next)
                     }
                 }
+            }
+            if let width = widthMinimums.firstIndex(of: value) {
+                reached.formUnion(widthMinimums.prefix(width).map { Unicode.Scalar($0)! })
             }
             reached.remove(source)
             let candidates = reached.filter { isCombiningMark($0) == false }

@@ -20,7 +20,7 @@
 //
 // ## Blind-Improbability Math
 //
-// Exact DP over the three-command uniform chain: at threshold 24 the trigger probability is 3.5e-5 for a 40-command sequence and 1.7e-6 averaged over the uniform 0...40 length draw. The design document's starting constant of 7 gives 0.36 per attempt — found blind within the first few attempts — so the starting constant here is 24, finalized by the MX1g calibration sweep. Masking makes the fault mask-probable: an epoch masking `pad` (or `pad` and `checkpoint`) roughly doubles the per-command toggle probability, lifting the count tail by orders of magnitude.
+// Exact DP over the three-command uniform chain: at threshold 24 the trigger probability is 3.5e-5 for a 40-command sequence and 1.7e-6 averaged over the uniform 0...40 length draw. A threshold of 7 gives 0.36 per attempt — found blind within the first few attempts — so the starting constant here is 24, finalized by the calibration sweep. Masking makes the fault mask-probable: an epoch masking `pad` (or `pad` and `checkpoint`) roughly doubles the per-command toggle probability, lifting the count tail by orders of magnitude.
 //
 // Pinned baseline (MX1g, 2026-07-12, seeds 1-20, 10 s, defaults, .commandLimit(40)): 0/20.
 

@@ -174,6 +174,7 @@ struct MigrationReachabilityTests {
             selfSimilarityGroups: base.selfSimilarityGroups,
             liveNodeIDs: base.liveNodeIDs,
             leafNodes: base.leafNodes,
+            characterLeafNodes: base.characterLeafNodes,
             topologicalOrder: base.topologicalOrder,
             dependencyAdjacency: adjacency
         )

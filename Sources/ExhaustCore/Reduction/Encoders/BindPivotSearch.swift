@@ -116,7 +116,7 @@ enum BindPivotSearch {
             return .failed(.bindNotFound)
         }
         return .stage(
-            encoder: .liftedStage(GraphLiftedStageEncoder(
+            encoder: .init(GraphLiftedStageEncoder(
                 name: .bindPivot,
                 mutation: proposal.mutation,
                 boundRange: boundRange

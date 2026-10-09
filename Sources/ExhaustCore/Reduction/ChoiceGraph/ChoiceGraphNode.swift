@@ -152,10 +152,15 @@ package struct ChooseBitsMetadata: Sendable {
 
     /// Simpler forms of this leaf's characters in index space, or nil when the leaf is not a character.
     package var characterSimplifications: CharacterSimplifications? {
-        guard case let .character(_, simplifications) = typeTagPayload else {
+        guard case let .character(_, simplifications, _) = typeTagPayload else {
             return nil
         }
         return simplifications
+    }
+
+    package var characterDomain: CharacterDomain? {
+        guard case let .character(_, _, domain) = typeTagPayload else { return nil }
+        return domain
     }
 }
 

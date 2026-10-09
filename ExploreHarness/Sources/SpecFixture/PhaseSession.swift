@@ -20,7 +20,7 @@
 //
 // ## Blind-Improbability Math
 //
-// Exact DP over the five-command uniform chain (state: phase x usedThisCycle x capped cycle count): at requiredCycles = 5 the trigger probability is 5.0e-6 for a 40-command sequence and 7.3e-7 averaged over the uniform 0...40 length draw. At the design document's starting constant of 2 cycles the DP gives 7.8e-3 per attempt — found blind within the first few hundred attempts, hopelessly outside the calibration window at ~5000 attempts/s — so the starting constant here is 5, finalized by the MX1g calibration sweep.
+// Exact DP over the five-command uniform chain (state: phase x usedThisCycle x capped cycle count): at requiredCycles = 5 the trigger probability is 5.0e-6 for a 40-command sequence and 7.3e-7 averaged over the uniform 0...40 length draw. At 2 cycles the DP gives 7.8e-3 per attempt — found blind within the first few hundred attempts, hopelessly outside the calibration window at ~5000 attempts/s — so the starting constant here is 5, finalized by the calibration sweep.
 //
 // Pinned baselines (MX1g, 2026-07-12, seeds 1-20, 10 s, defaults, .commandLimit(40)): flat 0/20, laddered 19/20.
 

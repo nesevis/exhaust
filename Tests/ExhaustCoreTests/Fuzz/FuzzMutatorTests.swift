@@ -333,7 +333,7 @@ private func generateBindExample(seed: UInt64) throws -> ([Int], ChoiceTree, Cho
 private func characterPayloadIndices(in tree: ChoiceTree) -> [UInt64]? {
     switch tree {
         case let .choice(_, metadata):
-            guard case let .character(problematicIndices, _) = metadata.typeTagPayload else {
+            guard case let .character(problematicIndices, _, _) = metadata.typeTagPayload else {
                 return nil
             }
             return problematicIndices

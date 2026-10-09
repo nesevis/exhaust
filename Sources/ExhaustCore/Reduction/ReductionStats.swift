@@ -177,6 +177,9 @@ package struct ReductionStats: Sendable {
     /// Per-encoder probe outcome counts accumulated across all cycles.
     package var encoderCounts: [EncoderName: ReductionProbeCounts] = [:]
 
+    /// Separates the two-, three-, and four-way stages of ``EncoderName/stagedJointSearch``.
+    package var numericSearchCountsByArity: [Int: ReductionProbeCounts] = [:]
+
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
     package var encoderProbes: [EncoderName: Int] {
         encoderCounts.mapValues { $0.emitted }
@@ -313,6 +316,9 @@ package struct ReductionStats: Sendable {
         for (name, counts) in other.encoderCounts {
             encoderCounts[name, default: ReductionProbeCounts()].merge(counts)
         }
+        for (arity, counts) in other.numericSearchCountsByArity {
+            numericSearchCountsByArity[arity, default: .init()].merge(counts)
+        }
         probeCounts.merge(other.probeCounts)
         for (site, count) in other.outOfLoopMaterializations {
             outOfLoopMaterializations[site, default: 0] += count
@@ -431,6 +437,8 @@ package extension ReductionStats {
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
     struct StepTimings: Sendable {
         package var dispatch: UInt64 = 0
+        /// Bookkeeping and routing after ordinary dispatched encoder passes; post-cycle passes retain their owning timing bucket.
+        package var passApply: UInt64 = 0
         package var buildSources: UInt64 = 0
         package var encode: UInt64 = 0
         package var decode: UInt64 = 0
@@ -438,10 +446,11 @@ package extension ReductionStats {
         package var convergenceConfirmation: UInt64 = 0
         package var relaxRound: UInt64 = 0
         package var relationPass: UInt64 = 0
-        package var pairwiseNumericPass: UInt64 = 0
+        package var stagedJointPass: UInt64 = 0
         package var reorder: UInt64 = 0
 
         package var dispatchCount: Int = 0
+        package var passApplyCount: Int = 0
         package var encodeCount: Int = 0
         package var decodeCount: Int = 0
         package var rebuildCount: Int = 0
@@ -453,6 +462,7 @@ package extension ReductionStats {
         /// Merges another timings value by summing all counters and durations.
         package mutating func merge(_ other: StepTimings) {
             dispatch += other.dispatch
+            passApply += other.passApply
             buildSources += other.buildSources
             encode += other.encode
             decode += other.decode
@@ -460,9 +470,10 @@ package extension ReductionStats {
             convergenceConfirmation += other.convergenceConfirmation
             relaxRound += other.relaxRound
             relationPass += other.relationPass
-            pairwiseNumericPass += other.pairwiseNumericPass
+            stagedJointPass += other.stagedJointPass
             reorder += other.reorder
             dispatchCount += other.dispatchCount
+            passApplyCount += other.passApplyCount
             encodeCount += other.encodeCount
             decodeCount += other.decodeCount
             rebuildCount += other.rebuildCount
@@ -476,6 +487,13 @@ package extension ReductionStats {
                 case .dispatched:
                     dispatch += elapsed
                     dispatchCount += 1
+                case let .postCycleStarted(owner),
+                     let .postCycleEncoded(owner, _, _),
+                     let .postCycleDecoded(owner, _, _):
+                    recordPostCycle(owner: owner, elapsed: elapsed)
+                case .passCompleted:
+                    passApply += elapsed
+                    passApplyCount += 1
                 case .encoded:
                     encode += elapsed
                     encodeCount += 1
@@ -487,18 +505,30 @@ package extension ReductionStats {
                     rebuildCount += 1
                 case .convergenceConfirmed:
                     convergenceConfirmation += elapsed
-                case .improvingPivotsCompleted, .excursionCompleted:
+                case .improvingPivotsCompleted, .excursionAdvanced, .excursionCompleted:
                     relaxRound += elapsed
                 case .relationPassCompleted:
                     relationPass += elapsed
-                case .pairwiseNumericPassCompleted:
-                    pairwiseNumericPass += elapsed
+                case .stagedJointPassCompleted:
+                    stagedJointPass += elapsed
                 case .reorderCompleted:
                     reorder += elapsed
                 case .sourcesBuilt:
                     buildSources += elapsed
                 case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
                     break
+            }
+        }
+
+        /// Charges setup and intermediate probes to their owning post-cycle pass exactly once.
+        private mutating func recordPostCycle(owner: ReductionMachine.PostCycleTiming, elapsed: UInt64) {
+            switch owner {
+                case .relationPass:
+                    relationPass += elapsed
+                case .stagedJointPass:
+                    stagedJointPass += elapsed
+                case .reorder:
+                    reorder += elapsed
             }
         }
     }

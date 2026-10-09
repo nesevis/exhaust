@@ -47,37 +47,14 @@ package extension Interpreters {
         config: ReducerConfiguration,
         property: (Output) -> Bool
     ) -> ReductionOutcome<Output> {
-        if config.visualize {
-            print("── Before reduction ──")
-            print(tree.visualization(width: 100))
-        }
-
-        let outcome = withoutActuallyEscaping(property) { escapingProperty in
-            ChoiceGraphScheduler.run(
-                gen: gen,
-                initialTree: tree,
-                initialOutput: output,
-                config: config,
-                property: escapingProperty
-            )
-        }
-
-        if config.visualize, let (resultSequence, _) = outcome.counterexample {
-            let resultTree = Materializer.materialize(
-                gen,
-                context: .init(
-                    prefix: resultSequence,
-                    mode: .exact,
-                    fallbackTree: tree
-                )
-            )
-            if case let .success(_, resultChoiceTree, _) = resultTree {
-                print("── After reduction ──")
-                print(resultChoiceTree.visualization(width: 100))
-            }
-        }
-
-        return outcome
+        reduceChoiceGraph(
+            gen: gen,
+            tree: tree,
+            output: output,
+            config: config,
+            collectStats: false,
+            property: property
+        ).outcome
     }
 
     /// Reduces a failing counterexample using the graph-based pipeline and returns accumulated statistics.
@@ -90,17 +67,37 @@ package extension Interpreters {
         config: ReducerConfiguration,
         property: (Output) -> Bool
     ) -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+        reduceChoiceGraph(
+            gen: gen,
+            tree: tree,
+            output: output,
+            config: config,
+            collectStats: true,
+            property: property
+        )
+    }
+
+    /// Keeps visualization and property lifetime handling identical for both reduction entry points.
+    private static func reduceChoiceGraph<Output>(
+        gen: Generator<Output>,
+        tree: ChoiceTree,
+        output: Output,
+        config: ReducerConfiguration,
+        collectStats: Bool,
+        property: (Output) -> Bool
+    ) -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
         }
 
         let result = withoutActuallyEscaping(property) { escapingProperty in
-            ChoiceGraphScheduler.runCollectingStats(
+            ChoiceGraphScheduler.run(
                 gen: gen,
                 initialTree: tree,
                 initialOutput: output,
                 config: config,
+                collectStats: collectStats,
                 property: escapingProperty
             )
         }

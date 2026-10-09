@@ -50,7 +50,7 @@ extension ChoiceGraphScheduler {
     ///   - bindScope: The bound value scope from the source pipeline.
     ///   - scope: The dispatched ``EncoderInput``. Provides controller choice metadata and the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialization.
-    ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
+    ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``BoundValueGate/decayedBudget(fingerprint:)`` based on per-bind stall counts.
     ///   - totalProbeCap: Maximum probes the composition emits across all lifts, zero meaning uncapped. The machine passes ``SchedulerTuning/composedFirstDispatchProbeCap`` for a bind fingerprint's first dispatch of the run and zero afterwards.
     static func makeBoundValueComposition(
         bindScope: BoundValueScope,
@@ -72,7 +72,7 @@ extension ChoiceGraphScheduler {
             graph: graph,
             seenBindFingerprints: seenBindFingerprints
         )
-        return .composed(makeBoundValueCompositionEncoder(
+        return .init(makeBoundValueCompositionEncoder(
             bindNodeID: bindScope.bindNodeID,
             controllerLeafNodeID: bindScope.upstreamLeafNodeID,
             controllerSequenceIndex: graph.nodes.indices.contains(bindScope.upstreamLeafNodeID)
@@ -318,7 +318,7 @@ extension ChoiceGraphScheduler {
             chain: nestedChain,
             totalProbeCap: 0
         )
-        return .stage(encoder: .composed(nestedEncoder), scope: nestedInput)
+        return .stage(encoder: .init(nestedEncoder), scope: nestedInput)
     }
 
     /// Builds the value search over the lifted bound subtree's leaves: binary search for one leaf, covering for several.
@@ -363,8 +363,8 @@ extension ChoiceGraphScheduler {
             warmStartRecords: [:]
         )
         let downstreamEncoder: EncoderDispatch = downstreamLeaves.count == 1
-            ? .binarySearch(GraphBinarySearchEncoder())
-            : .boundValueCovering(GraphBoundValueCoveringEncoder())
+            ? .init(GraphBinarySearchEncoder())
+            : .init(GraphBoundValueCoveringEncoder())
 
         Self.logReducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",

@@ -19,7 +19,7 @@ import Foundation
 /// return [("adaptive", base), ("relax-off", relaxOff)]
 /// ```
 ///
-/// An `enabledEncoders` subset works the same way: rebuild the configuration with, for example, `enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch])` to measure one encoder's contribution.
+/// An `enabledEncoders` subset works the same way: rebuild the configuration with, for example, `enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch])` to measure one encoder's contribution. Exclude `.stagedJointSearch` to measure the numeric fallback's contribution.
 func withStrategies(
     _ base: Interpreters.ReducerConfiguration = reducerConfig
 ) -> [(name: String, config: Interpreters.ReducerConfiguration)] {

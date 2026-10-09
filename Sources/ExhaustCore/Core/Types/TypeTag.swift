@@ -57,8 +57,8 @@ package enum TypeTag: UInt8, Sendable, Hashable {
 package indirect enum TypeTagPayload: Hashable, Sendable {
     /// The date generator's grid. Used by ``ProblematicValues`` to convert calendar-meaningful instants (month/year boundaries, DST transitions) into step indices with the same forward map generation uses.
     case date(grid: DateGrid)
-    /// Pre-computed problematic character indices and simpler forms of each character. `problematicIndices` corresponds to ``ProblematicValues/interestingCharacterScalars`` in flat array index space, clamped to the valid range during construction. `simplifications` is read by the reducer's value encoder.
-    case character(problematicIndices: [UInt64], simplifications: CharacterSimplifications)
+    /// Pre-computed problematic character indices and simpler forms of each character. `problematicIndices` corresponds to ``ProblematicValues/interestingCharacterScalars`` in flat array index space, clamped to the valid range during construction. `simplifications` is read by the reducer's value encoder. `domain` identifies the complete index map for uniform character lockstep; legacy or synthetic payloads without it remain ineligible for that pass.
+    case character(problematicIndices: [UInt64], simplifications: CharacterSimplifications, domain: CharacterDomain? = nil)
 }
 
 package extension TypeTag {

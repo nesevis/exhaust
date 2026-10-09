@@ -46,6 +46,9 @@ package struct ChoiceGraph: Sendable {
     /// All leaf node IDs (chooseBits nodes with non-nil position range). Computed eagerly during graph assembly.
     package let leafNodes: [Int]
 
+    /// Character leaves with known index maps, used by uniform character lockstep. Cached during graph assembly to avoid rescanning every leaf when preparing lockstep plans.
+    package let characterLeafNodes: [Int]
+
     /// Node IDs in dependency order (roots first). Computed eagerly via Kahn's algorithm during graph assembly.
     package let topologicalOrder: [Int]
 
@@ -68,7 +71,7 @@ package struct ChoiceGraph: Sendable {
     /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and transferred across full rebuilds by ``ChoiceGraphScheduler/transferConvergence(_:to:)``. Read by ``MinimizationQuery`` (skip converged leaves), ``ChoiceGraphScheduler/allValuesConverged(in:graph:)`` (termination check), and ``ChoiceGraphScheduler/extractWarmStarts(from:)`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk by ``clearConvergence(inPositionRange:)`` for bound subtree regions after reshape.
     package var convergenceStore: [Int: ConvergedOrigin] = [:]
 
-    /// Measured value-coupling dependents. Maps each "changed" node to the set of nodes whose convergence floors shifted when it changed. Populated from floor-motion events in `ReductionMachine.applyPassReport`, only when the maintainer-set `collectDiagnostics` flag is enabled. Diagnostic instrumentation with no scheduling consumer yet; a coupling-aware leaf ordering in ``MinimizationQuery`` was tried and reverted (zero measured effect on the ECOOP suite because coupling data arrives only after the affected leaves have converged).
+    /// Possible value-coupling dependents inferred from floor motion after recent accepted changes. Populated by ``CouplingTracker`` independently of research diagnostics and bounded to 256 numeric edges. ``NumericJointQuery`` uses these hints to rank groups; no edge proves causal coupling, and an empty map does not rule out joint constraints. Discarded when graph structure or node numbering changes.
     package var couplingDependents: [Int: Set<Int>] = [:]
 
     /// Writes convergence records from an encoder pass into the store by node ID.

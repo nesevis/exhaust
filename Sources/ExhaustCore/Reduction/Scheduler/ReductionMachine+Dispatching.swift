@@ -6,200 +6,33 @@
 // MARK: - Dispatching Sub-Phases
 
 extension ReductionMachine {
-    /// Routes to the active ``DispatchPhase`` sub-step.
+    /// Lends core state to the main dispatch loop without retaining an array copy across its source mutations.
     mutating func stepDispatching() -> Transition {
-        switch dispatchPhase {
-            case .dispatch:
-                return stepDispatch()
-            case .probing:
-                return stepProbing()
-            case .rebuild:
-                return stepRebuild()
+        var loop = dispatchLoop
+        dispatchLoop = DispatchLoop(policy: .main)
+        let transition = loop.step(state: &self)
+        dispatchLoop = loop
+        guard let transition else {
+            preconditionFailure("The main dispatch loop must report its final source exhaustion")
         }
+        return transition
     }
 
-    // MARK: - Dispatch
-
-    /// Selects the highest-priority source, pulls the next transformation, and resolves the dispatch decision. On ``ChoiceGraphScheduler/DispatchDecision/readyToDispatch(boundValueFingerprint:)``, initializes the encoder and transitions to the ``DispatchPhase/probing`` sub-phase.
-    private mutating func stepDispatch() -> Transition {
-        guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(sources) else {
-            phase = .endCycle
-            return .dispatched(decision: .sourceExhausted)
-        }
-
-        guard let transformation = sources[sourceIndex].next() else {
-            sources.swapAt(sourceIndex, sources.count - 1)
-            sources.removeLast()
-            return .dispatched(decision: .sourceExhausted)
-        }
-        guard isDeadlineExceeded() == false else {
-            return finishAtDeadline()
-        }
-
-        guard isEncoderEnabled(transformation.operation.encoderName) else {
-            return .dispatched(decision: .skipped)
-        }
-
-        if transformation.operation.encoderName == .migration,
-           tuning.migrationDemotionThreshold > 0,
-           migrationConsecutiveRejects >= tuning.migrationDemotionThreshold
-        {
-            return .dispatched(decision: .skipped)
-        }
-
-        var decision = ChoiceGraphScheduler.evaluateDispatch(
-            transformation: transformation,
-            graph: graph,
-            sequence: sequence,
-            gate: convergence.gate,
-            scopeCache: scopeRejectionCache,
-            graphIsStripped: graphIsStripped,
-            anyAccepted: anyAccepted
-        )
-
-        if case let .classifyBind(bindNodeID, fingerprint) = decision {
-            guard case let .minimize(.boundValue(bindScope)) = transformation.operation else {
-                return .dispatched(decision: .skipped)
-            }
-            let classificationMaterializations = graph.classifyBind(
-                at: bindNodeID,
-                gen: gen,
-                baseSequence: sequence,
-                fallbackTree: tree,
-                upstreamLeafNodeID: bindScope.upstreamLeafNodeID
-            )
-            if collectStats {
-                stats.recordMaterializations(classificationMaterializations, at: .classification)
-            }
-            guard isDeadlineExceeded() == false else {
-                return finishAtDeadline()
-            }
-            guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
-                  let classification = updatedMetadata.classification
-            else {
-                return .dispatched(decision: .skipped)
-            }
-            if classification.topology != .identical || classification.liftability != .both {
-                convergence.gate.markFruitless(fingerprint)
-                return .dispatched(decision: .skipped)
-            }
-            decision = .readyToDispatch(boundValueFingerprint: fingerprint)
-        }
-
-        switch decision {
-            case .skip:
-                return .dispatched(decision: .skipped)
-
-            case .classifyBind:
-                return .dispatched(decision: .skipped)
-
-            case .rematerialize:
-                let graphBefore = rematerializeUnselectedBranches()
-                sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
-                return .dispatched(decision: .rematerialized)
-
-            case let .readyToDispatch(boundValueFingerprint):
-                return beginProbeSession(
-                    transformation: transformation,
-                    boundValueFingerprint: boundValueFingerprint
-                )
-        }
-    }
-
-    // MARK: - Begin Probe Session
-
-    private mutating func beginProbeSession(
-        transformation: GraphTransformation,
-        boundValueFingerprint: UInt64?
-    ) -> Transition {
-        let warmStarts = ChoiceGraphScheduler.extractWarmStarts(from: graph)
-        let scope = EncoderInput(
-            transformation: transformation,
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
-            warmStartRecords: warmStarts
-        )
-
-        var encoder: EncoderDispatch
-        if case let .minimize(.boundValue(bindScope)) = transformation.operation,
-           let fingerprint = boundValueFingerprint
-        {
-            encoder = ChoiceGraphScheduler.makeBoundValueComposition(
-                bindScope: bindScope,
-                scope: scope,
-                graph: graph,
-                gen: gen,
-                upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint),
-                totalProbeCap: convergence.gate.isFirstDispatch(fingerprint: fingerprint)
-                    ? tuning.composedFirstDispatchProbeCap
-                    : 0,
-                buildTally: boundValueBuildTally
-            )
-            convergence.gate.markDispatched(fingerprint)
-        } else {
-            encoder = ChoiceGraphScheduler.selectEncoder(for: transformation.operation, gen: gen)
-        }
-
-        encoder.start(scope: scope)
-
-        captureDispatchBaseline()
-        activeSession = ProbeSession(
-            encoder: encoder,
-            transformation: transformation,
-            boundValueFingerprint: boundValueFingerprint,
-            baseSequence: sequence,
-            hasBind: sequence.contains { entry in
-                if case .bind = entry { return true }
-                return false
-            }
-        )
-
-        dispatchPhase = .probing
-        return .dispatched(decision: .encoderStarted(encoder: encoder.name))
-    }
-
-    // MARK: - Probing
-
-    /// Delegates to the active ``ProbeSession`` for one encode or decode sub-phase. On completion, applies the ``PassReport`` and routes to dispatch or rebuild.
-    private mutating func stepProbing() -> Transition {
-        guard var session = activeSession else {
-            dispatchPhase = .dispatch
-            return .dispatched(decision: .sourceExhausted)
-        }
-
-        let result = session.step(state: &self)
-        activeSession = session
-
-        switch result {
-            case let .encoded(encoder, cacheHit):
-                return .encoded(encoder: encoder, cacheHit: cacheHit)
-
-            case let .decoded(encoder, accepted):
-                return .decoded(encoder: encoder, accepted: accepted)
-
-            case .finished:
-                var s = activeSession!
-                let report = s.report()
-                activeSession = nil
-                pendingReport = report
-                return applyPassReport(report)
-        }
-    }
-
-    // MARK: - Apply Pass Report
+    // MARK: - Apply Pass Policy
 
     /// Applies post-pass policy from a completed encoder pass.
     ///
-    /// Called identically whether the pass was stepped (via the main dispatching loop) or run to completion (via reorder/relax). Handles convergence recording, gate outcome, shortlex rejection propagation, stats accumulation, logging, and acceptance evaluation routing.
-    mutating func applyPassReport(_ report: PassReport) -> Transition {
+    /// Shared by dispatched and post-cycle passes. Records convergence, gate outcomes, scope rejections, statistics, and acceptance flags without changing the caller's dispatch phase or pending report. The returned action lets each caller choose its own rebuild and routing behavior.
+    mutating func applyPassPolicy(_ report: PassReport) -> ChoiceGraphScheduler.PostAcceptanceAction {
         passCounter += 1
+        var valueMotionNodes: Set<Int> = []
 
         if report.convergenceRecords.isEmpty == false {
             let motion = graph.recordConvergence(
                 byNodeID: report.convergenceRecords,
                 rebuildGeneration: stats.graphStats.fullGraphRebuilds
             )
+            valueMotionNodes = motion.valueMotionNodeIDs
             if collectDiagnostics {
                 for motionNodeID in motion.valueMotionNodeIDs {
                     let sincePass = lastConvergencePass[motionNodeID] ?? 0
@@ -207,7 +40,6 @@ extension ReductionMachine {
                     for entry in valueChangeLog where entry.passIndex > sincePass {
                         for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
                             partnerNodes.insert(changedNodeID)
-                            graph.couplingDependents[changedNodeID, default: []].insert(motionNodeID)
                             let edge = CouplingEdge(motionNodeID: motionNodeID, changedNodeID: changedNodeID)
                             stats.couplingEdges[edge, default: 0] += 1
                         }
@@ -223,6 +55,16 @@ extension ReductionMachine {
                     lastConvergencePass[nodeID] = passCounter
                 }
             }
+        }
+
+        if isEncoderEnabled(.stagedJointSearch), tuning.stagedJointProbeBudget > 0 {
+            couplingTracker.observe(
+                motionNodes: valueMotionNodes,
+                convergedNodes: Array(report.convergenceRecords.keys),
+                changedNodes: report.acceptedLeafNodeIDs,
+                pass: passCounter,
+                graph: &graph
+            )
         }
 
         if collectDiagnostics, report.acceptedLeafNodeIDs.isEmpty == false {
@@ -245,6 +87,16 @@ extension ReductionMachine {
 
         if collectStats {
             stats.record(report.counts, for: report.encoderName)
+            switch report.transformation.operation {
+                case .exchange(.stagedNumericPairs):
+                    stats.numericSearchCountsByArity[2, default: .init()].merge(report.counts)
+                case let .exchange(.numericJoint(groups, _)):
+                    if let arity = groups.first?.leaves.count {
+                        stats.numericSearchCountsByArity[arity, default: .init()].merge(report.counts)
+                    }
+                default:
+                    break
+            }
             if let liftMaterializations = report.liftMaterializations {
                 stats.recordMaterializations(liftMaterializations.count, at: liftMaterializations.site)
             }
@@ -305,92 +157,10 @@ extension ReductionMachine {
                         graph: graph
                     )
                 }
-                pendingReport = nil
-                dispatchPhase = .dispatch
-                return .dispatched(decision: .sourceExhausted)
-
             case .rebuildAndResume:
                 convergence.gate.clearFruitless()
-                dispatchPhase = .rebuild
-                return .dispatched(decision: .sourceExhausted)
         }
-    }
-
-    // MARK: - Rebuild
-
-    /// Rebuilds the graph from the current tree after a structural acceptance, clears stale convergence in bound subtrees when a bound value scope triggered the rebuild, and reconstructs candidate sources.
-    private mutating func stepRebuild() -> Transition {
-        var boundPositionRange: ClosedRange<Int>?
-        if let report = pendingReport,
-           case let .minimize(.boundValue(bindScope)) = report.transformation.operation,
-           bindScope.bindNodeID < graph.nodes.count,
-           case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind,
-           graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
-        {
-            let boundChildID = graph.nodes[bindScope.bindNodeID].children[bindMetadata.boundChildIndex]
-            boundPositionRange = graph.nodes[boundChildID].positionRange
-        }
-
-        let latestTreeIsStripped = pendingReport?.latestTreeIsStripped ?? false
-
-        // Leaves that accepted in the pass triggering this rebuild hold stale values in the old graph (reshape and stateful passes skip the in-place apply), so they are exempt from the transfer value guard.
-        var valueGuardExemptNodeIDs: Set<Int> = []
-        if let report = pendingReport {
-            valueGuardExemptNodeIDs = report.acceptedLeafNodeIDs
-                .union(report.convergenceRecords.keys)
-        }
-
-        let graphBefore = graph
-        let graphStart = MonotonicClock.nanoseconds()
-        let diff = rebuildAndUpdateGraph(valueGuardExemptNodeIDs: valueGuardExemptNodeIDs)
-        graphIsStripped = latestTreeIsStripped
-
-        if let boundRange = boundPositionRange {
-            graph.clearConvergence(inPositionRange: boundRange)
-        }
-        let graphEnd = MonotonicClock.nanoseconds()
-
-        if diff.canReuseStructuralSources {
-            let structuralSources = sources.filter { $0.isValueDependent == false }
-            sources = structuralSources
-                + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: convergence.deferBindInner)
-
-            ChoiceGraphScheduler.logReducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
-            ])
-        } else if diff.canReuseStructuralSourcesExceptPermutation {
-            scopeRejectionCache.clear()
-            let reusableStructuralSources = sources.filter { $0.canReuseAfterLeafKindChange }
-            sources = reusableStructuralSources
-                + CandidateSourceBuilder.buildPermutationSources(from: graph)
-                + CandidateSourceBuilder.buildValueSources(
-                    from: graph,
-                    deferBindInner: convergence.deferBindInner
-                )
-
-            ChoiceGraphScheduler.logReducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
-            ])
-        } else {
-            scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: graph, deferBindInner: convergence.deferBindInner, previousGraph: graphBefore)
-
-            ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
-            ])
-        }
-        let sourceEnd = MonotonicClock.nanoseconds()
-
-        if collectStats {
-            stats.stepTimings.rebuildGraphNanoseconds += graphEnd - graphStart
-            stats.stepTimings.rebuildSourceNanoseconds += sourceEnd - graphEnd
-        }
-
-        valueChangeLog = []
-        lastConvergencePass = [:]
-        pendingReport = nil
-        dispatchPhase = .dispatch
-        return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.canReuseStructuralSources == false)
+        return acceptanceAction
     }
 
     /// Restores the unselected branches of a stripped tree and rebuilds the graph, so pick nodes carry every arm.

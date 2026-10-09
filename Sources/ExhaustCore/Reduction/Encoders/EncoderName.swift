@@ -39,8 +39,8 @@ package enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Reduces a pair of values jointly along their inferred rational relation. Fires only when both values have converged above their targets with nothing else accepting, which is the signature of a multiplicative coupling (for example, one value always twice another) that per-value search, common-delta lockstep, and sum-conserving redistribution all break. The reduced ratio of the current values is held fixed while their shared scale factor is searched downward.
     case relationSearch
 
-    /// Searches atomic numeric pairs after cheaper reduction has stalled, without assuming an arithmetic relationship.
-    case pairwiseNumericSearch
+    /// Searches numeric groups after cheaper reduction has stalled. Sampled-work limits unlock sequential three- and four-way stages after two-way search stalls, sharing one checkpoint budget.
+    case stagedJointSearch
 
     /// Lowers a bind inner and raises a value its bind determines by the same amount, lifting each candidate through the generator so the raised value is placed within the range the lowered bind inner produces. Fires only once the bind inner has stalled above its target, which is the signature of factors that must trade magnitude, such as the bind inners of a nested chain of binds.
     case boundExchange

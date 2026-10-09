@@ -5,21 +5,21 @@ import Testing
 @Suite("Cooperative reducer deadline accounting")
 struct ReductionDeadlineTests {
     @Test("Expired deadlines stop every machine phase before starting work", arguments: [
-        ReductionMachine.Phase.beginCycle,
+        DeadlineStartPhase.beginCycle,
         .buildSources,
         .dispatching,
         .endCycle,
-        .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .pairwiseNumericPass, .excursion]),
+        .postCycle,
         .checkTermination,
         .reorderPass,
     ])
-    func expiresBeforePhase(phase: ReductionMachine.Phase) throws {
+    private func expiresBeforePhase(phase: DeadlineStartPhase) throws {
         let clock = DeadlineTestClock()
         var machine = try scalarMachine(clock: clock) { _ in
             Issue.record("An expired phase must not call the property")
             return false
         }
-        machine.phase = phase
+        machine.phase = phase.machinePhase
         clock.expire()
         let transition = machine.next()
         guard case .terminated = transition else {
@@ -125,11 +125,10 @@ struct ReductionDeadlineTests {
         #expect(try machine.next() == nil)
     }
 
-    @Test("Post-cycle relation and numeric passes stop after their first in-flight property", arguments: [false, true], [false, true])
-    func postCyclePassesHonorDeadline(numericPass: Bool, accepted: Bool) throws {
+    @Test("Post-cycle relation and numeric passes stop after their first in-flight property", arguments: [EncoderName.relationSearch, .stagedJointSearch], [false, true])
+    func postCyclePassesHonorDeadline(encoder: EncoderName, accepted: Bool) throws {
         let clock = DeadlineTestClock()
         let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 2 ... 2)
-        let encoder: EncoderName = numericPass ? .pairwiseNumericSearch : .relationSearch
         var propertyCalls = 0
         var machine = try makeMachine(generator: generator, initialOutput: [UInt64(40), 20], clock: clock, enabledEncoders: [encoder]) { _ in
             propertyCalls += 1
@@ -138,12 +137,19 @@ struct ReductionDeadlineTests {
         }
         markStalledLeaves(&machine.graph)
         machine.convergence.deferBindInner = false
-        if numericPass {
-            #expect(machine.pendingNumericPairs() != nil)
-        } else {
-            #expect(RelationQuery.build(graph: machine.graph) != nil)
+        let action: ChoiceGraphScheduler.PostCycleAction = switch encoder {
+            case .stagedJointSearch:
+                .stagedJointPass
+            default:
+                .relationPass
         }
-        machine.phase = .postCycle(remaining: [numericPass ? .pairwiseNumericPass : .relationPass, .excursion, .releaseDeferral])
+        switch encoder {
+            case .stagedJointSearch:
+                #expect(machine.pendingStagedNumericPairs() != nil)
+            default:
+                #expect(RelationQuery.build(graph: machine.graph) != nil)
+        }
+        machine.phase = .postCycle(remaining: [action, .excursion, .releaseDeferral])
         let initialSequence = machine.sequence
         _ = try complete(&machine)
         #expect(propertyCalls == 1)
@@ -300,7 +306,7 @@ struct ReductionDeadlineTests {
         var rejected = state.sequence
         rejected[0] = rejected[0].withBitPattern(0)
         state.rejectCache.insert(ZobristHash.hash(of: rejected))
-        var session = state.makeSession(for: scalarScope(state))
+        let session = state.makeSession(for: scalarScope(state))
         var checks = 0
         let report = session.runToCompletion(state: &state, deadlineCheck: {
             checks += 1
@@ -319,7 +325,7 @@ struct ReductionDeadlineTests {
             Issue.record("The session must not decode after expiry")
             return false
         }
-        var session = state.makeSession(for: scalarScope(state))
+        let session = state.makeSession(for: scalarScope(state))
         var checks = 0
         let report = session.runToCompletion(state: &state, deadlineCheck: {
             checks += 1
@@ -334,6 +340,36 @@ struct ReductionDeadlineTests {
 }
 
 // MARK: - Test Helpers
+
+/// Describes session-free starting phases without sharing a mutable post-cycle frame between test cases.
+private enum DeadlineStartPhase: Sendable {
+    case beginCycle
+    case buildSources
+    case dispatching
+    case endCycle
+    case postCycle
+    case checkTermination
+    case reorderPass
+
+    var machinePhase: ReductionMachine.Phase {
+        switch self {
+            case .beginCycle:
+                .beginCycle
+            case .buildSources:
+                .buildSources
+            case .dispatching:
+                .dispatching
+            case .endCycle:
+                .endCycle
+            case .postCycle:
+                .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .stagedJointPass, .excursion])
+            case .checkTermination:
+                .checkTermination
+            case .reorderPass:
+                .reorderPass
+        }
+    }
+}
 
 /// Advances only when a test changes time; property closures can expire the budget while a decode is in flight.
 private final class DeadlineTestClock {

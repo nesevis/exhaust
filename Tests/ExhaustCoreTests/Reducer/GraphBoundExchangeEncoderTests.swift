@@ -194,7 +194,7 @@ struct GraphBoundExchangeEncoderTests {
         #expect(encoder.nextProbe(into: &buffer, lastAccepted: true) == nil)
         #expect(encoder.ledger.constructedStages == 1)
         #expect(encoder.ledger.attempts == 1)
-        let reported = EncoderDispatch.composed(encoder).liftMaterializations
+        let reported = EncoderDispatch(encoder).liftMaterializations
         #expect(reported?.site == .boundExchangeLift)
         #expect(reported?.count == 1)
     }

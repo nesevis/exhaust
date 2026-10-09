@@ -76,7 +76,7 @@ package extension __ExhaustRuntime {
 package extension __ExhaustRuntime {
     /// Builds the prioritized source array for a spec machine run.
     ///
-    /// Source order matches the design document: screening replay, sampling replay, smoke, screening, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
+    /// Sources run in this order: screening replay, sampling replay, smoke, screening, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
     static func buildStateMachineSources<Spec: StateMachineSpecBase>(
         config: ResolvedConcurrentConfig,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,

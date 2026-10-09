@@ -90,7 +90,7 @@ struct ProbeAcceptanceAccountingTests {
             warmStartRecords: [:]
         )
         var state = ProbeSessionFixtureState(sequence: sequence, tree: tree, output: [Int64(0), -1, 1], graph: graph, gen: generator.erase(), property: { _ in false })
-        var session = state.makeSession(for: scope)
+        let session = state.makeSession(for: scope)
         let report = session.runToCompletion(state: &state)
         #expect(sequence.shortLexPrecedes(state.sequence))
         #expect(state.output as? [Int64] == [-1, 0, 1])
@@ -183,7 +183,7 @@ private struct SingleProbeFixture {
             graph: ChoiceGraph.build(from: proposalTree),
             warmStartRecords: [:]
         )
-        var encoder = EncoderDispatch.liftedStage(GraphLiftedStageEncoder(
+        var encoder = EncoderDispatch(GraphLiftedStageEncoder(
             name: .composed,
             mutation: .leafValues([LeafChange(leafNodeID: 0, newValue: ChoiceValue(candidate, tag: .uint64), mayReshape: false)])
         ))

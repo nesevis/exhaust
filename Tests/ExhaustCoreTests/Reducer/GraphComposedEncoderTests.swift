@@ -103,7 +103,7 @@ struct GraphComposedEncoderTests {
                 #expect(lifted.sequence == expected)
                 #expect(ChoiceSequence(lifted.tree) == expected)
                 return .stage(
-                    encoder: .liftedStage(GraphLiftedStageEncoder(name: .composed, mutation: proposal.mutation)),
+                    encoder: .init(GraphLiftedStageEncoder(name: .composed, mutation: proposal.mutation)),
                     scope: EncoderInput(
                         transformation: parent.transformation,
                         baseSequence: lifted.sequence,
@@ -142,7 +142,7 @@ struct GraphComposedEncoderTests {
         )
         encoder.start(scope: scope)
         #expect(drainCandidates(of: &encoder, sequence: scope.baseSequence).isEmpty == false)
-        let dispatch = EncoderDispatch.composed(encoder)
+        let dispatch = EncoderDispatch(encoder)
         #expect(dispatch.name == name)
         #expect(dispatch.composedUpstreamProbesUsed == (reportsStages ? 1 : nil))
         #expect(dispatch.liftMaterializations?.site == (reportsStages ? .bindPivotLift : nil))
@@ -254,7 +254,7 @@ struct GraphComposedEncoderTests {
                 downstreamBuildCount += 1
                 let nestedScope = liftedLeafScope(lifted, parent: parent)
                 nestedScopes.append(nestedScope)
-                return .stage(encoder: .composed(nestedComposition()), scope: nestedScope)
+                return .stage(encoder: .init(nestedComposition()), scope: nestedScope)
             }
         )
 
@@ -424,7 +424,7 @@ struct GraphComposedEncoderTests {
                         return .failed(.bindNotFound)
                     }
                 )
-                return .stage(encoder: .composed(emptyNested), scope: nestedScope)
+                return .stage(encoder: .init(emptyNested), scope: nestedScope)
             }
         )
 

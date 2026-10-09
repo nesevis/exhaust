@@ -6,35 +6,28 @@
 // MARK: - Post-Cycle Encoder Passes
 
 extension ReductionMachine {
-    /// Runs the relation encoder over stall-converged leaf pairs, returning true when any probe was accepted.
-    ///
-    /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
-    mutating func runRelationPass() -> Bool {
-        guard isEncoderEnabled(.relationSearch) else {
-            return false
+    /// Starts relation search after value search has written its stall evidence, retaining the remaining actions until the pass completes.
+    mutating func startRelationPass(remaining: [ChoiceGraphScheduler.PostCycleAction]) -> Transition {
+        guard isEncoderEnabled(.relationSearch),
+              let scope = RelationQuery.build(graph: graph),
+              let session = makePostCycleSession(
+                  operation: .exchange(.relation(scope)),
+                  estimatedCost: scope.pairs.count * 8
+              )
+        else {
+            return .relationPassCompleted(accepted: false)
         }
-        guard let relationScope = RelationQuery.build(graph: graph) else {
-            return false
-        }
-        guard let report = runPostCycleEncoder(
-            operation: .exchange(.relation(relationScope)),
-            estimatedCost: relationScope.pairs.count * 8
-        ) else {
-            return false
-        }
-        if isInstrumented, report.anyAccepted {
-            ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
-        }
-        return report.anyAccepted
+        phase = .postCycleProbing(PostCycleFrame(session: session, pass: .relation, remaining: remaining))
+        return .postCycleStarted(owner: .relationPass)
     }
 
-    /// Runs one encoder pass to completion outside cycle dispatch, through the same decoding, accounting, and acceptance policy as dispatched passes.
-    ///
-    /// A reshaping acceptance rebuilds the graph here rather than through the dispatch rebuild phase, which never runs between post-cycle actions: later actions and the next cycle's source build read the live graph. Returns nil without starting a disabled encoder or when the deadline has already expired.
-    mutating func runPostCycleEncoder(
-        operation: GraphOperation,
-        estimatedCost: Int
-    ) -> PassReport? {
+    /// Restores the action queue only after the in-flight pass has finished applying its report.
+    mutating func resumePostCycle(remaining: [ChoiceGraphScheduler.PostCycleAction]) {
+        phase = remaining.isEmpty ? .checkTermination : .postCycle(remaining: remaining)
+    }
+
+    /// Starts a fresh post-cycle encoder with no warm starts, preserving the enabled-encoder and deadline guards.
+    mutating func makePostCycleSession(operation: GraphOperation, estimatedCost: Int) -> ProbeSession? {
         guard isEncoderEnabled(operation.encoderName) else {
             return nil
         }
@@ -59,30 +52,46 @@ extension ReductionMachine {
             graph: graph,
             warmStartRecords: [:]
         ))
-
-        let hasBind = sequence.contains { entry in
-            if case .bind = entry { return true }
-            return false
-        }
         captureDispatchBaseline()
-        var session = ProbeSession(
+        return ProbeSession(
             encoder: encoder,
             transformation: transformation,
             boundValueFingerprint: nil,
             baseSequence: sequence,
-            hasBind: hasBind
+            hasBind: sequence.contains { entry in
+                if case .bind = entry {
+                    return true
+                }
+                return false
+            }
         )
-        let report = session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())
+    }
 
-        _ = applyPassReport(report)
-
+    /// Applies shared policy and a graph-only rebuild; post-cycle actions never rebuild candidate sources.
+    mutating func applyPostCycleReport(_ report: PassReport) {
+        _ = applyPassPolicy(report)
         if report.anyAccepted, report.anyRequiresRebuild {
             _ = rebuildAndUpdateGraph(
-                valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs
-                    .union(report.convergenceRecords.keys)
+                valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs.union(report.convergenceRecords.keys)
             )
             graphIsStripped = report.latestTreeIsStripped
         }
-        return report
+    }
+
+    /// Applies relation policy and preserves its acceptance event on normal completion and deadline interruption.
+    mutating func finishRelationReport(_ report: PassReport) {
+        applyPostCycleReport(report)
+        if isInstrumented, report.anyAccepted {
+            ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
+        }
+    }
+
+    /// Restores search rejections before applying cosmetic reorder policy, which does not rebuild the graph.
+    mutating func finishReorderReport(_ report: PassReport, savedRejectCache: Set<UInt64>) {
+        rejectCache = savedRejectCache
+        _ = applyPassPolicy(report)
+        if isInstrumented, report.anyAccepted {
+            ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
+        }
     }
 }

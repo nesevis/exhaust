@@ -98,7 +98,7 @@ private struct WindowFixture {
             ))),
             priority: .zeroBenefit
         )
-        var session = state.makeSession(for: EncoderInput(
+        let session = state.makeSession(for: EncoderInput(
             transformation: transformation,
             baseSequence: state.sequence,
             tree: state.tree,

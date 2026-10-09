@@ -39,7 +39,7 @@ struct ReorderFinalizationTests {
         }
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = .reorderPass
-        _ = machine.next()
+        finishReorder(&machine)
 
         #expect(try machine.next() == nil)
         #expect(propertyCalls == 1)
@@ -54,12 +54,12 @@ struct ReorderFinalizationTests {
     }
 
     @Test("An expired search still runs the enabled final reorder", arguments: [
-        ReductionMachine.Phase.beginCycle,
+        ReorderStartPhase.beginCycle,
         .dispatching,
-        .postCycle(remaining: [.confirmConvergence, .excursion]),
+        .postCycle,
         .reorderPass,
     ], [false, true])
-    func expiredSearchRunsFinalReorder(phase: ReductionMachine.Phase, reorderEnabled: Bool) throws {
+    private func expiredSearchRunsFinalReorder(phase: ReorderStartPhase, reorderEnabled: Bool) throws {
         let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 3 ... 3)
         let output = [UInt64(3), 2, 1]
         let tree = try #require(try Interpreters.reflect(generator, with: output))
@@ -78,7 +78,7 @@ struct ReorderFinalizationTests {
             }
         )
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
-        machine.phase = phase
+        machine.phase = phase.machinePhase
         clock.expire()
         _ = machine.next()
 
@@ -120,7 +120,7 @@ struct ReorderFinalizationTests {
         )
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = .reorderPass
-        _ = machine.next()
+        finishReorder(&machine)
         let reordered = try #require(machine.output as? ([UInt64], [UInt64]))
 
         #expect(reordered.0 == [1, 2, 3])
@@ -180,6 +180,27 @@ struct ReorderFinalizationTests {
     }
 }
 
+/// Describes session-free starting phases without sharing a mutable post-cycle frame between test cases.
+private enum ReorderStartPhase: Sendable {
+    case beginCycle
+    case dispatching
+    case postCycle
+    case reorderPass
+
+    var machinePhase: ReductionMachine.Phase {
+        switch self {
+            case .beginCycle:
+                .beginCycle
+            case .dispatching:
+                .dispatching
+            case .postCycle:
+                .postCycle(remaining: [.confirmConvergence, .excursion])
+            case .reorderPass:
+                .reorderPass
+        }
+    }
+}
+
 /// Lets the property expire the budget after reordering starts, independently of wall-clock timing.
 private final class ReorderTestClock {
     private var nanoseconds: UInt64 = 0
@@ -191,4 +212,14 @@ private final class ReorderTestClock {
     func expire() {
         nanoseconds = 100
     }
+}
+
+/// Drives the cooperative final pass to completion before checking its existing finalization contract.
+private func finishReorder(_ machine: inout ReductionMachine) {
+    for _ in 0 ..< 10000 {
+        guard machine.next() != nil else {
+            return
+        }
+    }
+    Issue.record("Final reorder did not terminate")
 }
