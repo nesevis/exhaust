@@ -8,7 +8,7 @@ enum NumericPairCandidates {
     /// Samples the target, local changes, boundaries, and successively subdivided intervals without assuming a monotone property.
     ///
     /// Proposal order matters: it decides which candidates fit under ``maximumSamples`` and the order the pair cursor probes them in.
-    static func values(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
+    static func values(for leaf: ReductionLeaf, simplifying: Bool) -> [UInt64] {
         var samples = CandidateSamples(leaf: leaf, simplifying: simplifying)
         samples.append(samples.target)
         samples.appendNeighbors()
@@ -23,7 +23,7 @@ enum NumericPairCandidates {
     }
 
     /// Keeps higher-order grids small while trying targets, coherent halving, local compensation, and simple magnitudes before widening. These are proposals, not an exhaustive domain or a monotonicity assumption.
-    static func jointValues(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
+    static func jointValues(for leaf: ReductionLeaf, simplifying: Bool) -> [UInt64] {
         var samples = CandidateSamples(leaf: leaf, simplifying: simplifying, maximumSamples: maximumJointSamples)
         samples.append(samples.target)
         if leaf.choice.tag.isFloatingPoint {
@@ -66,7 +66,7 @@ enum NumericPairCandidates {
 
 /// Collects distinct admissible bit patterns in proposal order up to the caller's sample limit.
 private struct CandidateSamples {
-    let leaf: NumericPairQuery.Leaf
+    let leaf: ReductionLeaf
     let simplifying: Bool
     let current: UInt64
     let target: UInt64
@@ -78,7 +78,7 @@ private struct CandidateSamples {
         candidates.count >= maximumSamples
     }
 
-    init(leaf: NumericPairQuery.Leaf, simplifying: Bool, maximumSamples: Int = NumericPairCandidates.maximumSamples) {
+    init(leaf: ReductionLeaf, simplifying: Bool, maximumSamples: Int = NumericPairCandidates.maximumSamples) {
         self.leaf = leaf
         self.simplifying = simplifying
         current = leaf.choice.bitPattern64

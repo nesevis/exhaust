@@ -4,7 +4,7 @@ enum NumericJointQuery {
 
     /// Captures stalled membership as well as values and domains so new convergence evidence can reopen an exhausted checkpoint.
     struct Entry: Equatable {
-        let leaf: NumericPairQuery.Leaf
+        let leaf: ReductionLeaf
         let stalled: Bool
         let span: UInt64
         let simplifyingSamples: [UInt64]
@@ -60,7 +60,7 @@ enum NumericJointQuery {
 
     /// Ranks compact descriptors rather than materialized candidate histories.
     struct Group {
-        let leaves: [NumericPairQuery.Leaf]
+        let leaves: [ReductionLeaf]
         let samples: [[UInt64]]
         let ratioProposals: [NumericCommonDivisorProposal.Rescaling]
         let estimatedWork: Int

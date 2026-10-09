@@ -215,7 +215,7 @@ struct NumericCommonDivisorTests {
         #expect(candidate.compactMap { $0.value?.choice.bitPattern64 } == [3, 4, 0, 175])
     }
 
-    private func leaves(values: [ChoiceValue], ranges: [ClosedRange<UInt64>]? = nil) -> [NumericPairQuery.Leaf] {
+    private func leaves(values: [ChoiceValue], ranges: [ClosedRange<UInt64>]? = nil) -> [ReductionLeaf] {
         let tree = ChoiceTree.group(values.enumerated().map { index, value in
             .choice(value, .init(validRange: ranges?[index] ?? value.tag.bitPatternRange, isRangeExplicit: true))
         })

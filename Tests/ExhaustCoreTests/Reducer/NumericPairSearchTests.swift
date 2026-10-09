@@ -22,7 +22,7 @@ struct NumericPairSearchTests {
             let width = upper - lower
             let offset = width == UInt64.max ? sample.1.1 : sample.1.1 % (width + 1)
             let choice = ChoiceValue(lower + offset, tag: tag)
-            let leaf = NumericPairQuery.Leaf(
+            let leaf = ReductionLeaf(
                 nodeID: 0,
                 position: 0,
                 path: [],
@@ -456,7 +456,7 @@ struct NumericPairSearchTests {
     }
 
     /// Reconstructs the original proposal stream, applying the six-value cap only after admission and deduplication.
-    private static func uncappedJointValues(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
+    private static func uncappedJointValues(for leaf: ReductionLeaf, simplifying: Bool) -> [UInt64] {
         let zero = leaf.choice.tag.simplestBitPattern
         let current = leaf.choice.bitPattern64
         let target = leaf.choice.reductionTarget(in: leaf.range)

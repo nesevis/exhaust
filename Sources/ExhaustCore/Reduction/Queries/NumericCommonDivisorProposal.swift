@@ -10,7 +10,7 @@ enum NumericCommonDivisorProposal {
     }
 
     /// Visits the primitive tuple, scales two through four, up to eight successive halvings of the current scale, and its three nearest smaller scales. A checkpoint still has one shared probe budget, and each group has at most 15 distinct proposals.
-    static func rescalings(for leaves: [NumericPairQuery.Leaf]) -> [Rescaling] {
+    static func rescalings(for leaves: [ReductionLeaf]) -> [Rescaling] {
         guard let normalization = normalize(leaves) else { return [] }
         var scales: [UInt64] = [1, 2, 3, 4]
         var geometric = normalization.divisor
@@ -31,7 +31,7 @@ enum NumericCommonDivisorProposal {
     }
 
     /// Divides semantic magnitudes by their greatest common divisor, preserving signs and zero. Rejects a trivial divisor, a non-improving source, or any result outside its leaf's domain rather than clamping away the common scale.
-    static func patterns(for leaves: [NumericPairQuery.Leaf]) -> [UInt64]? {
+    static func patterns(for leaves: [ReductionLeaf]) -> [UInt64]? {
         normalize(leaves)?.patterns(scale: 1, leaves: leaves)
     }
 
@@ -41,7 +41,7 @@ enum NumericCommonDivisorProposal {
         let primitiveMagnitudes: [UInt64]
 
         /// Reconstructs signs from the original choices and rejects any scale that would leave a declared domain.
-        func patterns(scale: UInt64, leaves: [NumericPairQuery.Leaf]) -> [UInt64]? {
+        func patterns(scale: UInt64, leaves: [ReductionLeaf]) -> [UInt64]? {
             var patterns: [UInt64] = []
             for index in leaves.indices {
                 let leaf = leaves[index]
@@ -58,7 +58,7 @@ enum NumericCommonDivisorProposal {
     }
 
     /// Computes the shared integer scale once; individual proposals enforce domain admission independently so an excluded primitive tuple does not discard viable larger scales.
-    private static func normalize(_ leaves: [NumericPairQuery.Leaf]) -> Normalization? {
+    private static func normalize(_ leaves: [ReductionLeaf]) -> Normalization? {
         guard (2 ... 4).contains(leaves.count), leaves.allSatisfy({ leaf in
             switch leaf.choice.tag {
                 case .int, .int8, .int16, .int32, .int64, .uint, .uint8, .uint16, .uint32, .uint64:

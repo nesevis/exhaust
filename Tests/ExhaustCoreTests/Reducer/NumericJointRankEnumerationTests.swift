@@ -92,7 +92,7 @@ struct NumericJointRankEnumerationTests {
 
     private func group(counts: [Int], index: Int, rescaled: Bool) -> NumericJointQuery.Group {
         let leaves = counts.indices.map { position in
-            NumericPairQuery.Leaf(
+            ReductionLeaf(
                 nodeID: index * counts.count + position,
                 position: index * counts.count + position,
                 path: [],

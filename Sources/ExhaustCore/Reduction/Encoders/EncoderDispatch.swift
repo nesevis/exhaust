@@ -64,61 +64,6 @@ enum EncoderDispatch {
 }
 
 extension EncoderDispatch: GraphEncoder {
-    /// The staged session advances descriptors before touching its candidate buffer; other encoders retain their normal probe path.
-    ///
-    /// Restores each concrete case explicitly so dispatch consumption does not retain the staged box during its uniqueness check.
-    mutating func nextStagedJointProbe(lastAccepted: Bool) -> StagedJointEncoder.Probe? {
-        switch consume self {
-            case var .stagedJoint(encoder):
-                Self.makeUnique(&encoder)
-                let probe = encoder.value.nextSparseProbe(lastAccepted: lastAccepted)
-                self = .stagedJoint(encoder)
-                return probe
-            case let .structural(encoder):
-                self = .structural(encoder)
-                return nil
-            case let .value(encoder):
-                self = .value(encoder)
-                return nil
-            case let .redistribution(encoder):
-                self = .redistribution(encoder)
-                return nil
-            case let .lockstep(encoder):
-                self = .lockstep(encoder)
-                return nil
-            case let .relation(encoder):
-                self = .relation(encoder)
-                return nil
-            case let .swap(encoder):
-                self = .swap(encoder)
-                return nil
-            case let .windowRemoval(encoder):
-                self = .windowRemoval(encoder)
-                return nil
-            case let .reorder(encoder):
-                self = .reorder(encoder)
-                return nil
-            case let .laneCollapse(encoder):
-                self = .laneCollapse(encoder)
-                return nil
-            case let .depthCollapse(encoder):
-                self = .depthCollapse(encoder)
-                return nil
-            case let .binarySearch(encoder):
-                self = .binarySearch(encoder)
-                return nil
-            case let .boundValueCovering(encoder):
-                self = .boundValueCovering(encoder)
-                return nil
-            case let .liftedStage(encoder):
-                self = .liftedStage(encoder)
-                return nil
-            case let .composed(encoder):
-                self = .composed(encoder)
-                return nil
-        }
-    }
-
     var name: EncoderName {
         switch self {
             case let .structural(encoder):
@@ -220,80 +165,84 @@ extension EncoderDispatch: GraphEncoder {
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
+        prepareProbe(into: &candidate, lastAccepted: lastAccepted)?.write(into: &candidate)
+    }
+
+    mutating func prepareProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> PreparedEncoderProbe? {
         switch consume self {
             case var .structural(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .structural(encoder)
                 return result
             case var .value(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .value(encoder)
                 return result
             case var .redistribution(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .redistribution(encoder)
                 return result
             case var .lockstep(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .lockstep(encoder)
                 return result
             case var .relation(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .relation(encoder)
                 return result
             case var .stagedJoint(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .stagedJoint(encoder)
                 return result
             case var .swap(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .swap(encoder)
                 return result
             case var .windowRemoval(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .windowRemoval(encoder)
                 return result
             case var .reorder(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .reorder(encoder)
                 return result
             case var .laneCollapse(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .laneCollapse(encoder)
                 return result
             case var .depthCollapse(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .depthCollapse(encoder)
                 return result
             case var .binarySearch(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .binarySearch(encoder)
                 return result
             case var .boundValueCovering(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .boundValueCovering(encoder)
                 return result
             case var .liftedStage(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .liftedStage(encoder)
                 return result
             case var .composed(encoder):
                 Self.makeUnique(&encoder)
-                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                let result = encoder.value.prepareProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .composed(encoder)
                 return result
         }

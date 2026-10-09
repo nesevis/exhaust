@@ -18,7 +18,7 @@ struct StagedJointSparseProbeTests {
         for arity in 2 ... 4 {
             let selected = Array(leaves.prefix(arity))
             let patterns = selected.map { leaf in NumericPairCandidates.values(for: leaf, simplifying: true).first ?? leaf.choice.bitPattern64 }
-            let probe = StagedJointEncoder.Probe(leaves: selected, patterns: patterns)
+            let probe = SparseEncoderProbe(leaves: selected, patterns: patterns)
             var candidate = base
             probe.write(into: &candidate)
             #expect(probe.hash(baseHash: hash, baseSequence: base) == ZobristHash.hash(of: candidate))
@@ -137,19 +137,20 @@ struct StagedJointSparseProbeTests {
         var encoder = fixture.encoder
         var reference = StagedJointEncoder()
         reference.start(scope: fixture.scope)
-        let firstProbe = encoder.nextStagedJointProbe(lastAccepted: false)
+        var candidate = fixture.scope.baseSequence
+        let firstProbe = nextSparseProbe(&encoder, candidate: &candidate)
         let firstReferenceProbe = reference.nextSparseProbe(lastAccepted: false)
         _ = try #require(firstProbe)
         _ = try #require(firstReferenceProbe)
         var snapshot = encoder
         for _ in 0 ..< 5 {
-            let probe = encoder.nextStagedJointProbe(lastAccepted: false)
+            let probe = nextSparseProbe(&encoder, candidate: &candidate)
             _ = try #require(probe)
         }
 
         var comparedProbes = 0
         while let expectedProbe = reference.nextSparseProbe(lastAccepted: false) {
-            let nextProbe = snapshot.nextStagedJointProbe(lastAccepted: false)
+            let nextProbe = nextSparseProbe(&snapshot, candidate: &candidate)
             let actualProbe = try #require(nextProbe)
             var expected = fixture.scope.baseSequence
             var actual = fixture.scope.baseSequence
@@ -159,7 +160,7 @@ struct StagedJointSparseProbeTests {
             comparedProbes += 1
         }
         #expect(comparedProbes == 127)
-        let exhaustedProbe = snapshot.nextStagedJointProbe(lastAccepted: false)
+        let exhaustedProbe = nextSparseProbe(&snapshot, candidate: &candidate)
         #expect(exhaustedProbe == nil)
     }
 
@@ -169,11 +170,24 @@ struct StagedJointSparseProbeTests {
         var encoder = EncoderDispatch(StagedJointEncoder())
         encoder.start(scope: scope)
         let initialStorage = sparseStorageIdentity(of: encoder)
+        var candidate = scope.baseSequence
         for _ in 0 ..< 5 {
-            let probe = encoder.nextStagedJointProbe(lastAccepted: false)
+            let probe = nextSparseProbe(&encoder, candidate: &candidate)
             _ = try #require(probe)
             #expect(sparseStorageIdentity(of: encoder) == initialStorage)
         }
+    }
+
+    /// Requires sparse preparation through the common dispatch contract without materializing its candidate.
+    private func nextSparseProbe(_ encoder: inout EncoderDispatch, candidate: inout ChoiceSequence) -> SparseEncoderProbe? {
+        guard let prepared = encoder.prepareProbe(into: &candidate, lastAccepted: false) else {
+            return nil
+        }
+        guard case let .sparse(probe, _) = prepared else {
+            Issue.record("Staged search must prepare leaf edits without writing a complete candidate")
+            return nil
+        }
+        return probe
     }
 
     /// Observes the tagged pointer without creating another owner during the next uniqueness check.

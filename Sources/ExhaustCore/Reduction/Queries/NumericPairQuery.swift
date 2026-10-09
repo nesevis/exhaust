@@ -5,29 +5,10 @@ enum NumericPairQuery {
     static let maximumLeaves = 256
     static let maximumPairs = 30
 
-    /// Captures the domain as well as the address so exhausted work becomes eligible again after a domain change.
-    ///
-    /// Equality is hand-written for comparing exhausted scopes across graph rebuilds: it ignores `nodeID`, which rebuilds renumber, and `mayReshapeOnAcceptance`, which the path already determines.
-    struct Leaf: Equatable {
-        let nodeID: Int
-        let position: Int
-        let path: ChoicePath
-        let choice: ChoiceValue
-        let range: ClosedRange<UInt64>
-        let bindFingerprints: [UInt64]
-        /// Mirrors ``LeafEntry/mayReshapeOnAcceptance``: only a bind inner's edit can make the graph's dependent ranges stale, so every other edit is written in place.
-        let mayReshapeOnAcceptance: Bool
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.position == rhs.position && lhs.path == rhs.path && lhs.choice == rhs.choice
-                && lhs.range == rhs.range && lhs.bindFingerprints == rhs.bindFingerprints
-        }
-    }
-
     /// A stalled source that the search moves toward its target, and the partner whose value may move in either direction to keep the property failing.
     struct Pair: Equatable {
-        let source: Leaf
-        let sink: Leaf
+        let source: ReductionLeaf
+        let sink: ReductionLeaf
     }
 
     /// Collects the bounded search scope, interleaving each source's nearest and farthest partners before any intermediate distance.
@@ -62,9 +43,9 @@ enum NumericPairQuery {
     }
 
     /// Shares numeric and bind admission between pair search and higher-order group discovery.
-    static func eligibleLeaves(graph: ChoiceGraph) -> [Leaf] {
+    static func eligibleLeaves(graph: ChoiceGraph) -> [ReductionLeaf] {
         // Filter before capping, so non-numeric leaves (a long string's characters, say) cannot use up the cap ahead of numeric ones.
-        graph.leafNodes.lazy.compactMap { nodeID -> Leaf? in
+        graph.leafNodes.lazy.compactMap { nodeID -> ReductionLeaf? in
             let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind,
                   let position = node.positionRange?.lowerBound,
@@ -73,7 +54,7 @@ enum NumericPairQuery {
             else {
                 return nil
             }
-            return Leaf(
+            return ReductionLeaf(
                 nodeID: nodeID,
                 position: position,
                 path: node.choicePath,
@@ -86,7 +67,7 @@ enum NumericPairQuery {
     }
 
     /// Requires a current convergence floor above target, or a fruitless bound search for a bind inner.
-    static func isStalled(_ leaf: Leaf, graph: ChoiceGraph, gate: BoundValueGate) -> Bool {
+    static func isStalled(_ leaf: ReductionLeaf, graph: ChoiceGraph, gate: BoundValueGate) -> Bool {
         guard leaf.choice.bitPattern64 != leaf.choice.reductionTarget(in: leaf.range) else {
             return false
         }
@@ -116,7 +97,7 @@ enum NumericPairQuery {
     }
 
     /// Checks all joint edits against fresh bind ancestry using one graph construction per surviving failure.
-    static func preservesIdentity(of leaves: [Leaf], in tree: ChoiceTree) -> Bool {
+    static func preservesIdentity(of leaves: [ReductionLeaf], in tree: ChoiceTree) -> Bool {
         guard leaves.contains(where: { $0.bindFingerprints.isEmpty == false }) else {
             return true
         }

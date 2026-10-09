@@ -2,7 +2,7 @@
 enum DecoderAdmission {
     case standard
     case numericPair(NumericPairQuery.Pair)
-    case numericJoint([NumericPairQuery.Leaf])
+    case numericJoint([ReductionLeaf])
 
     /// Whether the admission inspects the decoded history. Only exact decoding produces a history to inspect, and only then does value-only decoding need to build it.
     var inspectsDecodedHistory: Bool {

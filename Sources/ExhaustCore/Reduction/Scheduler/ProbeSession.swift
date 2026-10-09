@@ -42,7 +42,7 @@ extension ProbeSessionState {
 ///
 /// Constructed by the machine when dispatch selects an encoder. Advanced by ``step(state:)`` (one sub-phase per call) or ``runToCompletion(state:deadlineCheck:)`` (loops step internally). Produces a ``PassReport`` when finished via ``report()``.
 ///
-/// Retains one pass's mutable encoder and reusable candidate buffer across cooperative steps. Hosts borrow the session reference while lending their state, keeping its fields in place and allowing staged probes to reuse one candidate buffer.
+/// Retains one pass's mutable encoder and reusable candidate buffer across cooperative steps. Hosts borrow the session reference while lending their state, keeping its fields in place and allowing sparse probes to reuse one candidate buffer.
 final class ProbeSession {
     // MARK: - Phase
 
@@ -72,7 +72,7 @@ final class ProbeSession {
     private let hasBind: Bool
 
     private var candidateBuffer: ChoiceSequence
-    private var previousStagedProbe: StagedJointEncoder.Probe?
+    private var previousSparseProbe: SparseEncoderProbe?
     private var lastProbeAccepted: Bool = false
 
     private var pendingMutation: ProjectedMutation?
@@ -127,33 +127,34 @@ final class ProbeSession {
 
     // MARK: - Encode
 
-    /// Emits one probe, checking its cached hash before writing staged edits or selecting a decoder.
+    /// Emits one probe, checking its cached hash before writing sparse edits or selecting a decoder.
     private func stepEncode(state: inout some ProbeSessionState) -> StepResult {
-        let mutation: ProjectedMutation
-        let probeHash: UInt64
-        let cacheHit: Bool
-        if case .stagedJoint = encoder {
-            guard let probe = encoder.nextStagedJointProbe(lastAccepted: lastProbeAccepted) else {
-                phase = .finished
-                return .finished
-            }
-            mutation = probe.mutation
-            probeHash = probe.hash(baseHash: baseHash, baseSequence: state.sequence)
-            cacheHit = state.rejectCache.contains(probeHash)
-            // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
-            if cacheHit == false || observer != nil {
-                previousStagedProbe?.restore(into: &candidateBuffer, baseSequence: state.sequence)
-                probe.write(into: &candidateBuffer)
-                previousStagedProbe = probe
-            }
-        } else {
-            guard let probe = encoder.nextProbe(into: &candidateBuffer, lastAccepted: lastProbeAccepted) else {
-                phase = .finished
-                return .finished
-            }
-            mutation = probe
-            probeHash = ZobristHash.incrementalHash(baseHash: baseHash, baseSequence: state.sequence, probe: candidateBuffer)
-            cacheHit = state.rejectCache.contains(probeHash)
+        guard let prepared = encoder.prepareProbe(into: &candidateBuffer, lastAccepted: lastProbeAccepted) else {
+            phase = .finished
+            return .finished
+        }
+        let mutation = prepared.mutation
+        let probeHash = switch prepared {
+            case .materialized:
+                ZobristHash.incrementalHash(baseHash: baseHash, baseSequence: state.sequence, probe: candidateBuffer)
+            case let .sparse(probe, baseSequence):
+                probe.hash(baseHash: baseHash, baseSequence: baseSequence)
+        }
+        let cacheHit = state.rejectCache.contains(probeHash)
+        switch prepared {
+            case .materialized:
+                previousSparseProbe = nil
+            case let .sparse(probe, baseSequence):
+                // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
+                if cacheHit == false || observer != nil {
+                    if let previousSparseProbe {
+                        previousSparseProbe.restore(into: &candidateBuffer, baseSequence: baseSequence)
+                    } else {
+                        candidateBuffer = baseSequence
+                    }
+                    probe.write(into: &candidateBuffer)
+                    previousSparseProbe = probe
+                }
         }
 
         counts.recordEmission()

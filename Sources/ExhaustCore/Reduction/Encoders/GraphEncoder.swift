@@ -25,7 +25,7 @@ typealias EncoderProbe = ProjectedMutation
 /// ## Lifecycle
 ///
 /// 1. The scheduler calls ``start(scope:)`` with a self-contained scope.
-/// 2. The scheduler calls ``nextProbe(into:lastAccepted:)`` in a loop until it returns nil (converged). The caller owns the candidate buffer and passes it as `inout`; the encoder writes the candidate directly into it.
+/// 2. The scheduler calls ``prepareProbe(into:lastAccepted:)`` until it returns nil (converged). The encoder either writes the complete candidate into the caller's buffer or returns sparse edits that the session can check before writing. Direct callers use ``nextProbe(into:lastAccepted:)`` to materialize every candidate from the same stream.
 /// 3. The scheduler reads ``convergenceRecords`` after the loop to harvest cached bounds.
 protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
@@ -45,6 +45,9 @@ protocol GraphEncoder {
     ///   - lastAccepted: Whether the previous probe was accepted by the property. Ignored on the first call after ``start(scope:)``.
     /// - Returns: The projected mutation for this probe, or `nil` when converged.
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe?
+
+    /// Prepares the same probe stream for session execution. Sparse edits use the session's current checkpoint and stop when acceptance makes its addresses stale; ordinary encoders default to writing the complete candidate via ``nextProbe(into:lastAccepted:)``.
+    mutating func prepareProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> PreparedEncoderProbe?
 
     /// Whether a replacement candidate was dropped by the shortlex gate without being probed.
     ///
@@ -66,7 +69,7 @@ protocol GraphEncoder {
     /// ``AcceptanceHandling/applyMutation`` ends the session whenever the mutation requires a full rebuild. An encoder whose search must continue past acceptances returns ``AcceptanceHandling/refreshAndIdle`` and keeps whatever state its ``StatefulGraphEncoder/refreshState(graph:sequence:)`` leaves valid. Defaults to ``AcceptanceHandling/applyMutation``.
     var acceptanceHandling: AcceptanceHandling { get }
 
-    /// Candidate-specific checks for the most recent probe. ``ProbeSession`` reads it straight after ``nextProbe(into:lastAccepted:)`` and folds it into that probe's decoder selection; a non-standard admission forces exact decoding. Defaults to ``DecoderAdmission/standard``.
+    /// Candidate-specific checks for the most recent probe. ``ProbeSession`` reads it straight after ``prepareProbe(into:lastAccepted:)`` and folds it into that probe's decoder selection; a non-standard admission forces exact decoding. Defaults to ``DecoderAdmission/standard``.
     var admission: DecoderAdmission { get }
 }
 
@@ -92,6 +95,11 @@ protocol StatefulGraphEncoder: GraphEncoder {
 }
 
 extension GraphEncoder {
+    /// Existing encoders keep their candidate-writing path; sparse encoders override preparation without changing the stream's ordering or acceptance feedback.
+    mutating func prepareProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> PreparedEncoderProbe? {
+        nextProbe(into: &candidate, lastAccepted: lastAccepted).map(PreparedEncoderProbe.materialized)
+    }
+
     /// Default: no unresolved replacements.
     var hadUnresolvedReplacement: Bool {
         false

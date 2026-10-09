@@ -1,7 +1,7 @@
 /// Tries primitive, small-scale, geometric, and nearby rescalings before coherent proposals, then shares each Cartesian diagonal across retained groups. Only index tuples are enumerated; candidate histories are written into the caller's reusable buffer.
 struct NumericJointSearchCursor {
     private struct Plan {
-        let leaves: [NumericPairQuery.Leaf]
+        let leaves: [ReductionLeaf]
         let samples: [[UInt64]]
         let ratioPatterns: Set<[UInt64]>
     }
@@ -48,7 +48,7 @@ struct NumericJointSearchCursor {
     }
 
     struct Proposal {
-        let leaves: [NumericPairQuery.Leaf]
+        let leaves: [ReductionLeaf]
         let patterns: [UInt64]
 
         func write(into candidate: inout ChoiceSequence) {
