@@ -47,7 +47,12 @@ struct ProbeSessionOwnershipTests {
         }
         machine.convergence.deferBindInner = false
         _ = machine.startStagedJointPass(remaining: [])
-        let session = try #require(machine.activeSession)
+        guard case let .postCycleProbing(initialFrame) = machine.phase else {
+            Issue.record("Staged search must retain its session in the post-cycle frame")
+            return
+        }
+        let session = initialFrame.session
+        #expect(machine.dispatchLoop.activeSession == nil)
         var completed = false
         for _ in 0 ..< 1000 {
             let next = machine.next()
@@ -57,7 +62,12 @@ struct ProbeSessionOwnershipTests {
                 completed = true
                 break
             }
-            #expect(machine.activeSession === session)
+            guard case let .postCycleProbing(frame) = machine.phase else {
+                Issue.record("Staged search must retain its frame until completion")
+                return
+            }
+            #expect(frame.session === session)
+            #expect(machine.dispatchLoop.activeSession == nil)
         }
         #expect(completed)
         #expect(machine.activeSession == nil)

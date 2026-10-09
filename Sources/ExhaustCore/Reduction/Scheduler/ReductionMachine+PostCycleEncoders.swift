@@ -17,41 +17,8 @@ extension ReductionMachine {
         else {
             return .relationPassCompleted(accepted: false)
         }
-        activeSession = session
-        phase = .postCycleProbing(pass: .relation, remaining: remaining)
+        phase = .postCycleProbing(PostCycleFrame(session: session, pass: .relation, remaining: remaining))
         return .postCycleStarted(owner: .relationPass)
-    }
-
-    /// Advances one encode or decode while preserving the pass's timing owner and continuation state.
-    mutating func stepPostCycleProbing(
-        pass: PostCyclePass,
-        remaining: [ChoiceGraphScheduler.PostCycleAction]
-    ) -> Transition {
-        guard let session = activeSession else {
-            preconditionFailure("A post-cycle probing phase must own an active session")
-        }
-        let result = session.step(state: &self)
-        switch result {
-            case let .encoded(encoder, cacheHit):
-                return .postCycleEncoded(owner: pass.timing, encoder: encoder, cacheHit: cacheHit)
-            case let .decoded(encoder, accepted):
-                return .postCycleDecoded(owner: pass.timing, encoder: encoder, accepted: accepted)
-            case .finished:
-                let report = session.report()
-                activeSession = nil
-                switch pass {
-                    case .relation:
-                        finishRelationReport(report)
-                        resumePostCycle(remaining: remaining)
-                        return .relationPassCompleted(accepted: report.anyAccepted)
-                    case var .stagedJoint(search):
-                        applyPostCycleReport(report)
-                        return advanceStagedJointPass(report: report, search: &search, remaining: remaining)
-                    case let .reorder(savedRejectCache):
-                        finishReorderReport(report, savedRejectCache: savedRejectCache)
-                        return completeReorderPass(accepted: report.anyAccepted)
-                }
-        }
     }
 
     /// Restores the action queue only after the in-flight pass has finished applying its report.

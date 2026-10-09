@@ -62,7 +62,13 @@ struct PostCycleSteppingTests {
         timings.record(encoded, elapsed: 7)
         #expect(emittedEncoder == encoder)
         #expect(cacheHit == false)
-        #expect(machine.activeSession?.phase == .decode)
+        guard case let .postCycleProbing(frame) = machine.phase else {
+            Issue.record("A post-cycle pass must retain its own session")
+            return
+        }
+        #expect(frame.session.phase == .decode)
+        #expect(machine.dispatchLoop.activeSession == nil)
+        #expect(machine.dispatchLoop.pendingReport == nil)
         #expect(propertyCalls == 0)
         let decoded = try nextTransition(&machine)
         guard case let .postCycleDecoded(_, decodedEncoder, accepted) = decoded else {
@@ -78,6 +84,8 @@ struct PostCycleSteppingTests {
         var completed = false
         for _ in 0 ..< 10000 {
             let transition = try nextTransition(&machine)
+            #expect(machine.dispatchLoop.activeSession == nil)
+            #expect(machine.dispatchLoop.pendingReport == nil)
             steps += 1
             timings.record(transition, elapsed: 7)
             switch transition {

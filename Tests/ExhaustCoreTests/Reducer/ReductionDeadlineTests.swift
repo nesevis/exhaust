@@ -5,21 +5,21 @@ import Testing
 @Suite("Cooperative reducer deadline accounting")
 struct ReductionDeadlineTests {
     @Test("Expired deadlines stop every machine phase before starting work", arguments: [
-        ReductionMachine.Phase.beginCycle,
+        DeadlineStartPhase.beginCycle,
         .buildSources,
         .dispatching,
         .endCycle,
-        .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .stagedJointPass, .excursion]),
+        .postCycle,
         .checkTermination,
         .reorderPass,
     ])
-    func expiresBeforePhase(phase: ReductionMachine.Phase) throws {
+    private func expiresBeforePhase(phase: DeadlineStartPhase) throws {
         let clock = DeadlineTestClock()
         var machine = try scalarMachine(clock: clock) { _ in
             Issue.record("An expired phase must not call the property")
             return false
         }
-        machine.phase = phase
+        machine.phase = phase.machinePhase
         clock.expire()
         let transition = machine.next()
         guard case .terminated = transition else {
@@ -340,6 +340,36 @@ struct ReductionDeadlineTests {
 }
 
 // MARK: - Test Helpers
+
+/// Describes session-free starting phases without sharing a mutable post-cycle frame between test cases.
+private enum DeadlineStartPhase: Sendable {
+    case beginCycle
+    case buildSources
+    case dispatching
+    case endCycle
+    case postCycle
+    case checkTermination
+    case reorderPass
+
+    var machinePhase: ReductionMachine.Phase {
+        switch self {
+            case .beginCycle:
+                .beginCycle
+            case .buildSources:
+                .buildSources
+            case .dispatching:
+                .dispatching
+            case .endCycle:
+                .endCycle
+            case .postCycle:
+                .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .stagedJointPass, .excursion])
+            case .checkTermination:
+                .checkTermination
+            case .reorderPass:
+                .reorderPass
+        }
+    }
+}
 
 /// Advances only when a test changes time; property closures can expire the budget while a decode is in flight.
 private final class DeadlineTestClock {

@@ -27,7 +27,7 @@
 ///
 /// The ``dispatching`` phase uses three sub-phases (``DispatchPhase``): select and evaluate a source (``dispatch``), delegate to the active ``ProbeSession`` for encode-decode stepping (``probing``), and optionally rebuild the graph after a structural acceptance (``rebuild``).
 ///
-/// Session-backed post-cycle actions and final reorder use ``Phase/postCycleProbing(pass:remaining:)`` to yield between encoding and decoding while retaining their own reporting bucket.
+/// Session-backed post-cycle actions and final reorder use ``PostCycleFrame`` to retain their session, continuation, and reporting bucket independently of the main dispatch loop.
 /// Excursions suspend the outer cycle while an ``ExcursionFrame`` steps perturbation and a nested exploitation loop, then commits or restores the checkpoint.
 package struct ReductionMachine: ProbeSessionState {
     // MARK: - Phase
@@ -39,7 +39,7 @@ package struct ReductionMachine: ProbeSessionState {
         case dispatching
         case endCycle
         case postCycle(remaining: [ChoiceGraphScheduler.PostCycleAction])
-        case postCycleProbing(pass: PostCyclePass, remaining: [ChoiceGraphScheduler.PostCycleAction])
+        case postCycleProbing(PostCycleFrame)
         case excursion(remaining: [ChoiceGraphScheduler.PostCycleAction])
         case checkTermination
         case reorderPass
@@ -109,21 +109,6 @@ package struct ReductionMachine: ProbeSessionState {
         case relationPass
         case stagedJointPass
         case reorder
-    }
-
-    /// Retains continuation state across probes; final reorder also owns the rejection cache it temporarily replaced.
-    enum PostCyclePass {
-        case relation
-        case stagedJoint(StagedJointSearch)
-        case reorder(savedRejectCache: Set<UInt64>)
-
-        var timing: PostCycleTiming {
-            switch self {
-                case .relation: .relationPass
-                case .stagedJoint: .stagedJointPass
-                case .reorder: .reorder
-            }
-        }
     }
 
     // MARK: - State
@@ -243,7 +228,7 @@ package struct ReductionMachine: ProbeSessionState {
     /// Total distance-to-reduction-target at the start of the pass currently in flight.
     var dispatchBaselineTargetDistance: Double = 0
 
-    // MARK: - Active Probe Session
+    // MARK: - Active Dispatch Session
 
     var activeSession: ProbeSession? {
         get { dispatchLoop.activeSession }
@@ -376,8 +361,8 @@ package struct ReductionMachine: ProbeSessionState {
                 stepEndCycle()
             case let .postCycle(remaining):
                 stepPostCycle(remaining: remaining)
-            case let .postCycleProbing(pass, remaining):
-                stepPostCycleProbing(pass: pass, remaining: remaining)
+            case let .postCycleProbing(frame):
+                frame.step(state: &self)
             case let .excursion(remaining):
                 stepExcursion(remaining: remaining)
             case .checkTermination:
@@ -557,114 +542,7 @@ package struct ReductionMachine: ProbeSessionState {
         return .terminated
     }
 
-    // MARK: - Reorder Pass
-
-    private mutating func stepReorderPass() -> Transition {
-        guard isEncoderEnabled(.numericReorder), let session = makeReorderSession() else {
-            return completeReorderPass(accepted: false)
-        }
-        let savedRejectCache = rejectCache
-        rejectCache = []
-        captureDispatchBaseline()
-        activeSession = session
-        phase = .postCycleProbing(pass: .reorder(savedRejectCache: savedRejectCache), remaining: [])
-        return .postCycleStarted(owner: .reorder)
-    }
-
-    /// Finalizes diagnostics after the reorder session has applied its report and restored the rejection cache.
-    mutating func completeReorderPass(accepted: Bool) -> Transition {
-        recordStallDiagnostic()
-        phase = .done
-        return .reorderCompleted(accepted: accepted)
-    }
-
-    /// Populates the stall-diagnostic fields on ``ReductionStats`` at termination.
-    ///
-    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Leaf counts use the graph from before final numeric reordering, which does not update the graph; the acceptance flag includes that final pass. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
-    private mutating func recordStallDiagnostic() {
-        var stalledCount = 0
-        var residualDistance: Double = 0
-        for nodeID in graph.liveNodeIDs {
-            let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else {
-                continue
-            }
-            let annotation = node.scopeAnnotation
-            if annotation.isDepthControl || annotation.isLaneControl || annotation.isBindInner {
-                continue
-            }
-            let bitPattern = metadata.value.bitPattern64
-            let target = metadata.value.reductionTarget(in: metadata.validRange)
-            guard bitPattern != target else {
-                continue
-            }
-            guard let record = graph.convergenceStore[nodeID], record.bound == bitPattern else {
-                continue
-            }
-            stalledCount += 1
-            residualDistance += Double(bitPattern > target ? bitPattern - target : target - bitPattern)
-        }
-        stats.stalledLeafCount = stalledCount
-        stats.stalledLeafResidualDistance = residualDistance
-        stats.anyAcceptanceEverOccurred = anyAcceptanceEverOccurred
-    }
-
     // MARK: - Helpers
-
-    /// Applies an interrupted search session exactly once, then runs the enabled final numeric reorder pass without rebuilding candidate sources.
-    ///
-    /// A pending structural acceptance rebuilds only the graph needed for final reordering and stall diagnostics. The decoded sequence, tree, and output are already committed; cosmetic reordering never needs a graph rebuild after its final value is accepted.
-    mutating func finishAtDeadline() -> Transition {
-        stats.reductionWasCapped = true
-        if case .done = phase {
-            return .terminated
-        }
-        if var frame = excursionFrame {
-            excursionFrame = nil
-            if frame.finishAtDeadline(state: &self) {
-                recordPostCycleAcceptance()
-            }
-        }
-        if case let .postCycleProbing(pass, _) = phase {
-            if let session = activeSession {
-                activeSession = nil
-                switch pass {
-                    case let .reorder(savedRejectCache):
-                        let report = session.runToCompletion(state: &self)
-                        finishReorderReport(report, savedRejectCache: savedRejectCache)
-                        pendingReport = nil
-                        sources = []
-                        _ = completeReorderPass(accepted: report.anyAccepted)
-                        return .terminated
-                    case .relation:
-                        finishRelationReport(session.report())
-                    case .stagedJoint:
-                        let report = session.report()
-                        applyPostCycleReport(report)
-                        if report.anyAccepted {
-                            invalidateAfterCoupledAcceptance()
-                        }
-                }
-            }
-        }
-        if let session = activeSession {
-            let report = session.report()
-            activeSession = nil
-            pendingReport = report
-            _ = applyPassPolicy(report)
-        }
-        if let report = pendingReport, report.anyAccepted, report.anyRequiresRebuild {
-            _ = rebuildAndUpdateGraph(
-                valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs.union(report.convergenceRecords.keys)
-            )
-            graphIsStripped = report.latestTreeIsStripped
-        }
-        pendingReport = nil
-        sources = []
-        let accepted = isEncoderEnabled(.numericReorder) ? runReorderPass() : false
-        _ = completeReorderPass(accepted: accepted)
-        return .terminated
-    }
 
     /// Treats zero as unlimited; otherwise compares elapsed time on the same monotonic clock used at initialization.
     func isDeadlineExceeded() -> Bool {
@@ -689,52 +567,6 @@ package struct ReductionMachine: ProbeSessionState {
 
     func allValuesConverged() -> Bool {
         ChoiceGraphScheduler.allValuesConverged(in: sequence, graph: graph)
-    }
-
-    /// Builds final reordering work without a deadline gate: an expired search must still finish its presentation pass.
-    func makeReorderSession() -> ProbeSession? {
-        guard let reorderScope = ReorderingQuery.build(graph: graph) else {
-            return nil
-        }
-        let reorderTransformation = GraphTransformation(
-            operation: .reorder(reorderScope),
-            priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
-        )
-        let scope = EncoderInput(
-            transformation: reorderTransformation,
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
-            warmStartRecords: [:]
-        )
-        var encoder: EncoderDispatch = .init(GraphReorderEncoder())
-        encoder.start(scope: scope)
-
-        return ProbeSession(
-            encoder: encoder,
-            transformation: reorderTransformation,
-            boundValueFingerprint: nil,
-            baseSequence: sequence,
-            hasBind: sequence.contains { entry in
-                if case .bind = entry {
-                    return true
-                }
-                return false
-            }
-        )
-    }
-
-    /// Runs final presentation work synchronously when the search deadline has already expired.
-    private mutating func runReorderPass() -> Bool {
-        guard let session = makeReorderSession() else {
-            return false
-        }
-        let savedRejectCache = rejectCache
-        rejectCache = []
-        captureDispatchBaseline()
-        let report = session.runToCompletion(state: &self)
-        finishReorderReport(report, savedRejectCache: savedRejectCache)
-        return report.anyAccepted
     }
 
     /// Snapshots the sequence's length and total target distance ahead of a probe session, so the completed pass's dispatch record can carry improvement deltas. No-op unless diagnostics are enabled.

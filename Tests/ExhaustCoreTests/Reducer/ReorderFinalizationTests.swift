@@ -54,12 +54,12 @@ struct ReorderFinalizationTests {
     }
 
     @Test("An expired search still runs the enabled final reorder", arguments: [
-        ReductionMachine.Phase.beginCycle,
+        ReorderStartPhase.beginCycle,
         .dispatching,
-        .postCycle(remaining: [.confirmConvergence, .excursion]),
+        .postCycle,
         .reorderPass,
     ], [false, true])
-    func expiredSearchRunsFinalReorder(phase: ReductionMachine.Phase, reorderEnabled: Bool) throws {
+    private func expiredSearchRunsFinalReorder(phase: ReorderStartPhase, reorderEnabled: Bool) throws {
         let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 3 ... 3)
         let output = [UInt64(3), 2, 1]
         let tree = try #require(try Interpreters.reflect(generator, with: output))
@@ -78,7 +78,7 @@ struct ReorderFinalizationTests {
             }
         )
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
-        machine.phase = phase
+        machine.phase = phase.machinePhase
         clock.expire()
         _ = machine.next()
 
@@ -177,6 +177,27 @@ struct ReorderFinalizationTests {
         #expect(machine.activeSession == nil)
         #expect(machine.pendingReport == nil)
         #expect(try machine.next() == nil)
+    }
+}
+
+/// Describes session-free starting phases without sharing a mutable post-cycle frame between test cases.
+private enum ReorderStartPhase: Sendable {
+    case beginCycle
+    case dispatching
+    case postCycle
+    case reorderPass
+
+    var machinePhase: ReductionMachine.Phase {
+        switch self {
+            case .beginCycle:
+                .beginCycle
+            case .dispatching:
+                .dispatching
+            case .postCycle:
+                .postCycle(remaining: [.confirmConvergence, .excursion])
+            case .reorderPass:
+                .reorderPass
+        }
     }
 }
 

@@ -31,8 +31,7 @@ extension ReductionMachine {
         else {
             return .stagedJointPassCompleted(accepted: false)
         }
-        activeSession = session
-        phase = .postCycleProbing(pass: .stagedJoint(checkpoint.search), remaining: remaining)
+        phase = .postCycleProbing(PostCycleFrame(session: session, pass: .stagedJoint(checkpoint.search), remaining: remaining))
         return .postCycleStarted(owner: .stagedJointPass)
     }
 
@@ -42,11 +41,6 @@ extension ReductionMachine {
         search: inout StagedJointSearch,
         remaining: [ChoiceGraphScheduler.PostCycleAction]
     ) -> Transition {
-        if report.anyAccepted {
-            invalidateAfterCoupledAcceptance()
-            resumePostCycle(remaining: remaining)
-            return .stagedJointPassCompleted(accepted: true)
-        }
         search.remaining -= report.probeCount
         guard let stage = nextStagedJointOperation(search: &search),
               let session = makePostCycleSession(operation: stage.operation, estimatedCost: stage.budget)
@@ -54,8 +48,7 @@ extension ReductionMachine {
             resumePostCycle(remaining: remaining)
             return .stagedJointPassCompleted(accepted: false)
         }
-        activeSession = session
-        phase = .postCycleProbing(pass: .stagedJoint(search), remaining: remaining)
+        phase = .postCycleProbing(PostCycleFrame(session: session, pass: .stagedJoint(search), remaining: remaining))
         return .postCycleStarted(owner: .stagedJointPass)
     }
 
