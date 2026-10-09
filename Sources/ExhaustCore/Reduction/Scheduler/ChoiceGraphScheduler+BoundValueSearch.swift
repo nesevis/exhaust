@@ -50,7 +50,7 @@ extension ChoiceGraphScheduler {
     ///   - bindScope: The bound value scope from the source pipeline.
     ///   - scope: The dispatched ``EncoderInput``. Provides controller choice metadata and the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialization.
-    ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
+    ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``BoundValueGate/decayedBudget(fingerprint:)`` based on per-bind stall counts.
     ///   - totalProbeCap: Maximum probes the composition emits across all lifts, zero meaning uncapped. The machine passes ``SchedulerTuning/composedFirstDispatchProbeCap`` for a bind fingerprint's first dispatch of the run and zero afterwards.
     static func makeBoundValueComposition(
         bindScope: BoundValueScope,

@@ -8,38 +8,21 @@
 /// Pure decision functions and entry points for the graph-based reduction pipeline.
 ///
 /// The stateful reduction logic lives in ``ReductionMachine``. This enum provides:
-/// - Entry points (``run``, ``runCollectingStats``) that construct and drive the machine.
+/// - The entry point (``run``) that constructs and drives the machine.
 /// - Pure decision functions (``evaluateDispatch``, ``evaluateAcceptance``, ``evaluatePostCycle``) that compute scheduling decisions from immutable inputs.
 /// - Encoder selection and instrumentation helpers shared by the machine and its sub-systems.
 enum ChoiceGraphScheduler {
     // MARK: - Entry Points
 
-    /// Reduces a failing counterexample by constructing and driving a ``ReductionMachine`` to completion.
+    /// Drives a reduction with optional accounting and per-step timing.
+    ///
+    /// Non-stats callers retain their lighter workload: the driver does not read the timing clock or record step durations when `collectStats` is false.
     static func run<Output>(
         gen: Generator<Output>,
         initialTree: ChoiceTree,
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
-        property: @escaping (Output) -> Bool
-    ) -> ReductionOutcome<Output> {
-        var machine = ReductionMachine(
-            gen: gen,
-            initialTree: initialTree,
-            initialOutput: initialOutput,
-            config: config,
-            collectStats: false,
-            property: property
-        )
-        while machine.next() != nil {}
-        return machine.typedResult().outcome
-    }
-
-    /// Reduces a failing counterexample with per-step wall-time measurement, returning both the reduced result and accumulated ``ReductionStats`` including ``ReductionStats/StepTimings``.
-    static func runCollectingStats<Output>(
-        gen: Generator<Output>,
-        initialTree: ChoiceTree,
-        initialOutput: Output,
-        config: Interpreters.ReducerConfiguration,
+        collectStats: Bool,
         property: @escaping (Output) -> Bool
     ) -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         var machine = ReductionMachine(
@@ -47,14 +30,16 @@ enum ChoiceGraphScheduler {
             initialTree: initialTree,
             initialOutput: initialOutput,
             config: config,
-            collectStats: true,
+            collectStats: collectStats,
             property: property
         )
-        var lastStep = MonotonicClock.nanoseconds()
+        var lastStep = collectStats ? MonotonicClock.nanoseconds() : 0
         while let transition = machine.next() {
-            let now = MonotonicClock.nanoseconds()
-            machine.stats.stepTimings.record(transition, elapsed: now - lastStep)
-            lastStep = now
+            if collectStats {
+                let now = MonotonicClock.nanoseconds()
+                machine.stats.stepTimings.record(transition, elapsed: now - lastStep)
+                lastStep = now
+            }
         }
         return machine.typedResult()
     }
