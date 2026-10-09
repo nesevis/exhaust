@@ -32,9 +32,9 @@ struct CouplingTrackerTests {
         let first = machine.graph.leafNodes[0]
         let second = machine.graph.leafNodes[1]
         #expect(machine.collectDiagnostics == false)
-        _ = machine.applyPassReport(report(converged: [first: 10]))
-        _ = machine.applyPassReport(report(changed: [second]))
-        _ = machine.applyPassReport(report(converged: [first: 7]))
+        _ = machine.applyPassPolicy(report(converged: [first: 10]))
+        _ = machine.applyPassPolicy(report(changed: [second]))
+        _ = machine.applyPassPolicy(report(converged: [first: 7]))
         #expect(machine.graph.couplingDependents[second] == (stagedEnabled && budgetEnabled ? [first] : nil))
         #expect(machine.stats.dispatchLog.isEmpty)
         #expect(machine.stats.couplingEdges.isEmpty)

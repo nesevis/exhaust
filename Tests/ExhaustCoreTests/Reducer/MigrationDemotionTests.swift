@@ -45,14 +45,14 @@ struct MigrationDemotionTests {
             return
         }
 
-        _ = machine.applyPassReport(migrationReport(transformation: transformation, accepted: false))
-        _ = machine.applyPassReport(migrationReport(transformation: transformation, accepted: false))
+        _ = machine.applyPassPolicy(migrationReport(transformation: transformation, accepted: false))
+        _ = machine.applyPassPolicy(migrationReport(transformation: transformation, accepted: false))
         #expect(machine.migrationConsecutiveRejects == 2)
 
-        _ = machine.applyPassReport(migrationReport(transformation: transformation, accepted: true))
+        _ = machine.applyPassPolicy(migrationReport(transformation: transformation, accepted: true))
         #expect(machine.migrationConsecutiveRejects == 0)
 
-        _ = machine.applyPassReport(migrationReport(transformation: transformation, accepted: false))
+        _ = machine.applyPassPolicy(migrationReport(transformation: transformation, accepted: false))
         #expect(machine.migrationConsecutiveRejects == 1)
     }
 
@@ -64,9 +64,9 @@ struct MigrationDemotionTests {
             return
         }
 
-        _ = machine.applyPassReport(migrationReport(transformation: transformation, accepted: false))
-        _ = machine.applyPassReport(passReport(encoderName: .valueSearch, transformation: transformation, accepted: true))
-        _ = machine.applyPassReport(passReport(encoderName: .deletion, transformation: transformation, accepted: false))
+        _ = machine.applyPassPolicy(migrationReport(transformation: transformation, accepted: false))
+        _ = machine.applyPassPolicy(passReport(encoderName: .valueSearch, transformation: transformation, accepted: true))
+        _ = machine.applyPassPolicy(passReport(encoderName: .deletion, transformation: transformation, accepted: false))
         #expect(machine.migrationConsecutiveRejects == 1)
     }
 }

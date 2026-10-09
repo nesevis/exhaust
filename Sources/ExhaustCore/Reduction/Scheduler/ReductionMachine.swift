@@ -188,7 +188,7 @@ package struct ReductionMachine: ProbeSessionState {
     /// Maintains bounded coupling hints for joint-group ranking without enabling research diagnostics.
     var couplingTracker = CouplingTracker()
 
-    /// Monotonic pass counter incremented on each `applyPassReport` call.
+    /// Monotonic pass counter incremented on each `applyPassPolicy` call.
     var passCounter: Int = 0
 
     // MARK: - Research Diagnostics
@@ -196,7 +196,7 @@ package struct ReductionMachine: ProbeSessionState {
     /// Enables the research diagnostics: floor-motion counters, coupling attribution (`couplingDependents`, coupling edges, partner counts), redistribution acceptance sets, and the per-dispatch log that feeds the `dispatch_stats` and `indexability` benchmark reports. Deliberately a maintainer-set literal rather than configuration surface: `collectStats` is always on in normal use, so these per-pass costs (attribution scans, two O(*n*) distance sums, record appends) must not ride it. Flip to true for a diagnostics session over the benchmark suite; the benchmark report blocks appear only when this was set.
     var collectDiagnostics = false
 
-    /// Sequence length at the start of the pass currently in flight. Captured by ``captureDispatchBaseline()`` so ``applyPassReport(_:)`` can record the pass's ``DispatchRecord/sequenceLengthDelta``.
+    /// Sequence length at the start of the pass currently in flight. Captured by ``captureDispatchBaseline()`` so ``applyPassPolicy(_:)`` can record the pass's ``DispatchRecord/sequenceLengthDelta``.
     var dispatchBaselineLength: Int = 0
 
     /// Total distance-to-reduction-target at the start of the pass currently in flight.
@@ -560,7 +560,7 @@ package struct ReductionMachine: ProbeSessionState {
             let report = session.report()
             activeSession = nil
             pendingReport = report
-            _ = applyPassReport(report)
+            _ = applyPassPolicy(report)
         }
         if let report = pendingReport, report.anyAccepted, report.anyRequiresRebuild {
             _ = rebuildAndUpdateGraph(
@@ -637,7 +637,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         rejectCache = savedRejectCache
 
-        _ = applyPassReport(report)
+        _ = applyPassPolicy(report)
 
         if isInstrumented, report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")

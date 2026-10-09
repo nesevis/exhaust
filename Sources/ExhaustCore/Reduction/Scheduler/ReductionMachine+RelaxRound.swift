@@ -190,7 +190,7 @@ extension ReductionMachine {
             )
             let report = session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
 
-            _ = applyPassReport(report)
+            _ = applyPassPolicy(report)
 
             if report.anyAccepted, report.anyRequiresRebuild {
                 _ = rebuildAndUpdateGraph(

@@ -183,16 +183,17 @@ extension ReductionMachine {
                 let report = s.report()
                 activeSession = nil
                 pendingReport = report
-                return applyPassReport(report)
+                let action = applyPassPolicy(report)
+                return routeAfterPass(action, report: report)
         }
     }
 
-    // MARK: - Apply Pass Report
+    // MARK: - Apply Pass Policy
 
     /// Applies post-pass policy from a completed encoder pass.
     ///
-    /// Called identically whether the pass was stepped (via the main dispatching loop) or run to completion (via reorder/relax). Handles convergence recording, gate outcome, shortlex rejection propagation, stats accumulation, logging, and acceptance evaluation routing.
-    mutating func applyPassReport(_ report: PassReport) -> Transition {
+    /// Shared by dispatched and post-cycle passes. Records convergence, gate outcomes, scope rejections, statistics, and acceptance flags without changing the caller's dispatch phase or pending report. The returned action lets each caller choose its own rebuild and routing behavior.
+    mutating func applyPassPolicy(_ report: PassReport) -> ChoiceGraphScheduler.PostAcceptanceAction {
         passCounter += 1
         var valueMotionNodes: Set<Int> = []
 
@@ -326,15 +327,25 @@ extension ReductionMachine {
                         graph: graph
                     )
                 }
-                pendingReport = nil
-                dispatchPhase = .dispatch
-                return .passCompleted(encoder: report.encoderName, accepted: report.anyAccepted)
-
             case .rebuildAndResume:
                 convergence.gate.clearFruitless()
-                dispatchPhase = .rebuild
-                return .passCompleted(encoder: report.encoderName, accepted: report.anyAccepted)
         }
+        return acceptanceAction
+    }
+
+    /// Routes a completed main-loop pass, retaining its report only when the dispatch rebuild phase needs it.
+    private mutating func routeAfterPass(
+        _ action: ChoiceGraphScheduler.PostAcceptanceAction,
+        report: PassReport
+    ) -> Transition {
+        switch action {
+            case .continueDispatching:
+                pendingReport = nil
+                dispatchPhase = .dispatch
+            case .rebuildAndResume:
+                dispatchPhase = .rebuild
+        }
+        return .passCompleted(encoder: report.encoderName, accepted: report.anyAccepted)
     }
 
     // MARK: - Rebuild

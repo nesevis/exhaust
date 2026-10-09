@@ -8,7 +8,7 @@
 extension ReductionMachine {
     /// Runs the relation encoder over stall-converged leaf pairs, returning true when any probe was accepted.
     ///
-    /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
+    /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassPolicy(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
     mutating func runRelationPass() -> Bool {
         guard isEncoderEnabled(.relationSearch) else {
             return false
@@ -74,7 +74,7 @@ extension ReductionMachine {
         )
         let report = session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())
 
-        _ = applyPassReport(report)
+        _ = applyPassPolicy(report)
 
         if report.anyAccepted, report.anyRequiresRebuild {
             _ = rebuildAndUpdateGraph(
