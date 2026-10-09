@@ -209,13 +209,13 @@ struct PostCycleDecisionTests {
                 allConverged: true,
                 improved: false,
                 structurallyImproved: false,
-                shouldAttemptNumericPairs: true
+                shouldAttemptStagedJoint: true
             ),
             stallBudget: 4,
             maxStalls: 4,
             deferBindInner: false
         )
-        #expect(evaluation.actions == [.confirmConvergence, .relationPass, .pairwiseNumericPass, .excursion])
+        #expect(evaluation.actions == [.confirmConvergence, .relationPass, .stagedJointPass, .excursion])
         let numericOnly = ChoiceGraphScheduler.evaluatePostCycle(
             outcome: .init(
                 anyAccepted: false,
@@ -224,37 +224,13 @@ struct PostCycleDecisionTests {
                 allConverged: false,
                 improved: false,
                 structurallyImproved: false,
-                shouldAttemptNumericPairs: true
+                shouldAttemptStagedJoint: true
             ),
             stallBudget: 4,
             maxStalls: 4,
             deferBindInner: false
         )
-        #expect(numericOnly.actions == [.pairwiseNumericPass])
-    }
-
-    @Test("Numeric encoders have separate post-cycle actions before the excursion", arguments: [false, true], [false, true])
-    func independentNumericFallbackActions(pairwise: Bool, staged: Bool) {
-        let evaluation = ChoiceGraphScheduler.evaluatePostCycle(
-            outcome: .init(
-                anyAccepted: false,
-                hadUnresolvedReplacement: true,
-                hasUnprobedImprovingPivot: false,
-                allConverged: false,
-                improved: false,
-                structurallyImproved: false,
-                shouldAttemptNumericPairs: pairwise,
-                shouldAttemptStagedJoint: staged
-            ),
-            stallBudget: 1,
-            maxStalls: 4,
-            deferBindInner: false
-        )
-        var expected: [ChoiceGraphScheduler.PostCycleAction] = []
-        if pairwise { expected.append(.pairwiseNumericPass) }
-        if staged { expected.append(.stagedJointPass) }
-        expected.append(.excursion)
-        #expect(evaluation.actions == expected)
+        #expect(numericOnly.actions == [.stagedJointPass])
     }
 
     // MARK: - Helpers
@@ -278,8 +254,7 @@ struct PostCycleDecisionTests {
                 hasUnprobedImprovingPivot: hasUnprobedImprovingPivot,
                 allConverged: allConverged,
                 improved: improved,
-                structurallyImproved: structurallyImproved,
-                shouldAttemptNumericPairs: false
+                structurallyImproved: structurallyImproved
             ),
             stallBudget: stallBudget,
             maxStalls: maxStalls,

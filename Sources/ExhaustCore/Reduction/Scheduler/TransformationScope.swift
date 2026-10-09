@@ -218,10 +218,7 @@ enum ExchangeScope {
     /// Joint descent along an inferred rational relation between stall-converged leaf pairs.
     case relation(RelationScope)
 
-    /// Bounded numeric fallback after structural relaxation has stalled.
-    case numericPairs([NumericPairQuery.Pair], probeBudget: Int)
-
-    /// Two-way stage of staged joint search, with a distinct reporting and configuration identity from legacy pairwise search.
+    /// Two-way stage of staged joint search.
     case stagedNumericPairs([NumericPairQuery.Pair], probeBudget: Int)
 
     /// Retained three- or four-way groups unlocked after a lower-order numeric stage stalls.

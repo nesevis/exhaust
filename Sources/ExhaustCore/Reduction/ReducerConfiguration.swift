@@ -28,11 +28,11 @@ package extension Interpreters {
         /// Nil for a host that does not observe individual probes, which is the default. The one shipping client is the fuzz loop's crash breadcrumb, which marks the probe's own sequence as in flight so an abnormal termination names it rather than the last search candidate.
         package var probeWrapper: ProbeWrapper?
 
-        /// Creates a configuration with the given stall budget and optional wall-clock deadline. Temporarily excludes ``EncoderName/pairwiseNumericSearch`` by default while staged joint search is evaluated. An explicit encoder set can enable pairwise search for A/B comparisons; nil enables every encoder.
+        /// Creates a configuration with the given stall budget and optional wall-clock deadline. Nil enables every encoder.
         package init(
             maxStalls: Int,
             wallClockDeadlineNanoseconds: UInt64 = 0,
-            enabledEncoders: Set<EncoderName>? = Set(EncoderName.allCases).subtracting([.pairwiseNumericSearch]),
+            enabledEncoders: Set<EncoderName>? = nil,
             tuning: SchedulerTuning = .init(),
             probeWrapper: ProbeWrapper? = nil
         ) {
@@ -59,9 +59,6 @@ package struct SchedulerTuning: Sendable {
 
     /// Maximum improving pivot probes per relax round. Separate from ``relaxMaterializationBudget`` so that spending it never changes which excursions a round reaches. Zero disables the phase.
     public var relaxImprovingProbeBudget: Int
-
-    /// Maximum probes per checkpoint for the original two-way ``EncoderName/pairwiseNumericSearch`` fallback. Independent of the staged joint budget. Zero disables pairwise search.
-    public var pairwiseNumericProbeBudget: Int
 
     /// Maximum probes per checkpoint for ``EncoderName/stagedJointSearch``, shared by its sequential two-, three-, and four-way stages. Passing probes use one flat materialization; a surviving failure also rebuilds the tree before acceptance. Zero disables staged joint search.
     public var stagedJointProbeBudget: Int
@@ -94,7 +91,6 @@ package struct SchedulerTuning: Sendable {
         boundValueBaseBudget: Int = 15,
         relaxMaterializationBudget: Int = 10,
         relaxImprovingProbeBudget: Int = 2,
-        pairwiseNumericProbeBudget: Int = 512,
         stagedJointProbeBudget: Int = 512,
         threeWayNumericWorkLimit: Int = 4096,
         fourWayNumericWorkLimit: Int = 1024,
@@ -107,7 +103,6 @@ package struct SchedulerTuning: Sendable {
         self.boundValueBaseBudget = boundValueBaseBudget
         self.relaxMaterializationBudget = relaxMaterializationBudget
         self.relaxImprovingProbeBudget = relaxImprovingProbeBudget
-        self.pairwiseNumericProbeBudget = pairwiseNumericProbeBudget
         self.stagedJointProbeBudget = stagedJointProbeBudget
         self.threeWayNumericWorkLimit = threeWayNumericWorkLimit
         self.fourWayNumericWorkLimit = fourWayNumericWorkLimit

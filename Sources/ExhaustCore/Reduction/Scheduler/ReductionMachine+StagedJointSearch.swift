@@ -94,7 +94,7 @@ extension ReductionMachine {
     }
 }
 
-/// Keeps staged exhaustion independent of legacy pairwise search, including frontier changes that can unlock a higher-order stage.
+/// Captures the exhausted checkpoint, including frontier changes that can unlock a higher-order stage.
 struct ExhaustedStagedJointScope {
     let base: ChoiceSequence
     let pairs: [NumericPairQuery.Pair]

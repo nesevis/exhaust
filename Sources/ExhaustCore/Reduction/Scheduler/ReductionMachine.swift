@@ -77,7 +77,6 @@ package struct ReductionMachine: ProbeSessionState {
         case improvingPivotsCompleted(improved: Bool)
         case excursionCompleted(improved: Bool)
         case relationPassCompleted(accepted: Bool)
-        case pairwiseNumericPassCompleted(accepted: Bool)
         case stagedJointPassCompleted(accepted: Bool)
         case deferralReleased
 
@@ -174,7 +173,6 @@ package struct ReductionMachine: ProbeSessionState {
     var migrationConsecutiveRejects: Int = 0
     var sequenceBeforeCycle: ChoiceSequence = []
 
-    var exhaustedNumericPairScope: ExhaustedNumericPairScope?
     var exhaustedStagedJointScope: ExhaustedStagedJointScope?
 
     // MARK: - Coupling Attribution
@@ -385,7 +383,6 @@ package struct ReductionMachine: ProbeSessionState {
                 allConverged: allValuesConverged(),
                 improved: sequence != sequenceBeforeCycle,
                 structurallyImproved: sequence.count < sequenceBeforeCycle.count,
-                shouldAttemptNumericPairs: anyAccepted == false && pendingNumericPairs() != nil,
                 shouldAttemptStagedJoint: anyAccepted == false && pendingStagedNumericPairs() != nil
             )
         )
@@ -426,8 +423,6 @@ package struct ReductionMachine: ProbeSessionState {
                     recordPostCycleAcceptance()
                 }
                 return .improvingPivotsCompleted(improved: improved)
-            case .pairwiseNumericPass:
-                return .pairwiseNumericPassCompleted(accepted: runPairwiseNumericSearch())
             case .stagedJointPass:
                 return .stagedJointPassCompleted(accepted: runStagedJointSearch())
             case .excursion:

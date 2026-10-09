@@ -243,8 +243,6 @@ enum ChoiceGraphScheduler {
                 .redistribution(GraphRedistributionEncoder())
             case .exchange(.tandem):
                 .lockstep(GraphLockstepEncoder())
-            case .exchange(.numericPairs):
-                .numericPair(NumericPairEncoder())
             case .exchange(.stagedNumericPairs), .exchange(.numericJoint):
                 .stagedJoint(StagedJointEncoder())
             case .exchange(.relation):
@@ -267,7 +265,6 @@ enum ChoiceGraphScheduler {
         let allConverged: Bool
         let improved: Bool
         let structurallyImproved: Bool
-        let shouldAttemptNumericPairs: Bool
         var shouldAttemptStagedJoint: Bool = false
     }
 
@@ -276,7 +273,6 @@ enum ChoiceGraphScheduler {
         case confirmConvergence
         case relationPass
         case improvingPivots
-        case pairwiseNumericPass
         case stagedJointPass
         case excursion
         case releaseDeferral
@@ -306,10 +302,6 @@ enum ChoiceGraphScheduler {
 
         if outcome.anyAccepted == false, outcome.hasUnprobedImprovingPivot {
             actions.append(.improvingPivots)
-        }
-
-        if outcome.anyAccepted == false, outcome.shouldAttemptNumericPairs {
-            actions.append(.pairwiseNumericPass)
         }
 
         if outcome.anyAccepted == false, outcome.shouldAttemptStagedJoint {

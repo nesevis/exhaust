@@ -2,8 +2,8 @@ import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
-@Suite("Pairwise numeric search")
-struct PairwiseNumericSearchTests {
+@Suite("Numeric pair search")
+struct NumericPairSearchTests {
     @Test("Numeric candidates satisfy their domain contract and preserve joint palette order", arguments: [
         TypeTag.int, .int8, .int16, .int32, .int64,
         .uint, .uint8, .uint16, .uint32, .uint64, .float16, .float, .double,
@@ -139,14 +139,14 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases)),
             collectStats: true,
             property: { $0.0 * weight + $0.1 + $0.2 != 50 }
         )
         while machine.next() != nil {}
         let result = try #require(machine.output as? (Int, Int, Int))
         #expect(result.0 == 0 && result.1 == 0 && result.2 == 50)
-        #expect((machine.stats.encoderCounts[.pairwiseNumericSearch]?.accepted ?? 0) > 0)
+        #expect((machine.stats.encoderCounts[.stagedJointSearch]?.accepted ?? 0) > 0)
     }
 
     @Test("A failed phase spends its budget once for the same base")
@@ -158,20 +158,20 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch]), tuning: .init(pairwiseNumericProbeBudget: 7)),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases), tuning: .init(stagedJointProbeBudget: 7)),
             collectStats: true,
             property: { $0 != start }
         )
         machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
-        #expect(try machine.runPairwiseNumericSearch() == false)
-        let counts = try #require(machine.stats.encoderCounts[.pairwiseNumericSearch])
+        #expect(try machine.runStagedJointSearch() == false)
+        let counts = try #require(machine.stats.encoderCounts[.stagedJointSearch])
         #expect(counts.emitted == 7)
         #expect(counts.materializationAttempts == 7)
-        #expect(machine.pendingNumericPairs() == nil)
-        #expect(try machine.runPairwiseNumericSearch() == false)
-        #expect(machine.stats.encoderCounts[.pairwiseNumericSearch] == counts)
+        #expect(machine.pendingStagedNumericPairs() == nil)
+        #expect(try machine.runStagedJointSearch() == false)
+        #expect(machine.stats.encoderCounts[.stagedJointSearch] == counts)
     }
 
     @Test("Pair probes use the shared rejection cache before materialization")
@@ -183,7 +183,7 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch]), tuning: .init(pairwiseNumericProbeBudget: 1)),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases), tuning: .init(stagedJointProbeBudget: 1)),
             collectStats: true,
             property: { _ in
                 Issue.record("Cached probes must not invoke the property")
@@ -192,14 +192,14 @@ struct PairwiseNumericSearchTests {
         )
         machine.convergence.deferBindInner = false
         try Self.markConverged(#require(machine.graph.leafNodes.first), in: &machine.graph)
-        let pairs = try #require(machine.pendingNumericPairs())
-        var cursor = NumericPairSearchCursor(pairs: pairs)
+        let pairs = try #require(machine.pendingStagedNumericPairs())
+        var cursor = StagedPairSearchCursor(pairs: pairs)
         var candidate = machine.sequence
         let firstPair = cursor.next(into: &candidate)
         _ = try #require(firstPair)
         machine.rejectCache.insert(ZobristHash.hash(of: candidate))
-        #expect(try machine.runPairwiseNumericSearch() == false)
-        let counts = try #require(machine.stats.encoderCounts[.pairwiseNumericSearch])
+        #expect(try machine.runStagedJointSearch() == false)
+        let counts = try #require(machine.stats.encoderCounts[.stagedJointSearch])
         #expect(counts.emitted == 1)
         #expect(counts.rejectedByCache == 1)
         #expect(counts.materializationAttempts == 0)
@@ -214,18 +214,18 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases)),
             collectStats: true,
             property: { $0.0 * 4 + $0.1 != 8 * scale }
         )
         machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
-        let accepted = machine.runPairwiseNumericSearch()
+        let accepted = machine.runStagedJointSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Double, Double))
         #expect(result.0 == 0 && result.1 == 8 * scale)
-        let counts = try #require(machine.stats.encoderCounts[.pairwiseNumericSearch])
+        let counts = try #require(machine.stats.encoderCounts[.stagedJointSearch])
         #expect(counts.materializationAttempts == counts.emitted + 1)
     }
 
@@ -238,14 +238,14 @@ struct PairwiseNumericSearchTests {
             gen: generator,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases)),
             collectStats: true,
             property: { Int($0.0) * -3 + Int($0.1) != 9 }
         )
         machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
-        let accepted = machine.runPairwiseNumericSearch()
+        let accepted = machine.runStagedJointSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Int8, UInt64))
         #expect(Int(result.0) * -3 + Int(result.1) == 9)
@@ -263,7 +263,7 @@ struct PairwiseNumericSearchTests {
             gen: generator.gen,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases)),
             collectStats: true,
             property: { $0.0 * 2 + $0.1 != 10 }
         )
@@ -278,7 +278,7 @@ struct PairwiseNumericSearchTests {
         let fullBudget = SchedulerTuning().boundValueBaseBudget
         #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) < fullBudget)
         #expect(machine.graph.convergenceStore[source] == nil)
-        let accepted = machine.runPairwiseNumericSearch()
+        let accepted = machine.runStagedJointSearch()
         #expect(accepted)
         let result = try #require(machine.output as? (Int, Int))
         #expect(machine.convergence.gate.decayedBudget(fingerprint: metadata.fingerprint) == fullBudget)
@@ -310,7 +310,7 @@ struct PairwiseNumericSearchTests {
             gen: generator.gen,
             initialTree: initialTree,
             initialOutput: start,
-            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases).subtracting([.stagedJointSearch])),
+            config: .init(maxStalls: 3, enabledEncoders: Set(EncoderName.allCases)),
             collectStats: true,
             property: { candidate in
                 evaluations.append(candidate)
@@ -320,16 +320,18 @@ struct PairwiseNumericSearchTests {
         machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
-        #expect(try machine.runPairwiseNumericSearch() == false)
-        #expect(evaluations.allSatisfy { $0 == (1, 1) })
-        #expect(evaluations.count == 1)
-        #expect((machine.stats.encoderCounts[.pairwiseNumericSearch]?.rejectedDuringMaterialization ?? 0) > 0)
+        #expect(try machine.runStagedJointSearch() == false)
+        // Staged rescaling also tries (1, 0); both probes preserve the proposed
+        // values exactly instead of reaching the property after clamping a sink.
+        #expect(evaluations.allSatisfy { $0 == (1, 0) || $0 == (1, 1) })
+        #expect(evaluations.count == 2)
+        #expect((machine.stats.encoderCounts[.stagedJointSearch]?.rejectedDuringMaterialization ?? 0) > 0)
     }
 
     @Test("Pair probes mark only bind-inner edits as reshaping", arguments: [false, true])
     func reshapeFollowsBindInner(sourceIsBindInner: Bool) throws {
         let source = Self.tree(values: [3], range: 0 ... 20)
-        let sink = Self.tree(values: [0], range: 0 ... 20)
+        let sink = Self.tree(values: [6], range: 0 ... 20)
         let tree: ChoiceTree = switch sourceIsBindInner {
             case true:
                 .bind(fingerprint: 42, inner: source, bound: sink)
@@ -341,10 +343,10 @@ struct PairwiseNumericSearchTests {
         try Self.markConverged(#require(graph.leafNodes.first), in: &graph)
         let pairs = NumericPairQuery.build(graph: graph, gate: BoundValueGate(baseBudget: 15))
         let sequence = ChoiceSequence(tree)
-        var encoder = NumericPairEncoder()
+        var encoder = StagedJointEncoder()
         encoder.start(scope: EncoderInput(
             transformation: GraphTransformation(
-                operation: .exchange(.numericPairs(pairs, probeBudget: 4)),
+                operation: .exchange(.stagedNumericPairs(pairs, probeBudget: 4)),
                 priority: DispatchPriority(
                     structuralBenefit: 0,
                     valueBenefit: 0,

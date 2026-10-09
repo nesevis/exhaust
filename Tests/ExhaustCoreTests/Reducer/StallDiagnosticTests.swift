@@ -13,11 +13,11 @@ import Testing
 struct StallDiagnosticTests {
     @Test("A fully stalled run reports stalled leaves and no acceptance")
     func fullyStalledRunReportsStall() throws {
-        // A 2:1 ratio coupling with relation, pairwise numeric, and staged joint search excluded: every single-value move, sum-conserving exchange, and lockstep shift breaks the coupling, so the reducer can accept nothing.
+        // A 2:1 ratio coupling with relation and staged joint search excluded: every single-value move, sum-conserving exchange, and lockstep shift breaks the coupling, so the reducer can accept nothing.
         let stats = try reduceCollectingStats(
             gen: ratioGen,
             property: ratioProperty,
-            enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch, .pairwiseNumericSearch, .stagedJointSearch])
+            enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch, .stagedJointSearch])
         )
 
         #expect(stats.anyAcceptanceEverOccurred == false)
@@ -25,15 +25,15 @@ struct StallDiagnosticTests {
         #expect(stats.stalledLeafResidualDistance > 0)
     }
 
-    @Test("Pairwise numeric search resolves the coupling when relation search is disabled")
-    func pairwiseSearchClearsTheStall() throws {
+    @Test("Staged joint search resolves the coupling when relation search is disabled")
+    func stagedSearchClearsTheStall() throws {
         let stats = try reduceCollectingStats(
             gen: ratioGen,
             property: ratioProperty,
-            enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch, .stagedJointSearch])
+            enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch])
         )
         #expect(stats.anyAcceptanceEverOccurred)
-        #expect((stats.encoderCounts[.pairwiseNumericSearch]?.accepted ?? 0) > 0)
+        #expect((stats.encoderCounts[.stagedJointSearch]?.accepted ?? 0) > 0)
     }
 
     @Test("The relation encoder resolves the same coupling, so no stall is reported")

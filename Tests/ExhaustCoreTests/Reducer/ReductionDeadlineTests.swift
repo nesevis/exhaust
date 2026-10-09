@@ -9,7 +9,7 @@ struct ReductionDeadlineTests {
         .buildSources,
         .dispatching,
         .endCycle,
-        .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .pairwiseNumericPass, .stagedJointPass, .excursion]),
+        .postCycle(remaining: [.confirmConvergence, .relationPass, .improvingPivots, .stagedJointPass, .excursion]),
         .checkTermination,
         .reorderPass,
     ])
@@ -125,7 +125,7 @@ struct ReductionDeadlineTests {
         #expect(try machine.next() == nil)
     }
 
-    @Test("Post-cycle relation and numeric passes stop after their first in-flight property", arguments: [EncoderName.relationSearch, .pairwiseNumericSearch, .stagedJointSearch], [false, true])
+    @Test("Post-cycle relation and numeric passes stop after their first in-flight property", arguments: [EncoderName.relationSearch, .stagedJointSearch], [false, true])
     func postCyclePassesHonorDeadline(encoder: EncoderName, accepted: Bool) throws {
         let clock = DeadlineTestClock()
         let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 2 ... 2)
@@ -138,16 +138,12 @@ struct ReductionDeadlineTests {
         markStalledLeaves(&machine.graph)
         machine.convergence.deferBindInner = false
         let action: ChoiceGraphScheduler.PostCycleAction = switch encoder {
-            case .pairwiseNumericSearch:
-                .pairwiseNumericPass
             case .stagedJointSearch:
                 .stagedJointPass
             default:
                 .relationPass
         }
         switch encoder {
-            case .pairwiseNumericSearch:
-                #expect(machine.pendingNumericPairs() != nil)
             case .stagedJointSearch:
                 #expect(machine.pendingStagedNumericPairs() != nil)
             default:

@@ -5,7 +5,6 @@ indirect enum EncoderDispatch {
     case redistribution(GraphRedistributionEncoder)
     case lockstep(GraphLockstepEncoder)
     case relation(GraphRelationEncoder)
-    case numericPair(NumericPairEncoder)
     case stagedJoint(StagedJointEncoder)
     case swap(GraphSwapEncoder)
     case windowRemoval(GraphWindowRemovalEncoder)
@@ -34,7 +33,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.name
             case let .lockstep(encoder): encoder.name
             case let .relation(encoder): encoder.name
-            case let .numericPair(encoder): encoder.name
             case let .stagedJoint(encoder): encoder.name
             case let .swap(encoder): encoder.name
             case let .windowRemoval(encoder): encoder.name
@@ -66,9 +64,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .relation(encoder):
                 encoder.start(scope: scope)
                 self = .relation(encoder)
-            case var .numericPair(encoder):
-                encoder.start(scope: scope)
-                self = .numericPair(encoder)
             case var .stagedJoint(encoder):
                 encoder.start(scope: scope)
                 self = .stagedJoint(encoder)
@@ -124,10 +119,6 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .relation(encoder)
                 return result
-            case var .numericPair(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
-                self = .numericPair(encoder)
-                return result
             case var .stagedJoint(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .stagedJoint(encoder)
@@ -178,7 +169,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.hadUnresolvedReplacement
             case let .lockstep(encoder): encoder.hadUnresolvedReplacement
             case let .relation(encoder): encoder.hadUnresolvedReplacement
-            case let .numericPair(encoder): encoder.hadUnresolvedReplacement
             case let .stagedJoint(encoder): encoder.hadUnresolvedReplacement
             case let .swap(encoder): encoder.hadUnresolvedReplacement
             case let .windowRemoval(encoder): encoder.hadUnresolvedReplacement
@@ -200,7 +190,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.convergenceRecords
             case let .lockstep(encoder): encoder.convergenceRecords
             case let .relation(encoder): encoder.convergenceRecords
-            case let .numericPair(encoder): encoder.convergenceRecords
             case let .stagedJoint(encoder): encoder.convergenceRecords
             case let .swap(encoder): encoder.convergenceRecords
             case let .windowRemoval(encoder): encoder.convergenceRecords
@@ -232,9 +221,6 @@ extension EncoderDispatch: GraphEncoder {
             case var .relation(encoder):
                 encoder.flushPartialConvergence()
                 self = .relation(encoder)
-            case var .numericPair(encoder):
-                encoder.flushPartialConvergence()
-                self = .numericPair(encoder)
             case var .stagedJoint(encoder):
                 encoder.flushPartialConvergence()
                 self = .stagedJoint(encoder)
@@ -285,7 +271,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.acceptanceHandling
             case let .lockstep(encoder): encoder.acceptanceHandling
             case let .relation(encoder): encoder.acceptanceHandling
-            case let .numericPair(encoder): encoder.acceptanceHandling
             case let .stagedJoint(encoder): encoder.acceptanceHandling
             case let .swap(encoder): encoder.acceptanceHandling
             case let .windowRemoval(encoder): encoder.acceptanceHandling
@@ -306,7 +291,6 @@ extension EncoderDispatch: GraphEncoder {
             case let .redistribution(encoder): encoder.admission
             case let .lockstep(encoder): encoder.admission
             case let .relation(encoder): encoder.admission
-            case let .numericPair(encoder): encoder.admission
             case let .stagedJoint(encoder): encoder.admission
             case let .swap(encoder): encoder.admission
             case let .windowRemoval(encoder): encoder.admission

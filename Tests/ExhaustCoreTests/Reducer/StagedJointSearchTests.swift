@@ -292,7 +292,6 @@ struct StagedJointSearchTests {
         #expect(machine.stats.encoderCounts[.stagedJointSearch]?.emitted == 1)
         #expect(machine.stats.numericSearchCountsByArity[2]?.accepted == 1)
         #expect(machine.stats.numericSearchCountsByArity[3] == nil)
-        #expect(machine.stats.encoderCounts[.pairwiseNumericSearch] == nil)
     }
 
     @Test("A common divisor directly escapes the Pythagorean sampling plateau")
@@ -367,58 +366,19 @@ struct StagedJointSearchTests {
         #expect([output[0], output[2], output[4]] == [1_000_000, 1_000_000, 1_000_000])
     }
 
-    @Test("Pairwise and staged encoders can be selected independently for A/B testing", arguments: [EncoderName.pairwiseNumericSearch, .stagedJointSearch])
-    func independentEncoderSelection(encoder: EncoderName) throws {
+    @Test("Staged joint search obeys encoder selection and zero probe budgets", arguments: [false, true], [0, 512])
+    func selectionAndBudget(enabled: Bool, budget: Int) throws {
         let initial = [6, 8, 10]
-        var machine = try machine(values: initial, enabledEncoders: [.valueSearch, encoder]) {
-            $0[0] * $0[0] + $0[1] * $0[1] != $0[2] * $0[2]
-        }
+        var machine = try machine(
+            values: initial,
+            tuning: .init(stagedJointProbeBudget: budget),
+            enabledEncoders: enabled ? [.valueSearch, .stagedJointSearch] : [.valueSearch]
+        ) { $0[0] * $0[0] + $0[1] * $0[1] != $0[2] * $0[2] }
+        let eligible = enabled && budget > 0
+        #expect((machine.pendingStagedNumericPairs() != nil) == eligible)
         finish(&machine)
-        #expect(machine.output as? [Int] == (encoder == .stagedJointSearch ? [3, 4, 5] : initial))
-        #expect((machine.stats.encoderCounts[encoder]?.emitted ?? 0) > 0)
-        let other: EncoderName = encoder == .stagedJointSearch ? .pairwiseNumericSearch : .stagedJointSearch
-        #expect(machine.stats.encoderCounts[other] == nil)
-        #expect(machine.stats.numericSearchCountsByArity.isEmpty == (encoder == .pairwiseNumericSearch))
-    }
-
-    @Test("Numeric encoders retain independent checkpoint budgets and exhaustion")
-    func independentBudgetsAndExhaustion() throws {
-        let initial = [2, 4, 6, 10]
-        let tuning = SchedulerTuning(pairwiseNumericProbeBudget: 7, stagedJointProbeBudget: 32)
-        var machine = try machine(values: initial, tuning: tuning, enabledEncoders: [.pairwiseNumericSearch, .stagedJointSearch]) { $0 != initial }
-        #expect(machine.runPairwiseNumericSearch() == false)
-        let pairCounts = try #require(machine.stats.encoderCounts[.pairwiseNumericSearch])
-        #expect(pairCounts.emitted == 7)
-        #expect(machine.pendingNumericPairs() == nil)
-        #expect(machine.pendingStagedNumericPairs() != nil)
-        #expect(machine.stats.numericSearchCountsByArity.isEmpty)
-        #expect(machine.runStagedJointSearch() == false)
-        let stagedCounts = try #require(machine.stats.encoderCounts[.stagedJointSearch])
-        #expect(stagedCounts.emitted == 32)
-        #expect(machine.stats.numericSearchCountsByArity.values.reduce(0) { $0 + $1.emitted } == stagedCounts.emitted)
-        #expect(machine.stats.encoderCounts[.pairwiseNumericSearch] == pairCounts)
-        #expect(machine.pendingStagedNumericPairs() == nil)
-        #expect(machine.runPairwiseNumericSearch() == false)
-        #expect(machine.runStagedJointSearch() == false)
-        #expect(machine.stats.encoderCounts[.pairwiseNumericSearch] == pairCounts)
-        #expect(machine.stats.encoderCounts[.stagedJointSearch] == stagedCounts)
-    }
-
-    @Test("Zeroing either numeric budget leaves the other search eligible", arguments: [EncoderName.pairwiseNumericSearch, .stagedJointSearch])
-    func independentBudgetDisable(disabled: EncoderName) throws {
-        let tuning = SchedulerTuning(
-            pairwiseNumericProbeBudget: disabled == .pairwiseNumericSearch ? 0 : 512,
-            stagedJointProbeBudget: disabled == .stagedJointSearch ? 0 : 512
-        )
-        let initial = [2, 4, 6, 10]
-        var machine = try machine(values: initial, tuning: tuning, enabledEncoders: [.pairwiseNumericSearch, .stagedJointSearch]) { $0 != initial }
-        #expect((machine.pendingNumericPairs() == nil) == (disabled == .pairwiseNumericSearch))
-        #expect((machine.pendingStagedNumericPairs() == nil) == (disabled == .stagedJointSearch))
-        #expect(machine.runPairwiseNumericSearch() == false)
-        #expect(machine.runStagedJointSearch() == false)
-        #expect(machine.stats.encoderCounts[disabled] == nil)
-        let other: EncoderName = disabled == .stagedJointSearch ? .pairwiseNumericSearch : .stagedJointSearch
-        #expect((machine.stats.encoderCounts[other]?.emitted ?? 0) > 0)
+        #expect(machine.output as? [Int] == (eligible ? [3, 4, 5] : initial))
+        #expect((machine.stats.encoderCounts[.stagedJointSearch] != nil) == eligible)
     }
 
     @Test("Higher-order grids enumerate unique improving tuples", arguments: [3, 4])

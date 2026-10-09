@@ -26,7 +26,7 @@ struct CouplingTrackerTests {
         let generator = Gen.zip(Gen.choose(in: UInt64(0) ... 100), Gen.choose(in: UInt64(0) ... 100))
         let initial: (UInt64, UInt64) = (10, 20)
         let tree = try #require(try Interpreters.reflect(generator, with: initial))
-        let encoders: Set<EncoderName> = stagedEnabled ? [.stagedJointSearch] : [.pairwiseNumericSearch]
+        let encoders: Set<EncoderName> = stagedEnabled ? [.stagedJointSearch] : [.valueSearch]
         let tuning = SchedulerTuning(stagedJointProbeBudget: budgetEnabled ? 512 : 0)
         var machine = ReductionMachine(gen: generator, initialTree: tree, initialOutput: initial, config: .init(maxStalls: 2, enabledEncoders: encoders, tuning: tuning), collectStats: true, property: { _ in true })
         let first = machine.graph.leafNodes[0]

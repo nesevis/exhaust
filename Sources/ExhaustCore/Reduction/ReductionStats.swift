@@ -177,7 +177,7 @@ package struct ReductionStats: Sendable {
     /// Per-encoder probe outcome counts accumulated across all cycles.
     package var encoderCounts: [EncoderName: ReductionProbeCounts] = [:]
 
-    /// Separates the two-, three-, and four-way stages of ``EncoderName/stagedJointSearch``. Legacy pairwise counts remain only in ``encoderCounts`` so A/B reports do not mix the searches.
+    /// Separates the two-, three-, and four-way stages of ``EncoderName/stagedJointSearch``.
     package var numericSearchCountsByArity: [Int: ReductionProbeCounts] = [:]
 
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
@@ -444,7 +444,6 @@ package extension ReductionStats {
         package var convergenceConfirmation: UInt64 = 0
         package var relaxRound: UInt64 = 0
         package var relationPass: UInt64 = 0
-        package var pairwiseNumericPass: UInt64 = 0
         package var stagedJointPass: UInt64 = 0
         package var reorder: UInt64 = 0
 
@@ -467,7 +466,6 @@ package extension ReductionStats {
             convergenceConfirmation += other.convergenceConfirmation
             relaxRound += other.relaxRound
             relationPass += other.relationPass
-            pairwiseNumericPass += other.pairwiseNumericPass
             stagedJointPass += other.stagedJointPass
             reorder += other.reorder
             dispatchCount += other.dispatchCount
@@ -499,8 +497,6 @@ package extension ReductionStats {
                     relaxRound += elapsed
                 case .relationPassCompleted:
                     relationPass += elapsed
-                case .pairwiseNumericPassCompleted:
-                    pairwiseNumericPass += elapsed
                 case .stagedJointPassCompleted:
                     stagedJointPass += elapsed
                 case .reorderCompleted:

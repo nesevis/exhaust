@@ -1,4 +1,4 @@
-/// Tries ratio-preserving tactics in priority order across pairs before the ordinary pair grid, keeping the legacy cursor's ordering available independently for A/B comparisons.
+/// Tries ratio-preserving tactics in priority order across pairs before the ordinary pair grid.
 struct StagedPairSearchCursor {
     /// Includes both addresses so equal values in different scopes do not suppress each other's proposals.
     private struct ProposalKey: Hashable {

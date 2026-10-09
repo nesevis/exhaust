@@ -54,7 +54,6 @@ enum GraphOperation {
             case .exchange(.redistribution): .redistribution
             case .exchange(.tandem): .lockstep
             case .exchange(.relation): .relationSearch
-            case .exchange(.numericPairs): .pairwiseNumericSearch
             case .exchange(.stagedNumericPairs), .exchange(.numericJoint): .stagedJointSearch
             case .exchange(.boundExchange): .boundExchange
             case .permute: .siblingSwap
