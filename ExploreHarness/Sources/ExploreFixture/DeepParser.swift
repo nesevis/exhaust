@@ -43,7 +43,7 @@
 //   least 12 pushes among at most 16 commands with no interleaved clear — joint on the order of
 //   1e-8 under the uniform mix, but near-certain once a swarm mask suppresses pop and clear.
 //   No intermediate stage lights an edge, so coverage guidance gets no ladder; this fault is the
-//   measurement target for swarm generation (W3), not for the search-power gates.
+//   measurement target for swarm generation, not for the search-power gates.
 //
 // P and Q throw one shared error type from one shared site — the slippage pair at depth. Blind
 // symptom deduplication collapses them; the clustered inventory must separate them by reduced form.

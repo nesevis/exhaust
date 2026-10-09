@@ -157,17 +157,6 @@ package struct ReductionMachine: ProbeSessionState {
         var deferBindInner: Bool
         var gate: BoundValueGate
 
-        func evaluatePostCycle(
-            outcome: ChoiceGraphScheduler.CycleOutcome
-        ) -> ChoiceGraphScheduler.PostCycleEvaluation {
-            ChoiceGraphScheduler.evaluatePostCycle(
-                outcome: outcome,
-                stallBudget: stallBudget,
-                maxStalls: maxStalls,
-                deferBindInner: deferBindInner
-            )
-        }
-
         mutating func apply(_ evaluation: ChoiceGraphScheduler.PostCycleEvaluation) {
             stallBudget = evaluation.newStallBudget
             deferBindInner = evaluation.newDeferBindInner
@@ -421,7 +410,7 @@ package struct ReductionMachine: ProbeSessionState {
         if anyAccepted == false, graphIsStripped, isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 {
             rematerializeUnselectedBranches()
         }
-        let evaluation = convergence.evaluatePostCycle(
+        let evaluation = ChoiceGraphScheduler.evaluatePostCycle(
             outcome: ChoiceGraphScheduler.CycleOutcome(
                 anyAccepted: anyAccepted,
                 hadUnresolvedReplacement: hadUnresolvedReplacement,
@@ -431,7 +420,10 @@ package struct ReductionMachine: ProbeSessionState {
                 improved: sequence != sequenceBeforeCycle,
                 structurallyImproved: sequence.count < sequenceBeforeCycle.count,
                 shouldAttemptStagedJoint: anyAccepted == false && pendingStagedNumericPairs() != nil
-            )
+            ),
+            stallBudget: convergence.stallBudget,
+            maxStalls: convergence.maxStalls,
+            deferBindInner: convergence.deferBindInner
         )
 
         convergence.apply(evaluation)
