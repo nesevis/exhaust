@@ -1,5 +1,7 @@
 /// Keeps a post-cycle session with its pass policy and remaining actions, independently of the suspended main dispatch loop.
-struct PostCycleFrame {
+///
+/// The continuation is immutable and shared by reference so each cooperative step carries one pointer rather than copying its session, frontier, and remaining actions through the machine's phase enum.
+final class PostCycleFrame {
     /// Final reorder owns the rejection cache it temporarily replaces; staged search retains its reservation across arities.
     enum Pass {
         case relation
@@ -27,6 +29,16 @@ struct PostCycleFrame {
     let session: ProbeSession
     let pass: Pass
     let remaining: [ChoiceGraphScheduler.PostCycleAction]
+
+    init(
+        session: ProbeSession,
+        pass: Pass,
+        remaining: [ChoiceGraphScheduler.PostCycleAction]
+    ) {
+        self.session = session
+        self.pass = pass
+        self.remaining = remaining
+    }
 
     /// Preserves the owning timing bucket while yielding between encoding and decoding.
     func step(state: inout ReductionMachine) -> ReductionMachine.Transition {

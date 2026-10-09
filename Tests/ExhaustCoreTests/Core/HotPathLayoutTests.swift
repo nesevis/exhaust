@@ -39,6 +39,12 @@ struct HotPathLayoutTests {
         #expect(MemoryLayout<EncoderDispatch>.size == pointerSize)
     }
 
+    @Test("Post-cycle continuation state stays behind a pointer in the reducer phase")
+    func reducerPhaseFitsOnePointerAndTag() {
+        #expect(MemoryLayout<PostCycleFrame>.size == pointerSize)
+        #expect(MemoryLayout<ReductionMachine.Phase>.size <= MemoryLayout<(UnsafeRawPointer, UInt8)>.size)
+    }
+
     // MARK: - Boxed payload budgets
 
     @Test("The choice node payload stays within eight pointers")

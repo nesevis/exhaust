@@ -94,14 +94,4 @@ extension ReductionMachine {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
         }
     }
-
-    /// Runs the same session and completion policy synchronously for callers that explicitly execute an entire numeric checkpoint.
-    mutating func runPostCycleEncoder(operation: GraphOperation, estimatedCost: Int) -> PassReport? {
-        guard let session = makePostCycleSession(operation: operation, estimatedCost: estimatedCost) else {
-            return nil
-        }
-        let report = session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())
-        applyPostCycleReport(report)
-        return report
-    }
 }

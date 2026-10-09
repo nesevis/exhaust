@@ -133,18 +133,19 @@ final class ProbeSession {
             phase = .finished
             return .finished
         }
-        let mutation = prepared.mutation
-        let probeHash = switch prepared {
-            case .materialized:
-                ZobristHash.incrementalHash(baseHash: baseHash, baseSequence: state.sequence, probe: candidateBuffer)
-            case let .sparse(probe, baseSequence):
-                probe.hash(baseHash: baseHash, baseSequence: baseSequence)
-        }
-        let cacheHit = state.rejectCache.contains(probeHash)
-        switch prepared {
-            case .materialized:
+        let mutation: EncoderProbe
+        let probeHash: UInt64
+        let cacheHit: Bool
+        switch consume prepared {
+            case let .materialized(preparedMutation):
+                mutation = preparedMutation
+                probeHash = ZobristHash.incrementalHash(baseHash: baseHash, baseSequence: state.sequence, probe: candidateBuffer)
+                cacheHit = state.rejectCache.contains(probeHash)
                 previousSparseProbe = nil
             case let .sparse(probe, baseSequence):
+                mutation = probe.mutation
+                probeHash = probe.hash(baseHash: baseHash, baseSequence: baseSequence)
+                cacheHit = state.rejectCache.contains(probeHash)
                 // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
                 if cacheHit == false || observer != nil {
                     if let previousSparseProbe {

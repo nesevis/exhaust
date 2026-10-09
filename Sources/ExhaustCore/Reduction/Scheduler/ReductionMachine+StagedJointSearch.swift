@@ -52,24 +52,22 @@ extension ReductionMachine {
         return .postCycleStarted(owner: .stagedJointPass)
     }
 
-    /// Runs a complete numeric checkpoint for direct callers, using the same stage preparation and report policy as cooperative stepping.
+    /// Drives the production post-cycle continuation synchronously without advancing the caller's outer cycle or final reorder.
     mutating func runStagedJointSearch() -> Bool {
-        guard let checkpoint = beginStagedJointSearch() else {
+        let savedPhase = phase
+        defer { phase = savedPhase }
+        guard case .postCycleStarted = startStagedJointPass(remaining: []) else {
             return false
         }
-        var search = checkpoint.search
-        var stage: (operation: GraphOperation, budget: Int)? = (checkpoint.operation, checkpoint.budget)
-        while let current = stage,
-              let report = runPostCycleEncoder(operation: current.operation, estimatedCost: current.budget)
-        {
-            if report.anyAccepted {
-                invalidateAfterCoupledAcceptance()
-                return true
+        while case let .postCycleProbing(frame) = phase {
+            let transition = isDeadlineExceeded()
+                ? frame.complete(state: &self, reason: .deadline)
+                : frame.step(state: &self)
+            if case let .stagedJointPassCompleted(accepted) = transition {
+                return accepted
             }
-            search.remaining -= report.probeCount
-            stage = nextStagedJointOperation(search: &search)
         }
-        return false
+        preconditionFailure("A staged joint continuation must report completion before resuming its caller")
     }
 
     /// Marks the checkpoint exhausted before encoder startup, so deadline interruption does not repeat its original search scope.

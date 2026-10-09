@@ -3,6 +3,62 @@ import Testing
 
 @Suite("Post-cycle frame finalization")
 struct PostCycleFrameTests {
+    @Test("Synchronous staged search preserves its caller's phase and skips final reorder even when a property expires", arguments: [false, true], [false, true])
+    func synchronousContinuation(acceptsProbe: Bool, expiresDuringProperty: Bool) throws {
+        let clock = PostCycleFrameClock()
+        let generator = Gen.eachOf(Array(repeating: Gen.choose(in: 1 ... 1000), count: 2))
+        let initial = [75, 100]
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        var propertyCalls = 0
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initial,
+            config: .init(
+                maxStalls: 1,
+                wallClockDeadlineNanoseconds: 100,
+                enabledEncoders: [.stagedJointSearch, .numericReorder],
+                tuning: .init(stagedJointProbeBudget: 1)
+            ),
+            collectStats: true,
+            currentNanoseconds: clock.read,
+            property: { _ in
+                propertyCalls += 1
+                if expiresDuringProperty {
+                    clock.expire()
+                }
+                return acceptsProbe == false
+            }
+        )
+        for nodeID in machine.graph.leafNodes {
+            guard case let .chooseBits(metadata) = machine.graph.nodes[nodeID].kind else {
+                continue
+            }
+            machine.graph.convergenceStore[nodeID] = ConvergedOrigin(
+                bound: metadata.value.bitPattern64,
+                signal: .monotoneConvergence,
+                configuration: .binarySearchSemanticSimplest,
+                cycle: 0
+            )
+        }
+        machine.convergence.deferBindInner = false
+        machine.phase = .postCycle(remaining: [.releaseDeferral])
+        let accepted = machine.runStagedJointSearch()
+        #expect(accepted == acceptsProbe)
+        #expect(machine.output as? [Int] == (acceptsProbe ? [3, 4] : initial))
+        #expect(propertyCalls == 1)
+        #expect(machine.passCounter == 1)
+        #expect(machine.stats.encoderProbes[.stagedJointSearch] == 1)
+        #expect(machine.stats.encoderProbes[.numericReorder] == nil)
+        #expect(machine.dispatchLoop.activeSession == nil)
+        #expect(machine.dispatchLoop.pendingReport == nil)
+        #expect(machine.deferralReleasedThisCycle == false)
+        guard case .postCycle(remaining: [.releaseDeferral]) = machine.phase else {
+            Issue.record("Synchronous staged search must restore the caller's continuation")
+            return
+        }
+    }
+
     @Test("Expiry reports a post-cycle session once, skips remaining actions, and restores reorder rejections", arguments: [
         EncoderName.relationSearch, .stagedJointSearch, .numericReorder,
     ], [(false, false), (false, true), (true, false), (true, true)])
