@@ -11,12 +11,14 @@ enum NumericJointQuery {
         let compensatingSamples: [UInt64]
     }
 
-    /// Samples only the bounded frontier, retaining at-target leaves as compensating partners. These exact palettes supply both the work estimate and the eventual cursor, so the gate measures the grid it will search. Higher-order proposals currently support integers; floating-point search continues through the pair stage.
+    /// Samples only the bounded frontier, retaining at-target leaves as compensating partners. These exact palettes supply both the work estimate and the eventual cursor, so the gate measures the grid it will search. Higher-order proposals support integers and finite floating-point values, including mixed groups.
     static func frontier(graph: ChoiceGraph, gate: BoundValueGate) -> [Entry] {
-        NumericPairQuery.eligibleLeaves(graph: graph).compactMap { leaf -> (leaf: NumericPairQuery.Leaf, stalled: Bool, span: UInt64)? in
-            guard leaf.choice.tag.isFloatingPoint == false, leaf.range.lowerBound != leaf.range.upperBound else {
-                return nil
-            }
+        var leaves = NumericPairQuery.eligibleLeaves(graph: graph)
+        leaves.removeAll { $0.range.lowerBound == $0.range.upperBound }
+        // A higher-order group needs at least three movable leaves. Avoid floor
+        // queries, ranking, and palette preparation when only pair search is possible.
+        guard leaves.count >= 3 else { return [] }
+        return leaves.map { leaf in
             let target = leaf.choice.reductionTarget(in: leaf.range)
             let pattern = leaf.choice.bitPattern64
             let distance = pattern > target ? pattern - target : target - pattern

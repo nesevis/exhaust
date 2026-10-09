@@ -3,6 +3,131 @@ import Testing
 
 @Suite("Staged joint numeric search")
 struct StagedJointSearchTests {
+    @Test("Pair-only float scopes skip the joint frontier without suppressing pair search", arguments: [TypeTag.float16, .float, .double], [1, 2])
+    func pairOnlyFloatingFrontier(tag: TypeTag, count: Int) {
+        let range = tag.floatingBitPattern(from: -16) ... tag.floatingBitPattern(from: 16)
+        let values: [ChoiceTree] = (0 ..< count).map { _ in
+            .choice(ChoiceValue(tag.floatingBitPattern(from: 8), tag: tag), .init(validRange: range, isRangeExplicit: true))
+        }
+        // Fixed domains, booleans, and nonfinite floats cannot supply a third coordinate.
+        let excluded: [ChoiceTree] = [
+            .choice(ChoiceValue(UInt64(8), tag: .uint64), .init(validRange: 8 ... 8, isRangeExplicit: true)),
+            .choice(ChoiceValue(UInt8(1), tag: .uint8), .init(validRange: 0 ... 1, isRangeExplicit: true)),
+            .choice(ChoiceValue(tag.floatingBitPattern(from: .infinity), tag: tag), .init(validRange: tag.bitPatternRange, isRangeExplicit: true)),
+        ]
+        var graph = ChoiceGraph.build(from: .group(values + excluded))
+        markConverged(&graph)
+        let gate = BoundValueGate(baseBudget: 15)
+        #expect(NumericPairQuery.eligibleLeaves(graph: graph).count == count + 1)
+        #expect(NumericJointQuery.frontier(graph: graph, gate: gate).isEmpty)
+        if count == 2 {
+            #expect(NumericPairQuery.build(graph: graph, gate: gate).contains {
+                $0.source.choice.tag == tag && $0.sink.choice.tag == tag
+            })
+        }
+    }
+
+    @Test("Floating triples and quadruples require every coordinate to change", arguments: [3, 4], [false, true])
+    func floatingJointSearch(arity: Int, negative: Bool) throws {
+        let initial = Array(repeating: negative ? -8.0 : 8.0, count: arity)
+        let generator = Gen.eachOf(Array(repeating: Gen.choose(in: -16.0 ... 16.0), count: arity))
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch], tuning: .init(fourWayNumericWorkLimit: 1296)),
+            collectStats: true,
+            property: { values in values.contains { $0 != values[0] } }
+        )
+        machine.convergence.deferBindInner = false
+        markConverged(&machine.graph)
+        let accepted = machine.runStagedJointSearch()
+        #expect(accepted)
+        #expect(machine.output as? [Double] == Array(repeating: 0.0, count: arity))
+        for lowerArity in 2 ..< arity {
+            #expect(machine.stats.numericSearchCountsByArity[lowerArity]?.accepted == 0)
+        }
+        #expect(machine.stats.numericSearchCountsByArity[arity]?.accepted == 1)
+        #expect(machine.stats.encoderCounts[.stagedJointSearch]!.emitted <= 512)
+        #expect(ChoiceSequence(machine.tree) == machine.sequence)
+    }
+
+    @Test("Floating joint search scales proportional tuples semantically", arguments: [3, 4])
+    func floatingRescaling(arity: Int) throws {
+        let initial = Array([8.0, 16.0, 24.0, 40.0].prefix(arity))
+        let generator = Gen.eachOf(Array(repeating: Gen.choose(in: 1.0 ... 1000.0), count: arity))
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch], tuning: .init(fourWayNumericWorkLimit: 1296)),
+            collectStats: true,
+            property: { values in values.indices.contains { values[$0] * initial[0] != values[0] * initial[$0] } }
+        )
+        machine.convergence.deferBindInner = false
+        markConverged(&machine.graph)
+        let accepted = machine.runStagedJointSearch()
+        #expect(accepted)
+        #expect(machine.output as? [Double] == initial.map { $0 / 2 })
+        #expect(machine.stats.numericSearchCountsByArity[arity]?.accepted == 1)
+    }
+
+    @Test("Floating palettes use semantic halves and admit only finite domain values", arguments: [TypeTag.float16, .float, .double])
+    func floatingFrontier(tag: TypeTag) {
+        let range = tag.floatingBitPattern(from: -16) ... tag.floatingBitPattern(from: 16)
+        let tree = ChoiceTree.group([8.0, -8.0, 0.0].map { value in
+            .choice(ChoiceValue(tag.floatingBitPattern(from: value), tag: tag), .init(validRange: range, isRangeExplicit: true))
+        })
+        var graph = ChoiceGraph.build(from: tree)
+        markConverged(&graph)
+        let frontier = NumericJointQuery.frontier(graph: graph, gate: .init(baseBudget: 15))
+        #expect(frontier.count == 3)
+        for entry in frontier {
+            let current = entry.leaf.choice.decodedDoubleValue
+            if current != 0 {
+                let values = entry.simplifyingSamples.map { ChoiceValue($0, tag: tag).decodedDoubleValue }
+                #expect(values.prefix(2).elementsEqual([0, current / 2]))
+            }
+            for pattern in entry.simplifyingSamples + entry.compensatingSamples {
+                #expect(range.contains(pattern))
+                #expect(ChoiceValue(pattern, tag: tag).decodedDoubleValue.isFinite)
+            }
+        }
+        let nonfiniteTree = ChoiceTree.group([Double.infinity, -Double.infinity, Double.nan].map { value in
+            .choice(ChoiceValue(tag.floatingBitPattern(from: value), tag: tag), .init(validRange: tag.bitPatternRange, isRangeExplicit: true))
+        })
+        #expect(NumericJointQuery.frontier(graph: ChoiceGraph.build(from: nonfiniteTree), gate: .init(baseBudget: 15)).isEmpty)
+    }
+
+    @Test("Joint groups can mix integers and floating-point widths without integer rescaling")
+    func mixedFloatingTriple() throws {
+        let generator = Gen.zip(Gen.choose(in: 1.0 ... 16.0), Gen.choose(in: Float(1) ... 16), Gen.choose(in: Int8(1) ... 16))
+        let initial = (8.0, Float(8), Int8(8))
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch]),
+            collectStats: true,
+            property: { values in values.0 != Double(values.1) || values.0 != Double(values.2) }
+        )
+        machine.convergence.deferBindInner = false
+        markConverged(&machine.graph)
+        let frontier = NumericJointQuery.frontier(graph: machine.graph, gate: machine.convergence.gate)
+        let scope = NumericJointQuery.build(frontier: frontier, graph: machine.graph, arity: 3, workLimit: 4096, calculationLimit: 512, scopeLimit: 30)
+        #expect(scope.groups.count == 1)
+        #expect(scope.groups[0].ratioProposals.isEmpty)
+        let accepted = machine.runStagedJointSearch()
+        #expect(accepted)
+        let output = try #require(machine.output as? (Double, Float, Int8))
+        #expect(output.0 == 1 && output.1 == 1 && output.2 == 1)
+        #expect(machine.stats.numericSearchCountsByArity[2]?.accepted == 0)
+        #expect(machine.stats.numericSearchCountsByArity[3]?.accepted == 1)
+    }
+
     @Test("Pythagorean triples shrink inside zips with unrelated slots", arguments: [3, 4, 5, 6])
     func pythagoreanZips(count: Int) throws {
         for positions in determiningTriples(count: count) {

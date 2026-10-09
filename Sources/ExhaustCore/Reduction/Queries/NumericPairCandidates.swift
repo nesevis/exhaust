@@ -26,6 +26,23 @@ enum NumericPairCandidates {
     static func jointValues(for leaf: NumericPairQuery.Leaf, simplifying: Bool) -> [UInt64] {
         var samples = CandidateSamples(leaf: leaf, simplifying: simplifying, maximumSamples: maximumJointSamples)
         samples.append(samples.target)
+        if leaf.choice.tag.isFloatingPoint {
+            let tag = leaf.choice.tag
+            let current = leaf.choice.decodedDoubleValue
+            let target = ChoiceValue(samples.target, tag: tag).decodedDoubleValue
+            samples.append(tag.floatingBitPattern(from: current / 2))
+            // Separate halves keep the midpoint finite even near the largest representable magnitude.
+            samples.append(tag.floatingBitPattern(from: current / 2 + target / 2))
+            for magnitude in [1.0, 2.0, 3.0] {
+                guard samples.isFull == false else { return samples.candidates }
+                samples.append(tag.floatingBitPattern(from: magnitude))
+                samples.append(tag.floatingBitPattern(from: -magnitude))
+            }
+            samples.appendNeighbors()
+            samples.appendFloatingProposals()
+            samples.appendSubdivisions()
+            return samples.candidates
+        }
         let zero = leaf.choice.tag.simplestBitPattern
         let current = leaf.choice.bitPattern64
         let half = current >= zero ? zero + (current - zero) / 2 : zero - (zero - current) / 2

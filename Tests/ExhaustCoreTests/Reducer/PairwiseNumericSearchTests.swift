@@ -35,10 +35,12 @@ struct PairwiseNumericSearchTests {
             let base = ChoiceSequence(.choice(choice, .init(validRange: lower ... upper, isRangeExplicit: true)))
             return [false, true].allSatisfy { simplifying in
                 let candidates = NumericPairCandidates.values(for: leaf, simplifying: simplifying)
-                return NumericPairCandidates.jointValues(for: leaf, simplifying: simplifying) == Self.uncappedJointValues(for: leaf, simplifying: simplifying)
+                let jointCandidates = NumericPairCandidates.jointValues(for: leaf, simplifying: simplifying)
+                return (tag.isFloatingPoint || jointCandidates == Self.uncappedJointValues(for: leaf, simplifying: simplifying))
+                    && jointCandidates.count <= NumericPairCandidates.maximumJointSamples
                     && candidates.count <= NumericPairCandidates.maximumSamples
-                    && Set(candidates).count == candidates.count
-                    && candidates.allSatisfy { pattern in
+                    && [candidates, jointCandidates].allSatisfy { Set($0).count == $0.count }
+                    && (candidates + jointCandidates).allSatisfy { pattern in
                         let value = ChoiceValue(pattern, tag: tag)
                         var proposed = base
                         proposed[0] = proposed[0].withBitPattern(pattern)
