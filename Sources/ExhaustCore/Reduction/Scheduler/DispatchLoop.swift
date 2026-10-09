@@ -212,13 +212,12 @@ struct DispatchLoop {
 
     /// Delegates to the active ``ProbeSession`` for one encode or decode sub-phase. On completion, applies the ``PassReport`` and routes to dispatch or rebuild.
     private mutating func stepProbing(state: inout ReductionMachine) -> ReductionMachine.Transition {
-        guard var session = activeSession else {
+        guard let session = activeSession else {
             subPhase = .dispatch
             return .dispatched(decision: .sourceExhausted)
         }
 
         let result = session.step(state: &state)
-        activeSession = session
 
         switch result {
             case let .encoded(encoder, cacheHit):
@@ -228,8 +227,7 @@ struct DispatchLoop {
                 return .decoded(encoder: encoder, accepted: accepted)
 
             case .finished:
-                var s = activeSession!
-                let report = s.report()
+                let report = session.report()
                 activeSession = nil
                 pendingReport = report
                 let action = state.applyPassPolicy(report)
@@ -343,7 +341,7 @@ struct DispatchLoop {
     }
 
     /// Publishes an interrupted main loop before machine finalization; exploitation instead applies its own report and stops for checkpoint settlement.
-    private mutating func finishAtDeadline(state: inout ReductionMachine) -> ReductionMachine.Transition {
+    mutating func finishAtDeadline(state: inout ReductionMachine) -> ReductionMachine.Transition {
         switch policy {
             case .main:
                 state.dispatchLoop = self
@@ -351,7 +349,7 @@ struct DispatchLoop {
                 self = state.dispatchLoop
                 return transition
             case .exploitation:
-                if var session = activeSession {
+                if let session = activeSession {
                     let report = session.report()
                     activeSession = nil
                     pendingReport = report

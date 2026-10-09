@@ -41,7 +41,9 @@ extension ProbeSessionState {
 /// Drives the encode-decode loop for a single encoder pass.
 ///
 /// Constructed by the machine when dispatch selects an encoder. Advanced by ``step(state:)`` (one sub-phase per call) or ``runToCompletion(state:deadlineCheck:)`` (loops step internally). Produces a ``PassReport`` when finished via ``report()``.
-struct ProbeSession {
+///
+/// Retains one pass's mutable encoder and reusable candidate buffer across cooperative steps. Hosts borrow the session reference while lending their state, keeping its fields in place and allowing staged probes to reuse one candidate buffer.
+final class ProbeSession {
     // MARK: - Phase
 
     /// Tracks the session's position within the encode-decode cycle.
@@ -112,7 +114,7 @@ struct ProbeSession {
     // MARK: - Step
 
     /// Advances the session by one encode or decode sub-phase.
-    mutating func step(state: inout some ProbeSessionState) -> StepResult {
+    func step(state: inout some ProbeSessionState) -> StepResult {
         switch phase {
             case .encode:
                 return stepEncode(state: &state)
@@ -125,7 +127,8 @@ struct ProbeSession {
 
     // MARK: - Encode
 
-    private mutating func stepEncode(state: inout some ProbeSessionState) -> StepResult {
+    /// Emits one probe, checking its cached hash before writing staged edits or selecting a decoder.
+    private func stepEncode(state: inout some ProbeSessionState) -> StepResult {
         let mutation: ProjectedMutation
         let probeHash: UInt64
         let cacheHit: Bool
@@ -192,7 +195,8 @@ struct ProbeSession {
 
     // MARK: - Decode
 
-    private mutating func stepDecode(state: inout some ProbeSessionState) -> StepResult {
+    /// Decodes the pending probe, records its terminal outcome, and commits candidates admitted by the encoder.
+    private func stepDecode(state: inout some ProbeSessionState) -> StepResult {
         guard let mutation = pendingMutation,
               let selection = pendingDecoderSelection
         else {
@@ -285,7 +289,7 @@ struct ProbeSession {
     }
 
     /// Completes an observed probe once, including when a caller stops with decoding still pending.
-    private mutating func terminateObservation(
+    private func terminateObservation(
         _ disposition: ProbeDisposition,
         materializationAttempts: Int = 0
     ) {
@@ -303,7 +307,7 @@ struct ProbeSession {
     // MARK: - Report
 
     /// Produces the pass report by flushing partial convergence and snapshotting all counters.
-    mutating func report() -> PassReport {
+    func report() -> PassReport {
         terminateObservation(.interrupted)
         encoder.flushPartialConvergence()
 
@@ -328,7 +332,7 @@ struct ProbeSession {
     /// Stops before the next encode or decode step when the deadline expires, reporting all work already performed.
     ///
     /// Checking every step also bounds runs consisting entirely of cache rejections. A pending undecoded probe is interrupted by ``report()``; an in-flight decode completes before the next check.
-    mutating func runToCompletion(
+    func runToCompletion(
         state: inout some ProbeSessionState,
         deadlineCheck: (() -> Bool)? = nil
     ) -> PassReport {

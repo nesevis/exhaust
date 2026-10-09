@@ -505,7 +505,7 @@ package extension ReductionStats {
                     rebuildCount += 1
                 case .convergenceConfirmed:
                     convergenceConfirmation += elapsed
-                case .improvingPivotsCompleted, .excursionCompleted:
+                case .improvingPivotsCompleted, .excursionAdvanced, .excursionCompleted:
                     relaxRound += elapsed
                 case .relationPassCompleted:
                     relationPass += elapsed

@@ -90,7 +90,7 @@ struct ProbeAcceptanceAccountingTests {
             warmStartRecords: [:]
         )
         var state = ProbeSessionFixtureState(sequence: sequence, tree: tree, output: [Int64(0), -1, 1], graph: graph, gen: generator.erase(), property: { _ in false })
-        var session = state.makeSession(for: scope)
+        let session = state.makeSession(for: scope)
         let report = session.runToCompletion(state: &state)
         #expect(sequence.shortLexPrecedes(state.sequence))
         #expect(state.output as? [Int64] == [-1, 0, 1])

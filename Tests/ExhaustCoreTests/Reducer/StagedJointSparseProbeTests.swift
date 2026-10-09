@@ -42,7 +42,7 @@ struct StagedJointSparseProbeTests {
         }
         let cachedCount = expected.count { state.rejectCache.contains(ZobristHash.hash(of: $0.sequence)) }
         let recorder = ProbeTraceRecorder()
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: fixture.encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -73,7 +73,7 @@ struct StagedJointSparseProbeTests {
     func bufferReuse(arity: Int) throws {
         var fixture = try fixture(arity: arity)
         var addresses: [UInt] = []
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: fixture.encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -116,7 +116,7 @@ struct StagedJointSparseProbeTests {
             }
         )
         try state.rejectCache.insert(ZobristHash.hash(of: #require(first)))
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: fixture.encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,

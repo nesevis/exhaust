@@ -27,11 +27,10 @@ extension ReductionMachine {
         pass: PostCyclePass,
         remaining: [ChoiceGraphScheduler.PostCycleAction]
     ) -> Transition {
-        guard var session = activeSession else {
+        guard let session = activeSession else {
             preconditionFailure("A post-cycle probing phase must own an active session")
         }
         let result = session.step(state: &self)
-        activeSession = session
         switch result {
             case let .encoded(encoder, cacheHit):
                 return .postCycleEncoded(owner: pass.timing, encoder: encoder, cacheHit: cacheHit)
@@ -131,7 +130,7 @@ extension ReductionMachine {
 
     /// Runs the same session and completion policy synchronously for callers that explicitly execute an entire numeric checkpoint.
     mutating func runPostCycleEncoder(operation: GraphOperation, estimatedCost: Int) -> PassReport? {
-        guard var session = makePostCycleSession(operation: operation, estimatedCost: estimatedCost) else {
+        guard let session = makePostCycleSession(operation: operation, estimatedCost: estimatedCost) else {
             return nil
         }
         let report = session.runToCompletion(state: &self, deadlineCheck: makeDeadlineCheck())

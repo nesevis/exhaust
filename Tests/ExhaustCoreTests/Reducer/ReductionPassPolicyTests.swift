@@ -29,7 +29,7 @@ struct ReductionPassPolicyTests {
             graph: machine.graph,
             warmStartRecords: [:]
         ))
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: transformation,
             boundValueFingerprint: nil,

@@ -28,6 +28,7 @@
 /// The ``dispatching`` phase uses three sub-phases (``DispatchPhase``): select and evaluate a source (``dispatch``), delegate to the active ``ProbeSession`` for encode-decode stepping (``probing``), and optionally rebuild the graph after a structural acceptance (``rebuild``).
 ///
 /// Session-backed post-cycle actions and final reorder use ``Phase/postCycleProbing(pass:remaining:)`` to yield between encoding and decoding while retaining their own reporting bucket.
+/// Excursions suspend the outer cycle while an ``ExcursionFrame`` steps perturbation and a nested exploitation loop, then commits or restores the checkpoint.
 package struct ReductionMachine: ProbeSessionState {
     // MARK: - Phase
 
@@ -39,6 +40,7 @@ package struct ReductionMachine: ProbeSessionState {
         case endCycle
         case postCycle(remaining: [ChoiceGraphScheduler.PostCycleAction])
         case postCycleProbing(pass: PostCyclePass, remaining: [ChoiceGraphScheduler.PostCycleAction])
+        case excursion(remaining: [ChoiceGraphScheduler.PostCycleAction])
         case checkTermination
         case reorderPass
         case done
@@ -76,6 +78,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         case convergenceConfirmed(anyStale: Bool)
         case improvingPivotsCompleted(improved: Bool)
+        case excursionAdvanced(step: ExcursionStep)
         case excursionCompleted(improved: Bool)
         case relationPassCompleted(accepted: Bool)
         case stagedJointPassCompleted(accepted: Bool)
@@ -87,6 +90,18 @@ package struct ReductionMachine: ProbeSessionState {
 
         case reorderCompleted(accepted: Bool)
         case terminated
+    }
+
+    /// Reports provisional excursion work without attributing nested dispatch and probing to the ordinary cycle's timing buckets.
+    package enum ExcursionStep {
+        case started
+        case perturbed(accepted: Bool)
+        case exploitationStarted(sourceCount: Int)
+        case dispatched(decision: DispatchOutcome)
+        case encoded(encoder: EncoderName, cacheHit: Bool)
+        case decoded(encoder: EncoderName, accepted: Bool)
+        case passCompleted(encoder: EncoderName, accepted: Bool)
+        case rebuilt(sequenceLength: Int, structurallyChanged: Bool)
     }
 
     /// Owns the reporting bucket for every step of a session-backed post-cycle pass, including setup and completion.
@@ -115,6 +130,8 @@ package struct ReductionMachine: ProbeSessionState {
 
     var phase: Phase = .beginCycle
     var dispatchLoop = DispatchLoop(policy: .main)
+    /// Present only during ``Phase/excursion(remaining:)``; removed while stepping to avoid retaining copies of the nested loop's sources.
+    var excursionFrame: ExcursionFrame?
 
     var dispatchPhase: DispatchPhase {
         get { dispatchLoop.subPhase }
@@ -361,6 +378,8 @@ package struct ReductionMachine: ProbeSessionState {
                 stepPostCycle(remaining: remaining)
             case let .postCycleProbing(pass, remaining):
                 stepPostCycleProbing(pass: pass, remaining: remaining)
+            case let .excursion(remaining):
+                stepExcursion(remaining: remaining)
             case .checkTermination:
                 stepCheckTermination()
             case .reorderPass:
@@ -468,11 +487,7 @@ package struct ReductionMachine: ProbeSessionState {
                 guard anyAccepted == false else {
                     return .excursionCompleted(improved: false)
                 }
-                let improved = runExcursion()
-                if improved {
-                    recordPostCycleAcceptance()
-                }
-                return .excursionCompleted(improved: improved)
+                return startExcursion(remaining: rest)
             case .releaseDeferral:
                 // Only worth a cycle when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none, and the extra cycle would replay the structural sources for nothing.
                 deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
@@ -604,8 +619,14 @@ package struct ReductionMachine: ProbeSessionState {
         if case .done = phase {
             return .terminated
         }
+        if var frame = excursionFrame {
+            excursionFrame = nil
+            if frame.finishAtDeadline(state: &self) {
+                recordPostCycleAcceptance()
+            }
+        }
         if case let .postCycleProbing(pass, _) = phase {
-            if var session = activeSession {
+            if let session = activeSession {
                 activeSession = nil
                 switch pass {
                     case let .reorder(savedRejectCache):
@@ -626,7 +647,7 @@ package struct ReductionMachine: ProbeSessionState {
                 }
             }
         }
-        if var session = activeSession {
+        if let session = activeSession {
             let report = session.report()
             activeSession = nil
             pendingReport = report
@@ -705,7 +726,7 @@ package struct ReductionMachine: ProbeSessionState {
 
     /// Runs final presentation work synchronously when the search deadline has already expired.
     private mutating func runReorderPass() -> Bool {
-        guard var session = makeReorderSession() else {
+        guard let session = makeReorderSession() else {
             return false
         }
         let savedRejectCache = rejectCache

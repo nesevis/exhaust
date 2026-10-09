@@ -9,7 +9,7 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { _ in true })
         fixture.state.rejectCache.insert(ZobristHash.hash(of: ChoiceSequence(choices(2))))
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
 
         #expect(recorder.events == [
@@ -23,7 +23,7 @@ struct ProbeSessionTraceTests {
     func propertyPasses() throws {
         var fixture = try Fixture(property: { _ in true })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         let report = session.runToCompletion(state: &fixture.state)
 
         #expect(recorder.events == [
@@ -45,7 +45,7 @@ struct ProbeSessionTraceTests {
     func enlargingCommit() throws {
         var fixture = try Fixture(property: { _ in false })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
         _ = session.step(state: &fixture.state)
 
@@ -63,7 +63,7 @@ struct ProbeSessionTraceTests {
     func acceptedCommit() throws {
         var fixture = try Fixture(property: { _ in false })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         for _ in 0 ..< 4 {
             _ = session.step(state: &fixture.state)
         }
@@ -90,7 +90,7 @@ struct ProbeSessionTraceTests {
         })
         fixture.state.gen = Gen.choose(in: UInt64(0) ... 1).erase()
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
         _ = session.step(state: &fixture.state)
 
@@ -124,7 +124,7 @@ struct ProbeSessionTraceTests {
             }
         ))
         encoder.start(scope: fixture.scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -166,7 +166,7 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var encoder = ChoiceGraphScheduler.makeBindPivotEncoder(gen: fixture.state.gen)
         encoder.start(scope: fixture.scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -201,7 +201,7 @@ struct ProbeSessionTraceTests {
         let original = fixture.scope.tree
         var encoder = EncoderDispatch.composed(BindPivotSearch.makeEncoder(lift: { _, _ in original }))
         encoder.start(scope: fixture.scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: fixture.scope.transformation,
             boundValueFingerprint: nil,
@@ -273,7 +273,7 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var encoder = ChoiceGraphScheduler.makeBoundExchangeEncoder(gen: generator)
         encoder.start(scope: scope)
-        var session = ProbeSession(
+        let session = ProbeSession(
             encoder: encoder,
             transformation: scope.transformation,
             boundValueFingerprint: nil,
@@ -309,7 +309,7 @@ struct ProbeSessionTraceTests {
     func pendingProbeInterrupted() throws {
         var fixture = try Fixture(property: { _ in true })
         let recorder = ProbeTraceRecorder()
-        var session = fixture.session(recorder: recorder)
+        let session = fixture.session(recorder: recorder)
         _ = session.step(state: &fixture.state)
         _ = session.report()
         _ = session.report()

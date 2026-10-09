@@ -136,7 +136,7 @@ private struct SwapFixture {
 
     /// Runs one probe session for the sibling swap encoder, starting with its initial swap. Stops after 100 encode and decode steps, far more than any of these four-slot sessions need, and records whether the session finished on its own.
     mutating func run() throws -> PassReport {
-        var session = state.makeSession(for: scope)
+        let session = state.makeSession(for: scope)
         for _ in 0 ..< 100 where session.phase != .finished {
             _ = session.step(state: &state)
         }

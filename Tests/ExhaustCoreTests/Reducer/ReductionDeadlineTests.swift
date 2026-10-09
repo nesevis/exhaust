@@ -306,7 +306,7 @@ struct ReductionDeadlineTests {
         var rejected = state.sequence
         rejected[0] = rejected[0].withBitPattern(0)
         state.rejectCache.insert(ZobristHash.hash(of: rejected))
-        var session = state.makeSession(for: scalarScope(state))
+        let session = state.makeSession(for: scalarScope(state))
         var checks = 0
         let report = session.runToCompletion(state: &state, deadlineCheck: {
             checks += 1
@@ -325,7 +325,7 @@ struct ReductionDeadlineTests {
             Issue.record("The session must not decode after expiry")
             return false
         }
-        var session = state.makeSession(for: scalarScope(state))
+        let session = state.makeSession(for: scalarScope(state))
         var checks = 0
         let report = session.runToCompletion(state: &state, deadlineCheck: {
             checks += 1
