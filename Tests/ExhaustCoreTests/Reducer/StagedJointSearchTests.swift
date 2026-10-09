@@ -3,6 +3,76 @@ import Testing
 
 @Suite("Staged joint numeric search")
 struct StagedJointSearchTests {
+    @Test("Character pairs, triples, and quadruples never enter staged joint search", arguments: [2, 3, 4])
+    func excludesCharacterScopes(arity: Int) throws {
+        let generator = Gen.eachOf(Array(repeating: Gen.character(in: "a" ... "z").gen, count: arity))
+        let initial = Array(repeating: Character("z"), count: arity)
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch]),
+            collectStats: true,
+            property: { values in values.contains { $0 != values[0] } }
+        )
+        machine.convergence.deferBindInner = false
+        markConverged(&machine.graph)
+        #expect(machine.pendingStagedNumericPairs() == nil)
+        let accepted = machine.runStagedJointSearch()
+        #expect(accepted == false)
+        #expect(machine.stats.encoderCounts[.stagedJointSearch] == nil)
+        #expect(machine.output as? [Character] == initial)
+    }
+
+    @Test("Numeric triples and quadruples shrink alongside untouched characters", arguments: [3, 4])
+    func numericStagesExcludeCharacters(arity: Int) throws {
+        let text = Gen.eachOf(Array(repeating: Gen.character(in: "a" ... "z").gen, count: 2))
+        let numbers = Gen.eachOf(Array(repeating: Gen.choose(in: 1 ... 1000), count: arity))
+        let generator = Gen.zip(text, numbers)
+        let initial: ([Character], [Int]) = (["z", "z"], arity == 3 ? [6, 8, 10] : [2, 4, 6, 10])
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        var sawCharacterProbe = false
+        var machine = ReductionMachine(
+            gen: generator,
+            initialTree: tree,
+            initialOutput: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch]),
+            collectStats: true,
+            property: { values in
+                if values.0 != initial.0 { sawCharacterProbe = true }
+                let numbers = values.1
+                let numericPasses = arity == 3
+                    ? numbers[0] * numbers[0] + numbers[1] * numbers[1] != numbers[2] * numbers[2]
+                    : numbers[1] != 2 * numbers[0] || numbers[2] != 3 * numbers[0] || numbers[3] != 5 * numbers[0]
+                return values.0[0] != values.0[1] || numericPasses
+            }
+        )
+        machine.convergence.deferBindInner = false
+        markConverged(&machine.graph)
+        let accepted = machine.runStagedJointSearch()
+        #expect(accepted)
+        let output = try #require(machine.output as? ([Character], [Int]))
+        #expect(output.0 == initial.0)
+        #expect(output.1 == (arity == 3 ? [3, 4, 5] : [1, 2, 3, 5]))
+        #expect(machine.stats.numericSearchCountsByArity[2]?.accepted == 0)
+        #expect(machine.stats.numericSearchCountsByArity[arity]?.accepted == 1)
+        #expect(sawCharacterProbe == false)
+    }
+
+    @Test("A long character sequence cannot consume the numeric leaf or frontier caps")
+    func separateFrontierCaps() throws {
+        let character = try #require(try Interpreters.reflect(Gen.character(in: "a" ... "z").gen, with: "z"))
+        let count = NumericPairQuery.maximumLeaves + 44
+        let text = ChoiceTree.sequence(elements: Array(repeating: character, count: count), metadata: .init(validRange: UInt64(count) ... UInt64(count), isRangeExplicit: true))
+        let numbers = ChoiceTree.group([6, 8, 10].map { .choice(ChoiceValue(UInt64($0), tag: .uint64), .init(validRange: 1 ... 1000, isRangeExplicit: true)) })
+        var graph = ChoiceGraph.build(from: .group([text, numbers]))
+        markConverged(&graph)
+        let gate = BoundValueGate(baseBudget: 15)
+        #expect(NumericPairQuery.eligibleLeaves(graph: graph).count == 3)
+        #expect(NumericJointQuery.frontier(graph: graph, gate: gate).count == 3)
+    }
+
     @Test("Pair-only float scopes skip the joint frontier without suppressing pair search", arguments: [TypeTag.float16, .float, .double], [1, 2])
     func pairOnlyFloatingFrontier(tag: TypeTag, count: Int) {
         let range = tag.floatingBitPattern(from: -16) ... tag.floatingBitPattern(from: 16)

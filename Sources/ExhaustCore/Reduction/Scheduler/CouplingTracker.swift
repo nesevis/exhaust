@@ -38,7 +38,7 @@ struct CouplingTracker {
                 convergencePasses[nodeID] = pass
             }
         }
-        let numericChanges = changedNodes.sorted().prefix(Self.maximumNodes).filter { isNumeric($0, graph: graph) }
+        let numericChanges = changedNodes.sorted().filter { isNumeric($0, graph: graph) }.prefix(Self.maximumNodes)
         if numericChanges.isEmpty == false {
             history.append(Change(pass: pass, nodes: Array(numericChanges)))
             if history.count > Self.maximumHistory { history.removeFirst() }

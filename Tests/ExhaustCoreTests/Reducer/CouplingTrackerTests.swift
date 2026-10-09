@@ -3,6 +3,24 @@ import Testing
 
 @Suite("Bounded coupling evidence")
 struct CouplingTrackerTests {
+    @Test("Character changes neither create coupling edges nor evict numeric history")
+    func characterChangesDoNotDisplaceNumericEvidence() throws {
+        let character = try #require(try Interpreters.reflect(Gen.character(in: "a" ... "z").gen, with: "z"))
+        var graph = ChoiceGraph.build(from: .group(Array(repeating: character, count: CouplingTracker.maximumNodes + 1) + [.uint64(10), .uint64(20)]))
+        let leaves = graph.leafNodes
+        let source = leaves[leaves.count - 2]
+        let partner = leaves[leaves.count - 1]
+        var tracker = CouplingTracker()
+        tracker.observe(motionNodes: [], convergedNodes: leaves, changedNodes: [], pass: 1, graph: &graph)
+        tracker.observe(motionNodes: [], convergedNodes: [], changedNodes: Set(leaves), pass: 2, graph: &graph)
+        for pass in 3 ..< 3 + CouplingTracker.maximumHistory {
+            tracker.observe(motionNodes: [], convergedNodes: [], changedNodes: [leaves[0]], pass: pass, graph: &graph)
+        }
+        tracker.observe(motionNodes: Set(leaves.dropLast()), convergedNodes: [], changedNodes: [], pass: 100, graph: &graph)
+        #expect(graph.couplingDependents[partner] == [source])
+        #expect(graph.couplingDependents.count == 1)
+    }
+
     @Test("Coupling collection follows staged encoder eligibility without research diagnostics", arguments: [false, true], [false, true])
     func normalCollection(stagedEnabled: Bool, budgetEnabled: Bool) throws {
         let generator = Gen.zip(Gen.choose(in: UInt64(0) ... 100), Gen.choose(in: UInt64(0) ... 100))

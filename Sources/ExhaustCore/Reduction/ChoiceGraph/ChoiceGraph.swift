@@ -68,7 +68,7 @@ package struct ChoiceGraph: Sendable {
     /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and transferred across full rebuilds by ``ChoiceGraphScheduler/transferConvergence(_:to:)``. Read by ``MinimizationQuery`` (skip converged leaves), ``ChoiceGraphScheduler/allValuesConverged(in:graph:)`` (termination check), and ``ChoiceGraphScheduler/extractWarmStarts(from:)`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk by ``clearConvergence(inPositionRange:)`` for bound subtree regions after reshape.
     package var convergenceStore: [Int: ConvergedOrigin] = [:]
 
-    /// Possible value-coupling dependents inferred from floor motion after recent accepted changes. Populated by ``CouplingTracker`` independently of research diagnostics and bounded to 256 edges. ``NumericJointQuery`` uses these hints to rank groups; no edge proves causal coupling, and an empty map does not rule out joint constraints. Discarded when graph structure or node numbering changes.
+    /// Possible value-coupling dependents inferred from floor motion after recent accepted changes. Populated by ``CouplingTracker`` independently of research diagnostics and bounded to 256 numeric edges. ``NumericJointQuery`` uses these hints to rank groups; no edge proves causal coupling, and an empty map does not rule out joint constraints. Discarded when graph structure or node numbering changes.
     package var couplingDependents: [Int: Set<Int>] = [:]
 
     /// Writes convergence records from an encoder pass into the store by node ID.
