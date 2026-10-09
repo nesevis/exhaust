@@ -211,31 +211,31 @@ enum ChoiceGraphScheduler {
     static func selectEncoder(for operation: GraphOperation, gen: AnyGenerator) -> EncoderDispatch {
         switch operation {
             case .remove(.window):
-                .windowRemoval(GraphWindowRemovalEncoder())
+                .init(GraphWindowRemovalEncoder())
             case .remove, .replace, .migrate:
-                .structural(GraphStructuralEncoder())
+                .init(GraphStructuralEncoder())
             case .permute:
-                .swap(GraphSwapEncoder())
+                .init(GraphSwapEncoder())
             case .minimize(.laneCollapse):
-                .laneCollapse(GraphLaneCollapseEncoder())
+                .init(GraphLaneCollapseEncoder())
             case .minimize(.depthCollapse):
-                .depthCollapse(GraphDepthCollapseEncoder())
+                .init(GraphDepthCollapseEncoder())
             case .minimize(.bindPivot):
                 makeBindPivotEncoder(gen: gen)
             case .minimize:
-                .value(GraphValueEncoder())
+                .init(GraphValueEncoder())
             case .exchange(.redistribution):
-                .redistribution(GraphRedistributionEncoder())
+                .init(GraphRedistributionEncoder())
             case .exchange(.tandem):
-                .lockstep(GraphLockstepEncoder())
+                .init(GraphLockstepEncoder())
             case .exchange(.stagedNumericPairs), .exchange(.numericJoint):
-                .stagedJoint(StagedJointEncoder())
+                .init(StagedJointEncoder())
             case .exchange(.relation):
-                .relation(GraphRelationEncoder())
+                .init(GraphRelationEncoder())
             case .exchange(.boundExchange):
                 makeBoundExchangeEncoder(gen: gen)
             case .reorder:
-                .reorder(GraphReorderEncoder())
+                .init(GraphReorderEncoder())
         }
     }
 

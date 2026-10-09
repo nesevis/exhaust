@@ -707,7 +707,7 @@ package struct ReductionMachine: ProbeSessionState {
             graph: graph,
             warmStartRecords: [:]
         )
-        var encoder: EncoderDispatch = .reorder(GraphReorderEncoder())
+        var encoder: EncoderDispatch = .init(GraphReorderEncoder())
         encoder.start(scope: scope)
 
         return ProbeSession(

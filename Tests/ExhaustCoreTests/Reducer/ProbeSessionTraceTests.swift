@@ -107,7 +107,7 @@ struct ProbeSessionTraceTests {
         var fixture = try Fixture(property: { ($0 as? UInt64) != 0 })
         let downstream = try Fixture(value: 2, property: { _ in true })
         let recorder = ProbeTraceRecorder()
-        var encoder = EncoderDispatch.composed(GraphComposedEncoder(
+        var encoder = EncoderDispatch(GraphComposedEncoder(
             name: .composed,
             makeProposals: domainLeafProposals,
             policy: CompositionPolicy(
@@ -120,7 +120,7 @@ struct ProbeSessionTraceTests {
             ),
             lift: { _, fallbackTree in fallbackTree },
             downstreamFactory: { _, _, _ in
-                .stage(encoder: .composed(domainFixtureEncoder()), scope: downstream.scope)
+                .stage(encoder: .init(domainFixtureEncoder()), scope: downstream.scope)
             }
         ))
         encoder.start(scope: fixture.scope)
@@ -199,7 +199,7 @@ struct ProbeSessionTraceTests {
         var fixture = try pivotFixture()
         let recorder = ProbeTraceRecorder()
         let original = fixture.scope.tree
-        var encoder = EncoderDispatch.composed(BindPivotSearch.makeEncoder(lift: { _, _ in original }))
+        var encoder = EncoderDispatch(BindPivotSearch.makeEncoder(lift: { _, _ in original }))
         encoder.start(scope: fixture.scope)
         let session = ProbeSession(
             encoder: encoder,
@@ -324,9 +324,9 @@ struct ProbeSessionTraceTests {
     @Test("Lifted operations retain their decoder and acceptance policies")
     func separateDecoderAndAcceptanceContracts() {
         let encoders: [(EncoderDispatch, Bool, AcceptanceHandling)] = [
-            (.composed(BoundExchangeSearch.makeEncoder(lift: { _, _ in nil })), true, .refreshAndIdle),
-            (.composed(BindPivotSearch.makeEncoder(lift: { _, _ in nil })), false, .applyMutation),
-            (.binarySearch(GraphBinarySearchEncoder()), false, .applyMutation),
+            (.init(BoundExchangeSearch.makeEncoder(lift: { _, _ in nil })), true, .refreshAndIdle),
+            (.init(BindPivotSearch.makeEncoder(lift: { _, _ in nil })), false, .applyMutation),
+            (.init(GraphBinarySearchEncoder()), false, .applyMutation),
         ]
         for (encoder, requiresExact, acceptance) in encoders {
             #expect(encoder.requiresExactDecoder == requiresExact)
@@ -360,7 +360,7 @@ struct ProbeSessionTraceTests {
         ]
         for name in [EncoderName.composed, .bindPivot, .boundExchange] {
             for (requiresExact, acceptance) in policies {
-                let encoder = EncoderDispatch.composed(GraphComposedEncoder(
+                let encoder = EncoderDispatch(GraphComposedEncoder(
                     name: name,
                     makeProposals: { _ in nil },
                     policy: CompositionPolicy(
@@ -559,7 +559,7 @@ private struct Fixture {
     }
 
     func session(recorder: ProbeTraceRecorder? = nil) -> ProbeSession {
-        var encoder = EncoderDispatch.composed(domainFixtureEncoder())
+        var encoder = EncoderDispatch(domainFixtureEncoder())
         encoder.start(scope: scope)
         return ProbeSession(
             encoder: encoder,

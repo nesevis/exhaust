@@ -131,6 +131,56 @@ struct StagedJointSparseProbeTests {
         #expect(state.output as? [UInt64] == expectedValues)
     }
 
+    @Test("Copied sparse dispatches preserve their own descriptor cursor", arguments: [2, 3, 4])
+    func copiedSparseProgress(arity: Int) throws {
+        let fixture = try fixture(arity: arity)
+        var encoder = fixture.encoder
+        var reference = StagedJointEncoder()
+        reference.start(scope: fixture.scope)
+        let firstProbe = encoder.nextStagedJointProbe(lastAccepted: false)
+        let firstReferenceProbe = reference.nextSparseProbe(lastAccepted: false)
+        _ = try #require(firstProbe)
+        _ = try #require(firstReferenceProbe)
+        var snapshot = encoder
+        for _ in 0 ..< 5 {
+            let probe = encoder.nextStagedJointProbe(lastAccepted: false)
+            _ = try #require(probe)
+        }
+
+        var comparedProbes = 0
+        while let expectedProbe = reference.nextSparseProbe(lastAccepted: false) {
+            let nextProbe = snapshot.nextStagedJointProbe(lastAccepted: false)
+            let actualProbe = try #require(nextProbe)
+            var expected = fixture.scope.baseSequence
+            var actual = fixture.scope.baseSequence
+            expectedProbe.write(into: &expected)
+            actualProbe.write(into: &actual)
+            #expect(actual == expected)
+            comparedProbes += 1
+        }
+        #expect(comparedProbes == 127)
+        let exhaustedProbe = snapshot.nextStagedJointProbe(lastAccepted: false)
+        #expect(exhaustedProbe == nil)
+    }
+
+    @Test("A uniquely owned sparse dispatch reuses its encoder box", arguments: [2, 3, 4])
+    func sparseStorageReuse(arity: Int) throws {
+        let scope = try fixture(arity: arity).scope
+        var encoder = EncoderDispatch(StagedJointEncoder())
+        encoder.start(scope: scope)
+        let initialStorage = sparseStorageIdentity(of: encoder)
+        for _ in 0 ..< 5 {
+            let probe = encoder.nextStagedJointProbe(lastAccepted: false)
+            _ = try #require(probe)
+            #expect(sparseStorageIdentity(of: encoder) == initialStorage)
+        }
+    }
+
+    /// Observes the tagged pointer without creating another owner during the next uniqueness check.
+    private func sparseStorageIdentity(of encoder: borrowing EncoderDispatch) -> UInt {
+        withUnsafeBytes(of: encoder) { $0.load(as: UInt.self) }
+    }
+
     private func fixture(arity: Int) throws -> (state: ProbeSessionFixtureState, scope: EncoderInput, encoder: EncoderDispatch) {
         let values: [UInt64] = [75, 100, 0, 125, 175, 225]
         let generator = Gen.eachOf(Array(repeating: Gen.choose(in: UInt64(0) ... 1000), count: values.count))
@@ -151,7 +201,7 @@ struct StagedJointSparseProbeTests {
         }
         let sequence = ChoiceSequence(tree)
         let scope = EncoderInput(transformation: .init(operation: operation, priority: .zeroBenefit), baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:])
-        var encoder = EncoderDispatch.stagedJoint(StagedJointEncoder())
+        var encoder = EncoderDispatch(StagedJointEncoder())
         encoder.start(scope: scope)
         let state = ProbeSessionFixtureState(sequence: sequence, tree: tree, output: values, graph: graph, gen: generator.erase(), property: { _ in true })
         return (state, scope, encoder)

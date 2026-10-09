@@ -10,7 +10,7 @@ import Testing
 ///
 /// None of these assertions can be derived from behavior. A violation costs throughput and nothing else, so no functional test fails and no reviewer sees a symptom. That is the whole reason they are written down.
 ///
-/// ``ChoiceTree``, ``FreerMonad``, and ``EncoderDispatch`` are `indirect` for performance, but each is also recursive, so the compiler already refuses to drop the keyword. What is left unguarded for those three is the width the boxing buys: the case tag rides in the pointer's spare bits, and past roughly 64 payload cases it no longer fits, doubling the stride of every array of them.
+/// ``ChoiceTree`` and ``FreerMonad`` are recursive indirect enums whose case tags use the boxed pointer's spare bits. ``EncoderDispatch`` uses reference payloads to keep each concrete encoder in its own copy-on-write box. The pointer-width assertions guard against exposing inline payloads or adding enough enum cases to require a separate discriminator.
 ///
 /// The payload budgets matter more, because that is where the cost actually accrued once before. Boxing hides a payload from the enum's own size, so a payload can grow without any of the pointer-width assertions moving. Inlining ``TypeTagPayload`` into ``ChoiceMetadata`` took the `.choice` box from 48 to 113 bytes and the `.sequence` box from 40 to 105, and cost roughly 15% across the ECOOP suite, uniformly, in workloads that generate no dates at all (measured 2026-07-28 against the 0.17.4 baseline).
 ///

@@ -62,7 +62,7 @@ enum BoundExchangeSearch {
             return .failed(.sinkValueMismatch)
         }
         return .stage(
-            encoder: .liftedStage(GraphLiftedStageEncoder(name: .boundExchange, mutation: proposal.mutation)),
+            encoder: .init(GraphLiftedStageEncoder(name: .boundExchange, mutation: proposal.mutation)),
             scope: EncoderInput(
                 transformation: parent.transformation,
                 baseSequence: lifted.sequence,

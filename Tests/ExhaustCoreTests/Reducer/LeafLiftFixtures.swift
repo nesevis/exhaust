@@ -33,5 +33,5 @@ func liftedLeafScope(_ lifted: LiftResult, parent: EncoderInput) -> EncoderInput
 
 /// Searches the lifted leaf using acceptance feedback rather than treating the proposal as already failing.
 func binaryLeafStage(_: LiftProposal, lifted: LiftResult, parent: EncoderInput) -> DownstreamBuild {
-    .stage(encoder: .binarySearch(GraphBinarySearchEncoder()), scope: liftedLeafScope(lifted, parent: parent))
+    .stage(encoder: .init(GraphBinarySearchEncoder()), scope: liftedLeafScope(lifted, parent: parent))
 }

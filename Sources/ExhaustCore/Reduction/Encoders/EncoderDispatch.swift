@@ -1,162 +1,299 @@
-/// Routes ``GraphEncoder`` calls to concrete encoder types via enum dispatch, avoiding existential witness-table overhead on the reducer's per-probe hot path.
-indirect enum EncoderDispatch {
-    case structural(GraphStructuralEncoder)
-    case value(GraphValueEncoder)
-    case redistribution(GraphRedistributionEncoder)
-    case lockstep(GraphLockstepEncoder)
-    case relation(GraphRelationEncoder)
-    case stagedJoint(StagedJointEncoder)
-    case swap(GraphSwapEncoder)
-    case windowRemoval(GraphWindowRemovalEncoder)
-    case reorder(GraphReorderEncoder)
-    case laneCollapse(GraphLaneCollapseEncoder)
-    case depthCollapse(GraphDepthCollapseEncoder)
-    case binarySearch(GraphBinarySearchEncoder)
-    case boundValueCovering(GraphBoundValueCoveringEncoder)
-    case liftedStage(GraphLiftedStageEncoder)
-    case composed(GraphComposedEncoder)
+/// Routes ``GraphEncoder`` calls through concrete copy-on-write boxes, avoiding existential dispatch and enum payload reconstruction on the per-probe path.
+///
+/// Each case keeps its concrete encoder in reusable reference storage. Mutating calls detach shared storage before advancing the search, preserving independent progress when a dispatch handle is copied.
+enum EncoderDispatch {
+    case structural(EncoderStorage<GraphStructuralEncoder>)
+    case value(EncoderStorage<GraphValueEncoder>)
+    case redistribution(EncoderStorage<GraphRedistributionEncoder>)
+    case lockstep(EncoderStorage<GraphLockstepEncoder>)
+    case relation(EncoderStorage<GraphRelationEncoder>)
+    case stagedJoint(EncoderStorage<StagedJointEncoder>)
+    case swap(EncoderStorage<GraphSwapEncoder>)
+    case windowRemoval(EncoderStorage<GraphWindowRemovalEncoder>)
+    case reorder(EncoderStorage<GraphReorderEncoder>)
+    case laneCollapse(EncoderStorage<GraphLaneCollapseEncoder>)
+    case depthCollapse(EncoderStorage<GraphDepthCollapseEncoder>)
+    case binarySearch(EncoderStorage<GraphBinarySearchEncoder>)
+    case boundValueCovering(EncoderStorage<GraphBoundValueCoveringEncoder>)
+    case liftedStage(EncoderStorage<GraphLiftedStageEncoder>)
+    case composed(EncoderStorage<GraphComposedEncoder>)
+
+    /// Selects a concrete storage case once at construction, so subsequent probes use enum dispatch rather than existential calls.
+    ///
+    /// Generic input lets concrete callers specialize away the type switch and temporary existential storage. Erased encoders still work through implicit existential opening.
+    ///
+    /// Existing dispatch handles preserve their storage and copy-on-write behavior. Every other conformer must have a concrete case here; an unsupported encoder fails a precondition instead of silently falling back to existential dispatch.
+    init(_ encoder: some GraphEncoder) {
+        switch encoder {
+            case let encoder as Self:
+                self = encoder
+            case let encoder as GraphStructuralEncoder:
+                self = .structural(EncoderStorage(encoder))
+            case let encoder as GraphValueEncoder:
+                self = .value(EncoderStorage(encoder))
+            case let encoder as GraphRedistributionEncoder:
+                self = .redistribution(EncoderStorage(encoder))
+            case let encoder as GraphLockstepEncoder:
+                self = .lockstep(EncoderStorage(encoder))
+            case let encoder as GraphRelationEncoder:
+                self = .relation(EncoderStorage(encoder))
+            case let encoder as StagedJointEncoder:
+                self = .stagedJoint(EncoderStorage(encoder))
+            case let encoder as GraphSwapEncoder:
+                self = .swap(EncoderStorage(encoder))
+            case let encoder as GraphWindowRemovalEncoder:
+                self = .windowRemoval(EncoderStorage(encoder))
+            case let encoder as GraphReorderEncoder:
+                self = .reorder(EncoderStorage(encoder))
+            case let encoder as GraphLaneCollapseEncoder:
+                self = .laneCollapse(EncoderStorage(encoder))
+            case let encoder as GraphDepthCollapseEncoder:
+                self = .depthCollapse(EncoderStorage(encoder))
+            case let encoder as GraphBinarySearchEncoder:
+                self = .binarySearch(EncoderStorage(encoder))
+            case let encoder as GraphBoundValueCoveringEncoder:
+                self = .boundValueCovering(EncoderStorage(encoder))
+            case let encoder as GraphLiftedStageEncoder:
+                self = .liftedStage(EncoderStorage(encoder))
+            case let encoder as GraphComposedEncoder:
+                self = .composed(EncoderStorage(encoder))
+            default:
+                preconditionFailure("Unsupported graph encoder: \(type(of: encoder))")
+        }
+    }
 }
 
 extension EncoderDispatch: GraphEncoder {
     /// The staged session advances descriptors before touching its candidate buffer; other encoders retain their normal probe path.
+    ///
+    /// Restores each concrete case explicitly so dispatch consumption does not retain the staged box during its uniqueness check.
     mutating func nextStagedJointProbe(lastAccepted: Bool) -> StagedJointEncoder.Probe? {
-        guard case var .stagedJoint(encoder) = self else { return nil }
-        let probe = encoder.nextSparseProbe(lastAccepted: lastAccepted)
-        self = .stagedJoint(encoder)
-        return probe
+        switch consume self {
+            case var .stagedJoint(encoder):
+                Self.makeUnique(&encoder)
+                let probe = encoder.value.nextSparseProbe(lastAccepted: lastAccepted)
+                self = .stagedJoint(encoder)
+                return probe
+            case let .structural(encoder):
+                self = .structural(encoder)
+                return nil
+            case let .value(encoder):
+                self = .value(encoder)
+                return nil
+            case let .redistribution(encoder):
+                self = .redistribution(encoder)
+                return nil
+            case let .lockstep(encoder):
+                self = .lockstep(encoder)
+                return nil
+            case let .relation(encoder):
+                self = .relation(encoder)
+                return nil
+            case let .swap(encoder):
+                self = .swap(encoder)
+                return nil
+            case let .windowRemoval(encoder):
+                self = .windowRemoval(encoder)
+                return nil
+            case let .reorder(encoder):
+                self = .reorder(encoder)
+                return nil
+            case let .laneCollapse(encoder):
+                self = .laneCollapse(encoder)
+                return nil
+            case let .depthCollapse(encoder):
+                self = .depthCollapse(encoder)
+                return nil
+            case let .binarySearch(encoder):
+                self = .binarySearch(encoder)
+                return nil
+            case let .boundValueCovering(encoder):
+                self = .boundValueCovering(encoder)
+                return nil
+            case let .liftedStage(encoder):
+                self = .liftedStage(encoder)
+                return nil
+            case let .composed(encoder):
+                self = .composed(encoder)
+                return nil
+        }
     }
 
     var name: EncoderName {
         switch self {
-            case let .structural(encoder): encoder.name
-            case let .value(encoder): encoder.name
-            case let .redistribution(encoder): encoder.name
-            case let .lockstep(encoder): encoder.name
-            case let .relation(encoder): encoder.name
-            case let .stagedJoint(encoder): encoder.name
-            case let .swap(encoder): encoder.name
-            case let .windowRemoval(encoder): encoder.name
-            case let .reorder(encoder): encoder.name
-            case let .laneCollapse(encoder): encoder.name
-            case let .depthCollapse(encoder): encoder.name
-            case let .binarySearch(encoder): encoder.name
-            case let .boundValueCovering(encoder): encoder.name
+            case let .structural(encoder):
+                encoder.value.name
+            case let .value(encoder):
+                encoder.value.name
+            case let .redistribution(encoder):
+                encoder.value.name
+            case let .lockstep(encoder):
+                encoder.value.name
+            case let .relation(encoder):
+                encoder.value.name
+            case let .stagedJoint(encoder):
+                encoder.value.name
+            case let .swap(encoder):
+                encoder.value.name
+            case let .windowRemoval(encoder):
+                encoder.value.name
+            case let .reorder(encoder):
+                encoder.value.name
+            case let .laneCollapse(encoder):
+                encoder.value.name
+            case let .depthCollapse(encoder):
+                encoder.value.name
+            case let .binarySearch(encoder):
+                encoder.value.name
+            case let .boundValueCovering(encoder):
+                encoder.value.name
             case let .liftedStage(encoder):
-                encoder.name
-            case let .composed(encoder): encoder.name
+                encoder.value.name
+            case let .composed(encoder):
+                encoder.value.name
         }
     }
 
     mutating func start(scope: EncoderInput) {
-        switch self {
+        switch consume self {
             case var .structural(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .structural(encoder)
             case var .value(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .value(encoder)
             case var .redistribution(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .redistribution(encoder)
             case var .lockstep(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .lockstep(encoder)
             case var .relation(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .relation(encoder)
             case var .stagedJoint(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .stagedJoint(encoder)
             case var .swap(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .swap(encoder)
             case var .windowRemoval(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .windowRemoval(encoder)
             case var .reorder(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .reorder(encoder)
             case var .laneCollapse(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .laneCollapse(encoder)
             case var .depthCollapse(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .depthCollapse(encoder)
             case var .binarySearch(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .binarySearch(encoder)
             case var .boundValueCovering(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .boundValueCovering(encoder)
             case var .liftedStage(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .liftedStage(encoder)
             case var .composed(encoder):
-                encoder.start(scope: scope)
+                Self.makeUnique(&encoder)
+                encoder.value.start(scope: scope)
                 self = .composed(encoder)
         }
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
-        switch self {
+        switch consume self {
             case var .structural(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .structural(encoder)
                 return result
             case var .value(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .value(encoder)
                 return result
             case var .redistribution(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .redistribution(encoder)
                 return result
             case var .lockstep(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .lockstep(encoder)
                 return result
             case var .relation(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .relation(encoder)
                 return result
             case var .stagedJoint(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .stagedJoint(encoder)
                 return result
             case var .swap(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .swap(encoder)
                 return result
             case var .windowRemoval(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .windowRemoval(encoder)
                 return result
             case var .reorder(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .reorder(encoder)
                 return result
             case var .laneCollapse(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .laneCollapse(encoder)
                 return result
             case var .depthCollapse(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .depthCollapse(encoder)
                 return result
             case var .binarySearch(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .binarySearch(encoder)
                 return result
             case var .boundValueCovering(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .boundValueCovering(encoder)
                 return result
             case var .liftedStage(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .liftedStage(encoder)
                 return result
             case var .composed(encoder):
-                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                Self.makeUnique(&encoder)
+                let result = encoder.value.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .composed(encoder)
                 return result
         }
@@ -164,92 +301,135 @@ extension EncoderDispatch: GraphEncoder {
 
     var hadUnresolvedReplacement: Bool {
         switch self {
-            case let .structural(encoder): encoder.hadUnresolvedReplacement
-            case let .value(encoder): encoder.hadUnresolvedReplacement
-            case let .redistribution(encoder): encoder.hadUnresolvedReplacement
-            case let .lockstep(encoder): encoder.hadUnresolvedReplacement
-            case let .relation(encoder): encoder.hadUnresolvedReplacement
-            case let .stagedJoint(encoder): encoder.hadUnresolvedReplacement
-            case let .swap(encoder): encoder.hadUnresolvedReplacement
-            case let .windowRemoval(encoder): encoder.hadUnresolvedReplacement
-            case let .reorder(encoder): encoder.hadUnresolvedReplacement
-            case let .laneCollapse(encoder): encoder.hadUnresolvedReplacement
-            case let .depthCollapse(encoder): encoder.hadUnresolvedReplacement
-            case let .binarySearch(encoder): encoder.hadUnresolvedReplacement
-            case let .boundValueCovering(encoder): encoder.hadUnresolvedReplacement
+            case let .structural(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .value(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .redistribution(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .lockstep(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .relation(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .stagedJoint(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .swap(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .windowRemoval(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .reorder(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .laneCollapse(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .depthCollapse(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .binarySearch(encoder):
+                encoder.value.hadUnresolvedReplacement
+            case let .boundValueCovering(encoder):
+                encoder.value.hadUnresolvedReplacement
             case let .liftedStage(encoder):
-                encoder.hadUnresolvedReplacement
-            case let .composed(encoder): encoder.hadUnresolvedReplacement
+                encoder.value.hadUnresolvedReplacement
+            case let .composed(encoder):
+                encoder.value.hadUnresolvedReplacement
         }
     }
 
     var convergenceRecords: [Int: ConvergedOrigin] {
         switch self {
-            case let .structural(encoder): encoder.convergenceRecords
-            case let .value(encoder): encoder.convergenceRecords
-            case let .redistribution(encoder): encoder.convergenceRecords
-            case let .lockstep(encoder): encoder.convergenceRecords
-            case let .relation(encoder): encoder.convergenceRecords
-            case let .stagedJoint(encoder): encoder.convergenceRecords
-            case let .swap(encoder): encoder.convergenceRecords
-            case let .windowRemoval(encoder): encoder.convergenceRecords
-            case let .reorder(encoder): encoder.convergenceRecords
-            case let .laneCollapse(encoder): encoder.convergenceRecords
-            case let .depthCollapse(encoder): encoder.convergenceRecords
-            case let .binarySearch(encoder): encoder.convergenceRecords
-            case let .boundValueCovering(encoder): encoder.convergenceRecords
+            case let .structural(encoder):
+                encoder.value.convergenceRecords
+            case let .value(encoder):
+                encoder.value.convergenceRecords
+            case let .redistribution(encoder):
+                encoder.value.convergenceRecords
+            case let .lockstep(encoder):
+                encoder.value.convergenceRecords
+            case let .relation(encoder):
+                encoder.value.convergenceRecords
+            case let .stagedJoint(encoder):
+                encoder.value.convergenceRecords
+            case let .swap(encoder):
+                encoder.value.convergenceRecords
+            case let .windowRemoval(encoder):
+                encoder.value.convergenceRecords
+            case let .reorder(encoder):
+                encoder.value.convergenceRecords
+            case let .laneCollapse(encoder):
+                encoder.value.convergenceRecords
+            case let .depthCollapse(encoder):
+                encoder.value.convergenceRecords
+            case let .binarySearch(encoder):
+                encoder.value.convergenceRecords
+            case let .boundValueCovering(encoder):
+                encoder.value.convergenceRecords
             case let .liftedStage(encoder):
-                encoder.convergenceRecords
-            case let .composed(encoder): encoder.convergenceRecords
+                encoder.value.convergenceRecords
+            case let .composed(encoder):
+                encoder.value.convergenceRecords
         }
     }
 
     mutating func flushPartialConvergence() {
-        switch self {
+        switch consume self {
             case var .structural(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .structural(encoder)
             case var .value(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .value(encoder)
             case var .redistribution(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .redistribution(encoder)
             case var .lockstep(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .lockstep(encoder)
             case var .relation(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .relation(encoder)
             case var .stagedJoint(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .stagedJoint(encoder)
             case var .swap(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .swap(encoder)
             case var .windowRemoval(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .windowRemoval(encoder)
             case var .reorder(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .reorder(encoder)
             case var .laneCollapse(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .laneCollapse(encoder)
             case var .depthCollapse(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .depthCollapse(encoder)
             case var .binarySearch(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .binarySearch(encoder)
             case var .boundValueCovering(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .boundValueCovering(encoder)
             case var .liftedStage(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .liftedStage(encoder)
             case var .composed(encoder):
-                encoder.flushPartialConvergence()
+                Self.makeUnique(&encoder)
+                encoder.value.flushPartialConvergence()
                 self = .composed(encoder)
         }
     }
@@ -258,7 +438,7 @@ extension EncoderDispatch: GraphEncoder {
     var requiresExactDecoder: Bool {
         switch self {
             case let .composed(encoder):
-                encoder.requiresExactDecoder
+                encoder.value.requiresExactDecoder
             default:
                 false
         }
@@ -266,41 +446,71 @@ extension EncoderDispatch: GraphEncoder {
 
     var acceptanceHandling: AcceptanceHandling {
         switch self {
-            case let .structural(encoder): encoder.acceptanceHandling
-            case let .value(encoder): encoder.acceptanceHandling
-            case let .redistribution(encoder): encoder.acceptanceHandling
-            case let .lockstep(encoder): encoder.acceptanceHandling
-            case let .relation(encoder): encoder.acceptanceHandling
-            case let .stagedJoint(encoder): encoder.acceptanceHandling
-            case let .swap(encoder): encoder.acceptanceHandling
-            case let .windowRemoval(encoder): encoder.acceptanceHandling
-            case let .reorder(encoder): encoder.acceptanceHandling
-            case let .laneCollapse(encoder): encoder.acceptanceHandling
-            case let .depthCollapse(encoder): encoder.acceptanceHandling
-            case let .binarySearch(encoder): encoder.acceptanceHandling
-            case let .boundValueCovering(encoder): encoder.acceptanceHandling
-            case let .liftedStage(encoder): encoder.acceptanceHandling
-            case let .composed(encoder): encoder.acceptanceHandling
+            case let .structural(encoder):
+                encoder.value.acceptanceHandling
+            case let .value(encoder):
+                encoder.value.acceptanceHandling
+            case let .redistribution(encoder):
+                encoder.value.acceptanceHandling
+            case let .lockstep(encoder):
+                encoder.value.acceptanceHandling
+            case let .relation(encoder):
+                encoder.value.acceptanceHandling
+            case let .stagedJoint(encoder):
+                encoder.value.acceptanceHandling
+            case let .swap(encoder):
+                encoder.value.acceptanceHandling
+            case let .windowRemoval(encoder):
+                encoder.value.acceptanceHandling
+            case let .reorder(encoder):
+                encoder.value.acceptanceHandling
+            case let .laneCollapse(encoder):
+                encoder.value.acceptanceHandling
+            case let .depthCollapse(encoder):
+                encoder.value.acceptanceHandling
+            case let .binarySearch(encoder):
+                encoder.value.acceptanceHandling
+            case let .boundValueCovering(encoder):
+                encoder.value.acceptanceHandling
+            case let .liftedStage(encoder):
+                encoder.value.acceptanceHandling
+            case let .composed(encoder):
+                encoder.value.acceptanceHandling
         }
     }
 
     var admission: DecoderAdmission {
         switch self {
-            case let .structural(encoder): encoder.admission
-            case let .value(encoder): encoder.admission
-            case let .redistribution(encoder): encoder.admission
-            case let .lockstep(encoder): encoder.admission
-            case let .relation(encoder): encoder.admission
-            case let .stagedJoint(encoder): encoder.admission
-            case let .swap(encoder): encoder.admission
-            case let .windowRemoval(encoder): encoder.admission
-            case let .reorder(encoder): encoder.admission
-            case let .laneCollapse(encoder): encoder.admission
-            case let .depthCollapse(encoder): encoder.admission
-            case let .binarySearch(encoder): encoder.admission
-            case let .boundValueCovering(encoder): encoder.admission
-            case let .liftedStage(encoder): encoder.admission
-            case let .composed(encoder): encoder.admission
+            case let .structural(encoder):
+                encoder.value.admission
+            case let .value(encoder):
+                encoder.value.admission
+            case let .redistribution(encoder):
+                encoder.value.admission
+            case let .lockstep(encoder):
+                encoder.value.admission
+            case let .relation(encoder):
+                encoder.value.admission
+            case let .stagedJoint(encoder):
+                encoder.value.admission
+            case let .swap(encoder):
+                encoder.value.admission
+            case let .windowRemoval(encoder):
+                encoder.value.admission
+            case let .reorder(encoder):
+                encoder.value.admission
+            case let .laneCollapse(encoder):
+                encoder.value.admission
+            case let .depthCollapse(encoder):
+                encoder.value.admission
+            case let .binarySearch(encoder):
+                encoder.value.admission
+            case let .boundValueCovering(encoder):
+                encoder.value.admission
+            case let .liftedStage(encoder):
+                encoder.value.admission
+            case let .composed(encoder):
+                encoder.value.admission
         }
     }
 
@@ -308,7 +518,7 @@ extension EncoderDispatch: GraphEncoder {
     var composedUpstreamProbesUsed: Int? {
         switch self {
             case let .composed(encoder):
-                encoder.reportedConstructedStages
+                encoder.value.reportedConstructedStages
             default:
                 nil
         }
@@ -318,7 +528,7 @@ extension EncoderDispatch: GraphEncoder {
     var liftMaterializations: (site: MaterializationSite, count: Int)? {
         switch self {
             case let .composed(encoder):
-                encoder.liftMaterializations
+                encoder.value.liftMaterializations
             default:
                 nil
         }
@@ -326,15 +536,57 @@ extension EncoderDispatch: GraphEncoder {
 
     /// Discards pre-acceptance lifted scopes on the refresh-and-idle path. No-op for encoders that apply their mutations instead.
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
-        switch self {
+        switch consume self {
             case var .composed(encoder):
-                encoder.refreshState(graph: graph, sequence: sequence)
+                Self.makeUnique(&encoder)
+                encoder.value.refreshState(graph: graph, sequence: sequence)
                 self = .composed(encoder)
             case var .swap(encoder):
-                encoder.refreshState(graph: graph, sequence: sequence)
+                Self.makeUnique(&encoder)
+                encoder.value.refreshState(graph: graph, sequence: sequence)
                 self = .swap(encoder)
-            default:
-                break
+            case let .structural(encoder):
+                self = .structural(encoder)
+            case let .value(encoder):
+                self = .value(encoder)
+            case let .redistribution(encoder):
+                self = .redistribution(encoder)
+            case let .lockstep(encoder):
+                self = .lockstep(encoder)
+            case let .relation(encoder):
+                self = .relation(encoder)
+            case let .stagedJoint(encoder):
+                self = .stagedJoint(encoder)
+            case let .windowRemoval(encoder):
+                self = .windowRemoval(encoder)
+            case let .reorder(encoder):
+                self = .reorder(encoder)
+            case let .laneCollapse(encoder):
+                self = .laneCollapse(encoder)
+            case let .depthCollapse(encoder):
+                self = .depthCollapse(encoder)
+            case let .binarySearch(encoder):
+                self = .binarySearch(encoder)
+            case let .boundValueCovering(encoder):
+                self = .boundValueCovering(encoder)
+            case let .liftedStage(encoder):
+                self = .liftedStage(encoder)
         }
+    }
+
+    /// Detaches only genuinely shared encoder state before advancing a dispatch handle.
+    private static func makeUnique(_ storage: inout EncoderStorage<some Any>) {
+        if isKnownUniquelyReferenced(&storage) == false {
+            storage = EncoderStorage(storage.value)
+        }
+    }
+}
+
+/// Retains concrete encoder state between probes; ``EncoderDispatch`` detaches shared storage before mutation.
+final class EncoderStorage<Encoder: GraphEncoder> {
+    var value: Encoder
+
+    init(_ value: Encoder) {
+        self.value = value
     }
 }

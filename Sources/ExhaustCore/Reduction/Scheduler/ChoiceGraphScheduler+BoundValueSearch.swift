@@ -72,7 +72,7 @@ extension ChoiceGraphScheduler {
             graph: graph,
             seenBindFingerprints: seenBindFingerprints
         )
-        return .composed(makeBoundValueCompositionEncoder(
+        return .init(makeBoundValueCompositionEncoder(
             bindNodeID: bindScope.bindNodeID,
             controllerLeafNodeID: bindScope.upstreamLeafNodeID,
             controllerSequenceIndex: graph.nodes.indices.contains(bindScope.upstreamLeafNodeID)
@@ -318,7 +318,7 @@ extension ChoiceGraphScheduler {
             chain: nestedChain,
             totalProbeCap: 0
         )
-        return .stage(encoder: .composed(nestedEncoder), scope: nestedInput)
+        return .stage(encoder: .init(nestedEncoder), scope: nestedInput)
     }
 
     /// Builds the value search over the lifted bound subtree's leaves: binary search for one leaf, covering for several.
@@ -363,8 +363,8 @@ extension ChoiceGraphScheduler {
             warmStartRecords: [:]
         )
         let downstreamEncoder: EncoderDispatch = downstreamLeaves.count == 1
-            ? .binarySearch(GraphBinarySearchEncoder())
-            : .boundValueCovering(GraphBoundValueCoveringEncoder())
+            ? .init(GraphBinarySearchEncoder())
+            : .init(GraphBoundValueCoveringEncoder())
 
         Self.logReducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",

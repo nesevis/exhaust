@@ -183,7 +183,7 @@ private struct SingleProbeFixture {
             graph: ChoiceGraph.build(from: proposalTree),
             warmStartRecords: [:]
         )
-        var encoder = EncoderDispatch.liftedStage(GraphLiftedStageEncoder(
+        var encoder = EncoderDispatch(GraphLiftedStageEncoder(
             name: .composed,
             mutation: .leafValues([LeafChange(leafNodeID: 0, newValue: ChoiceValue(candidate, tag: .uint64), mayReshape: false)])
         ))
