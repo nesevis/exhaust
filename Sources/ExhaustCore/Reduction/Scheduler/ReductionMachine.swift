@@ -71,6 +71,8 @@ package struct ReductionMachine: ProbeSessionState {
         case dispatched(decision: DispatchOutcome)
         case encoded(encoder: EncoderName, cacheHit: Bool)
         case decoded(encoder: EncoderName, accepted: Bool)
+        /// A completed encoder pass applied its bookkeeping and selected the next dispatch phase.
+        case passCompleted(encoder: EncoderName, accepted: Bool)
         case rebuilt(sequenceLength: Int, structurallyChanged: Bool)
 
         case convergenceConfirmed(anyStale: Bool)

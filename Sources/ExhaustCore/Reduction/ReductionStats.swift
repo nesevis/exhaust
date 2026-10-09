@@ -437,6 +437,8 @@ package extension ReductionStats {
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
     struct StepTimings: Sendable {
         package var dispatch: UInt64 = 0
+        /// Bookkeeping and routing after ordinary dispatched encoder passes; post-cycle passes retain their owning timing bucket.
+        package var passApply: UInt64 = 0
         package var buildSources: UInt64 = 0
         package var encode: UInt64 = 0
         package var decode: UInt64 = 0
@@ -448,6 +450,7 @@ package extension ReductionStats {
         package var reorder: UInt64 = 0
 
         package var dispatchCount: Int = 0
+        package var passApplyCount: Int = 0
         package var encodeCount: Int = 0
         package var decodeCount: Int = 0
         package var rebuildCount: Int = 0
@@ -459,6 +462,7 @@ package extension ReductionStats {
         /// Merges another timings value by summing all counters and durations.
         package mutating func merge(_ other: StepTimings) {
             dispatch += other.dispatch
+            passApply += other.passApply
             buildSources += other.buildSources
             encode += other.encode
             decode += other.decode
@@ -469,6 +473,7 @@ package extension ReductionStats {
             stagedJointPass += other.stagedJointPass
             reorder += other.reorder
             dispatchCount += other.dispatchCount
+            passApplyCount += other.passApplyCount
             encodeCount += other.encodeCount
             decodeCount += other.decodeCount
             rebuildCount += other.rebuildCount
@@ -482,6 +487,9 @@ package extension ReductionStats {
                 case .dispatched:
                     dispatch += elapsed
                     dispatchCount += 1
+                case .passCompleted:
+                    passApply += elapsed
+                    passApplyCount += 1
                 case .encoded:
                     encode += elapsed
                     encodeCount += 1

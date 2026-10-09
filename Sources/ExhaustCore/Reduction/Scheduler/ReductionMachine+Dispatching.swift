@@ -328,12 +328,12 @@ extension ReductionMachine {
                 }
                 pendingReport = nil
                 dispatchPhase = .dispatch
-                return .dispatched(decision: .sourceExhausted)
+                return .passCompleted(encoder: report.encoderName, accepted: report.anyAccepted)
 
             case .rebuildAndResume:
                 convergence.gate.clearFruitless()
                 dispatchPhase = .rebuild
-                return .dispatched(decision: .sourceExhausted)
+                return .passCompleted(encoder: report.encoderName, accepted: report.anyAccepted)
         }
     }
 
