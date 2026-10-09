@@ -487,6 +487,10 @@ package extension ReductionStats {
                 case .dispatched:
                     dispatch += elapsed
                     dispatchCount += 1
+                case let .postCycleStarted(owner),
+                     let .postCycleEncoded(owner, _, _),
+                     let .postCycleDecoded(owner, _, _):
+                    recordPostCycle(owner: owner, elapsed: elapsed)
                 case .passCompleted:
                     passApply += elapsed
                     passApplyCount += 1
@@ -513,6 +517,18 @@ package extension ReductionStats {
                     buildSources += elapsed
                 case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
                     break
+            }
+        }
+
+        /// Charges setup and intermediate probes to their owning post-cycle pass exactly once.
+        private mutating func recordPostCycle(owner: ReductionMachine.PostCycleTiming, elapsed: UInt64) {
+            switch owner {
+                case .relationPass:
+                    relationPass += elapsed
+                case .stagedJointPass:
+                    stagedJointPass += elapsed
+                case .reorder:
+                    reorder += elapsed
             }
         }
     }

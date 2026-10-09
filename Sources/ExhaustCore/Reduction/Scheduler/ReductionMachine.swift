@@ -18,7 +18,7 @@
 ///
 /// ## Phases
 ///
-/// The machine cycles through seven top-level phases:
+/// The machine moves through cycle stages and final presentation work:
 ///
 /// ```
 /// beginCycle → dispatching ⟳ → endCycle → postCycle → checkTermination
@@ -26,6 +26,8 @@
 /// ```
 ///
 /// The ``dispatching`` phase uses three sub-phases (``DispatchPhase``): select and evaluate a source (``dispatch``), delegate to the active ``ProbeSession`` for encode-decode stepping (``probing``), and optionally rebuild the graph after a structural acceptance (``rebuild``).
+///
+/// Session-backed post-cycle actions and final reorder use ``Phase/postCycleProbing(pass:remaining:)`` to yield between encoding and decoding while retaining their own reporting bucket.
 package struct ReductionMachine: ProbeSessionState {
     // MARK: - Phase
 
@@ -36,6 +38,7 @@ package struct ReductionMachine: ProbeSessionState {
         case dispatching
         case endCycle
         case postCycle(remaining: [ChoiceGraphScheduler.PostCycleAction])
+        case postCycleProbing(pass: PostCyclePass, remaining: [ChoiceGraphScheduler.PostCycleAction])
         case checkTermination
         case reorderPass
         case done
@@ -82,8 +85,34 @@ package struct ReductionMachine: ProbeSessionState {
         case stagedJointPassCompleted(accepted: Bool)
         case deferralReleased
 
+        case postCycleStarted(owner: PostCycleTiming)
+        case postCycleEncoded(owner: PostCycleTiming, encoder: EncoderName, cacheHit: Bool)
+        case postCycleDecoded(owner: PostCycleTiming, encoder: EncoderName, accepted: Bool)
+
         case reorderCompleted(accepted: Bool)
         case terminated
+    }
+
+    /// Owns the reporting bucket for every step of a session-backed post-cycle pass, including setup and completion.
+    package enum PostCycleTiming {
+        case relationPass
+        case stagedJointPass
+        case reorder
+    }
+
+    /// Retains continuation state across probes; final reorder also owns the rejection cache it temporarily replaced.
+    enum PostCyclePass {
+        case relation
+        case stagedJoint(StagedJointSearch)
+        case reorder(savedRejectCache: Set<UInt64>)
+
+        var timing: PostCycleTiming {
+            switch self {
+                case .relation: .relationPass
+                case .stagedJoint: .stagedJointPass
+                case .reorder: .reorder
+            }
+        }
     }
 
     // MARK: - State
@@ -327,6 +356,8 @@ package struct ReductionMachine: ProbeSessionState {
                 stepEndCycle()
             case let .postCycle(remaining):
                 stepPostCycle(remaining: remaining)
+            case let .postCycleProbing(pass, remaining):
+                stepPostCycleProbing(pass: pass, remaining: remaining)
             case .checkTermination:
                 stepCheckTermination()
             case .reorderPass:
@@ -417,8 +448,7 @@ package struct ReductionMachine: ProbeSessionState {
                 let anyStale = confirmConvergence()
                 return .convergenceConfirmed(anyStale: anyStale)
             case .relationPass:
-                let accepted = runRelationPass()
-                return .relationPassCompleted(accepted: accepted)
+                return startRelationPass(remaining: rest)
             case .improvingPivots:
                 let improved = runImprovingPivotPass()
                 if improved {
@@ -426,7 +456,7 @@ package struct ReductionMachine: ProbeSessionState {
                 }
                 return .improvingPivotsCompleted(improved: improved)
             case .stagedJointPass:
-                return .stagedJointPassCompleted(accepted: runStagedJointSearch())
+                return startStagedJointPass(remaining: rest)
             case .excursion:
                 // Perturbing away from a counterexample that an earlier action just improved spends budget escaping a local minimum the run may not be in.
                 guard anyAccepted == false else {
@@ -509,7 +539,19 @@ package struct ReductionMachine: ProbeSessionState {
     // MARK: - Reorder Pass
 
     private mutating func stepReorderPass() -> Transition {
-        let accepted = isEncoderEnabled(.numericReorder) ? runReorderPass() : false
+        guard isEncoderEnabled(.numericReorder), let session = makeReorderSession() else {
+            return completeReorderPass(accepted: false)
+        }
+        let savedRejectCache = rejectCache
+        rejectCache = []
+        captureDispatchBaseline()
+        activeSession = session
+        phase = .postCycleProbing(pass: .reorder(savedRejectCache: savedRejectCache), remaining: [])
+        return .postCycleStarted(owner: .reorder)
+    }
+
+    /// Finalizes diagnostics after the reorder session has applied its report and restored the rejection cache.
+    mutating func completeReorderPass(accepted: Bool) -> Transition {
         recordStallDiagnostic()
         phase = .done
         return .reorderCompleted(accepted: accepted)
@@ -556,6 +598,28 @@ package struct ReductionMachine: ProbeSessionState {
         if case .done = phase {
             return .terminated
         }
+        if case let .postCycleProbing(pass, _) = phase {
+            if var session = activeSession {
+                activeSession = nil
+                switch pass {
+                    case let .reorder(savedRejectCache):
+                        let report = session.runToCompletion(state: &self)
+                        finishReorderReport(report, savedRejectCache: savedRejectCache)
+                        pendingReport = nil
+                        sources = []
+                        _ = completeReorderPass(accepted: report.anyAccepted)
+                        return .terminated
+                    case .relation:
+                        finishRelationReport(session.report())
+                    case .stagedJoint:
+                        let report = session.report()
+                        applyPostCycleReport(report)
+                        if report.anyAccepted {
+                            invalidateAfterCoupledAcceptance()
+                        }
+                }
+            }
+        }
         if var session = activeSession {
             let report = session.report()
             activeSession = nil
@@ -570,7 +634,8 @@ package struct ReductionMachine: ProbeSessionState {
         }
         pendingReport = nil
         sources = []
-        _ = stepReorderPass()
+        let accepted = isEncoderEnabled(.numericReorder) ? runReorderPass() : false
+        _ = completeReorderPass(accepted: accepted)
         return .terminated
     }
 
@@ -599,9 +664,10 @@ package struct ReductionMachine: ProbeSessionState {
         ChoiceGraphScheduler.allValuesConverged(in: sequence, graph: graph)
     }
 
-    private mutating func runReorderPass() -> Bool {
+    /// Builds final reordering work without a deadline gate: an expired search must still finish its presentation pass.
+    func makeReorderSession() -> ProbeSession? {
         guard let reorderScope = ReorderingQuery.build(graph: graph) else {
-            return false
+            return nil
         }
         let reorderTransformation = GraphTransformation(
             operation: .reorder(reorderScope),
@@ -617,11 +683,7 @@ package struct ReductionMachine: ProbeSessionState {
         var encoder: EncoderDispatch = .reorder(GraphReorderEncoder())
         encoder.start(scope: scope)
 
-        let savedRejectCache = rejectCache
-        rejectCache = []
-
-        captureDispatchBaseline()
-        var session = ProbeSession(
+        return ProbeSession(
             encoder: encoder,
             transformation: reorderTransformation,
             boundValueFingerprint: nil,
@@ -633,15 +695,18 @@ package struct ReductionMachine: ProbeSessionState {
                 return false
             }
         )
-        let report = session.runToCompletion(state: &self)
+    }
 
-        rejectCache = savedRejectCache
-
-        _ = applyPassPolicy(report)
-
-        if isInstrumented, report.anyAccepted {
-            ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
+    /// Runs final presentation work synchronously when the search deadline has already expired.
+    private mutating func runReorderPass() -> Bool {
+        guard var session = makeReorderSession() else {
+            return false
         }
+        let savedRejectCache = rejectCache
+        rejectCache = []
+        captureDispatchBaseline()
+        let report = session.runToCompletion(state: &self)
+        finishReorderReport(report, savedRejectCache: savedRejectCache)
         return report.anyAccepted
     }
 

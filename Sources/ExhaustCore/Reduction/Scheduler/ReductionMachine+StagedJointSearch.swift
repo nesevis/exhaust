@@ -24,64 +24,114 @@ extension ReductionMachine {
         return (pairs, frontier)
     }
 
-    /// Runs sequential numeric stages under one checkpoint budget. A higher arity is discovered only after the previous stage stalls and its sampled-work gate opens. Every accepted probe precedes the current sequence, so it runs even after an earlier post-cycle action has accepted.
-    ///
-    /// An acceptance invalidates every convergence floor, cached rejection, and bind search history, not only those of the edited pair: the property can couple values the generator treats as independent.
-    mutating func runStagedJointSearch() -> Bool {
-        guard isDeadlineExceeded() == false,
-              let scope = pendingStagedNumericSearchScope()
+    /// Starts the pair stage and retains its higher-arity frontier and remaining budgets across cooperative probes.
+    mutating func startStagedJointPass(remaining: [ChoiceGraphScheduler.PostCycleAction]) -> Transition {
+        guard let checkpoint = beginStagedJointSearch(),
+              let session = makePostCycleSession(operation: checkpoint.operation, estimatedCost: checkpoint.budget)
         else {
-            return false
+            return .stagedJointPassCompleted(accepted: false)
         }
-        let pairs = scope.pairs
-        let frontier = scope.frontier
-        exhaustedStagedJointScope = ExhaustedStagedJointScope(base: sequence, pairs: pairs, frontier: frontier)
-        let canTryThree = NumericJointQuery.canEscalate(
-            frontier: frontier,
-            arity: 3,
-            workLimit: tuning.threeWayNumericWorkLimit
-        )
-        var remaining = tuning.stagedJointProbeBudget
-        let pairBudget = canTryThree ? max(1, remaining / 2) : remaining
-        guard let report = runPostCycleEncoder(
-            operation: .exchange(.stagedNumericPairs(pairs, probeBudget: pairBudget)),
-            estimatedCost: pairBudget
-        ) else {
-            return false
-        }
+        activeSession = session
+        phase = .postCycleProbing(pass: .stagedJoint(checkpoint.search), remaining: remaining)
+        return .postCycleStarted(owner: .stagedJointPass)
+    }
+
+    /// Continues to the next arity only after the previous stage stalled and its sampled-work gate opened.
+    mutating func advanceStagedJointPass(
+        report: PassReport,
+        search: inout StagedJointSearch,
+        remaining: [ChoiceGraphScheduler.PostCycleAction]
+    ) -> Transition {
         if report.anyAccepted {
             invalidateAfterCoupledAcceptance()
-            return true
+            resumePostCycle(remaining: remaining)
+            return .stagedJointPassCompleted(accepted: true)
         }
-        remaining -= report.probeCount
-        var calculationsRemaining = tuning.numericJointGroupCalculationLimit
-        for arity in 3 ... 4 {
-            guard canTryThree, remaining > 0, calculationsRemaining > 0, isDeadlineExceeded() == false else { break }
-            let threshold = arity == 3 ? tuning.threeWayNumericWorkLimit : tuning.fourWayNumericWorkLimit
-            let scope = NumericJointQuery.build(
-                frontier: frontier,
-                graph: graph,
-                arity: arity,
-                workLimit: threshold,
-                calculationLimit: calculationsRemaining,
-                scopeLimit: tuning.numericJointScopeLimit
-            )
-            calculationsRemaining -= scope.calculations
-            guard scope.groups.isEmpty == false else { break }
-            let reserveFour = arity == 3 && calculationsRemaining > 0
-                && NumericJointQuery.canEscalate(frontier: frontier, arity: 4, workLimit: tuning.fourWayNumericWorkLimit)
-            let stageBudget = reserveFour ? max(1, remaining / 2) : remaining
-            guard let jointReport = runPostCycleEncoder(
-                operation: .exchange(.numericJoint(scope.groups, probeBudget: stageBudget)),
-                estimatedCost: stageBudget
-            ) else { break }
-            remaining -= jointReport.probeCount
-            if jointReport.anyAccepted {
+        search.remaining -= report.probeCount
+        guard let stage = nextStagedJointOperation(search: &search),
+              let session = makePostCycleSession(operation: stage.operation, estimatedCost: stage.budget)
+        else {
+            resumePostCycle(remaining: remaining)
+            return .stagedJointPassCompleted(accepted: false)
+        }
+        activeSession = session
+        phase = .postCycleProbing(pass: .stagedJoint(search), remaining: remaining)
+        return .postCycleStarted(owner: .stagedJointPass)
+    }
+
+    /// Runs a complete numeric checkpoint for direct callers, using the same stage preparation and report policy as cooperative stepping.
+    mutating func runStagedJointSearch() -> Bool {
+        guard let checkpoint = beginStagedJointSearch() else {
+            return false
+        }
+        var search = checkpoint.search
+        var stage: (operation: GraphOperation, budget: Int)? = (checkpoint.operation, checkpoint.budget)
+        while let current = stage,
+              let report = runPostCycleEncoder(operation: current.operation, estimatedCost: current.budget)
+        {
+            if report.anyAccepted {
                 invalidateAfterCoupledAcceptance()
                 return true
             }
+            search.remaining -= report.probeCount
+            stage = nextStagedJointOperation(search: &search)
         }
         return false
+    }
+
+    /// Marks the checkpoint exhausted before encoder startup, so deadline interruption does not repeat its original search scope.
+    private mutating func beginStagedJointSearch() -> (search: StagedJointSearch, operation: GraphOperation, budget: Int)? {
+        guard isDeadlineExceeded() == false, let scope = pendingStagedNumericSearchScope() else {
+            return nil
+        }
+        exhaustedStagedJointScope = ExhaustedStagedJointScope(base: sequence, pairs: scope.pairs, frontier: scope.frontier)
+        let canTryThree = NumericJointQuery.canEscalate(
+            frontier: scope.frontier,
+            arity: 3,
+            workLimit: tuning.threeWayNumericWorkLimit
+        )
+        let budget = canTryThree ? max(1, tuning.stagedJointProbeBudget / 2) : tuning.stagedJointProbeBudget
+        return (
+            StagedJointSearch(
+                frontier: scope.frontier,
+                canTryThree: canTryThree,
+                remaining: tuning.stagedJointProbeBudget,
+                calculationsRemaining: tuning.numericJointGroupCalculationLimit
+            ),
+            .exchange(.stagedNumericPairs(scope.pairs, probeBudget: budget)),
+            budget
+        )
+    }
+
+    /// Prepares one higher-arity stage without changing the original reservation rules or rebuilding the frontier.
+    private mutating func nextStagedJointOperation(search: inout StagedJointSearch) -> (operation: GraphOperation, budget: Int)? {
+        guard search.nextArity <= 4,
+              search.canTryThree,
+              search.remaining > 0,
+              search.calculationsRemaining > 0,
+              isDeadlineExceeded() == false
+        else {
+            return nil
+        }
+        let arity = search.nextArity
+        let threshold = arity == 3 ? tuning.threeWayNumericWorkLimit : tuning.fourWayNumericWorkLimit
+        let scope = NumericJointQuery.build(
+            frontier: search.frontier,
+            graph: graph,
+            arity: arity,
+            workLimit: threshold,
+            calculationLimit: search.calculationsRemaining,
+            scopeLimit: tuning.numericJointScopeLimit
+        )
+        search.calculationsRemaining -= scope.calculations
+        guard scope.groups.isEmpty == false else {
+            return nil
+        }
+        let reserveFour = arity == 3 && search.calculationsRemaining > 0
+            && NumericJointQuery.canEscalate(frontier: search.frontier, arity: 4, workLimit: tuning.fourWayNumericWorkLimit)
+        let budget = reserveFour ? max(1, search.remaining / 2) : search.remaining
+        search.nextArity += 1
+        return (.exchange(.numericJoint(scope.groups, probeBudget: budget)), budget)
     }
 
     /// Avoids higher-order preparation entirely when escalation is disabled.
@@ -99,4 +149,13 @@ struct ExhaustedStagedJointScope {
     let base: ChoiceSequence
     let pairs: [NumericPairQuery.Pair]
     let frontier: [NumericJointQuery.Entry]
+}
+
+/// Retains one checkpoint's frontier and reservation state while its current encoder is stepped.
+struct StagedJointSearch {
+    let frontier: [NumericJointQuery.Entry]
+    let canTryThree: Bool
+    var remaining: Int
+    var calculationsRemaining: Int
+    var nextArity: Int = 3
 }

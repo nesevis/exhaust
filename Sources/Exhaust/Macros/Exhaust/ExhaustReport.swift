@@ -314,9 +314,11 @@ public struct ExhaustReport: Sendable {
             let rebMs = Double(timings.rebuild) / 1_000_000
             let ccMs = Double(timings.convergenceConfirmation) / 1_000_000
             let rlxMs = Double(timings.relaxRound) / 1_000_000
+            let relationMilliseconds = Double(timings.relationPass) / 1_000_000
+            let stagedJointMilliseconds = Double(timings.stagedJointPass) / 1_000_000
             let reordMs = Double(timings.reorder) / 1_000_000
-            let totalMs = srcMs + dispMs + passApplyMilliseconds + encMs + decMs + rebMs + ccMs + rlxMs + reordMs
-            timingLabel = " timing=\(String(format: "%.2f", totalMs))ms(src=\(String(format: "%.2f", srcMs))/disp=\(String(format: "%.2f", dispMs))/apply=\(String(format: "%.2f", passApplyMilliseconds))/enc=\(String(format: "%.2f", encMs))/dec=\(String(format: "%.2f", decMs))/reb=\(String(format: "%.2f", rebMs))/cc=\(String(format: "%.2f", ccMs))/rlx=\(String(format: "%.2f", rlxMs))/reord=\(String(format: "%.2f", reordMs)))"
+            let totalMs = srcMs + dispMs + passApplyMilliseconds + encMs + decMs + rebMs + ccMs + rlxMs + relationMilliseconds + stagedJointMilliseconds + reordMs
+            timingLabel = " timing=\(String(format: "%.2f", totalMs))ms(src=\(String(format: "%.2f", srcMs))/disp=\(String(format: "%.2f", dispMs))/apply=\(String(format: "%.2f", passApplyMilliseconds))/enc=\(String(format: "%.2f", encMs))/dec=\(String(format: "%.2f", decMs))/reb=\(String(format: "%.2f", rebMs))/cc=\(String(format: "%.2f", ccMs))/rlx=\(String(format: "%.2f", rlxMs))/rel=\(String(format: "%.2f", relationMilliseconds))/staged=\(String(format: "%.2f", stagedJointMilliseconds))/reord=\(String(format: "%.2f", reordMs)))"
         } else {
             timingLabel = ""
         }

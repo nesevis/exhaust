@@ -39,7 +39,7 @@ struct ReorderFinalizationTests {
         }
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = .reorderPass
-        _ = machine.next()
+        finishReorder(&machine)
 
         #expect(try machine.next() == nil)
         #expect(propertyCalls == 1)
@@ -120,7 +120,7 @@ struct ReorderFinalizationTests {
         )
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.phase = .reorderPass
-        _ = machine.next()
+        finishReorder(&machine)
         let reordered = try #require(machine.output as? ([UInt64], [UInt64]))
 
         #expect(reordered.0 == [1, 2, 3])
@@ -191,4 +191,14 @@ private final class ReorderTestClock {
     func expire() {
         nanoseconds = 100
     }
+}
+
+/// Drives the cooperative final pass to completion before checking its existing finalization contract.
+private func finishReorder(_ machine: inout ReductionMachine) {
+    for _ in 0 ..< 10000 {
+        guard machine.next() != nil else {
+            return
+        }
+    }
+    Issue.record("Final reorder did not terminate")
 }
