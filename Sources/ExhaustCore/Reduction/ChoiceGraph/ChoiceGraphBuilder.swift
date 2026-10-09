@@ -61,6 +61,7 @@ struct ChoiceGraphBuilder {
                 selfSimilarityGroups: [:],
                 liveNodeIDs: [],
                 leafNodes: [],
+                characterLeafNodes: [],
                 topologicalOrder: [],
                 dependencyAdjacency: []
             )
@@ -667,9 +668,14 @@ struct ChoiceGraphBuilder {
         // Eagerly compute derived fields that are accessed multiple times per cycle.
         let liveNodeIDs = nodes.indices.filter { nodes[$0].positionRange != nil }
 
-        let leafNodes = liveNodeIDs.filter { nodeID in
-            guard case .chooseBits = nodes[nodeID].kind else { return false }
-            return true
+        var leafNodes: [Int] = []
+        var characterLeafNodes: [Int] = []
+        for nodeID in liveNodeIDs {
+            guard case let .chooseBits(metadata) = nodes[nodeID].kind else { continue }
+            leafNodes.append(nodeID)
+            if metadata.typeTag == .character, metadata.characterDomain != nil {
+                characterLeafNodes.append(nodeID)
+            }
         }
 
         // Dependency adjacency list for reachability queries.
@@ -722,6 +728,7 @@ struct ChoiceGraphBuilder {
             selfSimilarityGroups: selfSimilarityGroups,
             liveNodeIDs: liveNodeIDs,
             leafNodes: leafNodes,
+            characterLeafNodes: characterLeafNodes,
             topologicalOrder: topologicalOrder,
             dependencyAdjacency: dependencyAdjacency
         )

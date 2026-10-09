@@ -6,11 +6,12 @@
 // MARK: - Lockstep Reduction
 
 extension GraphLockstepEncoder {
-    /// Builds suffix-window plans from each tandem group and dispatches the lockstep state.
+    /// Builds numeric windows, complete equal-character proposals, then character windows.
     ///
     /// For each group of same-tag leaves, generates plans that drop progressively more leading entries — this prevents a near-target leader from blocking the whole set.
     mutating func startLockstep(scope: TandemScope, graph: ChoiceGraph) {
-        var plans: [LockstepWindowPlan] = []
+        var plans: [LockstepPlan] = []
+        var characterWindows: [LockstepPlan] = []
 
         for group in scope.groups {
             var indices: [Int] = []
@@ -27,22 +28,70 @@ extension GraphLockstepEncoder {
             while offset < maxWindows {
                 let windowIndices = Array(indices[offset...])
                 if let plan = makeLockstepWindowPlan(windowIndices: windowIndices) {
-                    plans.append(plan)
+                    if group.typeTag == .character {
+                        characterWindows.append(.shift(plan))
+                    } else {
+                        plans.append(.shift(plan))
+                    }
                 }
                 offset += 1
             }
         }
+
+        // Numeric searches precede character proposals. Try complete equal-character
+        // groups before the suffix windows, which can change only some occurrences.
+        plans.append(contentsOf: characterPlans(graph: graph))
+        plans.append(contentsOf: characterWindows)
 
         guard plans.isEmpty == false else { return }
 
         mode = .active(LockstepState(
             plans: plans,
             planIndex: 0,
+            characterCandidateIndex: 0,
             probePhase: .directShot,
             stepper: BinarySearchStepper(lo: 0, hi: 0, direction: .findLargest),
             lastEmittedCandidate: nil,
             lastWasDirectShot: false
         ))
+    }
+
+    /// Character indices are comparable only within the same scalar map and range.
+    private struct CharacterGroupKey: Hashable {
+        let domain: CharacterDomain
+        let range: ClosedRange<UInt64>?
+        let value: UInt64
+    }
+
+    private func characterPlans(graph: ChoiceGraph) -> [LockstepPlan] {
+        var groups: [CharacterGroupKey: [Int]] = [:]
+        for nodeID in graph.characterLeafNodes {
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind,
+                  let domain = metadata.characterDomain,
+                  let index = node.positionRange?.lowerBound,
+                  valueState.leafLookup[index] != nil,
+                  let value = valueState.sequence[index].value else { continue }
+            let key = CharacterGroupKey(domain: domain, range: value.validRange, value: value.choice.bitPattern64)
+            groups[key, default: []].append(index)
+        }
+
+        return groups.values.filter { $0.count >= 2 }.map { $0.sorted() }.sorted {
+            $0[0] < $1[0]
+        }.compactMap { indices in
+            guard let first = valueState.sequence[indices[0]].value,
+                  let nodeID = valueState.leafLookup[indices[0]]?.nodeID,
+                  case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return nil }
+            let current = first.choice.bitPattern64
+            var candidates = [first.choice.reductionTarget(in: first.validRange)]
+            if let simplifications = metadata.characterSimplifications {
+                candidates.append(contentsOf: simplifications.simplerIndices(than: current))
+            }
+            var seen: Set<UInt64> = []
+            candidates = candidates.filter { $0 < current && seen.insert($0).inserted }
+            guard candidates.isEmpty == false else { return nil }
+            return .characters(indices: indices, candidates: candidates)
+        }
     }
 
     /// Constructs a window plan from indices, computing direction and distance from the leader.
@@ -111,9 +160,28 @@ extension GraphLockstepEncoder {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.planIndex < state.plans.count {
+            if case let .characters(indices, candidates) = state.plans[state.planIndex] {
+                while state.characterCandidateIndex < candidates.count {
+                    let value = candidates[state.characterCandidateIndex]
+                    state.characterCandidateIndex += 1
+                    // Compare against the accepted baseline, never restore an earlier value.
+                    guard indices.allSatisfy({ index in
+                        guard let current = valueState.sequence[index].value else { return false }
+                        return value < current.choice.bitPattern64 && (current.validRange?.contains(value) ?? true)
+                    }) else { continue }
+                    var candidate = valueState.sequence
+                    for index in indices {
+                        candidate[index] = candidate[index].withBitPattern(value)
+                    }
+                    return candidate
+                }
+                state.planIndex += 1
+                state.characterCandidateIndex = 0
+                continue
+            }
+            guard case let .shift(plan) = state.plans[state.planIndex] else { continue }
             switch state.probePhase {
                 case .directShot:
-                    let plan = state.plans[state.planIndex]
                     if let candidate = makeLockstepCandidate(plan: plan, delta: plan.distance) {
                         state.lastEmittedCandidate = candidate
                         state.lastWasDirectShot = true
@@ -134,7 +202,6 @@ extension GraphLockstepEncoder {
                     }
                     state.lastWasDirectShot = false
 
-                    let plan = state.plans[state.planIndex]
                     state.stepper = BinarySearchStepper(lo: 0, hi: plan.distance, direction: .findLargest)
                     guard let firstDelta = state.stepper.start() else {
                         state.planIndex += 1
@@ -150,7 +217,6 @@ extension GraphLockstepEncoder {
                     continue
 
                 case .binarySearch:
-                    let plan = state.plans[state.planIndex]
                     guard let nextDelta = state.stepper.advance(lastAccepted: lastAccepted) else {
                         // Converged — move to next plan.
                         state.planIndex += 1
@@ -182,6 +248,15 @@ extension GraphLockstepEncoder {
             return nil
         }
         guard firstDifferenceOrder == .lt else { return nil }
+        if plan.tag == .character {
+            // Window deltas remain anchored to their original entries. A preceding
+            // uniform simplification may already have improved the accepted baseline.
+            for index in plan.windowIndices {
+                let order = candidate[index].shortLexCompare(valueState.sequence[index])
+                if order != .eq { return order == .lt ? candidate : nil }
+            }
+            return nil
+        }
         return candidate
     }
 }

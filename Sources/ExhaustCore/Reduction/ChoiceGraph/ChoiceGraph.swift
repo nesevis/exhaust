@@ -46,6 +46,9 @@ package struct ChoiceGraph: Sendable {
     /// All leaf node IDs (chooseBits nodes with non-nil position range). Computed eagerly during graph assembly.
     package let leafNodes: [Int]
 
+    /// Character leaves with known index maps, used by uniform character lockstep. Cached during graph assembly to avoid rescanning every leaf when preparing lockstep plans.
+    package let characterLeafNodes: [Int]
+
     /// Node IDs in dependency order (roots first). Computed eagerly via Kahn's algorithm during graph assembly.
     package let topologicalOrder: [Int]
 

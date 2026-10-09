@@ -18,6 +18,11 @@ package struct ScalarRangeSet: @unchecked Sendable {
     /// Cached sorted, non-overlapping ranges (avoids re-allocating on every lookup).
     private let rangesArray: [Range<UInt32>]
 
+    /// Exact index-map identity, including the scalar reserved at index zero.
+    package var domainIdentity: CharacterDomain {
+        CharacterDomain(ranges: rangesArray, bottomCodepoint: bottomCodepoint?.value)
+    }
+
     /// Number of distinct ranges after coalescing.
     public var rangeCount: Int {
         rangesArray.count
@@ -226,6 +231,22 @@ package struct ScalarRangeSet: @unchecked Sendable {
         preconditionFailure(
             "Scalar U+\(hex) not found in ScalarRangeSet"
         )
+    }
+}
+
+/// Two character indices are interchangeable only when these complete maps agree.
+@usableFromInline
+package struct CharacterDomain: Hashable, Sendable {
+    let ranges: [Range<UInt32>]
+    let bottomCodepoint: UInt32?
+
+    /// Payload hashing stays constant-time; equality still compares the complete domain.
+    @usableFromInline
+    package func hash(into hasher: inout Hasher) {
+        hasher.combine(ranges.count)
+        hasher.combine(ranges.first)
+        hasher.combine(ranges.last)
+        hasher.combine(bottomCodepoint)
     }
 }
 

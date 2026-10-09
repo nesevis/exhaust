@@ -8,6 +8,7 @@
 /// Reduces same-typed sibling values in lockstep, moving all values in a group by the same delta simultaneously.
 ///
 /// Each suffix window of a tandem group is searched independently to skip near-target leaders that would otherwise block the whole set. Preserves relative relationships between coupled leaves — the property may constrain siblings to be equal or related.
+/// Matching characters in the same domain also try their target and case/decomposition simplifications across every occurrence together, before character suffix windows.
 ///
 /// This is a value encoder: the delta magnitude is above the opacity boundary and requires predicate feedback to find.
 ///
@@ -35,6 +36,11 @@ struct GraphLockstepEncoder: GraphEncoder {
         let usesFloatingSteps: Bool
     }
 
+    enum LockstepPlan {
+        case shift(LockstepWindowPlan)
+        case characters(indices: [Int], candidates: [UInt64])
+    }
+
     /// Tracks whether the encoder is in the direct-shot phase (full distance) or binary search refinement.
     enum LockstepProbePhase {
         case directShot
@@ -44,8 +50,9 @@ struct GraphLockstepEncoder: GraphEncoder {
 
     /// Holds the per-scope mutable state for the lockstep encoder's probe loop, including plan iteration and binary search progress.
     struct LockstepState {
-        var plans: [LockstepWindowPlan]
+        var plans: [LockstepPlan]
         var planIndex: Int
+        var characterCandidateIndex: Int
         var probePhase: LockstepProbePhase
         var stepper: BinarySearchStepper
         var lastEmittedCandidate: ChoiceSequence?

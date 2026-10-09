@@ -4,6 +4,59 @@ import Testing
 
 @Suite("Character simplification")
 struct CharacterSimplificationTests {
+    @Test("Only UTF-8 width minimums have explicit width simplifications", arguments: [
+        (UInt32(0x7F), [UInt32]()),
+        (0x80, [0]),
+        (0x7FF, []),
+        (0x800, [0, 0x80]),
+        (0xD7FF, []),
+        (0x10000, [0, 0x80, 0x800]),
+        (0x1F600, []),
+    ] as [(UInt32, [UInt32])])
+    func widthCandidates(source: UInt32, expected: [UInt32]) {
+        let scalars = UnicodeVersion.v17.scalarRangeSet
+        let forms = simplerForms(of: Character(Unicode.Scalar(source)!), in: scalars)
+        #expect(forms.map { $0.unicodeScalars.first!.value } == expected)
+    }
+
+    @Test("Width candidates respect sparse domains and reserved simplest scalars", arguments: [UInt32?.none, 0, 0x80, 0x800, 0x10000])
+    func widthCandidateDomains(bottom: UInt32?) {
+        var ranges = ExhaustRangeSet<UInt32>()
+        for value: UInt32 in [0x80, 0x100, 0x800, 0x801, 0x10000, 0x10001] {
+            ranges.insert(contentsOf: value ..< value + 1)
+        }
+        let scalars = ScalarRangeSet(ranges, bottomCodepoint: bottom.map { Unicode.Scalar($0)! })
+        let source = Unicode.Scalar(0x10000)!
+        let indices = scalars.simplifications.simplerIndices(than: UInt64(scalars.index(of: source)))
+        let expected: [UInt32] = bottom == 0x10000 ? [] : bottom == 0 ? [0, 0x80, 0x800] : bottom == 0x800 ? [0x800, 0x80] : [0x80, 0x800]
+        #expect(indices.map { scalars.scalar(at: Int($0)).value } == expected)
+        #expect(indices.allSatisfy { $0 < UInt64(scalars.index(of: source)) })
+        if let bottom {
+            #expect(scalars.simplifications.simplerIndices(than: UInt64(scalars.index(of: Unicode.Scalar(bottom)!))).isEmpty)
+        }
+    }
+
+    @Test("Unavailable width boundaries are omitted")
+    func missingWidthBoundaries() {
+        let scalars = CharacterSet(charactersIn: "\u{10000}" ... "\u{10010}").scalarRangeSet(bottomCodepoint: nil)
+        #expect(simplerForms(of: "\u{10000}", in: scalars).isEmpty)
+    }
+
+    @Test("Value search reaches narrower width boundaries across a non-monotone gap", arguments: [UInt32(0x80), 0x800])
+    func reducesWidth(target: UInt32) throws {
+        let initial = Character("\u{10000}")
+        let expected = Character(Unicode.Scalar(target)!)
+        let generator = Gen.character().gen
+        let tree = try #require(try Interpreters.reflect(generator, with: initial))
+        let (_, reduced) = try #require(try Interpreters.choiceGraphReduce(
+            gen: generator,
+            tree: tree,
+            output: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.valueSearch])
+        ) { $0 != initial && $0 != expected }.counterexample)
+        #expect(reduced == expected)
+    }
+
     @Test("A lowercase letter's only simpler form is its uppercase letter", arguments: Array("creepidiot"))
     func lowercaseSimplifiesToUppercase(character: Character) {
         let scalars = UnicodeVersion.v17.scalarRangeSet
