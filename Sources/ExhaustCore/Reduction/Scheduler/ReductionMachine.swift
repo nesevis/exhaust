@@ -44,12 +44,8 @@ package struct ReductionMachine: ProbeSessionState {
         case done
     }
 
-    /// Tracks where the machine is within a single ``Phase/dispatching`` step.
-    enum DispatchPhase {
-        case dispatch
-        case probing
-        case rebuild
-    }
+    /// Names the dispatch loop's sub-phase for callers that inspect machine progress.
+    typealias DispatchPhase = DispatchLoop.SubPhase
 
     // MARK: - Transition
 
@@ -118,7 +114,12 @@ package struct ReductionMachine: ProbeSessionState {
     // MARK: - State
 
     var phase: Phase = .beginCycle
-    var dispatchPhase: DispatchPhase = .dispatch
+    var dispatchLoop = DispatchLoop(policy: .main)
+
+    var dispatchPhase: DispatchPhase {
+        get { dispatchLoop.subPhase }
+        set { dispatchLoop.subPhase = newValue }
+    }
 
     // MARK: - Core State
 
@@ -189,7 +190,12 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Per-Cycle State
 
-    var sources: [AnyCandidateSource] = []
+    var sources: [AnyCandidateSource] {
+        get { dispatchLoop.sources }
+        set { dispatchLoop.sources = newValue }
+        _modify { yield &dispatchLoop.sources }
+    }
+
     var scopeRejectionCache: CandidateRejectionCache = .init()
     var anyAccepted: Bool = false
     var hadUnresolvedReplacement: Bool = false
@@ -233,8 +239,16 @@ package struct ReductionMachine: ProbeSessionState {
 
     // MARK: - Active Probe Session
 
-    var activeSession: ProbeSession?
-    var pendingReport: PassReport?
+    var activeSession: ProbeSession? {
+        get { dispatchLoop.activeSession }
+        set { dispatchLoop.activeSession = newValue }
+        _modify { yield &dispatchLoop.activeSession }
+    }
+
+    var pendingReport: PassReport? {
+        get { dispatchLoop.pendingReport }
+        set { dispatchLoop.pendingReport = newValue }
+    }
 
     // MARK: - Init
 
