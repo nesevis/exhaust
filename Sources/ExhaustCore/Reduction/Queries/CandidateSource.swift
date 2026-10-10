@@ -204,6 +204,18 @@ enum CandidateSourceBuilder {
             }
         }
 
+        // Center-out growth from the middle element or pair.
+        let centeredCandidates = buildCenteredCandidates(graph: graph, elementScopes: elementScopes)
+        if centeredCandidates.isEmpty == false {
+            sources.append(.sorted(SortedCandidateSource(centeredCandidates)))
+        }
+
+        // Symmetric deletion grows inward from both edges in the same probe.
+        let symmetricCandidates = buildSymmetricCandidates(graph: graph, elementScopes: elementScopes)
+        if symmetricCandidates.isEmpty == false {
+            sources.append(.sorted(SortedCandidateSource(symmetricCandidates)))
+        }
+
         // Migration.
         let migrationSource = MigrationCandidateSource(graph: graph)
         if migrationSource.peekPriority != nil {

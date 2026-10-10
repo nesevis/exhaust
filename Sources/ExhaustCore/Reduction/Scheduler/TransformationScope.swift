@@ -18,7 +18,7 @@ enum RemovalScope {
     /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
     case coveringAligned(CoveringAlignedRemovalScope)
 
-    /// Removal window anchored at an interior element that grows rightward while the property keeps failing. Handled by ``GraphWindowRemovalEncoder`` rather than ``GraphStructuralEncoder``, because growth needs acceptance feedback that a session finishing on rebuild never delivers.
+    /// Removal window that grows from an interior anchor, from the center, or from both edges while the property keeps failing. Handled by ``GraphWindowRemovalEncoder`` rather than ``GraphStructuralEncoder``, because growth needs acceptance feedback that a session finishing on rebuild never delivers.
     case window(WindowRemovalScope)
 }
 
@@ -45,15 +45,55 @@ struct SequenceRemovalTarget {
     let elementNodeIDs: [Int]
 }
 
-/// Growable removal window within one sequence, seeded by ``BatchRemovalSource`` after its head and tail halving finishes.
+/// Grows nested deletions from an interior anchor, from the center, or symmetrically from both edges.
 ///
-/// The window always starts at `elementNodeIDs[0]`. A probe of length *k* removes the first *k* entries, so every accepted length is a prefix of every later probe and probes can be built from the dispatch-time base sequence without tracking a running sequence.
+/// Each growth mode removes nested sets from the dispatch-time base sequence, so later accepted probes remove supersets of earlier ones. Centered scopes retain the original sequence's parity when truncated to its deletion budget. Symmetric scopes contain equal-sized prefix and suffix arms with any retained middle elements omitted.
 struct WindowRemovalScope {
+    /// Determines which anchors stay fixed as the deletion grows.
+    enum Growth {
+        /// Removes increasingly long prefixes from the window's first element.
+        case rightward
+
+        /// Removes the middle element or pair first, then adds symmetric pairs.
+        case outward
+
+        /// Removes one element from each edge first, then grows both arms inward equally.
+        case symmetric
+    }
+
     /// The parent sequence node.
     let sequenceNodeID: Int
 
-    /// Element node IDs from the window's start element rightward, ordered by position. Truncated so that removing all of them keeps the sequence at or above its minimum length.
+    /// Elements in position order, truncated so that removing the whole window respects the minimum length. Symmetric windows concatenate the removable prefix and suffix, omitting their retained middle.
     let elementNodeIDs: [Int]
+
+    let growth: Growth
+
+    init(sequenceNodeID: Int, elementNodeIDs: [Int], growth: Growth = .rightward) {
+        self.sequenceNodeID = sequenceNodeID
+        self.elementNodeIDs = elementNodeIDs
+        self.growth = growth
+    }
+
+    /// Expands a search step into complete element targets, rejecting steps beyond capacity before computing their size.
+    func removalNodeIDs(step: Int) -> [Int]? {
+        guard step > 0 else { return nil }
+        switch growth {
+            case .rightward:
+                guard step <= elementNodeIDs.count else { return nil }
+                return Array(elementNodeIDs[..<step])
+            case .outward:
+                let centerCount = elementNodeIDs.count.isMultiple(of: 2) ? 2 : 1
+                let capacity = elementNodeIDs.count / 2 + elementNodeIDs.count % 2
+                guard step <= capacity else { return nil }
+                let count = centerCount + 2 * (step - 1)
+                let start = (elementNodeIDs.count - count) / 2
+                return Array(elementNodeIDs[start ..< start + count])
+            case .symmetric:
+                guard step <= elementNodeIDs.count / 2 else { return nil }
+                return Array(elementNodeIDs.prefix(step)) + Array(elementNodeIDs.suffix(step))
+        }
+    }
 }
 
 // MARK: - Covering Aligned Removal

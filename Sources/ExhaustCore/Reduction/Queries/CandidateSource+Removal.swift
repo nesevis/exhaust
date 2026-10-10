@@ -369,6 +369,74 @@ extension BatchRemovalSource: CandidateSource {
 // MARK: - Builder Functions
 
 extension CandidateSourceBuilder {
+    /// Seeds center-out deletion with the largest centered window allowed by each sequence's minimum length.
+    ///
+    /// Keeping the window's parity equal to the sequence's makes the first probe remove its middle element or middle pair. Its dispatch priority reflects only that first probe; subsequent growth is driven by acceptance feedback.
+    static func buildCenteredCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
+        var results: [GraphTransformation] = []
+        for scope in elementScopes {
+            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
+            let elements = target.elementNodeIDs
+            var capacity = min(scope.maxBatch, elements.count)
+            if capacity % 2 != elements.count % 2 {
+                capacity -= 1
+            }
+            guard capacity > 0 else { continue }
+            let start = (elements.count - capacity) / 2
+            let window = WindowRemovalScope(
+                sequenceNodeID: target.sequenceNodeID,
+                elementNodeIDs: Array(elements[start ..< start + capacity]),
+                growth: .outward
+            )
+            guard let initialNodeIDs = window.removalNodeIDs(step: 1) else { continue }
+            let initialYield = initialNodeIDs.reduce(0) { total, nodeID in
+                total + (graph.nodes[nodeID].positionRange?.count ?? 0)
+            }
+            results.append(GraphTransformation(
+                operation: .remove(.window(window)),
+                priority: DispatchPriority(
+                    structuralBenefit: initialYield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
+            ))
+        }
+        results.sort { $0.priority > $1.priority }
+        return results
+    }
+
+    /// Seeds equal prefix and suffix deletions within each sequence's minimum-length budget.
+    ///
+    /// The first probe removes both edge elements together. Increasing the search step grows both arms inward; the retained middle is omitted from the scope so it cannot be deleted or counted twice. Priority reflects only the first pair's yield.
+    static func buildSymmetricCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
+        var results: [GraphTransformation] = []
+        for scope in elementScopes {
+            guard scope.targets.count == 1, let target = scope.targets.first else { continue }
+            let elements = target.elementNodeIDs
+            let pairCapacity = min(scope.maxBatch / 2, elements.count / 2)
+            guard pairCapacity > 0 else { continue }
+            let window = WindowRemovalScope(
+                sequenceNodeID: target.sequenceNodeID,
+                elementNodeIDs: Array(elements.prefix(pairCapacity)) + Array(elements.suffix(pairCapacity)),
+                growth: .symmetric
+            )
+            let initialYield = (graph.nodes[elements[0]].positionRange?.count ?? 0)
+                + (graph.nodes[elements[elements.count - 1]].positionRange?.count ?? 0)
+            results.append(GraphTransformation(
+                operation: .remove(.window(window)),
+                priority: DispatchPriority(
+                    structuralBenefit: initialYield,
+                    valueBenefit: 0,
+                    reductionMagnitude: 0,
+                    estimatedCost: 1
+                )
+            ))
+        }
+        results.sort { $0.priority > $1.priority }
+        return results
+    }
+
     /// Constructs emptying removal candidates for sequences whose minimum length constraint is zero. Each candidate removes all elements from a single sequence, producing the maximal structural reduction per sequence. Sorted by yield descending.
     static func buildEmptyingCandidates(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [GraphTransformation] {
         var results: [GraphTransformation] = []

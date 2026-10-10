@@ -5,11 +5,11 @@
 
 // MARK: - Graph Window Removal Encoder
 
-/// Grows a removal window rightward from an interior element, finding the longest removable run with ``FindIntegerStepper``.
+/// Grows a removal window from its interior, center, or both edges, finding the largest accepted deletion with ``FindIntegerStepper``.
 ///
-/// Probe lengths follow the stepper: one through four, then doubling, then binary search between the longest accepted length and the shortest rejected one. A length beyond the window's capacity counts as a rejection without being probed.
+/// Search steps follow the stepper: one through four, then doubling, then binary search. Rightward growth removes one element per step; outward growth starts with the middle element or pair and adds one element on each side per step. Symmetric growth removes equal-sized prefix and suffix chunks atomically. A step beyond the window's capacity counts as a rejection without being probed.
 ///
-/// Each probe removes a prefix of ``WindowRemovalScope/elementNodeIDs`` from the dispatch-time base sequence, and accepted lengths only increase, so every probe after an acceptance removes a superset of what was committed. The reported mutation is never applied to the live graph; the session's rebuild picks up the final state.
+/// Each probe removes a nested set from the dispatch-time base sequence, so every probe after an acceptance removes a superset of what was committed. The reported mutation is never applied to the live graph; the session's rebuild picks up the final state.
 struct GraphWindowRemovalEncoder: GraphEncoder {
     let name: EncoderName = .deletion
 
@@ -54,16 +54,16 @@ struct GraphWindowRemovalEncoder: GraphEncoder {
             ? current.stepper.advance(lastAccepted: lastAccepted)
             : current.stepper.start()
 
-        while let length = proposal {
-            if length <= current.scope.elementNodeIDs.count,
-               let built = buildCandidate(length: length, state: current)
+        while let step = proposal {
+            if let elementNodeIDs = current.scope.removalNodeIDs(step: step),
+               let built = buildCandidate(elementNodeIDs: elementNodeIDs, state: current)
             {
                 current.awaitingFeedback = true
                 state = current
                 candidate = built
                 return .sequenceElementsRemoved([(
                     seqNodeID: current.scope.sequenceNodeID,
-                    removedNodeIDs: Array(current.scope.elementNodeIDs[..<length])
+                    removedNodeIDs: elementNodeIDs
                 )])
             }
             proposal = current.stepper.advance(lastAccepted: false)
@@ -75,13 +75,13 @@ struct GraphWindowRemovalEncoder: GraphEncoder {
 
     // MARK: - Candidate Construction
 
-    private func buildCandidate(length: Int, state: WindowState) -> ChoiceSequence? {
+    private func buildCandidate(elementNodeIDs: [Int], state: WindowState) -> ChoiceSequence? {
         let elementScope = ElementRemovalScope(
             targets: [SequenceRemovalTarget(
                 sequenceNodeID: state.scope.sequenceNodeID,
-                elementNodeIDs: Array(state.scope.elementNodeIDs[..<length])
+                elementNodeIDs: elementNodeIDs
             )],
-            maxBatch: length,
+            maxBatch: elementNodeIDs.count,
             maxElementYield: 0
         )
         return GraphStructuralEncoder.buildElementCandidate(

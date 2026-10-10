@@ -87,8 +87,15 @@ enum GraphOperation {
         }
     }
 
-    /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. Bind pivot mixes the pick's node ID in as well, because its affected set is the bind alone and one bind inner can hold several picks with the same branch identifiers. All other operations return 0.
+    /// Per-scope discriminator for the rejection cache. Branch pivot uses the target branch ID so that rejecting branch A at a pick site does not block branch B at the same site. Bind pivot mixes the pick's node ID in as well, because its affected set is the bind alone and one bind inner can hold several picks with the same branch identifiers. Centered and symmetric growth have separate discriminators so rejection of a full-window deletion does not block their smaller probes or one another. Other operations return 0.
     var scopeSubDiscriminator: UInt64 {
+        if case let .remove(.window(scope)) = self {
+            switch scope.growth {
+                case .rightward: return 0
+                case .outward: return 0xC37E_2ED0_0000_0001
+                case .symmetric: return 0xC37E_2ED0_0000_0002
+            }
+        }
         if case let .replace(.branchPivot(_, targetBranchID)) = self {
             return targetBranchID
         }
