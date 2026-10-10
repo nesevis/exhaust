@@ -6,12 +6,22 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-10
+
 ### Changed
 
+- Counterexamples with linked numeric values can now reduce further by searching groups of up to four values together, including floating-point values. Proportional integer groups can also shrink while preserving their ratios.
+- Matching characters can now simplify together, allowing repeated letters to reduce when changing one occurrence alone would stop the failure.
+- Collection reduction now tries deletions that grow outward from the middle or inward from both ends, allowing palindromes and other symmetric inputs to shrink further.
+- Reduction selects deletions from large, nested collections more efficiently and tries reducing compatible collections to their minimum lengths together.
 - Raised the minimum supported versions to macOS 12, iOS 15, Mac Catalyst 15, tvOS 15, and watchOS 9. Intel Macs remain supported through the precompiled framework's x86_64 slice.
 - Building Exhaust now requires Swift 6.4 (Xcode 27).
 - Updated to Swift Issue Reporting 2.1.1 and pinned Custom Dump to 1.7.3, removing the XCTest Dynamic Overlay dependency.
 - The precompiled framework now targets iOS 15 and includes an arm64_32 watchOS device slice for watchOS 9 support.
+
+### Fixed
+
+- Reduction now preserves element order when merging nested collections.
 
 ## [1.5.8] - 2026-10-06
 
@@ -260,7 +270,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.5.8...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/nesevis/exhaust/compare/v1.5.8...v1.6.0
 [1.5.8]: https://github.com/nesevis/exhaust/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/nesevis/exhaust/compare/v1.5.6...v1.5.7
 [1.5.6]: https://github.com/nesevis/exhaust/compare/v1.5.5...v1.5.6
