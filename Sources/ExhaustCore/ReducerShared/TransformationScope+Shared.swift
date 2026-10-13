@@ -1,146 +1,7 @@
 //
-//  TransformationScope.swift
+//  TransformationScope+Shared.swift
 //  Exhaust
 //
-
-// MARK: - Removal Scopes
-
-/// Defines the scope of a subgraph removal operation.
-///
-/// Three scope granularities: element removal across one or more sequences, structural subtree removal, and covering array backed aligned removal across sibling sequences under a common zip.
-enum RemovalScope {
-    /// Remove elements from one or more sequences. Subsumes both single-parent removal and aligned removal across sibling sequences.
-    case elements(ElementRemovalScope)
-
-    /// Remove a structural subtree (bind subtree, zip child, or other compound element).
-    case subtree(nodeID: Int, yield: Int)
-
-    /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
-    case coveringAligned(CoveringAlignedRemovalScope)
-
-    /// Removal window that grows from an interior anchor, from the center, or from both edges while the property keeps failing. Handled by ``GraphWindowRemovalEncoder`` rather than ``GraphStructuralEncoder``, because growth needs acceptance feedback that a session finishing on rebuild never delivers.
-    case window(WindowRemovalScope)
-}
-
-/// Scope for element removal across one or more sequences.
-///
-/// Each ``SequenceRemovalTarget`` identifies a parent sequence and the element node IDs to remove from it. A single-target scope is the common case (removal within one sequence). Multi-target scopes enable cross-sequence batched removal for compatible sequences.
-struct ElementRemovalScope {
-    /// Per-sequence removal targets.
-    let targets: [SequenceRemovalTarget]
-
-    /// Maximum batch size (for geometric halving in scope sources).
-    let maxBatch: Int
-
-    /// Yield of the largest single element across all targets.
-    let maxElementYield: Int
-}
-
-/// One sequence's contribution to an ``ElementRemovalScope``.
-struct SequenceRemovalTarget {
-    /// The parent sequence node.
-    let sequenceNodeID: Int
-
-    /// Deletable element node IDs, ordered by position within the sequence.
-    let elementNodeIDs: [Int]
-}
-
-/// Grows nested deletions from an interior anchor, from the center, or symmetrically from both edges.
-///
-/// Each growth mode removes nested sets from the dispatch-time base sequence, so later accepted probes remove supersets of earlier ones. Centered scopes retain the original sequence's parity when truncated to its deletion budget. Symmetric scopes contain equal-sized prefix and suffix arms with any retained middle elements omitted.
-struct WindowRemovalScope {
-    /// Determines which anchors stay fixed as the deletion grows.
-    enum Growth {
-        /// Removes increasingly long prefixes from the window's first element.
-        case rightward
-
-        /// Removes the middle element or pair first, then adds symmetric pairs.
-        case outward
-
-        /// Removes one element from each edge first, then grows both arms inward equally.
-        case symmetric
-    }
-
-    /// The parent sequence node.
-    let sequenceNodeID: Int
-
-    /// Elements in position order, truncated so that removing the whole window respects the minimum length. Symmetric windows concatenate the removable prefix and suffix, omitting their retained middle.
-    let elementNodeIDs: [Int]
-
-    let growth: Growth
-
-    init(sequenceNodeID: Int, elementNodeIDs: [Int], growth: Growth = .rightward) {
-        self.sequenceNodeID = sequenceNodeID
-        self.elementNodeIDs = elementNodeIDs
-        self.growth = growth
-    }
-
-    /// Expands a search step into complete element targets, rejecting steps beyond capacity before computing their size.
-    func removalNodeIDs(step: Int) -> [Int]? {
-        guard step > 0 else { return nil }
-        switch growth {
-            case .rightward:
-                guard step <= elementNodeIDs.count else { return nil }
-                return Array(elementNodeIDs[..<step])
-            case .outward:
-                let centerCount = elementNodeIDs.count.isMultiple(of: 2) ? 2 : 1
-                let capacity = elementNodeIDs.count / 2 + elementNodeIDs.count % 2
-                guard step <= capacity else { return nil }
-                let count = centerCount + 2 * (step - 1)
-                let start = (elementNodeIDs.count - count) / 2
-                return Array(elementNodeIDs[start ..< start + count])
-            case .symmetric:
-                guard step <= elementNodeIDs.count / 2 else { return nil }
-                return Array(elementNodeIDs.prefix(step)) + Array(elementNodeIDs.suffix(step))
-        }
-    }
-}
-
-// MARK: - Covering Aligned Removal
-
-/// Aligned removal scope backed by a strength-2 covering array over sibling sequence elements.
-///
-/// Each sibling sequence under a common zip becomes a parameter whose domain is `elementCount + 1` — the extra value encodes "skip this sibling" (do not delete from it). The covering array generator produces rows that guarantee pairwise coverage of all (sibling-A element, sibling-B element) interactions in O(max(domain)^2 * log(siblings)) rows, replacing the previous exponential subset enumeration and cross-product expansion.
-///
-/// The encoder pulls rows from the generator on each ``GraphEncoder/nextProbe(into:lastAccepted:)`` call, decoding each row into deletion targets for candidate construction.
-struct CoveringAlignedRemovalScope {
-    /// The sibling sequences participating in aligned deletion.
-    let siblings: [AlignedSibling]
-
-    /// Covering array generator. The encoder pulls rows via ``BalancedCoveringArrayGenerator/next()``. Bit vectors are deallocated automatically when the generator is released.
-    let generator: BalancedCoveringArrayGenerator
-
-    /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
-    let skipValues: [UInt64]
-
-    /// Maximum single-element yield across all siblings. Used for the scope source's ``DispatchPriority/structuralBenefit`` estimate.
-    let maxElementYield: Int
-
-    /// One sibling sequence in the aligned deletion group.
-    struct AlignedSibling {
-        /// The parent sequence node ID.
-        let sequenceNodeID: Int
-
-        /// Deletable element node IDs, ordered by position within the sequence.
-        let elementNodeIDs: [Int]
-    }
-}
-
-// MARK: - Replacement Scopes
-
-/// Defines the scope of a subgraph replacement operation.
-///
-/// Replacement is the only operation type that changes the generator's active execution path. Active donors (non-nil position range) enable sequence surgery. Inactive donors (nil position range) require tree edit and flatten.
-enum ReplacementScope {
-    /// Replace a pick subtree with a smaller same-fingerprint subtree.
-    case selfSimilar(targetNodeID: Int, donorNodeID: Int, sizeDelta: Int)
-
-    /// Change the selected branch at a pick node.
-    case branchPivot(pickNodeID: Int, targetBranchID: UInt64)
-
-    /// Collapse one recursion level via direct descendant promotion.
-    case descendantPromotion(ancestorPickNodeID: Int, descendantPickNodeID: Int, sizeDelta: Int)
-}
 
 // MARK: - Minimization Scopes
 
@@ -367,6 +228,148 @@ struct TandemGroup: Sendable {
     let typeTag: TypeTag
 }
 
+// MARK: - Removal Scopes
+
+/// Defines the scope of a subgraph removal operation.
+///
+/// Three scope granularities: element removal across one or more sequences, structural subtree removal, and covering array backed aligned removal across sibling sequences under a common zip.
+enum RemovalScope {
+    /// Remove elements from one or more sequences. Subsumes both single-parent removal and aligned removal across sibling sequences.
+    case elements(ElementRemovalScope)
+
+    /// Remove a structural subtree (bind subtree, zip child, or other compound element).
+    case subtree(nodeID: Int, yield: Int)
+
+    /// Covering-array-backed aligned removal across sibling sequences under a common zip. The encoder pulls rows from the covering array generator, decoding each into an element deletion combination with pairwise interaction coverage.
+    case coveringAligned(CoveringAlignedRemovalScope)
+
+    /// Removal window that grows from an interior anchor, from the center, or from both edges while the property keeps failing. Growth needs acceptance feedback, so its search keeps running after an accepted removal that requires a rebuild.
+    case window(WindowRemovalScope)
+}
+
+/// Scope for element removal across one or more sequences.
+///
+/// Each ``SequenceRemovalTarget`` identifies a parent sequence and the element node IDs to remove from it. A single-target scope is the common case (removal within one sequence). Multi-target scopes enable cross-sequence batched removal for compatible sequences.
+struct ElementRemovalScope {
+    /// Per-sequence removal targets.
+    let targets: [SequenceRemovalTarget]
+
+    /// Maximum batch size (for geometric halving in scope sources).
+    let maxBatch: Int
+
+    /// Yield of the largest single element across all targets.
+    let maxElementYield: Int
+}
+
+/// One sequence's contribution to an ``ElementRemovalScope``.
+struct SequenceRemovalTarget {
+    /// The parent sequence node.
+    let sequenceNodeID: Int
+
+    /// Deletable element node IDs, ordered by position within the sequence.
+    let elementNodeIDs: [Int]
+}
+
+/// Grows nested deletions from an interior anchor, from the center, or symmetrically from both edges.
+///
+/// Each growth mode removes nested sets from the dispatch-time base sequence, so later accepted probes remove supersets of earlier ones. Centered scopes retain the original sequence's parity when truncated to its deletion budget. Symmetric scopes contain equal-sized prefix and suffix arms with any retained middle elements omitted.
+struct WindowRemovalScope {
+    /// Determines which anchors stay fixed as the deletion grows.
+    enum Growth {
+        /// Removes increasingly long prefixes from the window's first element.
+        case rightward
+
+        /// Removes the middle element or pair first, then adds symmetric pairs.
+        case outward
+
+        /// Removes one element from each edge first, then grows both arms inward equally.
+        case symmetric
+    }
+
+    /// The parent sequence node.
+    let sequenceNodeID: Int
+
+    /// Elements in position order, truncated so that removing the whole window respects the minimum length. Symmetric windows concatenate the removable prefix and suffix, omitting their retained middle.
+    let elementNodeIDs: [Int]
+
+    let growth: Growth
+
+    init(sequenceNodeID: Int, elementNodeIDs: [Int], growth: Growth = .rightward) {
+        self.sequenceNodeID = sequenceNodeID
+        self.elementNodeIDs = elementNodeIDs
+        self.growth = growth
+    }
+
+    /// Expands a search step into complete element targets, rejecting steps beyond capacity before computing their size.
+    func removalNodeIDs(step: Int) -> [Int]? {
+        guard step > 0 else { return nil }
+        switch growth {
+            case .rightward:
+                guard step <= elementNodeIDs.count else { return nil }
+                return Array(elementNodeIDs[..<step])
+            case .outward:
+                let centerCount = elementNodeIDs.count.isMultiple(of: 2) ? 2 : 1
+                let capacity = elementNodeIDs.count / 2 + elementNodeIDs.count % 2
+                guard step <= capacity else { return nil }
+                let count = centerCount + 2 * (step - 1)
+                let start = (elementNodeIDs.count - count) / 2
+                return Array(elementNodeIDs[start ..< start + count])
+            case .symmetric:
+                guard step <= elementNodeIDs.count / 2 else { return nil }
+                return Array(elementNodeIDs.prefix(step)) + Array(elementNodeIDs.suffix(step))
+        }
+    }
+}
+
+// MARK: - Covering Aligned Removal
+
+/// Aligned removal scope backed by a strength-2 covering array over sibling sequence elements.
+///
+/// Each sibling sequence under a common zip becomes a parameter whose domain is `elementCount + 1` — the extra value encodes "skip this sibling" (do not delete from it). The covering array generator produces rows that guarantee pairwise coverage of all (sibling-A element, sibling-B element) interactions in O(max(domain)^2 * log(siblings)) rows, replacing the previous exponential subset enumeration and cross-product expansion.
+///
+/// The encoder pulls one row from the generator per probe, decoding each row into deletion targets for candidate construction.
+struct CoveringAlignedRemovalScope {
+    /// Maximum rows one dispatch pulls from ``generator``, counting rows skipped without a probe. Without it, a sibling pair whose pair space exceeds ``BalancedCoveringArrayGenerator/greedyThreshold`` squared yields an infinite row stream, and a dispatch where no row is accepted runs until the reduction deadline.
+    static let rowBudget = 128
+
+    /// The sibling sequences participating in aligned deletion.
+    let siblings: [AlignedSibling]
+
+    /// Covering array generator. The encoder pulls rows via ``BalancedCoveringArrayGenerator/next()``. Bit vectors are deallocated automatically when the generator is released.
+    let generator: BalancedCoveringArrayGenerator
+
+    /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
+    let skipValues: [UInt64]
+
+    /// Maximum single-element yield across all siblings. Used for the scope source's ``DispatchPriority/structuralBenefit`` estimate.
+    let maxElementYield: Int
+
+    /// One sibling sequence in the aligned deletion group.
+    struct AlignedSibling {
+        /// The parent sequence node ID.
+        let sequenceNodeID: Int
+
+        /// Deletable element node IDs, ordered by position within the sequence.
+        let elementNodeIDs: [Int]
+    }
+}
+
+// MARK: - Replacement Scopes
+
+/// Defines the scope of a subgraph replacement operation.
+///
+/// Replacement is the only operation type that changes the generator's active execution path. Active donors (non-nil position range) enable sequence surgery. Inactive donors (nil position range) require tree edit and flatten.
+enum ReplacementScope {
+    /// Replace a pick subtree with a smaller same-fingerprint subtree.
+    case selfSimilar(targetNodeID: Int, donorNodeID: Int, sizeDelta: Int)
+
+    /// Change the selected branch at a pick node.
+    case branchPivot(pickNodeID: Int, targetBranchID: UInt64)
+
+    /// Collapse one recursion level via direct descendant promotion.
+    case descendantPromotion(ancestorPickNodeID: Int, descendantPickNodeID: Int, sizeDelta: Int)
+}
+
 // MARK: - Permutation Scopes
 
 /// Defines the scope of a permutation operation.
@@ -426,7 +429,7 @@ struct ReorderableGroup {
     let ranges: [ClosedRange<Int>]
 }
 
-// MARK: - Transformation Scope
+// MARK: - Encoder Input
 
 /// Bundles a graph transformation with its base sequence, tree, graph, and warm-start convergence records into a self-contained unit of work for an encoder.
 ///

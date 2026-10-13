@@ -6,16 +6,15 @@ struct BoundExchangeProposalCursor {
     private let currentSource: UInt64
     private let currentSink: UInt64
 
-    init?(scope: EncoderInput, exchange: BoundExchangeScope) {
-        let graph = scope.graph
+    init?(graph: ChoiceGraph, baseSequence: ChoiceSequence, exchange: BoundExchangeScope) {
         guard exchange.sourceLeafNodeID < graph.nodes.count,
               case let .chooseBits(metadata) = graph.nodes[exchange.sourceLeafNodeID].kind,
               let sourceRange = graph.nodes[exchange.sourceLeafNodeID].positionRange,
-              sourceRange.lowerBound < scope.baseSequence.count,
-              let currentSource = scope.baseSequence[sourceRange.lowerBound].value?.choice.bitPattern64,
+              sourceRange.lowerBound < baseSequence.count,
+              let currentSource = baseSequence[sourceRange.lowerBound].value?.choice.bitPattern64,
               let sinkRange = graph.nodes[exchange.sinkLeafNodeID].positionRange,
-              sinkRange.lowerBound < scope.baseSequence.count,
-              let currentSink = scope.baseSequence[sinkRange.lowerBound].value?.choice.bitPattern64
+              sinkRange.lowerBound < baseSequence.count,
+              let currentSink = baseSequence[sinkRange.lowerBound].value?.choice.bitPattern64
         else {
             return nil
         }
@@ -25,7 +24,8 @@ struct BoundExchangeProposalCursor {
             return nil
         }
         guard let source = LeafProposalCursor(
-            scope: scope,
+            graph: graph,
+            baseSequence: baseSequence,
             leafNodeID: exchange.sourceLeafNodeID,
             candidates: LeafCandidates.rejectedBinarySearch(current: current, target: target),
             mayReshape: true
@@ -37,6 +37,11 @@ struct BoundExchangeProposalCursor {
         sinkIndex = sinkRange.lowerBound
         self.currentSource = currentSource
         self.currentSink = currentSink
+    }
+
+    /// Reads the graph and sequence from a dispatched scope.
+    init?(scope: EncoderInput, exchange: BoundExchangeScope) {
+        self.init(graph: scope.graph, baseSequence: scope.baseSequence, exchange: exchange)
     }
 
     mutating func next(into candidate: inout ChoiceSequence) -> LiftProposal? {

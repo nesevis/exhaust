@@ -7,6 +7,9 @@
 
 /// Shared helpers used by the scope query namespaces (``RemovalQuery``, ``ExchangeQuery``, and siblings).
 enum QueryHelpers {
+    /// Cap on the redistribution and relation pairs one scope carries, so preparing a scope stays bounded however many compatible leaves the graph has.
+    static let maxPairsPerScope = 30
+
     /// Retains leaf types before scope assembly. Node IDs are nonempty and ascending so group identity is independent of discovery order.
     struct LeafGroup {
         let typeTag: TypeTag

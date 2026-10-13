@@ -36,6 +36,7 @@ struct GraphStructuralEncoder: GraphEncoder {
         let scope: CoveringAlignedRemovalScope
         let baseSequence: ChoiceSequence
         let graph: ChoiceGraph
+        var rowsPulled = 0
     }
 
     mutating func start(scope: EncoderInput) {

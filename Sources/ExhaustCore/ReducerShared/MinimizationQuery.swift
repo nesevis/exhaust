@@ -216,7 +216,42 @@ enum MinimizationQuery {
         return scopes
     }
 
-    /// Probes a bind pivot on this bound subtree is expected to emit: per seed, the lifted sequence plus the covering rows ``BoundValueCoveringEncoder`` would build for the subtree's current leaves, exhaustive up to its threshold, otherwise its budget for several leaves and the smaller of the budget and the domain for one. Seeds are the plain pivot plus the transplant donors the encoder will try.
+    /// Largest bound value space whose covering bind pivot pricing counts as exhaustive.
+    static let bindPivotCoveringExhaustiveThreshold: UInt64 = 32
+
+    /// Covering rows bind pivot pricing counts for a value space past the exhaustive threshold.
+    static let bindPivotCoveringBudget = 64
+
+    /// Transplant seeds bind pivot pricing counts beyond the plain pivot.
+    static let bindPivotMaxTransplants = 4
+
+    /// Active picks below `boundChildID` sharing its fingerprint, smallest span first, at most `maxTransplants`. Empty when the bound subtree is not a pick: only a pick's span can stand in for another pick of the same family.
+    static func transplantDonors(
+        boundChildID: Int,
+        boundRange: ClosedRange<Int>,
+        graph: ChoiceGraph,
+        maxTransplants: Int
+    ) -> [Int] {
+        guard case let .pick(metadata) = graph.nodes[boundChildID].kind,
+              let group = graph.selfSimilarityGroups[metadata.fingerprint]
+        else {
+            return []
+        }
+        let donors = group.filter { candidateID in
+            guard candidateID != boundChildID,
+                  let range = graph.nodes[candidateID].positionRange
+            else {
+                return false
+            }
+            return range.lowerBound > boundRange.lowerBound && range.upperBound <= boundRange.upperBound
+        }
+        let sorted = donors.sorted { lhs, rhs in
+            (graph.nodes[lhs].positionRange?.count ?? 0) < (graph.nodes[rhs].positionRange?.count ?? 0)
+        }
+        return Array(sorted.prefix(maxTransplants))
+    }
+
+    /// Probes a bind pivot on this bound subtree is expected to emit: per seed, the lifted sequence plus the covering rows the pivot's covering would build for the subtree's current leaves, exhaustive up to ``bindPivotCoveringExhaustiveThreshold``, otherwise ``bindPivotCoveringBudget`` for several leaves and the smaller of that budget and the domain for one. Seeds are the plain pivot plus up to ``bindPivotMaxTransplants`` transplant donors.
     private static func estimatedBindPivotProbes(boundChildID: Int, graph: ChoiceGraph) -> Int {
         guard let boundRange = graph.nodes[boundChildID].positionRange else {
             return 1
@@ -238,14 +273,19 @@ enum MinimizationQuery {
         let rows: Int
         if domainSizes.isEmpty {
             rows = 0
-        } else if totalSpace <= BoundValueCoveringEncoder.exhaustiveThreshold {
+        } else if totalSpace <= bindPivotCoveringExhaustiveThreshold {
             rows = Int(totalSpace)
         } else if domainSizes.count == 1 {
-            rows = Int(min(totalSpace, UInt64(BoundValueCoveringEncoder.coveringBudget)))
+            rows = Int(min(totalSpace, UInt64(bindPivotCoveringBudget)))
         } else {
-            rows = BoundValueCoveringEncoder.coveringBudget
+            rows = bindPivotCoveringBudget
         }
-        let donors = BindPivotSearch.transplantDonors(boundChildID: boundChildID, boundRange: boundRange, graph: graph)
+        let donors = transplantDonors(
+            boundChildID: boundChildID,
+            boundRange: boundRange,
+            graph: graph,
+            maxTransplants: bindPivotMaxTransplants
+        )
         let seeds = 1 + donors.count
         return seeds * (1 + rows)
     }

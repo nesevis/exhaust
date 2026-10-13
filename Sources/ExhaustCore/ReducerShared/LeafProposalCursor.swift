@@ -12,16 +12,17 @@ struct LeafProposalCursor {
 
     /// Reads type and range metadata from the graph because candidate bit patterns do not carry decoding constraints. The graph's leaf position must address a value in the dispatched sequence; proposals do not repair malformed scopes.
     init?(
-        scope: EncoderInput,
+        graph: ChoiceGraph,
+        baseSequence: ChoiceSequence,
         leafNodeID: Int,
         candidates: [UInt64],
         mayReshape: Bool = false
     ) {
-        guard scope.graph.nodes.indices.contains(leafNodeID),
-              case let .chooseBits(metadata) = scope.graph.nodes[leafNodeID].kind,
-              let range = scope.graph.nodes[leafNodeID].positionRange,
-              scope.baseSequence.indices.contains(range.lowerBound),
-              scope.baseSequence[range.lowerBound].value != nil
+        guard graph.nodes.indices.contains(leafNodeID),
+              case let .chooseBits(metadata) = graph.nodes[leafNodeID].kind,
+              let range = graph.nodes[leafNodeID].positionRange,
+              baseSequence.indices.contains(range.lowerBound),
+              baseSequence[range.lowerBound].value != nil
         else {
             return nil
         }
@@ -31,8 +32,24 @@ struct LeafProposalCursor {
         validRange = metadata.validRange
         isRangeExplicit = metadata.isRangeExplicit
         self.mayReshape = mayReshape
-        baseSequence = scope.baseSequence
+        self.baseSequence = baseSequence
         self.candidates = candidates
+    }
+
+    /// Reads the graph and sequence from a dispatched scope.
+    init?(
+        scope: EncoderInput,
+        leafNodeID: Int,
+        candidates: [UInt64],
+        mayReshape: Bool = false
+    ) {
+        self.init(
+            graph: scope.graph,
+            baseSequence: scope.baseSequence,
+            leafNodeID: leafNodeID,
+            candidates: candidates,
+            mayReshape: mayReshape
+        )
     }
 
     /// Replaces only the controller's value entry so surrounding bind and group markers survive each proposal.

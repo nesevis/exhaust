@@ -103,10 +103,15 @@ extension GraphStructuralEncoder {
     /// Pulls the next row from the covering array generator and decodes it into a deletion probe.
     ///
     /// Each row is an array of `UInt64` values, one per sibling parameter. A value equal to the sibling's skip value (= element count) means "do not delete from this sibling." Any other value is an element index within that sibling's `elementNodeIDs`. Rows where fewer than two siblings participate are skipped — single-sequence deletion is already covered by ``BatchRemovalSource``.
+    ///
+    /// Returns `nil` once the dispatch has pulled ``CoveringAlignedRemovalScope/rowBudget`` rows. Skipped rows count toward the budget, since they cost no trial and so never reach the reduction deadline check.
     mutating func nextCoveringAlignedProbe(into candidate: inout ChoiceSequence) -> EncoderProbe? {
-        guard let state = coveringAlignedState else { return nil }
+        guard var state = coveringAlignedState else { return nil }
 
-        while let row = state.scope.generator.next() {
+        while state.rowsPulled < CoveringAlignedRemovalScope.rowBudget,
+              let row = state.scope.generator.next()
+        {
+            state.rowsPulled += 1
             // Decode the row into deletion targets.
             var targets: [SequenceRemovalTarget] = []
             var removedPairs: [(seqNodeID: Int, removedNodeIDs: [Int])] = []
@@ -147,10 +152,11 @@ extension GraphStructuralEncoder {
             }
 
             candidate = built
+            coveringAlignedState = state
             return .sequenceElementsRemoved(removedPairs)
         }
 
-        // Generator exhausted.
+        // Generator exhausted or row budget spent.
         coveringAlignedState = nil
         return nil
     }

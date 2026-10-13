@@ -28,10 +28,11 @@ struct ValueEncoderState {
         }
     }
 
-    /// Diffs a candidate against the baseline and returns a `.leafValues` mutation listing every leaf whose value changed.
+    /// Diffs a candidate against the baseline and returns a `.leafValues` mutation listing every leaf whose value changed, in sequence order so the mutation does not depend on dictionary iteration order.
     func buildLeafValuesMutation(candidate: ChoiceSequence) -> ProjectedMutation {
         var changes: [LeafChange] = []
-        for (sequenceIndex, info) in leafLookup {
+        for sequenceIndex in leafLookup.keys.sorted() {
+            guard let info = leafLookup[sequenceIndex] else { continue }
             guard sequenceIndex < candidate.count, sequenceIndex < sequence.count else { continue }
             guard let candidateChoice = candidate[sequenceIndex].value?.choice,
                   let baselineChoice = sequence[sequenceIndex].value?.choice

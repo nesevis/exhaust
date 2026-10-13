@@ -115,7 +115,7 @@ struct GeneratedRedistributionPairCursor: Sendable {
     private static func prepareGroup(nodeID: Int, tag: TypeTag, leaves: [Leaf?], graph: ChoiceGraph) -> HomogeneousGroup {
         let node = graph.nodes[nodeID]
         let members = node.children.compactMap { leaves[$0] }
-        var sources = BoundedSortedBuffer<Leaf>(limit: GraphRedistributionEncoder.maxPairsPerScope)
+        var sources = BoundedSortedBuffer<Leaf>(limit: QueryHelpers.maxPairsPerScope)
         for member in members where member.distance > 0 {
             sources.insert(member) { $0.distance > $1.distance }
         }

@@ -1,87 +1,3 @@
-/// Counts terminal probe outcomes and the producer's subsequent admissions separately.
-package struct ReductionProbeCounts: Sendable, Equatable {
-    package private(set) var emitted = 0
-    package private(set) var accepted = 0
-    package private(set) var rejectedByCache = 0
-    package private(set) var rejectedDuringMaterialization = 0
-    package private(set) var propertyPassed = 0
-    package private(set) var propertyFailed = 0
-    package private(set) var materializationAttempts = 0
-
-    /// Creates a count value, primarily for restoring or testing completed pass summaries.
-    package init(
-        emitted: Int = 0,
-        accepted: Int = 0,
-        rejectedByCache: Int = 0,
-        rejectedDuringMaterialization: Int = 0,
-        propertyPassed: Int = 0,
-        propertyFailed: Int = 0,
-        materializationAttempts: Int = 0
-    ) {
-        self.emitted = emitted
-        self.accepted = accepted
-        self.rejectedByCache = rejectedByCache
-        self.rejectedDuringMaterialization = rejectedDuringMaterialization
-        self.propertyPassed = propertyPassed
-        self.propertyFailed = propertyFailed
-        self.materializationAttempts = materializationAttempts
-    }
-
-    /// The number of emitted probes assigned exactly one terminal outcome.
-    package var terminalOutcomes: Int {
-        rejectedByCache + rejectedDuringMaterialization + propertyPassed + propertyFailed
-    }
-
-    /// The number of probes that entered the property.
-    package var propertyInvocations: Int {
-        propertyPassed + propertyFailed
-    }
-
-    /// The combined decoder-rejection view retained for the existing public report property.
-    package var decoderRejections: Int {
-        rejectedDuringMaterialization + propertyPassed + propertyFailed - accepted
-    }
-
-    /// Opens one encoder probe.
-    mutating func recordEmission() {
-        emitted += 1
-    }
-
-    /// Terminates the current probe before materialization.
-    mutating func recordCacheRejection() {
-        rejectedByCache += 1
-    }
-
-    /// Terminates the current probe with its decode outcome. A returned reduction still needs the producer's admission checks.
-    mutating func recordOutcome(_ outcome: SequenceDecodingOutcome) {
-        materializationAttempts += outcome.materializationAttempts
-        switch outcome {
-            case .materializationRejected:
-                rejectedDuringMaterialization += 1
-            case .propertyPassed:
-                propertyPassed += 1
-            case .propertyFailed:
-                propertyFailed += 1
-        }
-    }
-
-    /// Records one admission after the failing outcome and the producer's policy checks. Provisional admissions remain counted if a later excursion rolls back.
-    mutating func recordAcceptance() {
-        accepted += 1
-    }
-
-    /// Merges another pass after both have finished.
-    mutating func merge(_ other: ReductionProbeCounts) {
-        emitted += other.emitted
-        accepted += other.accepted
-        rejectedByCache += other.rejectedByCache
-        rejectedDuringMaterialization += other.rejectedDuringMaterialization
-        propertyPassed += other.propertyPassed
-        propertyFailed += other.propertyFailed
-        materializationAttempts += other.materializationAttempts
-    }
-}
-
 /// Where a reduction materialization ran.
 ///
 /// ``decoder`` counts probe decodes. Every other site materializes outside the probe loop, so the probe counts never see it.
@@ -102,38 +18,9 @@ package enum MaterializationSite: String, Sendable, CaseIterable {
     case boundExchangeLift
 }
 
-/// How one downstream build in a bound value composition ended. Every outcome follows one generator materialization of the lifted candidate.
-package enum BoundValueBuildOutcome: String, Sendable, CaseIterable {
-    /// The generator could not materialize the lifted candidate.
-    case materializationFailed
-    /// The lifted sequence was longer than the live sequence at dispatch, so no downstream candidate could be admitted.
-    case liftedTooLong
-    /// The bind, its bound subtree, or the nested bind could not be located in the lifted graph.
-    case bindNotFound
-    /// The lift built another composition one bind deeper.
-    case nestedStage
-    /// The lift found no leaves to search in the bound subtree.
-    case noDownstreamLeaves
-    /// The lift built a terminal value search.
-    case terminalSearch
-    /// An exchange lift changed the sink value; bound-value factories never produce this outcome. Retained to keep the shared-failure diagnostic mapping total.
-    case sinkValueMismatch
-}
-
-/// One downstream build, keyed by the chain stage that ran it.
-package struct BoundValueBuildRecord: Hashable, Sendable {
-    package let stage: BoundValueStage
-    package let outcome: BoundValueBuildOutcome
-
-    package init(stage: BoundValueStage, outcome: BoundValueBuildOutcome) {
-        self.stage = stage
-        self.outcome = outcome
-    }
-}
-
 /// Statistics collected from a single reduction run.
 ///
-/// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionMachine`` during reduction and extracted at the end of the pipeline.
+/// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically during reduction and extracted at the end of the run.
 package struct ReductionStats: Sendable {
     /// Run-wide reduction probe outcomes. Encoder passes and structural relax proposals merge into this value after their local work finishes.
     private var probeCounts = ReductionProbeCounts()
@@ -240,29 +127,29 @@ package struct ReductionStats: Sendable {
     /// Total reduction cycles completed.
     package var cycles: Int
 
-    /// Floor-motion events where a graph rebuild happened between the old and new convergence record. The floor shifted because the sequence structure changed (deletion, bind reshape), not because a partner coordinate's value moved. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Floor-motion events where a graph rebuild happened between the old and new convergence record. The floor shifted because the sequence structure changed (deletion, bind reshape), not because a partner coordinate's value moved. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
     package var structuralFloorMotionEvents: Int
 
-    /// Floor-motion events within the same rebuild generation. The floor shifted because a partner coordinate's value movement changed the property boundary for this leaf. This is the observable signal for inter-coordinate value coupling. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Floor-motion events within the same rebuild generation. The floor shifted because a partner coordinate's value movement changed the property boundary for this leaf. This is the observable signal for inter-coordinate value coupling. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
     package var valueFloorMotionEvents: Int
 
     // MARK: - Coupling Diagnostics
 
-    /// Node IDs that experienced value floor motion at least once during this run. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Node IDs that experienced value floor motion at least once during this run. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
     package var valueFloorMotionNodeIDs: Set<Int> = []
 
-    /// Node IDs that were part of an accepted redistribution pair (source or sink) at least once during this run. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Node IDs that were part of an accepted redistribution pair (source or sink) at least once during this run. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
     package var redistributionAcceptanceNodeIDs: Set<Int> = []
 
-    /// Measured coupling edges. Each entry records that `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted. Multiple observations of the same edge increment `count`. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Measured coupling edges. Each entry records that `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted. Multiple observations of the same edge increment `count`. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
     package var couplingEdges: [CouplingEdge: Int] = [:]
 
-    /// Distribution of partner counts per value floor-motion event. Key is the number of distinct nodes that changed between the shifting node's previous and current convergence. A count of 1 means the floor shift is attributable to a single partner (pairwise). Counts of 2+ mean multiple partners changed and the coupling may be k-ary. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Distribution of partner counts per value floor-motion event. Key is the number of distinct nodes that changed between the shifting node's previous and current convergence. A count of 1 means the floor shift is attributable to a single partner (pairwise). Counts of 2+ mean multiple partners changed and the coupling may be k-ary. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
     package var floorMotionPartnerCounts: [Int: Int] = [:]
 
     // MARK: - Dispatch Log
 
-    /// One record per completed encoder pass, in dispatch order. Populated only when ``ReductionMachine``'s maintainer-set `collectDiagnostics` flag is enabled; empty in all normal runs, including stats-collecting ones. The within-cycle ordering (via ``DispatchRecord/cycle`` and ``DispatchRecord/passIndex``) is what the indexability analysis conditions on, so the log must not be reordered.
+    /// One record per completed encoder pass, in dispatch order. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled; empty in all normal runs, including stats-collecting ones. The within-cycle ordering (via ``DispatchRecord/cycle`` and ``DispatchRecord/passIndex``) is what the indexability analysis conditions on, so the log must not be reordered.
     package var dispatchLog: [DispatchRecord] = []
 
     /// True when the reduction phase was terminated early by the wall-clock deadline.
@@ -270,7 +157,7 @@ package struct ReductionStats: Sendable {
 
     // MARK: - Relax Rounds
 
-    /// One record per relax round that had perturbation candidates, in run order. Populated only when ``ReductionMachine``'s maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed excursions actually cross.
+    /// One record per relax round that had perturbation candidates, in run order. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed excursions actually cross.
     package var relaxRoundLog: [RelaxRoundRecord] = []
 
     /// Improving pivot probes spent. An improving probe has no barrier to measure, so ``relaxRoundLog`` does not hold these.
@@ -300,7 +187,7 @@ package struct ReductionStats: Sendable {
     /// Graph structure and lifecycle statistics accumulated during reduction.
     package var graphStats: ChoiceGraphStats
 
-    /// Aggregate wall-time spent in each ``ReductionMachine`` step category, in nanoseconds.
+    /// Aggregate wall-time spent in each reduction step category, in nanoseconds.
     package var stepTimings: StepTimings = .init()
 
     /// Creates an empty stats value.
@@ -432,9 +319,9 @@ package struct DispatchRecord: Sendable {
 // MARK: - Step Timings
 
 package extension ReductionStats {
-    /// Aggregate wall-time spent in each ``ReductionMachine`` step category.
+    /// Aggregate wall-time spent in each reduction step category.
     ///
-    /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
+    /// Times are in nanoseconds, measured around each unit of reduction work.
     struct StepTimings: Sendable {
         package var dispatch: UInt64 = 0
         /// Bookkeeping and routing after ordinary dispatched encoder passes; post-cycle passes retain their owning timing bucket.
@@ -479,57 +366,6 @@ package extension ReductionStats {
             rebuildCount += other.rebuildCount
             rebuildGraphNanoseconds += other.rebuildGraphNanoseconds
             rebuildSourceNanoseconds += other.rebuildSourceNanoseconds
-        }
-
-        /// Records elapsed time for a step transition.
-        package mutating func record(_ transition: ReductionMachine.Transition, elapsed: UInt64) {
-            switch transition {
-                case .dispatched:
-                    dispatch += elapsed
-                    dispatchCount += 1
-                case let .postCycleStarted(owner),
-                     let .postCycleEncoded(owner, _, _),
-                     let .postCycleDecoded(owner, _, _):
-                    recordPostCycle(owner: owner, elapsed: elapsed)
-                case .passCompleted:
-                    passApply += elapsed
-                    passApplyCount += 1
-                case .encoded:
-                    encode += elapsed
-                    encodeCount += 1
-                case .decoded:
-                    decode += elapsed
-                    decodeCount += 1
-                case .rebuilt:
-                    rebuild += elapsed
-                    rebuildCount += 1
-                case .convergenceConfirmed:
-                    convergenceConfirmation += elapsed
-                case .improvingPivotsCompleted, .excursionAdvanced, .excursionCompleted:
-                    relaxRound += elapsed
-                case .relationPassCompleted:
-                    relationPass += elapsed
-                case .stagedJointPassCompleted:
-                    stagedJointPass += elapsed
-                case .reorderCompleted:
-                    reorder += elapsed
-                case .sourcesBuilt:
-                    buildSources += elapsed
-                case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
-                    break
-            }
-        }
-
-        /// Charges setup and intermediate probes to their owning post-cycle pass exactly once.
-        private mutating func recordPostCycle(owner: ReductionMachine.PostCycleTiming, elapsed: UInt64) {
-            switch owner {
-                case .relationPass:
-                    relationPass += elapsed
-                case .stagedJointPass:
-                    stagedJointPass += elapsed
-                case .reorder:
-                    reorder += elapsed
-            }
         }
     }
 }

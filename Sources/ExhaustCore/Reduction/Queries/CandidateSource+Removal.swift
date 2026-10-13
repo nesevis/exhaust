@@ -540,7 +540,7 @@ extension CandidateSourceBuilder {
                     structuralBenefit: scope.maxElementYield,
                     valueBenefit: 0,
                     reductionMagnitude: 0,
-                    estimatedCost: scope.generator.totalRemaining
+                    estimatedCost: min(CoveringAlignedRemovalScope.rowBudget, scope.generator.totalRemaining)
                 )
             )
         }
