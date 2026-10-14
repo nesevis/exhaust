@@ -72,7 +72,7 @@ package struct ReductionProbeCounts: Sendable, Equatable {
         }
     }
 
-    /// Records one admission after the failing outcome and the producer's policy checks. Provisional admissions remain counted if a later excursion rolls back.
+    /// Records one admission after the failing outcome and the producer's policy checks. Provisional admissions remain counted if a later relax round rolls back.
     mutating func recordAcceptance() {
         accepted += 1
     }

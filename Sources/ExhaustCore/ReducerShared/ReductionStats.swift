@@ -157,7 +157,7 @@ package struct ReductionStats: Sendable {
 
     // MARK: - Relax Rounds
 
-    /// One record per relax round that had perturbation candidates, in run order. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed excursions actually cross.
+    /// One record per relax round that had perturbation candidates, in run order. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed relax rounds actually cross.
     package var relaxRoundLog: [RelaxRoundRecord] = []
 
     /// Improving pivot probes spent. An improving probe has no barrier to measure, so ``relaxRoundLog`` does not hold these.
@@ -256,7 +256,7 @@ package struct ReductionStats: Sendable {
 
 // MARK: - Relax Round Record
 
-/// One relax round's barrier observation, for calibrating the relax materialization budget. Most rounds never start an excursion — no perturbation decodes — which is why this is a round record, not an excursion record.
+/// One relax round's barrier observation, for calibrating the relax materialization budget. Most rounds end without a perturbation decoding, so the record covers every round with candidates, not only those that go on to exploit one.
 ///
 /// The observed barrier is the number of failed perturbation materializations before one decoded. Rounds where no perturbation decoded are censored observations — the true barrier is at least `materializationsUsed`, and if many rounds exhaust the budget this way, a "p95 under the cap" conclusion drawn from decoded rounds alone would be biased.
 package struct RelaxRoundRecord: Sendable {
@@ -269,7 +269,7 @@ package struct RelaxRoundRecord: Sendable {
     /// True when a perturbation decoded and the exploitation loop ran.
     package let perturbationDecoded: Bool
 
-    /// True when the excursion beat the checkpoint and was committed.
+    /// True when the round's result beat the checkpoint and was committed.
     package let committed: Bool
 }
 
@@ -277,7 +277,7 @@ package struct RelaxRoundRecord: Sendable {
 
 /// One completed encoder pass, as seen by the scheduler.
 ///
-/// This is the raw material for the scheduling analyses: reservation values need the per-encoder distribution of improvement given acceptance against probes spent, the indexability check conditions an encoder's acceptance rate on whether an earlier pass in the same cycle accepted, and potential-shaping pre-filters need whole trajectories. Relax-round exploitation passes and the post-loop reorder pass are included; a rolled-back relax round's records describe the discarded excursion trajectory.
+/// This is the raw material for the scheduling analyses: reservation values need the per-encoder distribution of improvement given acceptance against probes spent, the indexability check conditions an encoder's acceptance rate on whether an earlier pass in the same cycle accepted, and potential-shaping pre-filters need whole trajectories. Relax-round exploitation passes and the post-loop reorder pass are included; a rolled-back relax round's records describe its discarded trajectory.
 package struct DispatchRecord: Sendable {
     /// The reduction cycle this pass ran in.
     package let cycle: Int
