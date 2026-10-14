@@ -54,7 +54,7 @@ struct ChoiceGraphBuilder {
 
     private static func build(from tree: ChoiceTree, omittingScalarSequenceElements: Bool) -> ChoiceGraph {
         if case .just = tree {
-            return ChoiceGraph(
+            var graph = ChoiceGraph(
                 nodes: [],
                 containmentEdges: [],
                 dependencyEdges: [],
@@ -65,10 +65,20 @@ struct ChoiceGraphBuilder {
                 topologicalOrder: [],
                 dependencyAdjacency: []
             )
+            graph.isControllerTopology = omittingScalarSequenceElements
+            return graph
         }
         var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
-        return builder.assembleGraph()
+        var graph = builder.assembleGraph()
+        graph.isControllerTopology = omittingScalarSequenceElements
+        graph.lacksUnselectedBranches = graph.nodes.contains { node in
+            guard case let .pick(metadata) = node.kind else {
+                return false
+            }
+            return UInt64(metadata.branchElements.count) < metadata.branchCount
+        }
+        return graph
     }
 
     // MARK: - Recursive Walk
