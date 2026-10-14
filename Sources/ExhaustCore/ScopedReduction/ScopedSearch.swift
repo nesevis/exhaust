@@ -88,7 +88,6 @@ protocol ScopedSearch {
 
 /// Closed registration of search types, dispatched by `switch` so the per-candidate path opens no existentials.
 enum ScopedSearchKind {
-    case liftedSeed(ScopedLiftedSeedSearch)
     case binarySearch(ScopedBinarySearch)
     case covering(ScopedCoveringSearch)
     case laneCollapse(ScopedLaneCollapseSearch)
@@ -107,10 +106,6 @@ enum ScopedSearchKind {
     /// Consumes `self` before advancing, so the search's storage stays uniquely referenced and is not copied per candidate.
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
         switch consume self {
-            case var .liftedSeed(search):
-                let candidate = search.next(feedback, into: &buffer)
-                self = .liftedSeed(search)
-                return candidate
             case var .binarySearch(search):
                 let candidate = search.next(feedback, into: &buffer)
                 self = .binarySearch(search)
@@ -172,8 +167,6 @@ enum ScopedSearchKind {
 
     consuming func finish(reason: ScopedStopReason, undelivered: ScopedSearchFeedback?) -> ScopedSearchReport {
         switch consume self {
-            case let .liftedSeed(search):
-                search.finish(reason: reason, undelivered: undelivered)
             case let .binarySearch(search):
                 search.finish(reason: reason, undelivered: undelivered)
             case let .covering(search):

@@ -7,7 +7,7 @@
 
 /// Bound exchange: the encoder's reducer proposes a sum-preserving proposal, lifts it, validates the lifted sink, and searches the compound candidate.
 ///
-/// Proposals come from ``BoundExchangeProposalCursor``. Each kept lift runs as one ``ScopedLiftedSeedSearch`` and is decoded exactly.
+/// Proposals come from ``BoundExchangeProposalCursor``. Each kept lift is one ``ScopedSingleCandidateSearch`` over the lifted sequence, decoded exactly.
 struct ScopedBoundExchangeEncoder: ScopedEncoder {
     static let name: EncoderName = .boundExchange
     static let isValueDependent = true
@@ -34,7 +34,7 @@ struct ScopedBoundExchangeEncoder: ScopedEncoder {
                 guard let lifted else {
                     return .fail(.materializationFailed)
                 }
-                return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, exchange: exchange, tuning: tuning)
+                return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, exchange: exchange)
             }
         }
     }
@@ -44,8 +44,7 @@ struct ScopedBoundExchangeEncoder: ScopedEncoder {
         proposal: LiftProposal,
         lifted: LiftResult,
         parent: ScopedEncoderInput,
-        exchange: BoundExchangeScope,
-        tuning: ScopedReductionTuning
+        exchange: BoundExchangeScope
     ) -> ScopedReducer {
         guard let parentSinkIndex = parent.graph.nodes[exchange.sinkLeafNodeID].positionRange?.lowerBound,
               parentSinkIndex < proposal.prefix.count
@@ -66,7 +65,7 @@ struct ScopedBoundExchangeEncoder: ScopedEncoder {
             return .fail(.sinkValueMismatch)
         }
         return .search(
-            .liftedSeed(ScopedLiftedSeedSearch(mutation: proposal.mutation, lifted: lifted.sequence, tuning: tuning)),
+            .singleCandidate(ScopedSingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation)),
             configuration: ScopedSearchConfiguration(
                 acceptance: .stop,
                 requiresExactDecoder: true,

@@ -37,6 +37,13 @@ struct ScopedCoveringSearch: ScopedSearch {
         hasSearch = true
     }
 
+    /// Covers every value entry in `positionRange` of `sequence`, up to ``ScopedReductionTuning/maxCoveredPositions``.
+    init(sequence: ChoiceSequence, positionRange: ClosedRange<Int>, tuning: ScopedReductionTuning) {
+        search = ScopedCoveringRows(tuning: tuning)
+        search.start(sequence: sequence, positionRange: positionRange)
+        hasSearch = true
+    }
+
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
         guard hasSearch else {
             return nil

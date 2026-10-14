@@ -73,9 +73,22 @@ extension ScopedReductionInterpreter {
                 case let .search(slot):
                     guard let candidate = slot.search.next(slot.feedback, into: &context.candidateBuffer) else {
                         absorb(slot.search.finish(reason: .exhausted, undelivered: nil), keepsSearchReports: keepsSearchReports, context: &context)
+                        // The branch continues with the search's outcome, in the same member, so its turn carries on.
+                        if let continuation = slot.continuation,
+                           let next = buildBranch(continuation(.outcome(slot.outcome)), depth: pool.depth, context: &context)
+                        {
+                            member.source = next
+                            pool.active = member
+                        }
                         continue
                     }
-                    evaluation = evaluate(candidate, configuration: slot.configuration, context: &context)
+                    // Only a branch search continues with its outcome, so only it pays to count its own work.
+                    evaluation = slot.continuation == nil
+                        ? evaluate(candidate, configuration: slot.configuration, context: &context)
+                        : evaluateCounting(candidate, in: slot, context: &context)
+                    if evaluation.isAccepted {
+                        slot.anyAccepted = true
+                    }
                     slot.feedback = pool.deliversUniformFeedback ? uniform(evaluation.feedback) : evaluation.feedback
                 case .level:
                     // Moving the level out leaves its storage uniquely referenced while it advances.
@@ -111,6 +124,22 @@ extension ScopedReductionInterpreter {
             }
             return .emitted(evaluation)
         }
+    }
+
+    /// Evaluates `candidate`, adding its probe counts to the slot's own as well as to the pass's.
+    private static func evaluateCounting(
+        _ candidate: ScopedCandidate,
+        in slot: ScopedSearchPool.SearchSlot,
+        context: inout Context
+    ) -> Evaluation {
+        let passCounts = context.report.counts
+        context.report.counts = ReductionProbeCounts()
+        let evaluation = evaluate(candidate, configuration: slot.configuration, context: &context)
+        let candidateCounts = context.report.counts
+        context.report.counts = passCounts
+        context.report.counts.merge(candidateCounts)
+        slot.counts.merge(candidateCounts)
+        return evaluation
     }
 
     /// Withholds the outcome, keeping only whether a candidate was evaluated at all.
@@ -184,6 +213,8 @@ extension ScopedReductionInterpreter {
     }
 
     /// Interprets one branch's pipeline until it reaches a search, a nested `propose`, or a failure, answering its lifts. The search or level is returned unstarted, so the search pool can interleave it with other branches.
+    ///
+    /// A search keeps its continuation: when it exhausts, the pool resumes the branch with the search's outcome, as a top-level search does. An acceptance that ends the search, the level's probe cap, or the deadline ends every branch in the level, so no continuation runs after them.
     private static func buildBranch(
         _ reducer: ScopedReducer,
         depth: Int,
@@ -203,9 +234,9 @@ extension ScopedReductionInterpreter {
             case let .impure(.fail(reason), _):
                 recordBuildOutcome(.failed(reason), depth: depth + 1, context: &context)
                 return nil
-            case let .impure(.search(box, configuration), _):
+            case let .impure(.search(box, configuration), continuation):
                 recordBuildOutcome(.terminalSearch, depth: depth + 1, context: &context)
-                return .search(ScopedSearchPool.SearchSlot(search: box.search, configuration: configuration, feedback: .initial))
+                return .search(ScopedSearchPool.SearchSlot(search: box.search, configuration: configuration, continuation: continuation))
             case let .impure(.propose(branches, configuration), continuation):
                 recordBuildOutcome(.nestedLevel, depth: depth + 1, context: &context)
                 return .level(ScopedSearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: depth + 1))
@@ -270,12 +301,27 @@ struct ScopedSearchPool {
     final class SearchSlot {
         var search: ScopedSearchKind
         let configuration: ScopedSearchConfiguration
-        var feedback: ScopedSearchFeedback
+        var feedback: ScopedSearchFeedback = .initial
+        /// What the branch does after the search exhausts; nil for a top-level search, whose handler resumes the continuation itself.
+        let continuation: ((ScopedReductionResult) -> ScopedReducer)?
+        /// Whether any of the search's candidates was accepted, for its outcome.
+        var anyAccepted = false
+        /// Probes this search alone spent, for its outcome. Counted only when the search has a continuation.
+        var counts = ReductionProbeCounts()
 
-        init(search: ScopedSearchKind, configuration: ScopedSearchConfiguration, feedback: ScopedSearchFeedback) {
+        init(
+            search: ScopedSearchKind,
+            configuration: ScopedSearchConfiguration,
+            continuation: ((ScopedReductionResult) -> ScopedReducer)?
+        ) {
             self.search = search
             self.configuration = configuration
-            self.feedback = feedback
+            self.continuation = continuation
+        }
+
+        /// The outcome of a search that ran out of candidates.
+        var outcome: ScopedSearchOutcome {
+            ScopedSearchOutcome(anyAccepted: anyAccepted, stopReason: .exhausted, counts: counts)
         }
 
         /// The pending feedback, or nil when the search has nothing waiting.
@@ -345,6 +391,6 @@ struct ScopedSearchPool {
         chainLimits = nil
         deliversUniformFeedback = false
         branchesExhausted = true
-        active = Member(source: .search(SearchSlot(search: search, configuration: configuration, feedback: .initial)), probesRemainingInTurn: .max)
+        active = Member(source: .search(SearchSlot(search: search, configuration: configuration, continuation: nil)), probesRemainingInTurn: .max)
     }
 }

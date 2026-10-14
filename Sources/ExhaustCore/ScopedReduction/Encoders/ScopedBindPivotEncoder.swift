@@ -7,7 +7,7 @@
 
 /// Bind pivot: the encoder's reducer proposes a pivot seed, lifts it, relocates the bind, and searches the lifted seed followed by covering over its bound subtree.
 ///
-/// The lifted seed and its covering run as one ``ScopedLiftedSeedSearch``. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
+/// The lifted seed is a ``ScopedSingleCandidateSearch``, and the branch continues with a ``ScopedCoveringSearch`` over the seed's bound range once the seed is evaluated. Both run in the branch's member, so the pool schedules them as one. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
 struct ScopedBindPivotEncoder: ScopedEncoder {
     static let name: EncoderName = .bindPivot
     static let isValueDependent = true
@@ -57,19 +57,20 @@ struct ScopedBindPivotEncoder: ScopedEncoder {
         else {
             return .fail(.bindNotFound)
         }
-        return .search(
-            .liftedSeed(ScopedLiftedSeedSearch(
-                mutation: proposal.mutation,
-                lifted: lifted.sequence,
-                boundRange: boundRange,
-                tuning: tuning
-            )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: ScopedComposition.reshaping(proposal.mutation)
-            )
+        let configuration = ScopedSearchConfiguration(
+            acceptance: .continue,
+            requiresExactDecoder: false,
+            reportedMutation: ScopedComposition.reshaping(proposal.mutation)
         )
+        return .search(
+            .singleCandidate(ScopedSingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation)),
+            configuration: configuration
+        ) { _ in
+            .search(
+                .covering(ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: tuning)),
+                configuration: configuration
+            )
+        }
     }
 
     /// The plain pivot candidate followed by its same-family transplants, with the mutation every seed reports. Nil when the pivot candidate cannot be built.
