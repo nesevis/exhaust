@@ -1,0 +1,31 @@
+//
+//  ScopedDepthCollapseEncoder.swift
+//  Exhaust
+//
+
+// MARK: - Depth Collapse Encoder
+
+/// Binary searches a ``TypeTag/depthControl`` leaf toward its range floor.
+///
+/// A depth leaf is an ordinary bounded integer, so finding the smallest failing layer count is a binary search over its value. Every candidate is a reshape: the leaf is the inner of a `._bound`, and accepting a lower value rebuilds the subtree that bind governs rather than editing an entry in place. Acceptance therefore ends the pass, and the next scope is built against the rebuilt graph.
+struct ScopedDepthCollapseEncoder: ScopedEncoder {
+    let name: EncoderName = .depthCollapse
+    let isValueDependent = true
+    let tuning: ScopedReductionTuning
+
+    func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
+        .search(
+            .binarySearch(ScopedBinarySearch(
+                leaves: scope.leaves,
+                graph: input.graph,
+                baseSequence: input.baseSequence,
+                mayReshape: true
+            )),
+            configuration: ScopedSearchConfiguration(
+                acceptance: .continue,
+                requiresExactDecoder: false,
+                reportedMutation: nil
+            )
+        )
+    }
+}

@@ -1,0 +1,337 @@
+//
+//  ScopedReductionRunner+PostCycle.swift
+//  Exhaust
+//
+
+// MARK: - Post-Cycle Actions
+
+extension ScopedReductionRunner {
+    /// Runs the cycle's post-cycle actions in order, stopping at the deadline.
+    mutating func runPostCycleActions(_ actions: [PostCycleAction]) -> PhaseOutcome {
+        for action in actions {
+            guard isDeadlineExceeded() == false else {
+                return .deadline
+            }
+            switch action {
+                case .confirmConvergence:
+                    confirmConvergence()
+                    chargeElapsed(to: .convergenceConfirmation)
+                case .relationPass:
+                    let previousOwner = beginTimingOwnership(.relationPass)
+                    runRelationPass()
+                    endTimingOwnership(restoring: previousOwner)
+                case .improvingPivots:
+                    if runImprovingPivotPass() {
+                        recordPostCycleAcceptance()
+                    }
+                    chargeElapsed(to: .relaxRound)
+                case .stagedJointPass:
+                    let previousOwner = beginTimingOwnership(.stagedJointPass)
+                    runStagedJointPass()
+                    endTimingOwnership(restoring: previousOwner)
+                case .relaxRound:
+                    // Perturbing away from a counterexample an earlier action just improved spends budget escaping a local minimum the run may not be in.
+                    guard anyAccepted == false else {
+                        continue
+                    }
+                    let previousOwner = beginTimingOwnership(.relaxRound)
+                    if runRelaxRound() {
+                        recordPostCycleAcceptance()
+                    }
+                    endTimingOwnership(restoring: previousOwner)
+                case .releaseDeferral:
+                    // Worth a cycle only when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none.
+                    deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
+                    Self.log("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
+                        "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
+                    ])
+                    chargeElapsed(to: .untimed)
+            }
+        }
+        return .completed
+    }
+
+    /// Records an acceptance made by a post-cycle action: marks the cycle accepted, drops scope rejections recorded against the previous sequence, and restores the stall budget.
+    ///
+    /// The stall that scheduled the action has already been spent, and the relax round runs only on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
+    mutating func recordPostCycleAcceptance() {
+        anyAccepted = true
+        anyAcceptanceEverOccurred = true
+        scopeRejectionCache.clear()
+        stallBudget = maxStalls
+    }
+
+    /// Records an acceptance whose effect can reach beyond the edited leaves, because the property couples values the generator treats as independent. Every convergence floor, cached rejection, and bind search history is invalidated as well.
+    mutating func invalidateAfterCoupledAcceptance() {
+        recordPostCycleAcceptance()
+        graph.convergenceStore.removeAll()
+        rejectCache.removeAll()
+        gate.invalidateSearchHistory()
+    }
+
+    /// Applies a post-cycle pass's policy and, for an acceptance that needs one, a graph-only rebuild. Post-cycle actions never rebuild sources.
+    mutating func applyPostCycleReport(_ pass: PassRecord, appliedPasses: Int = 1) {
+        applyPassPolicy(pass, appliedPasses: appliedPasses)
+        if pass.report.anyAccepted, pass.report.anyRequiresRebuild {
+            rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
+            graphIsStripped = pass.report.latestTreeIsStripped
+        }
+    }
+
+    // MARK: - Convergence Confirmation
+
+    /// Probes each converged leaf below its floor to find stale floors: `floor - 1` first, then `floor - 2` when that rejects and is in range, for non-monotone gaps. A passing probe clears the record so minimization can work on the leaf again.
+    ///
+    /// - Returns: Whether any stale floor was cleared.
+    @discardableResult
+    mutating func confirmConvergence() -> Bool {
+        guard isEncoderEnabled(.convergenceConfirmation) else {
+            return false
+        }
+        var anyStale = false
+        var counts = ReductionProbeCounts()
+        defer {
+            if collectStats {
+                stats.record(counts, for: .convergenceConfirmation)
+            }
+        }
+
+        let sequenceDecoder: SequenceDecoder = hasBind
+            ? .guided(fallbackTree: tree, materializePicks: false)
+            : .exact(materializePicks: false)
+        let baseHash = ZobristHash.hash(of: sequence)
+
+        for nodeID in graph.leafNodes {
+            if isDeadlineExceeded() {
+                break
+            }
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+                continue
+            }
+            guard let origin = graph.convergenceStore[nodeID] else {
+                continue
+            }
+            guard let range = graph.nodes[nodeID].positionRange else {
+                continue
+            }
+
+            let minimumBound: UInt64 = metadata.validRange?.lowerBound ?? 0
+            guard origin.bound > minimumBound else {
+                continue
+            }
+
+            let result = probeBelow(
+                value: origin.bound - 1,
+                at: range.lowerBound,
+                decoder: sequenceDecoder,
+                baseHash: baseHash,
+                counts: &counts
+            )
+
+            if result == .accepted {
+                anyStale = true
+                graph.clearConvergence(nodeID)
+                Self.log("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
+                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
+                ])
+            } else if result == .rejected, origin.bound - minimumBound >= 2, isDeadlineExceeded() == false {
+                let gapResult = probeBelow(
+                    value: origin.bound - 2,
+                    at: range.lowerBound,
+                    decoder: sequenceDecoder,
+                    baseHash: baseHash,
+                    counts: &counts
+                )
+                if gapResult == .accepted {
+                    anyStale = true
+                    graph.clearConvergence(nodeID)
+                    Self.log("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
+                        "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(origin.bound - 2)",
+                    ])
+                }
+            }
+        }
+
+        return anyStale
+    }
+
+    private enum ConfirmationProbeResult {
+        case accepted
+        case rejected
+        case skipped
+    }
+
+    /// Decodes the sequence with one value lowered, without committing it: a failing decode only proves the floor stale.
+    private mutating func probeBelow(
+        value: UInt64,
+        at sequenceIndex: Int,
+        decoder sequenceDecoder: SequenceDecoder,
+        baseHash: UInt64,
+        counts: inout ReductionProbeCounts
+    ) -> ConfirmationProbeResult {
+        var candidate = sequence
+        candidate[sequenceIndex] = candidate[sequenceIndex].withBitPattern(value)
+        guard candidate.shortLexPrecedes(sequence) else {
+            return .skipped
+        }
+
+        counts.recordEmission()
+
+        let probeHash = ZobristHash.incrementalHash(
+            baseHash: baseHash,
+            baseSequence: sequence,
+            probe: candidate
+        )
+        if rejectCache.contains(probeHash) {
+            counts.recordCacheRejection()
+            return .skipped
+        }
+
+        var filterObservations: [UInt64: FilterObservation] = [:]
+        let outcome = sequenceDecoder.decodeAny(
+            candidate: candidate,
+            gen: generator,
+            tree: tree,
+            originalSequence: sequence,
+            property: decoder.wrappedProperty(for: candidate),
+            filterObservations: &filterObservations,
+            precomputedHash: probeHash
+        )
+        counts.recordOutcome(outcome)
+        if outcome.reduction != nil {
+            counts.recordAcceptance()
+            return .accepted
+        }
+
+        rejectCache.insert(probeHash)
+        return .rejected
+    }
+
+    // MARK: - Relation Pass
+
+    /// Runs relation search once value search has written its stall evidence.
+    private mutating func runRelationPass() {
+        guard isEncoderEnabled(.relationSearch), let scope = RelationQuery.build(graph: graph) else {
+            return
+        }
+        guard isDeadlineExceeded() == false else {
+            stats.reductionWasCapped = true
+            return
+        }
+        let pass = runPass(.relation(scope), boundValueFingerprint: nil, usesWarmStarts: false)
+        applyPostCycleReport(pass)
+        if isInstrumented, pass.report.anyAccepted {
+            ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
+        }
+    }
+
+    // MARK: - Staged Joint Pass
+
+    /// Whether a staged joint checkpoint differs from the one last searched, with pairs to search.
+    func hasPendingStagedJointCheckpoint() -> Bool {
+        guard isEncoderEnabled(.stagedJointSearch) else {
+            return false
+        }
+        var source = stagedJointSource()
+        return source.dispatchPriority != nil
+    }
+
+    /// Searches the pending checkpoint, marking it searched before the program starts so a deadline interruption does not repeat it. An acceptance invalidates every floor, cached rejection, and bind search history, because the property couples the moved values.
+    private mutating func runStagedJointPass() {
+        guard isEncoderEnabled(.stagedJointSearch), isDeadlineExceeded() == false else {
+            return
+        }
+        var source = stagedJointSource()
+        guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.opportunity else {
+            return
+        }
+        exhaustedStagedJoint = ScopedStagedJointSource.Checkpoint(base: sequence, scope: scope)
+        let pass = runPass(.stagedJoint(scope), boundValueFingerprint: nil, usesWarmStarts: false)
+        applyPostCycleReport(pass, appliedPasses: max(1, pass.report.searchCounts.count))
+        if pass.report.anyAccepted {
+            invalidateAfterCoupledAcceptance()
+        }
+    }
+
+    private func stagedJointSource() -> ScopedSource {
+        ScopedSource.prepareStagedJointSource(
+            from: graph,
+            sequence: sequence,
+            deferBindInner: deferBindInner,
+            isFruitlessBind: gate.isFruitless,
+            exhausted: exhaustedStagedJoint,
+            tuning: tuning
+        )
+    }
+
+    // MARK: - Improving Pivots
+
+    /// Whether the improving pivot phase has a probe to spend.
+    var hasUnprobedImprovingPivot: Bool {
+        guard isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 else {
+            return false
+        }
+        var cursor = ScopedImprovingPivotCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: makeDeadlineCheck())
+        return cursor.next() != nil
+    }
+
+    /// Probes improving pivots at non-minimal content and accepts the first that still fails the property, without a checkpoint, because every accepted probe already precedes the sequence. The next cycle minimizes the accepted arm under ordinary scheduling.
+    ///
+    /// - Returns: Whether a pivot was accepted.
+    mutating func runImprovingPivotPass() -> Bool {
+        guard isEncoderEnabled(.branchPivot) else {
+            return false
+        }
+        let budget = tuning.relaxImprovingProbeBudget
+        guard budget > 0 else {
+            return false
+        }
+        let deadlineCheck = makeDeadlineCheck()
+        var probesUsed = 0
+        var probeCounts = ReductionProbeCounts()
+        defer {
+            if collectStats {
+                stats.recordStructuralRelax(probeCounts)
+                stats.relaxImprovingProbes += probesUsed
+            }
+        }
+        var candidates = ScopedImprovingPivotCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: deadlineCheck)
+        while probesUsed < budget {
+            guard let probe = candidates.next(), deadlineCheck() == false else {
+                break
+            }
+            let candidate = probe.sequence
+            probesUsed += 1
+            probeCounts.recordEmission()
+            let sequenceDecoder: SequenceDecoder = .exact(materializePicks: true)
+            var filterObservations: [UInt64: FilterObservation] = [:]
+            let outcome = sequenceDecoder.decodeAny(
+                candidate: candidate,
+                gen: generator,
+                tree: tree,
+                originalSequence: sequence,
+                property: decoder.wrappedProperty(for: candidate),
+                filterObservations: &filterObservations
+            )
+            probeCounts.recordOutcome(outcome)
+
+            guard let result = outcome.reduction, result.sequence.shortLexPrecedes(sequence) else {
+                rejectCache.insert(probe.probeHash)
+                continue
+            }
+            probeCounts.recordAcceptance()
+            sequence = result.sequence
+            tree = result.tree
+            output = result.output
+            if collectStats {
+                stats.relaxImprovingAcceptances += 1
+            }
+            rebuildAndUpdateGraph()
+            Self.log("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
+                "seq_len": "\(sequence.count)", "probes": "\(probesUsed)",
+            ])
+            return true
+        }
+        return false
+    }
+}

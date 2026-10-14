@@ -1,0 +1,121 @@
+//
+//  ScopedStagedJointEncoder.swift
+//  Exhaust
+//
+
+// MARK: - Staged Joint Encoder
+
+/// Searches stalled numeric leaves jointly: pairs first, then three-way and four-way groups while each preceding stage stalls.
+///
+/// One program covers a whole checkpoint, as a chain of stages that follow one rule. A stage searches its arity's candidates; a stage that accepts ends the chain, because every group's addresses and domain samples belong to the checkpoint. A stage that exhausts widens the search to one more leaf per group when probes and group calculations remain and a wider group is cheap enough to search: its cheapest sampled grid fits that arity's work limit. All stages share ``ScopedReductionTuning/stagedJointProbeBudget``, and a stage after which the search can widen reserves half of what remains for the wider stage.
+struct ScopedStagedJointEncoder: ScopedEncoder {
+    /// One checkpoint: the pairs to search and the candidate pool that three-way and four-way groups are drawn from, both discovered against the same graph.
+    struct Scope: Equatable {
+        let pairs: [NumericPairQuery.Pair]
+        let candidatePool: [ScopedStagedJointQuery.Entry]
+    }
+
+    static let maximumArity = 4
+
+    let name: EncoderName = .stagedJointSearch
+    let isValueDependent = true
+    let tuning: ScopedReductionTuning
+
+    func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
+        stage(
+            arity: 2,
+            candidates: .pairs(scope.pairs),
+            candidatePool: scope.candidatePool,
+            remaining: tuning.stagedJointProbeBudget,
+            calculationsRemaining: tuning.numericJointGroupCalculationLimit,
+            input: input
+        )
+    }
+
+    /// Probes a stage of `arity` N may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it.
+    func stageBudget(
+        arity: Int,
+        candidatePool: [ScopedStagedJointQuery.Entry],
+        remaining: Int,
+        calculationsRemaining: Int
+    ) -> Int {
+        let reservesProbesForWiderSearch = calculationsRemaining > 0 && canWidenSearch(after: arity, candidatePool: candidatePool)
+        return reservesProbesForWiderSearch ? max(1, remaining / 2) : remaining
+    }
+
+    // MARK: - Helpers
+
+    private enum Candidates {
+        case pairs([NumericPairQuery.Pair])
+        case groups([NumericJointQuery.Group])
+    }
+
+    private static let configuration = ScopedSearchConfiguration(
+        acceptance: .continue,
+        requiresExactDecoder: false,
+        reportedMutation: nil
+    )
+
+    /// Searches one arity, then widens to the next while the stage stalls and the search can widen.
+    private func stage(
+        arity: Int,
+        candidates: Candidates,
+        candidatePool: [ScopedStagedJointQuery.Entry],
+        remaining: Int,
+        calculationsRemaining: Int,
+        input: ScopedEncoderInput
+    ) -> ScopedReducer {
+        let budget = stageBudget(
+            arity: arity,
+            candidatePool: candidatePool,
+            remaining: remaining,
+            calculationsRemaining: calculationsRemaining
+        )
+        let search = switch candidates {
+            case let .pairs(pairs):
+                ScopedStagedJointSearch(pairs: pairs, base: input.baseSequence, probeBudget: budget)
+            case let .groups(groups):
+                ScopedStagedJointSearch(groups: groups, base: input.baseSequence, probeBudget: budget)
+        }
+        return .search(.stagedJoint(search), configuration: Self.configuration) { outcome in
+            let nextArity = arity + 1
+            let remaining = remaining - outcome.counts.emitted
+            guard outcome.anyAccepted == false,
+                  outcome.stopReason == .exhausted,
+                  remaining > 0,
+                  calculationsRemaining > 0,
+                  canWidenSearch(after: arity, candidatePool: candidatePool)
+            else {
+                return .pure(.finished)
+            }
+            let found = ScopedStagedJointQuery.groups(
+                candidatePool: candidatePool,
+                graph: input.graph,
+                arity: nextArity,
+                workLimit: tuning.jointWorkLimit(arity: nextArity),
+                calculationLimit: calculationsRemaining,
+                scopeLimit: tuning.numericJointScopeLimit
+            )
+            guard found.groups.isEmpty == false else {
+                return .pure(.finished)
+            }
+            return stage(
+                arity: nextArity,
+                candidates: .groups(found.groups),
+                candidatePool: candidatePool,
+                remaining: remaining,
+                calculationsRemaining: calculationsRemaining - found.calculations,
+                input: input
+            )
+        }
+    }
+
+    /// Whether a stage of one more leaf per group can follow a stage of `arity`: the four-way stage is the last, and a wider stage needs a group whose cheapest sampled grid fits that arity's work limit.
+    private func canWidenSearch(after arity: Int, candidatePool: [ScopedStagedJointQuery.Entry]) -> Bool {
+        arity < Self.maximumArity && ScopedStagedJointQuery.canWiden(
+            to: arity + 1,
+            candidatePool: candidatePool,
+            workLimit: tuning.jointWorkLimit(arity: arity + 1)
+        )
+    }
+}
