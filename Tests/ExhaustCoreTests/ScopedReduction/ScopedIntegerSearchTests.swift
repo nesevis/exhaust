@@ -3,18 +3,18 @@ import Testing
 
 @Suite("Scoped integer search")
 struct ScopedIntegerSearchTests {
-    @Test("A search stopped at the deadline right after a stepper acceptance records the accepted value as the leaf's bound")
-    func pendingStepperAcceptanceReachesConvergenceRecord() throws {
-        // Values below 10 pass, so the direct shot at zero is rejected and the stepper runs.
+    @Test("A search stopped at the deadline right after a stepper acceptance records the bound its rejections established, not the accepted value")
+    func pendingStepperAcceptanceRecordsResumeBound() throws {
+        // Values below 30 pass: the direct shot at zero and the stepper's first probe, 25, are rejected, which rules out everything below 26. The next probe, 38, is accepted, and the deadline stops the search before it learns of it.
         let run = try IntegerSearchRun(
             generator: Gen.choose(in: UInt64(0) ... 100),
             start: 50,
-            fails: { $0 >= 10 },
+            fails: { $0 >= 30 },
             expires: { _ in true }
         )
 
-        #expect(run.acceptedBitPattern < 50)
-        #expect(run.recordedBound == run.acceptedBitPattern)
+        #expect(run.acceptedBitPattern == 38)
+        #expect(run.recordedBound == 26)
     }
 
     @Test("A search stopped at the deadline during a gap scan records the scan's acceptance as the leaf's bound")

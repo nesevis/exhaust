@@ -28,6 +28,16 @@ struct BinarySearchStepper {
     /// The best accepted value found so far.
     private(set) var bestAccepted: UInt64
 
+    /// The end of the range past which every value has been rejected or lies beyond the search: `lo` when finding the smallest, `hi` when finding the largest. A search resumed from this bound skips nothing it has not already ruled out.
+    var resumeBound: UInt64 {
+        switch direction {
+            case .findSmallest:
+                lo
+            case .findLargest:
+                hi
+        }
+    }
+
     // MARK: - Init
 
     /// - Parameters:

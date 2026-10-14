@@ -167,6 +167,10 @@ struct ScopedIntegerSearch: ScopedSearch {
             binary?.bestAccepted ?? interpolation?.bestAccepted ?? 0
         }
 
+        var resumeBound: UInt64 {
+            binary?.resumeBound ?? interpolation?.resumeBound ?? 0
+        }
+
         init(binary stepper: BinarySearchStepper) {
             binary = stepper
         }
@@ -239,7 +243,7 @@ struct ScopedIntegerSearch: ScopedSearch {
 
     /// Records the in-progress leaf's progress, which each per-leaf phase otherwise records only when it completes. Without this, the progress is lost and the search restarts from the previous record on the next dispatch.
     ///
-    /// A pending acceptance belongs to the outstanding probe of whichever phase is active, checked in the per-leaf loop's order: cross-zero, then the candidate list, then the stepper. Each phase learns of an acceptance only when it is next pulled, so the acceptance is delivered here first.
+    /// A pending acceptance belongs to the outstanding probe of whichever phase is active, checked in the per-leaf loop's order: cross-zero, then the candidate list, then the stepper. Cross-zero and the candidate list learn of an acceptance only when they are next pulled, so the acceptance is delivered to them here first. A stepper records its ``DirectionalStepper/resumeBound``, which an acceptance never moves: every reader of a record treats its bound as a floor, so an accepted value, below which nothing has been tried, must not be recorded.
     private mutating func flushPartialConvergence(pendingAccepted: Bool) {
         guard state.leafIndex < state.leafPositions.count else {
             return
@@ -261,17 +265,14 @@ struct ScopedIntegerSearch: ScopedSearch {
             }
             return
         }
-        if pendingAccepted {
-            _ = state.stepper?.advance(lastAccepted: true)
-        }
         guard convergenceStore[leaf.nodeID] == nil else {
             return
         }
-        guard let bestAccepted = state.stepper?.bestAccepted else {
+        guard let resumeBound = state.stepper?.resumeBound else {
             return
         }
         convergenceStore[leaf.nodeID] = ConvergedOrigin(
-            bound: bestAccepted,
+            bound: resumeBound,
             signal: .monotoneConvergence,
             configuration: .binarySearchSemanticSimplest,
             cycle: 0
