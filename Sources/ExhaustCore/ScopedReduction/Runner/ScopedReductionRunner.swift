@@ -46,9 +46,7 @@ package struct ScopedReductionRunner {
     // MARK: - Core State
 
     let initialSequence: ChoiceSequence
-    var sequence: ChoiceSequence
-    var tree: ChoiceTree
-    var output: Any
+    var incumbent: ScopedCounterexample
     var graph: ChoiceGraph
     var stats = ReductionStats()
     var rejectCache: Set<UInt64> = []
@@ -193,9 +191,7 @@ package struct ScopedReductionRunner {
         graph.excludedPivots = reencoded?.excludedPivots ?? []
 
         initialSequence = sequence
-        self.sequence = sequence
-        self.tree = tree
-        output = initialOutput
+        incumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
         self.graph = graph
         self.generator = erasedGenerator
         self.property = wrappedProperty
@@ -218,7 +214,7 @@ package struct ScopedReductionRunner {
         }
 
         Self.log("graph_reducer_start", isInstrumented: isInstrumented, metadata: [
-            "seq_len": "\(sequence.count)", "max_stalls": "\(configuration.maxStalls)", "nodes": "\(graph.nodes.count)",
+            "seq_len": "\(incumbent.sequence.count)", "max_stalls": "\(configuration.maxStalls)", "nodes": "\(graph.nodes.count)",
         ])
     }
 
@@ -273,16 +269,16 @@ package struct ScopedReductionRunner {
         gate.resetForNewCycle()
         scopeRejectionCache.clearCoarse()
         // Latched across stalled cycles: the scope rejection cache can skip a replacement scope on the very stall that schedules the relax round.
-        hadUnresolvedReplacement = hadUnresolvedReplacement && sequence == sequenceBeforeCycle
+        hadUnresolvedReplacement = hadUnresolvedReplacement && incumbent.sequence == sequenceBeforeCycle
         anyAccepted = false
         deferralReleasedThisCycle = false
-        sequenceBeforeCycle = sequence
+        sequenceBeforeCycle = incumbent.sequence
     }
 
     private mutating func buildCycleSources() {
         sources = prepareAllSources(previousGraph: nil)
         Self.log("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
-            "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
+            "cycle": "\(cycles)", "seq_len": "\(incumbent.sequence.count)",
             "sources": "\(sources.count)", "stall_budget": "\(stallBudget)",
         ])
     }
@@ -306,8 +302,8 @@ package struct ScopedReductionRunner {
                 // The pivot's source is spent in the cycle that probed it, so no encoder sees it in the stalled cycle and the graph has to answer.
                 hasUnprobedImprovingPivot: anyAccepted == false && hasUnprobedImprovingPivot,
                 allConverged: allValuesConverged(),
-                improved: sequence != sequenceBeforeCycle,
-                structurallyImproved: sequence.count < sequenceBeforeCycle.count,
+                improved: incumbent.sequence != sequenceBeforeCycle,
+                structurallyImproved: incumbent.sequence.count < sequenceBeforeCycle.count,
                 shouldAttemptStagedJoint: anyAccepted == false && hasPendingStagedJointCheckpoint()
             ),
             stallBudget: stallBudget,
@@ -325,8 +321,8 @@ package struct ScopedReductionRunner {
         if continues {
             if deferralReleasedThisCycle == false {
                 Self.log("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
-                    "cycle": "\(cycles)", "improved": "\(sequence != sequenceBeforeCycle)",
-                    "seq_len": "\(sequence.count)", "total_mats": "\(stats.totalMaterializations)",
+                    "cycle": "\(cycles)", "improved": "\(incumbent.sequence != sequenceBeforeCycle)",
+                    "seq_len": "\(incumbent.sequence.count)", "total_mats": "\(stats.totalMaterializations)",
                 ])
             }
         } else if isInstrumented {
@@ -335,7 +331,7 @@ package struct ScopedReductionRunner {
                 event: "graph_reducer_complete",
                 metadata: [
                     "cycles": "\(cycles)",
-                    "seq_len": "\(sequence.count)",
+                    "seq_len": "\(incumbent.sequence.count)",
                     "total_mats": "\(stats.totalMaterializations)",
                 ]
             )
@@ -348,7 +344,7 @@ package struct ScopedReductionRunner {
         if deferralReleasedThisCycle {
             return true
         }
-        if sequence.count >= sequenceBeforeCycle.count, anyAccepted == false, allValuesConverged() {
+        if incumbent.sequence.count >= sequenceBeforeCycle.count, anyAccepted == false, allValuesConverged() {
             return false
         }
         return stallBudget > 0
@@ -361,10 +357,10 @@ package struct ScopedReductionRunner {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
-        let typedOutput = output as! Output // swiftlint:disable:this force_cast
-        let outcome: ReductionOutcome<Output> = sequence != initialSequence
-            ? .reduced(sequence, tree, typedOutput)
-            : .unreduced(sequence, tree, typedOutput)
+        let typedOutput = incumbent.output as! Output // swiftlint:disable:this force_cast
+        let outcome: ReductionOutcome<Output> = incumbent.sequence != initialSequence
+            ? .reduced(incumbent.sequence, incumbent.tree, typedOutput)
+            : .unreduced(incumbent.sequence, incumbent.tree, typedOutput)
         return (outcome: outcome, stats: stats)
     }
 
@@ -397,7 +393,7 @@ package struct ScopedReductionRunner {
     }
 
     var hasBind: Bool {
-        sequence.contains { entry in
+        incumbent.sequence.contains { entry in
             guard case .bind = entry else {
                 return false
             }
@@ -419,14 +415,14 @@ package struct ScopedReductionRunner {
         guard collectDiagnostics else {
             return
         }
-        dispatchBaselineLength = sequence.count
+        dispatchBaselineLength = incumbent.sequence.count
         dispatchBaselineTargetDistance = sequenceTargetDistance()
     }
 
     /// Sums each value's pattern-space distance to its reduction target. Floating point, because full-range leaves contribute distances near 2^63 that would overflow an integer sum.
     func sequenceTargetDistance() -> Double {
         var total: Double = 0
-        for entry in sequence {
+        for entry in incumbent.sequence {
             guard let value = entry.value else {
                 continue
             }
@@ -447,12 +443,12 @@ package struct ScopedReductionRunner {
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         let oldConvergence = Self.extractAllConvergence(from: graph, valueGuardExemptNodeIDs: valueGuardExemptNodeIDs)
         var newGraph = ChoiceGraph.build(
-            from: tree,
+            from: incumbent.tree,
             inheriting: graph.bindClassifications,
             observations: graph.bindTopologyObservations,
             excludedPivots: graph.excludedPivots
         )
-        newGraph.observeBindTopologies(tree: tree)
+        newGraph.observeBindTopologies(tree: incumbent.tree)
         Self.transferConvergence(oldConvergence, to: &newGraph)
         let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
         if diff.canReuseStructuralSources {
@@ -476,13 +472,13 @@ package struct ScopedReductionRunner {
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             generator,
             context: .init(
-                prefix: sequence,
+                prefix: incumbent.sequence,
                 mode: .exact,
-                fallbackTree: tree,
+                fallbackTree: incumbent.tree,
                 materializePicks: true
             )
         ) {
-            tree = fullTree
+            incumbent = ScopedCounterexample(sequence: incumbent.sequence, tree: fullTree, output: incumbent.output)
         }
         let graphBefore = graph
         rebuildAndUpdateGraph()

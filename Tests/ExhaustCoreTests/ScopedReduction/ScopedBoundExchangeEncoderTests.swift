@@ -62,7 +62,7 @@ private struct BoundExchangeFixture {
                 incumbent: ScopedCounterexample(
                     sequence: sequence,
                     tree: tree,
-                    output: ScopedOutputHandle(value: sink)
+                    output: sink
                 ),
                 graph: graph,
                 rejectCache: [],

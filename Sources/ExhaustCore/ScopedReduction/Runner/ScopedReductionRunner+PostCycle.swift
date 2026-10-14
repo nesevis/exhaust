@@ -43,7 +43,7 @@ extension ScopedReductionRunner {
                     // Worth a cycle only when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none.
                     deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
                     Self.log("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
-                        "cycle": "\(cycles)", "seq_len": "\(sequence.count)",
+                        "cycle": "\(cycles)", "seq_len": "\(incumbent.sequence.count)",
                     ])
                     chargeElapsed(to: .untimed)
             }
@@ -97,9 +97,9 @@ extension ScopedReductionRunner {
         }
 
         let sequenceDecoder: SequenceDecoder = hasBind
-            ? .guided(fallbackTree: tree, materializePicks: false)
+            ? .guided(fallbackTree: incumbent.tree, materializePicks: false)
             : .exact(materializePicks: false)
-        let baseHash = ZobristHash.hash(of: sequence)
+        let baseHash = ZobristHash.hash(of: incumbent.sequence)
 
         for nodeID in graph.leafNodes {
             if isDeadlineExceeded() {
@@ -169,9 +169,9 @@ extension ScopedReductionRunner {
         baseHash: UInt64,
         counts: inout ReductionProbeCounts
     ) -> ConfirmationProbeResult {
-        var candidate = sequence
+        var candidate = incumbent.sequence
         candidate[sequenceIndex] = candidate[sequenceIndex].withBitPattern(value)
-        guard candidate.shortLexPrecedes(sequence) else {
+        guard candidate.shortLexPrecedes(incumbent.sequence) else {
             return .skipped
         }
 
@@ -179,7 +179,7 @@ extension ScopedReductionRunner {
 
         let probeHash = ZobristHash.incrementalHash(
             baseHash: baseHash,
-            baseSequence: sequence,
+            baseSequence: incumbent.sequence,
             probe: candidate
         )
         if rejectCache.contains(probeHash) {
@@ -187,16 +187,7 @@ extension ScopedReductionRunner {
             return .skipped
         }
 
-        var filterObservations: [UInt64: FilterObservation] = [:]
-        let outcome = sequenceDecoder.decodeAny(
-            candidate: candidate,
-            gen: generator,
-            tree: tree,
-            originalSequence: sequence,
-            property: decoder.wrappedProperty(for: candidate),
-            filterObservations: &filterObservations,
-            precomputedHash: probeHash
-        )
+        let outcome = decoder.decode(candidate, using: sequenceDecoder, against: incumbent, precomputedHash: probeHash)
         counts.recordOutcome(outcome)
         if outcome.reduction != nil {
             counts.recordAcceptance()
@@ -245,7 +236,7 @@ extension ScopedReductionRunner {
         guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.encoderScope else {
             return
         }
-        exhaustedStagedJoint = ScopedStagedJointSource.Checkpoint(base: sequence, scope: scope)
+        exhaustedStagedJoint = ScopedStagedJointSource.Checkpoint(base: incumbent.sequence, scope: scope)
         let pass = runPass(.stagedJoint(scope), boundValueFingerprint: nil, usesWarmStarts: false)
         applyPostCycleReport(pass, appliedPasses: max(1, pass.report.searchCounts.count))
         if pass.report.anyAccepted {
@@ -256,7 +247,7 @@ extension ScopedReductionRunner {
     private func stagedJointSource() -> ScopedSource {
         ScopedSource.prepareStagedJointSource(
             from: graph,
-            sequence: sequence,
+            sequence: incumbent.sequence,
             deferBindInner: deferBindInner,
             isFruitlessBind: gate.isFruitless,
             exhausted: exhaustedStagedJoint,
@@ -271,7 +262,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 else {
             return false
         }
-        var cursor = ScopedImprovingPivotCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: makeDeadlineCheck())
+        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: makeDeadlineCheck())
         return cursor.next() != nil
     }
 
@@ -295,7 +286,7 @@ extension ScopedReductionRunner {
                 stats.relaxImprovingProbes += probesUsed
             }
         }
-        var candidates = ScopedImprovingPivotCursor(sequence: sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: deadlineCheck)
+        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: deadlineCheck)
         while probesUsed < budget {
             guard let probe = candidates.next(), deadlineCheck() == false else {
                 break
@@ -303,32 +294,21 @@ extension ScopedReductionRunner {
             let candidate = probe.sequence
             probesUsed += 1
             probeCounts.recordEmission()
-            let sequenceDecoder: SequenceDecoder = .exact(materializePicks: true)
-            var filterObservations: [UInt64: FilterObservation] = [:]
-            let outcome = sequenceDecoder.decodeAny(
-                candidate: candidate,
-                gen: generator,
-                tree: tree,
-                originalSequence: sequence,
-                property: decoder.wrappedProperty(for: candidate),
-                filterObservations: &filterObservations
-            )
+            let outcome = decoder.decode(candidate, using: .exact(materializePicks: true), against: incumbent)
             probeCounts.recordOutcome(outcome)
 
-            guard let result = outcome.reduction, result.sequence.shortLexPrecedes(sequence) else {
+            guard let result = outcome.reduction, result.sequence.shortLexPrecedes(incumbent.sequence) else {
                 rejectCache.insert(probe.probeHash)
                 continue
             }
             probeCounts.recordAcceptance()
-            sequence = result.sequence
-            tree = result.tree
-            output = result.output
+            incumbent = ScopedCounterexample(result)
             if collectStats {
                 stats.relaxImprovingAcceptances += 1
             }
             rebuildAndUpdateGraph()
             Self.log("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "probes": "\(probesUsed)",
+                "seq_len": "\(incumbent.sequence.count)", "probes": "\(probesUsed)",
             ])
             return true
         }

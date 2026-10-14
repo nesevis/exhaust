@@ -137,7 +137,7 @@ private struct IntegerSearchRun {
                 incumbent: ScopedCounterexample(
                     sequence: sequence,
                     tree: tree,
-                    output: ScopedOutputHandle(value: start)
+                    output: start
                 ),
                 graph: graph,
                 rejectCache: [],

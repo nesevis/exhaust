@@ -8,9 +8,7 @@
 extension ScopedReductionRunner {
     /// The state a relax round restores when its provisional result does not beat the checkpoint. Work already recorded by exploitation passes is kept either way.
     private struct RelaxRoundCheckpoint {
-        let sequence: ChoiceSequence
-        let tree: ChoiceTree
-        let output: Any
+        let incumbent: ScopedCounterexample
         let convergence: [ChoicePath: TransferableConvergence]
         let anyAccepted: Bool
         let hadUnresolvedReplacement: Bool
@@ -34,19 +32,17 @@ extension ScopedReductionRunner {
             return false
         }
         let checkpoint = RelaxRoundCheckpoint(
-            sequence: sequence,
-            tree: tree,
-            output: output,
+            incumbent: incumbent,
             convergence: Self.extractAllConvergence(from: graph),
             anyAccepted: anyAccepted,
             hadUnresolvedReplacement: hadUnresolvedReplacement
         )
         let budget = tuning.relaxMaterializationBudget
         Self.log("relax_round_start", isInstrumented: isInstrumented, metadata: [
-            "seq_len": "\(sequence.count)",
+            "seq_len": "\(incumbent.sequence.count)",
         ])
         var candidates = ScopedRelaxCandidateCursor(
-            sequence: sequence,
+            sequence: incumbent.sequence,
             graph: graph,
             limit: budget,
             isEncoderEnabled: isEncoderEnabled
@@ -70,40 +66,27 @@ extension ScopedReductionRunner {
                 return completeWithoutPerturbation(tally)
             }
             tally.probeCounts.recordEmission()
-            let sequenceDecoder: SequenceDecoder = .exact(materializePicks: true)
-            var filterObservations: [UInt64: FilterObservation] = [:]
-            let outcome = sequenceDecoder.decodeAny(
-                candidate: candidate,
-                gen: generator,
-                tree: tree,
-                originalSequence: sequence,
-                property: decoder.wrappedProperty(for: candidate),
-                filterObservations: &filterObservations
-            )
+            let outcome = decoder.decode(candidate, using: .exact(materializePicks: true), against: incumbent)
             tally.probeCounts.recordOutcome(outcome)
             guard let result = outcome.reduction else {
                 tally.materializationsUsed += 1
                 continue
             }
             tally.probeCounts.recordAcceptance()
-            sequence = result.sequence
-            tree = result.tree
-            output = result.output
+            incumbent = ScopedCounterexample(result)
             tally.perturbationAccepted = true
             Self.log("relax_round_perturbation_accepted", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)",
+                "seq_len": "\(incumbent.sequence.count)",
             ])
         }
 
         // A deadline before exploitation keeps a directly improving perturbation and rolls back any other, without a rebuild, since the graph still describes the checkpoint.
         guard isDeadlineExceeded() == false else {
-            let improved = sequence.shortLexPrecedes(checkpoint.sequence)
+            let improved = incumbent.sequence.shortLexPrecedes(checkpoint.incumbent.sequence)
             if improved {
                 rebuildAndUpdateGraph()
             } else {
-                sequence = checkpoint.sequence
-                tree = checkpoint.tree
-                output = checkpoint.output
+                incumbent = checkpoint.incumbent
             }
             recordRelaxRound(tally, committed: improved)
             completeRelaxRound(tally)
@@ -115,7 +98,7 @@ extension ScopedReductionRunner {
         let outerSources = sources
         sources = isDeadlineExceeded() ? [] : prepareExploitationSources()
         Self.log("relax_round_exploitation_start", isInstrumented: isInstrumented, metadata: [
-            "seq_len": "\(sequence.count)", "sources": "\(sources.count)",
+            "seq_len": "\(incumbent.sequence.count)", "sources": "\(sources.count)",
         ])
         let savedRejectCache = rejectCache
         rejectCache = []
@@ -124,18 +107,16 @@ extension ScopedReductionRunner {
 
         // Settle.
         rejectCache = savedRejectCache
-        let committed = sequence.shortLexPrecedes(checkpoint.sequence)
+        let committed = incumbent.sequence.shortLexPrecedes(checkpoint.incumbent.sequence)
         recordRelaxRound(tally, committed: committed)
         if committed {
             Self.log("relax_round_committed", isInstrumented: isInstrumented, metadata: [
-                "old_seq_len": "\(checkpoint.sequence.count)", "new_seq_len": "\(sequence.count)",
+                "old_seq_len": "\(checkpoint.incumbent.sequence.count)", "new_seq_len": "\(incumbent.sequence.count)",
             ])
             completeRelaxRound(tally)
             return true
         }
-        sequence = checkpoint.sequence
-        tree = checkpoint.tree
-        output = checkpoint.output
+        incumbent = checkpoint.incumbent
         anyAccepted = checkpoint.anyAccepted
         hadUnresolvedReplacement = checkpoint.hadUnresolvedReplacement
         rebuildAndUpdateGraph()
@@ -143,7 +124,7 @@ extension ScopedReductionRunner {
         couplingTracker = CouplingTracker()
         Self.transferConvergence(checkpoint.convergence, to: &graph)
         Self.log("relax_round_rolled_back", isInstrumented: isInstrumented, metadata: [
-            "seq_len": "\(sequence.count)",
+            "seq_len": "\(incumbent.sequence.count)",
         ])
         completeRelaxRound(tally)
         return false

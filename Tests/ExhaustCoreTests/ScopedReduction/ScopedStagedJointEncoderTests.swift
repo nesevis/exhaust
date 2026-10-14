@@ -69,7 +69,7 @@ private struct StagedJointFixture {
                 incumbent: ScopedCounterexample(
                     sequence: sequence,
                     tree: tree,
-                    output: ScopedOutputHandle(value: values)
+                    output: values
                 ),
                 graph: graph,
                 rejectCache: [],

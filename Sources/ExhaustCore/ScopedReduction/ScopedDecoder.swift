@@ -8,10 +8,23 @@
 /// The incumbent: a sequence, its tree, and the output the property was run on, kept together so they cannot drift apart.
 ///
 /// The runner holds the incumbent and lends it to each interpreter. Relax round rollback restores a copy; no property call is needed to recover the output.
+///
+/// The output is type-erased so encoders and the interpreter cannot inspect it. Only the runner's final cast reads it.
 struct ScopedCounterexample {
     let sequence: ChoiceSequence
     let tree: ChoiceTree
-    let output: ScopedOutputHandle
+    let output: Any
+
+    init(sequence: ChoiceSequence, tree: ChoiceTree, output: Any) {
+        self.sequence = sequence
+        self.tree = tree
+        self.output = output
+    }
+
+    /// The counterexample a decoded property failure describes.
+    init(_ reduction: ReductionResult<Any>) {
+        self.init(sequence: reduction.sequence, tree: reduction.tree, output: reduction.output)
+    }
 
     /// Whether `decoded` may replace this incumbent under `order`.
     func admits(_ decoded: ScopedCounterexample, under order: ReductionOrder) -> Bool {
@@ -24,11 +37,6 @@ struct ScopedCounterexample {
                 decoded.sequence.shortLexPrecedes(sequence)
         }
     }
-}
-
-/// Wraps a property output so encoders and the interpreter cannot inspect it. Only the runner's final cast reads ``value``.
-struct ScopedOutputHandle {
-    let value: Any
 }
 
 /// The ordering an admitted candidate must satisfy against the incumbent.
@@ -57,13 +65,7 @@ struct ScopedDecoding {
 
     /// The complete counterexample for an admitted property failure, or nil.
     var recovered: ScopedCounterexample? {
-        outcome.reduction.map { reduction in
-            ScopedCounterexample(
-                sequence: reduction.sequence,
-                tree: reduction.tree,
-                output: ScopedOutputHandle(value: reduction.output)
-            )
-        }
+        outcome.reduction.map(ScopedCounterexample.init)
     }
 }
 
@@ -91,10 +93,25 @@ struct ScopedDecoder {
             hasBind: hasBind,
             admission: requirement.admission
         )
-        let decoder = selection.decoder(fallbackTree: incumbent.tree)
+        let outcome = decode(
+            candidate,
+            using: selection.decoder(fallbackTree: incumbent.tree),
+            against: incumbent,
+            precomputedHash: precomputedHash
+        )
+        return ScopedDecoding(outcome: outcome, selection: selection)
+    }
+
+    /// Decodes `candidate` with `decoder`, running the property, against `incumbent`. For callers that fix their decoder rather than selecting one per candidate.
+    func decode(
+        _ candidate: ChoiceSequence,
+        using decoder: SequenceDecoder,
+        against incumbent: ScopedCounterexample,
+        precomputedHash: UInt64? = nil
+    ) -> SequenceDecodingOutcome {
         // Admission does not read filter observations, so they are collected and discarded.
         var filterObservations: [UInt64: FilterObservation] = [:]
-        let outcome = decoder.decodeAny(
+        return decoder.decodeAny(
             candidate: candidate,
             gen: generator,
             tree: incumbent.tree,
@@ -103,7 +120,6 @@ struct ScopedDecoder {
             filterObservations: &filterObservations,
             precomputedHash: precomputedHash
         )
-        return ScopedDecoding(outcome: outcome, selection: selection)
     }
 
     /// Materializes `prefix` in guided mode without running the property, so a composition can inspect the lifted structure before emitting any candidate.
@@ -118,7 +134,7 @@ struct ScopedDecoder {
     }
 
     /// The property with the host's wrapper around it, carrying the candidate the probe is testing.
-    func wrappedProperty(for candidate: ChoiceSequence) -> (Any) -> Bool {
+    private func wrappedProperty(for candidate: ChoiceSequence) -> (Any) -> Bool {
         guard let probeWrapper else {
             return property
         }

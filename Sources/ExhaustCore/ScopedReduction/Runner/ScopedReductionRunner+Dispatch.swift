@@ -145,8 +145,8 @@ extension ScopedReductionRunner {
             let classificationMaterializations = graph.classifyBind(
                 at: bindNodeID,
                 gen: generator,
-                baseSequence: sequence,
-                fallbackTree: tree,
+                baseSequence: incumbent.sequence,
+                fallbackTree: incumbent.tree,
                 upstreamLeafNodeID: bindScope.upstreamLeafNodeID
             )
             if collectStats {
@@ -185,7 +185,7 @@ extension ScopedReductionRunner {
             return .skip
         }
 
-        if scopeRejectionCache.isRejected(encoderScope, sequence: sequence, graph: graph) {
+        if scopeRejectionCache.isRejected(encoderScope, sequence: incumbent.sequence, graph: graph) {
             return .skip
         }
 
@@ -244,8 +244,8 @@ extension ScopedReductionRunner {
         checksDeadline: Bool = true
     ) -> PassRecord {
         let input = ScopedEncoderInput(
-            baseSequence: sequence,
-            tree: tree,
+            baseSequence: incumbent.sequence,
+            tree: incumbent.tree,
             graph: graph,
             warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:]
         )
@@ -264,11 +264,7 @@ extension ScopedReductionRunner {
         let result = ScopedReductionInterpreter.run(
             scopedReducer,
             context: ScopedReductionInterpreter.Context(
-                incumbent: ScopedCounterexample(
-                    sequence: sequence,
-                    tree: tree,
-                    output: ScopedOutputHandle(value: output)
-                ),
+                incumbent: incumbent,
                 graph: executionGraph,
                 rejectCache: executionRejectCache,
                 decoder: decoder,
@@ -279,9 +275,7 @@ extension ScopedReductionRunner {
             )
         )
         chargeProbing(result.probeTiming)
-        sequence = result.incumbent.sequence
-        tree = result.incumbent.tree
-        output = result.incumbent.output.value
+        incumbent = result.incumbent
         graph = result.graph
         rejectCache = result.rejectCache
 
@@ -423,7 +417,7 @@ extension ScopedReductionRunner {
         Self.log("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
             "encoder": pass.encoderScope.encoder.name.rawValue, "probes": "\(report.counts.emitted)",
             "accepted": "\(report.counts.accepted)", "cache_hits": "\(report.counts.rejectedByCache)",
-            "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(sequence.count)",
+            "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(incumbent.sequence.count)",
         ])
 
         let isBoundValue = switch pass.encoderScope {
@@ -444,7 +438,7 @@ extension ScopedReductionRunner {
         switch action {
             case .continueDispatching:
                 if report.anyAccepted == false {
-                    scopeRejectionCache.recordRejection(pass.encoderScope, sequence: sequence, graph: graph)
+                    scopeRejectionCache.recordRejection(pass.encoderScope, sequence: incumbent.sequence, graph: graph)
                 }
             case .rebuildAndResume:
                 gate.clearFruitless()
@@ -480,7 +474,7 @@ extension ScopedReductionRunner {
             sources = sources.filter { $0.isValueDependent == false }
                 + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
             Self.log("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
+                "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
             scopeRejectionCache.clear()
@@ -488,13 +482,13 @@ extension ScopedReductionRunner {
                 + ScopedSource.preparePermutationSources(from: graph)
                 + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
             Self.log("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
+                "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
             scopeRejectionCache.clear()
             sources = prepareAllSources(previousGraph: graphBefore)
             Self.log("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
+                "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         }
         let sourceEnd = MonotonicClock.nanoseconds()
@@ -593,7 +587,7 @@ extension ScopedReductionRunner {
             acceptCount: report.counts.accepted,
             cacheHitCount: report.counts.rejectedByCache,
             decoderRejectCount: report.counts.decoderRejections,
-            sequenceLengthDelta: dispatchBaselineLength - sequence.count,
+            sequenceLengthDelta: dispatchBaselineLength - incumbent.sequence.count,
             targetDistanceDelta: distanceDelta,
             boundValueFingerprint: pass.boundValueFingerprint,
             composedUpstreamLifts: nil,

@@ -87,7 +87,7 @@ private struct InterpreterFixture {
                 incumbent: ScopedCounterexample(
                     sequence: sequence,
                     tree: tree,
-                    output: ScopedOutputHandle(value: UInt64(5))
+                    output: UInt64(5)
                 ),
                 graph: ChoiceGraph.build(from: tree),
                 rejectCache: [],
