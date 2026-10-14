@@ -61,10 +61,6 @@ struct ScopedWindowRemovalSearch: ScopedSearch {
         return nil
     }
 
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
-
     // MARK: - Helpers
 
     private static func candidate(removing elementNodeIDs: [Int], state: WindowState) -> ChoiceSequence? {

@@ -85,7 +85,7 @@ struct ScopedFloatSearch: ScopedSearch {
     }
 
     /// Reports the convergence records gathered so far.
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
+    consuming func finish(pending _: ScopedSearchFeedback) -> ScopedSearchReport {
         ScopedSearchReport(convergenceRecords: convergenceStore)
     }
 }

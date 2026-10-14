@@ -55,10 +55,6 @@ struct ScopedCoveringSearch: ScopedSearch {
         buffer = built
         return .written(mutation: .leafValues([]), admission: .standard)
     }
-
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
 }
 
 // MARK: - Covering Search

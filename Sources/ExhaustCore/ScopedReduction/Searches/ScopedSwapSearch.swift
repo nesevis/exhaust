@@ -146,10 +146,6 @@ struct ScopedSwapSearch: ScopedSearch {
         return nil
     }
 
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
-
     // MARK: - Helpers
 
     /// Adopts the recovered sequence for the outstanding probe so the next extension probe builds on what was committed. A recovered sequence of a different length invalidates the slot ranges, so the extension ends.

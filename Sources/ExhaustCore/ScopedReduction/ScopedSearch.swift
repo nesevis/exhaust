@@ -80,8 +80,14 @@ protocol ScopedSearch {
     /// Produces the next candidate, given the outcome of the previous one.
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate?
 
-    /// Flushes partial search knowledge. Called exactly once, from the interpreter's single exit point, with the feedback for the last evaluated candidate when the search has not received it.
-    consuming func finish(reason: ScopedStopReason, undelivered: ScopedSearchFeedback?) -> ScopedSearchReport
+    /// Flushes partial search knowledge. Called exactly once, when the search ends. `pending` is the outcome of the last candidate when the search ended before it could receive it, and ``ScopedSearchFeedback/initial`` otherwise.
+    consuming func finish(pending: ScopedSearchFeedback) -> ScopedSearchReport
+}
+
+extension ScopedSearch {
+    consuming func finish(pending _: ScopedSearchFeedback) -> ScopedSearchReport {
+        ScopedSearchReport()
+    }
 }
 
 // MARK: - Registered Searches
@@ -165,36 +171,36 @@ enum ScopedSearchKind {
         }
     }
 
-    consuming func finish(reason: ScopedStopReason, undelivered: ScopedSearchFeedback?) -> ScopedSearchReport {
+    consuming func finish(pending: ScopedSearchFeedback) -> ScopedSearchReport {
         switch consume self {
             case let .binarySearch(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .covering(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .laneCollapse(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .integerSearch(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .floatSearch(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .redistribution(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .lockstep(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .relation(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .stagedJoint(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .singleCandidate(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .coveringAlignedRemoval(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .windowRemoval(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .swap(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
             case let .reorder(search):
-                search.finish(reason: reason, undelivered: undelivered)
+                search.finish(pending: pending)
         }
     }
 }

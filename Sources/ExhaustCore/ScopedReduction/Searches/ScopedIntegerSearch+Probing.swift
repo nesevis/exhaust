@@ -591,9 +591,7 @@ extension ScopedIntegerSearch {
         }
         let leaf = state.leafPositions[state.leafIndex]
 
-        if lastAccepted, list.nextIndex > list.candidates.startIndex {
-            let acceptedValue = list.candidates[list.nextIndex - 1]
-            list.bestAccepted = min(list.bestAccepted ?? acceptedValue, acceptedValue)
+        if lastAccepted, list.recordOutstandingAcceptance() {
             if list.source.endsOnFirstAcceptance {
                 state.candidateList = list
                 return nil
@@ -637,18 +635,24 @@ extension ScopedIntegerSearch {
                     cycle: 0
                 )
             case .characterSimplification:
-                guard let bestAccepted = list.bestAccepted,
-                      let record = convergenceStore[leaf.nodeID]
-                else {
+                guard let bestAccepted = list.bestAccepted else {
                     return
                 }
-                convergenceStore[leaf.nodeID] = ConvergedOrigin(
-                    bound: bestAccepted,
-                    signal: record.signal,
-                    configuration: record.configuration,
-                    cycle: record.cycle
-                )
+                lowerRecordedBound(to: bestAccepted, nodeID: leaf.nodeID)
         }
+    }
+
+    /// Replaces the bound of the leaf's existing record, keeping its signal and configuration. Does nothing when the leaf has no record.
+    mutating func lowerRecordedBound(to bound: UInt64, nodeID: Int) {
+        guard let record = convergenceStore[nodeID] else {
+            return
+        }
+        convergenceStore[nodeID] = ConvergedOrigin(
+            bound: bound,
+            signal: record.signal,
+            configuration: record.configuration,
+            cycle: record.cycle
+        )
     }
 
     // MARK: - Cross-Zero Phase
@@ -723,17 +727,7 @@ extension ScopedIntegerSearch {
             crossZero.lastEmittedKey = nil
             if lastAccepted {
                 // Acceptance — nextProbe has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
-                let leaf = state.leafPositions[state.leafIndex]
-                let acceptedChoice = ChoiceValue.fromShortlexKey(
-                    acceptedKey,
-                    tag: crossZero.tag
-                )
-                convergenceStore[leaf.nodeID] = ConvergedOrigin(
-                    bound: acceptedChoice.bitPattern64,
-                    signal: .monotoneConvergence,
-                    configuration: .binarySearchSemanticSimplest,
-                    cycle: 0
-                )
+                recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: state.leafPositions[state.leafIndex].nodeID)
                 state.crossZero = crossZero
                 return nil
             }
@@ -771,5 +765,16 @@ extension ScopedIntegerSearch {
         // Exhausted — no further probes to try.
         state.crossZero = crossZero
         return nil
+    }
+
+    /// Records an accepted cross-zero probe as the leaf's binary search bound.
+    mutating func recordCrossZeroAcceptance(_ acceptedKey: UInt64, tag: TypeTag, nodeID: Int) {
+        let acceptedChoice = ChoiceValue.fromShortlexKey(acceptedKey, tag: tag)
+        convergenceStore[nodeID] = ConvergedOrigin(
+            bound: acceptedChoice.bitPattern64,
+            signal: .monotoneConvergence,
+            configuration: .binarySearchSemanticSimplest,
+            cycle: 0
+        )
     }
 }

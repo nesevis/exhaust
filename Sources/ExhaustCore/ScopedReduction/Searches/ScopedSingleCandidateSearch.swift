@@ -46,7 +46,7 @@ struct ScopedSingleCandidateSearch: ScopedSearch {
         return .written(mutation: emitted.mutation, admission: .standard)
     }
 
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
+    consuming func finish(pending _: ScopedSearchFeedback) -> ScopedSearchReport {
         ScopedSearchReport(hadUnresolvedReplacement: hadUnresolvedReplacement)
     }
 }

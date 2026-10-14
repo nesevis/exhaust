@@ -37,10 +37,10 @@ extension ScopedReductionInterpreter {
                 case .exhausted:
                     return DriveOutcome(anyAccepted: acceptedInPool, stopReason: .exhausted)
                 case .deadline:
-                    finishAll(&pool, reason: .deadline, keepsSearchReports: keepsSearchReports, context: &context)
+                    finishAll(&pool, keepsSearchReports: keepsSearchReports, context: &context)
                     return DriveOutcome(anyAccepted: acceptedInPool, stopReason: .deadline)
                 case .budgetExhausted:
-                    finishAll(&pool, reason: .budgetExhausted, keepsSearchReports: keepsSearchReports, context: &context)
+                    finishAll(&pool, keepsSearchReports: keepsSearchReports, context: &context)
                     return DriveOutcome(anyAccepted: acceptedInPool, stopReason: .budgetExhausted)
                 case let .emitted(evaluation):
                     if evaluation.isAccepted {
@@ -86,7 +86,7 @@ extension ScopedReductionInterpreter {
             switch member.source {
                 case let .search(slot):
                     guard let candidate = slot.search.next(slot.feedback, into: &context.candidateBuffer) else {
-                        absorb(slot.search.finish(reason: .exhausted, undelivered: nil), keepsSearchReports: keepsSearchReports, context: &context)
+                        absorb(slot.search.finish(pending: .initial), keepsSearchReports: keepsSearchReports, context: &context)
                         // The branch continues with the search's outcome, in the same member, so its turn carries on.
                         if let continuation = slot.continuation {
                             switch buildBranch(continuation(.outcome(slot.outcome)), depth: pool.depth, context: &context) {
@@ -119,11 +119,11 @@ extension ScopedReductionInterpreter {
                     switch pull(&child, keepsSearchReports: keepsSearchReports, checksDeadline: false, context: &context) {
                         case .exhausted, .budgetExhausted:
                             // A nested level that returns nothing has no candidates left, so it is dropped.
-                            finishAll(&child, reason: .exhausted, keepsSearchReports: keepsSearchReports, context: &context)
+                            finishAll(&child, keepsSearchReports: keepsSearchReports, context: &context)
                             continue
                         case .deadline:
                             // A nested level reaches the deadline only while building, which ends the whole pool.
-                            finishAll(&child, reason: .deadline, keepsSearchReports: keepsSearchReports, context: &context)
+                            finishAll(&child, keepsSearchReports: keepsSearchReports, context: &context)
                             return .deadline
                         case let .emitted(childEvaluation):
                             evaluation = childEvaluation
@@ -136,8 +136,8 @@ extension ScopedReductionInterpreter {
             member.probesRemainingInTurn -= 1
             pool.emitted += 1
             if let stop = evaluation.stop {
-                finishMember(&member, reason: stop, keepsSearchReports: keepsSearchReports, context: &context)
-                finishAll(&pool, reason: stop, keepsSearchReports: keepsSearchReports, context: &context)
+                finishMember(&member, keepsSearchReports: keepsSearchReports, context: &context)
+                finishAll(&pool, keepsSearchReports: keepsSearchReports, context: &context)
                 return .emitted(evaluation)
             }
             if member.probesRemainingInTurn == 0 {
@@ -285,24 +285,22 @@ extension ScopedReductionInterpreter {
 
     static func finishAll(
         _ pool: inout ScopedSearchPool,
-        reason: ScopedStopReason,
         keepsSearchReports: Bool,
         context: inout Context
     ) {
         if var active = pool.active {
             pool.active = nil
-            finishMember(&active, reason: reason, keepsSearchReports: keepsSearchReports, context: &context)
+            finishMember(&active, keepsSearchReports: keepsSearchReports, context: &context)
         }
         var suspended = pool.suspended
         pool.suspended = []
         for index in suspended.indices {
-            finishMember(&suspended[index], reason: reason, keepsSearchReports: keepsSearchReports, context: &context)
+            finishMember(&suspended[index], keepsSearchReports: keepsSearchReports, context: &context)
         }
     }
 
     private static func finishMember(
         _ member: inout ScopedSearchPool.Member,
-        reason: ScopedStopReason,
         keepsSearchReports: Bool,
         context: inout Context
     ) {
@@ -310,9 +308,9 @@ extension ScopedReductionInterpreter {
         member.source = .vacant
         switch consume source {
             case let .search(slot):
-                absorb(slot.search.finish(reason: reason, undelivered: slot.undeliveredFeedback), keepsSearchReports: keepsSearchReports, context: &context)
+                absorb(slot.search.finish(pending: slot.feedback), keepsSearchReports: keepsSearchReports, context: &context)
             case var .level(child):
-                finishAll(&child, reason: reason, keepsSearchReports: keepsSearchReports, context: &context)
+                finishAll(&child, keepsSearchReports: keepsSearchReports, context: &context)
             case .vacant:
                 break
         }
@@ -360,16 +358,6 @@ struct ScopedSearchPool {
         /// The outcome of a search that ran out of candidates.
         var outcome: ScopedSearchOutcome {
             ScopedSearchOutcome(anyAccepted: anyAccepted, stopReason: .exhausted, counts: counts)
-        }
-
-        /// The pending feedback, or nil when the search has nothing waiting.
-        var undeliveredFeedback: ScopedSearchFeedback? {
-            switch feedback {
-                case .initial:
-                    nil
-                case .accepted, .rejected:
-                    feedback
-            }
         }
     }
 

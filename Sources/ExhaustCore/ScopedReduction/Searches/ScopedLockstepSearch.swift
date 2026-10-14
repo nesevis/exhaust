@@ -90,8 +90,4 @@ struct ScopedLockstepSearch: ScopedSearch {
         mode = .active(state)
         return .written(mutation: mutation, admission: .standard)
     }
-
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
 }

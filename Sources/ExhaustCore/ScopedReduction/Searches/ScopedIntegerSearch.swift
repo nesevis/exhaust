@@ -95,6 +95,17 @@ struct ScopedIntegerSearch: ScopedSearch {
             nextIndex = candidates.startIndex
             bestAccepted = nil
         }
+
+        /// Folds the outstanding probe's acceptance into ``bestAccepted``. Returns false when no probe has been emitted.
+        @discardableResult
+        mutating func recordOutstandingAcceptance() -> Bool {
+            guard nextIndex > candidates.startIndex else {
+                return false
+            }
+            let acceptedValue = candidates[nextIndex - 1]
+            bestAccepted = min(bestAccepted ?? acceptedValue, acceptedValue)
+            return true
+        }
     }
 
     /// State for the cross-zero phase of per-leaf minimization.
@@ -215,18 +226,39 @@ struct ScopedIntegerSearch: ScopedSearch {
         return .written(mutation: mutation, admission: .standard)
     }
 
-    /// Reports the convergence records gathered so far, first recording a partial bound for the leaf in progress so its search resumes from there on the next dispatch.
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        flushPartialConvergence()
+    /// Reports the convergence records gathered so far, first recording the progress of the leaf in progress so its search resumes from there on the next dispatch.
+    consuming func finish(pending: ScopedSearchFeedback) -> ScopedSearchReport {
+        flushPartialConvergence(pendingAccepted: pending.isAccepted)
         return ScopedSearchReport(convergenceRecords: convergenceStore)
     }
 
-    /// Writes a partial convergence record for the current in-progress leaf if the stepper has a best-accepted bound. Without this, the stepper's progress is lost and the search restarts from the warm-start bound on the next dispatch.
-    private mutating func flushPartialConvergence() {
+    /// Records the in-progress leaf's progress, which each per-leaf phase otherwise records only when it completes. Without this, the progress is lost and the search restarts from the previous record on the next dispatch.
+    ///
+    /// A pending acceptance belongs to the outstanding probe of whichever phase is active, checked in the per-leaf loop's order: cross-zero, then the candidate list, then the stepper. Each phase learns of an acceptance only when it is next pulled, so the acceptance is delivered here first.
+    private mutating func flushPartialConvergence(pendingAccepted: Bool) {
         guard state.leafIndex < state.leafPositions.count else {
             return
         }
         let leaf = state.leafPositions[state.leafIndex]
+        if let crossZero = state.crossZero {
+            if pendingAccepted, let acceptedKey = crossZero.lastEmittedKey {
+                recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: leaf.nodeID)
+            }
+            return
+        }
+        if var list = state.candidateList {
+            if pendingAccepted {
+                list.recordOutstandingAcceptance()
+            }
+            // An unfinished scan is not complete, so the record keeps its binary search configuration. The next dispatch warm-starts at the lowered bound and scans the gap below it again.
+            if let bestAccepted = list.bestAccepted {
+                lowerRecordedBound(to: bestAccepted, nodeID: leaf.nodeID)
+            }
+            return
+        }
+        if pendingAccepted {
+            _ = state.stepper?.advance(lastAccepted: true)
+        }
         guard convergenceStore[leaf.nodeID] == nil else {
             return
         }

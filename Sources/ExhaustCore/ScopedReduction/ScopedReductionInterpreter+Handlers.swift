@@ -44,7 +44,7 @@ extension ScopedReductionInterpreter {
         var pool = ScopedSearchPool(single: box.search, configuration: configuration)
         // A search that follows another one in the encoder's reducer is not started past the deadline, so no work is recorded for a stage that did not run. The runner checks the deadline before the first search of the encoder's reducer.
         if context.report.searchCounts.isEmpty == false, context.isExpired {
-            finishAll(&pool, reason: .deadline, keepsSearchReports: true, context: &context)
+            finishAll(&pool, keepsSearchReports: true, context: &context)
             return .deadline
         }
         // Counts this search alone, then folds them back into the pass, so the encoder's reducer can branch on its search's work and the runner can attribute it.

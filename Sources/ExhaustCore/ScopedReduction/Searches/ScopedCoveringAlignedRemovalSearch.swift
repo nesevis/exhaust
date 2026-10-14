@@ -86,8 +86,4 @@ struct ScopedCoveringAlignedRemovalSearch: ScopedSearch {
         isExhausted = true
         return nil
     }
-
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
 }

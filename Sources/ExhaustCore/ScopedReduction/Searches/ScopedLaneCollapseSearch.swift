@@ -63,10 +63,6 @@ struct ScopedLaneCollapseSearch: ScopedSearch {
         return nil
     }
 
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
-
     // MARK: - Types
 
     private struct SequenceElement {

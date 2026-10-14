@@ -108,10 +108,6 @@ struct ScopedRelationSearch: ScopedSearch {
         return .written(mutation: mutation, admission: .standard)
     }
 
-    consuming func finish(reason _: ScopedStopReason, undelivered _: ScopedSearchFeedback?) -> ScopedSearchReport {
-        ScopedSearchReport()
-    }
-
     // MARK: - Probe Loop
 
     private mutating func nextRelationProbe(
