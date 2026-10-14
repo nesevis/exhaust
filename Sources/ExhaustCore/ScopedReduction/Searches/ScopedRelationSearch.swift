@@ -45,7 +45,6 @@ struct ScopedRelationSearch: ScopedSearch {
         var planIndex: Int
         var probePhase: RelationProbePhase
         var stepper: BinarySearchStepper
-        var lastEmittedCandidate: ChoiceSequence?
         var lastWasDirectShot: Bool
     }
 
@@ -82,7 +81,6 @@ struct ScopedRelationSearch: ScopedSearch {
             planIndex: 0,
             probePhase: .directShot,
             stepper: BinarySearchStepper(lo: 0, hi: 0, direction: .findLargest),
-            lastEmittedCandidate: nil,
             lastWasDirectShot: false
         ))
     }
@@ -93,16 +91,18 @@ struct ScopedRelationSearch: ScopedSearch {
         }
 
         let lastAccepted = feedback.isAccepted
-        if lastAccepted, let accepted = state.lastEmittedCandidate {
-            valueState.sequence = accepted
+        if case let .accepted(recovered) = feedback {
+            // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
+            guard recovered.count == valueState.sequence.count else {
+                return nil
+            }
+            valueState.sequence = recovered
         }
-        state.lastEmittedCandidate = nil
         guard let built = nextRelationProbe(state: &state, lastAccepted: lastAccepted) else {
             mode = .active(state)
             return nil
         }
         buffer = built
-        state.lastEmittedCandidate = buffer
         let mutation = valueState.buildLeafValuesMutation(candidate: buffer)
         mode = .active(state)
         return .written(mutation: mutation, admission: .standard)
@@ -120,7 +120,6 @@ struct ScopedRelationSearch: ScopedSearch {
                 case .directShot:
                     // Full distance probes the line's minimum, scale factor one.
                     if let candidate = makeRelationCandidate(plan: plan, delta: plan.scale - 1) {
-                        state.lastEmittedCandidate = candidate
                         state.lastWasDirectShot = true
                         state.probePhase = .binarySearchStart
                         return candidate
@@ -146,7 +145,6 @@ struct ScopedRelationSearch: ScopedSearch {
                     }
                     state.probePhase = .binarySearch
                     if let candidate = makeRelationCandidate(plan: plan, delta: firstDelta) {
-                        state.lastEmittedCandidate = candidate
                         return candidate
                     }
                     continue
@@ -158,7 +156,6 @@ struct ScopedRelationSearch: ScopedSearch {
                         continue
                     }
                     if let candidate = makeRelationCandidate(plan: plan, delta: nextDelta) {
-                        state.lastEmittedCandidate = candidate
                         return candidate
                     }
                     continue

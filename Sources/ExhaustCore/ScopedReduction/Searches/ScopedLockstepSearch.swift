@@ -53,7 +53,6 @@ struct ScopedLockstepSearch: ScopedSearch {
         var characterCandidateIndex: Int
         var probePhase: LockstepProbePhase
         var stepper: BinarySearchStepper
-        var lastEmittedCandidate: ChoiceSequence?
         var lastWasDirectShot: Bool
     }
 
@@ -76,16 +75,18 @@ struct ScopedLockstepSearch: ScopedSearch {
         }
 
         let lastAccepted = feedback.isAccepted
-        if lastAccepted, let accepted = state.lastEmittedCandidate {
-            valueState.sequence = accepted
+        if case let .accepted(recovered) = feedback {
+            // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
+            guard recovered.count == valueState.sequence.count else {
+                return nil
+            }
+            valueState.sequence = recovered
         }
-        state.lastEmittedCandidate = nil
         guard let built = nextLockstepProbe(state: &state, lastAccepted: lastAccepted) else {
             mode = .active(state)
             return nil
         }
         buffer = built
-        state.lastEmittedCandidate = buffer
         let mutation = valueState.buildLeafValuesMutation(candidate: buffer)
         mode = .active(state)
         return .written(mutation: mutation, admission: .standard)

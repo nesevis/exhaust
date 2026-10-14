@@ -57,7 +57,6 @@ extension ScopedLockstepSearch {
             characterCandidateIndex: 0,
             probePhase: .directShot,
             stepper: BinarySearchStepper(lo: 0, hi: 0, direction: .findLargest),
-            lastEmittedCandidate: nil,
             lastWasDirectShot: false
         ))
     }
@@ -218,7 +217,6 @@ extension ScopedLockstepSearch {
             switch state.probePhase {
                 case .directShot:
                     if let candidate = makeLockstepCandidate(plan: plan, delta: plan.distance) {
-                        state.lastEmittedCandidate = candidate
                         state.lastWasDirectShot = true
                         state.probePhase = .binarySearchStart
                         return candidate
@@ -245,7 +243,6 @@ extension ScopedLockstepSearch {
                     }
                     state.probePhase = .binarySearch
                     if let candidate = makeLockstepCandidate(plan: plan, delta: firstDelta) {
-                        state.lastEmittedCandidate = candidate
                         return candidate
                     }
                     // First probe didn't yield a candidate — advance stepper.
@@ -259,7 +256,6 @@ extension ScopedLockstepSearch {
                         continue
                     }
                     if let candidate = makeLockstepCandidate(plan: plan, delta: nextDelta) {
-                        state.lastEmittedCandidate = candidate
                         return candidate
                     }
                     continue

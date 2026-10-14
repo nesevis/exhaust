@@ -44,6 +44,68 @@ struct ScopedIntegerSearchTests {
         #expect(run.acceptedBitPattern == Int64(-1).bitPattern64)
         #expect(run.recordedBound == run.acceptedBitPattern)
     }
+
+    @Test("A leaf accepted at its target in the per-leaf zero round is excluded from batch bisection")
+    func perLeafZeroAcceptanceConvergesLeaf() throws {
+        let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: 5)
+        let tree = try #require(try Interpreters.reflect(generator, with: [500, 500, 500, 500, 500]))
+        let graph = ChoiceGraph.build(from: tree)
+        let sequence = ChoiceSequence(tree)
+        let leafNodeIDs = graph.leafNodes.sorted { lhs, rhs in
+            graph.nodes[lhs].positionRange!.lowerBound < graph.nodes[rhs].positionRange!.lowerBound
+        }
+        let leafIndices = leafNodeIDs.map { graph.nodes[$0].positionRange!.lowerBound }
+        var search = ScopedIntegerSearch(
+            scope: ValueMinimizationScope(leaves: leafNodeIDs.map { LeafEntry(nodeID: $0) }, batchZeroEligible: true),
+            sequence: sequence,
+            graph: graph,
+            warmStarts: [:],
+            tuning: ScopedReductionTuning()
+        )
+
+        // The property fails while the last four leaves are all at least 10, so only the first leaf zeroes on its own, leaving four leaves for batch bisection.
+        var feedback = ScopedSearchFeedback.initial
+        var buffer = sequence
+        while search.state.phase != .batchBisect {
+            _ = try #require(search.next(feedback, into: &buffer))
+            let fails = leafIndices.dropFirst().allSatisfy { index in
+                (buffer[index].value?.choice.bitPattern64 ?? 0) >= 10
+            }
+            feedback = fails ? .accepted(recovered: buffer) : .rejected(.propertyPassed)
+        }
+
+        let firstLeaf = try #require(search.state.leafPositions.firstIndex { $0.nodeID == leafNodeIDs[0] })
+        #expect(search.state.bisection?.convergedIndices.contains(firstLeaf) == true)
+        #expect(search.state.leafPositions[firstLeaf].currentBitPattern == search.state.leafPositions[firstLeaf].targetBitPattern)
+    }
+
+    @Test("After an acceptance, the next candidate builds on the recovered sequence rather than the candidate the search emitted")
+    func nextCandidateBuildsOnRecoveredSequence() throws {
+        var fixture = try TwoLeafSearch()
+        var buffer = fixture.sequence
+        _ = try #require(fixture.search.next(.initial, into: &buffer))
+        _ = try #require(fixture.search.next(.rejected(.propertyPassed), into: &buffer))
+
+        // Decoding rewrote the leaf the search does not touch.
+        var recovered = buffer
+        recovered[fixture.otherLeafIndex] = recovered[fixture.otherLeafIndex].withBitPattern(7)
+        _ = try #require(fixture.search.next(.accepted(recovered: recovered), into: &buffer))
+
+        #expect(buffer[fixture.otherLeafIndex].value?.choice.bitPattern64 == 7)
+    }
+
+    @Test("A recovered sequence of a different length ends the search")
+    func recoveredLengthChangeEndsSearch() throws {
+        var fixture = try TwoLeafSearch()
+        var buffer = fixture.sequence
+        _ = try #require(fixture.search.next(.initial, into: &buffer))
+        // A rejected direct shot leaves the stepper with candidates, so only the length change can end the search.
+        _ = try #require(fixture.search.next(.rejected(.propertyPassed), into: &buffer))
+        let longer = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let recovered = try ChoiceSequence(#require(try Interpreters.reflect(longer, with: [50, 50, 50])))
+
+        #expect(fixture.search.next(.accepted(recovered: recovered), into: &buffer) == nil)
+    }
 }
 
 // MARK: - Fixture
@@ -101,5 +163,30 @@ private struct IntegerSearchRun {
 
         acceptedBitPattern = try #require(result.incumbent.sequence[leafIndex].value?.choice.bitPattern64)
         recordedBound = result.report.searchReport.convergenceRecords[leafNodeID]?.bound
+    }
+}
+
+/// Integer search over the first of two leaves, starting at 50 each, so the second leaf shows which baseline the search builds on.
+private struct TwoLeafSearch {
+    let sequence: ChoiceSequence
+    let otherLeafIndex: Int
+    var search: ScopedIntegerSearch
+
+    init() throws {
+        let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
+        let tree = try #require(try Interpreters.reflect(generator, with: [50, 50]))
+        let graph = ChoiceGraph.build(from: tree)
+        sequence = ChoiceSequence(tree)
+        let leafNodeIDs = graph.leafNodes.sorted { lhs, rhs in
+            graph.nodes[lhs].positionRange!.lowerBound < graph.nodes[rhs].positionRange!.lowerBound
+        }
+        otherLeafIndex = try #require(graph.nodes[leafNodeIDs[1]].positionRange).lowerBound
+        search = ScopedIntegerSearch(
+            scope: ValueMinimizationScope(leaves: [LeafEntry(nodeID: leafNodeIDs[0])], batchZeroEligible: false),
+            sequence: sequence,
+            graph: graph,
+            warmStarts: [:],
+            tuning: ScopedReductionTuning()
+        )
     }
 }

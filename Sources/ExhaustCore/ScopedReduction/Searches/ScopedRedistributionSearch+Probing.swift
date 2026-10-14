@@ -48,7 +48,6 @@ extension ScopedRedistributionSearch {
             pairIndex: 0,
             stepper: nil,
             didEmitCandidate: false,
-            lastEmittedCandidate: nil,
             triedFullDelta: false,
             acceptedPairIndices: [],
             passCount: 0,
@@ -97,7 +96,6 @@ extension ScopedRedistributionSearch {
                         mixedContext: freshContext
                     ) {
                         state.didEmitCandidate = true
-                        state.lastEmittedCandidate = candidate
                         return candidate
                     }
                     // Full delta rejected — fall through to binary search.
@@ -126,7 +124,6 @@ extension ScopedRedistributionSearch {
                     mixedContext: freshContext
                 ) {
                     state.didEmitCandidate = true
-                    state.lastEmittedCandidate = candidate
                     return candidate
                 }
                 // First stepper probe not viable — advance stepper.
@@ -161,7 +158,6 @@ extension ScopedRedistributionSearch {
                     mixedContext: freshContext
                 ) {
                     state.didEmitCandidate = true
-                    state.lastEmittedCandidate = candidate
                     return candidate
                 }
                 continue

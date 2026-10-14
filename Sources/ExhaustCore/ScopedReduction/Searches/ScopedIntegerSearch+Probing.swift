@@ -49,7 +49,6 @@ extension ScopedIntegerSearch {
             leafIndex: 0,
             stepper: nil,
             warmStartRecords: warmStarts,
-            lastEmittedCandidate: nil,
             batchRejected: false,
             candidateList: nil,
             crossZero: nil,
@@ -57,17 +56,11 @@ extension ScopedIntegerSearch {
         )
     }
 
-    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. Updates the baseline sequence on acceptance so subsequent probes build on the improved candidate.
+    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. The caller has already made an accepted candidate the baseline, so subsequent probes build on it.
     mutating func nextProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        // If the last probe was accepted, update the baseline sequence.
-        if lastAccepted, let accepted = state.lastEmittedCandidate {
-            state.sequence = accepted
-        }
-        state.lastEmittedCandidate = nil
-
         switch state.phase {
             case .batchZero:
                 // Try setting all leaves to their targets simultaneously.
@@ -80,7 +73,6 @@ extension ScopedIntegerSearch {
                     // Emit the batch-zero probe. If accepted, perLeafZero will see lastAccepted=true and converge all leaves. If rejected, perLeafZero tries each leaf individually at its target before per-leaf binary search.
                     state.phase = .perLeafZero
                     state.perLeafZero = PerLeafZeroState()
-                    state.lastEmittedCandidate = candidate
                     return candidate
                 }
                 // Batch zero not shortlex-smaller — skip to per-leaf.
@@ -115,21 +107,18 @@ extension ScopedIntegerSearch {
         }
 
         // Process feedback from the previous per-leaf-zero probe.
-        if lastAccepted, let accepted = state.lastEmittedCandidate {
-            state.sequence = accepted
-            // The leaf at cursor-1 accepted at its target — mark it converged.
-            if plz.leafCursor > 0 {
-                let acceptedIndex = plz.leafCursor - 1
-                plz.convergedIndices.insert(acceptedIndex)
-                state.leafPositions[acceptedIndex].currentBitPattern = state.leafPositions[acceptedIndex].targetBitPattern
+        if lastAccepted {
+            guard plz.leafCursor > 0 else {
+                // Batch-zero accepted — all leaves converge.
+                state.perLeafZero = nil
+                state.phase = .perLeaf
+                return nil
             }
-        } else if plz.leafCursor == 0, lastAccepted {
-            // Batch-zero accepted — all leaves converge.
-            state.perLeafZero = nil
-            state.phase = .perLeaf
-            return nil
+            // The leaf at cursor-1 accepted at its target — mark it converged.
+            let acceptedIndex = plz.leafCursor - 1
+            plz.convergedIndices.insert(acceptedIndex)
+            state.leafPositions[acceptedIndex].currentBitPattern = state.leafPositions[acceptedIndex].targetBitPattern
         }
-        state.lastEmittedCandidate = nil
 
         // Try the next unconverged leaf.
         while plz.leafCursor < state.leafPositions.count {
@@ -150,7 +139,6 @@ extension ScopedIntegerSearch {
             }
 
             state.perLeafZero = plz
-            state.lastEmittedCandidate = candidate
             return candidate
         }
 
@@ -301,7 +289,6 @@ extension ScopedIntegerSearch {
 
             bisection.awaitingFeedback = true
             state.bisection = bisection
-            state.lastEmittedCandidate = candidate
             return candidate
         }
 
@@ -388,7 +375,6 @@ extension ScopedIntegerSearch {
                         ))
                         candidate[leaf.sequenceIndex] = targetEntry
                         if candidate.shortLexPrecedes(state.sequence) {
-                            state.lastEmittedCandidate = candidate
                             return candidate
                         }
                     }
@@ -505,7 +491,6 @@ extension ScopedIntegerSearch {
             if newEntry.shortLexCompare(currentEntry) == .lt {
                 var candidate = state.sequence
                 candidate[leaf.sequenceIndex] = newEntry
-                state.lastEmittedCandidate = candidate
                 return candidate
             }
         }
@@ -516,7 +501,6 @@ extension ScopedIntegerSearch {
             if newEntry.shortLexCompare(currentEntry) == .lt {
                 var candidate = state.sequence
                 candidate[leaf.sequenceIndex] = newEntry
-                state.lastEmittedCandidate = candidate
                 return candidate
             }
             accepted = false
@@ -608,7 +592,6 @@ extension ScopedIntegerSearch {
             }
             var candidate = state.sequence
             candidate[leaf.sequenceIndex] = newEntry
-            state.lastEmittedCandidate = candidate
             state.candidateList = list
             return candidate
         }
@@ -726,7 +709,7 @@ extension ScopedIntegerSearch {
         if let acceptedKey = crossZero.lastEmittedKey {
             crossZero.lastEmittedKey = nil
             if lastAccepted {
-                // Acceptance — nextProbe has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
+                // Acceptance — `next` has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
                 recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: state.leafPositions[state.leafIndex].nodeID)
                 state.crossZero = crossZero
                 return nil
@@ -758,7 +741,6 @@ extension ScopedIntegerSearch {
                 validRange: crossZero.validRange,
                 isRangeExplicit: crossZero.isRangeExplicit
             ))
-            state.lastEmittedCandidate = candidate
             return candidate
         }
 

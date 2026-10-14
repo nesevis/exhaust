@@ -7,11 +7,11 @@
 
 /// The outcome of a search's previous candidate, delivered with the request for its next one.
 ///
-/// It carries the recovered sequence but not the graph: a search that continues after an acceptance works from the sequence alone.
+/// It carries sequences but not the graph: a search that continues after an acceptance works from the sequence alone.
 enum ScopedSearchFeedback {
     /// No candidate has been evaluated yet.
     case initial
-    /// The candidate was committed; `recovered` is the incumbent's sequence after decoding.
+    /// The candidate was committed; `recovered` is the incumbent's sequence after decoding, which can differ from the candidate. A search that continues from it builds on what was committed.
     case accepted(recovered: ChoiceSequence)
     case rejected(ScopedRejection)
 

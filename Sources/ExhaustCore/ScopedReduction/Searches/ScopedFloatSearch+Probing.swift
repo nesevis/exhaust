@@ -46,7 +46,6 @@ extension ScopedFloatSearch {
             batchIndex: 0,
             stepper: FindIntegerStepper(),
             needsFirstProbe: true,
-            lastEmittedCandidate: nil,
             binarySearchMinDelta: 1,
             binarySearchMaxQuantum: 0,
             binarySearchMovesUp: false,
@@ -63,12 +62,6 @@ extension ScopedFloatSearch {
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
-        // Update baseline on acceptance.
-        if lastAccepted, let accepted = state.lastEmittedCandidate {
-            state.sequence = accepted
-        }
-        state.lastEmittedCandidate = nil
-
         while state.currentTargetIndex < state.targets.count {
             if state.needsFirstProbe {
                 state.needsFirstProbe = false
@@ -81,7 +74,6 @@ extension ScopedFloatSearch {
                 state: &state,
                 lastAccepted: lastAccepted
             ) {
-                state.lastEmittedCandidate = candidate
                 return candidate
             }
 

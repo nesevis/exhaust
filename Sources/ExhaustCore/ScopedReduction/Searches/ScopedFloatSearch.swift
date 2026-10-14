@@ -52,7 +52,6 @@ struct ScopedFloatSearch: ScopedSearch {
         var batchIndex: Int
         var stepper: FindIntegerStepper
         var needsFirstProbe: Bool
-        var lastEmittedCandidate: ChoiceSequence?
         // Stage 2/3 binary search context.
         var binarySearchMinDelta: UInt64
         var binarySearchMaxQuantum: UInt64
@@ -74,6 +73,13 @@ struct ScopedFloatSearch: ScopedSearch {
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
         var current = state
+        if case let .accepted(recovered) = feedback {
+            // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
+            guard recovered.count == current.sequence.count else {
+                return nil
+            }
+            current.sequence = recovered
+        }
         guard let built = nextProbe(state: &current, lastAccepted: feedback.isAccepted) else {
             state = current
             return nil

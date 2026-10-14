@@ -46,8 +46,6 @@ struct ScopedIntegerSearch: ScopedSearch {
         var leafIndex: Int
         var stepper: DirectionalStepper?
         var warmStartRecords: [Int: ConvergedOrigin]
-        /// The last candidate emitted by nextProbe. When lastAccepted is true, this becomes the new baseline sequence.
-        var lastEmittedCandidate: ChoiceSequence?
         /// Whether the batch-zero probe was rejected. When true and a leaf individually converges at its target, the convergence signal is `zeroingDependency` instead of `monotoneConvergence`.
         var batchRejected: Bool
         /// Candidates that binary search cannot reach for the current leaf, or nil when inactive. Set when binary search converges.
@@ -216,6 +214,13 @@ struct ScopedIntegerSearch: ScopedSearch {
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
         var current = state
+        if case let .accepted(recovered) = feedback {
+            // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
+            guard recovered.count == current.sequence.count else {
+                return nil
+            }
+            current.sequence = recovered
+        }
         guard let built = nextProbe(state: &current, lastAccepted: feedback.isAccepted) else {
             state = current
             return nil
