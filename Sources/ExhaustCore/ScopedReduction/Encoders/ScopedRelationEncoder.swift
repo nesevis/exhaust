@@ -9,8 +9,10 @@
 ///
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate.
 struct ScopedRelationEncoder: ScopedEncoder {
-    let name: EncoderName = .relationSearch
-    let isValueDependent = true
+    static let name: EncoderName = .relationSearch
+    static let isValueDependent = true
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: RelationScope, input: ScopedEncoderInput) -> ScopedReducer {

@@ -5,7 +5,7 @@
 
 // MARK: - Composition Helpers
 
-/// Shared pieces of composed programs.
+/// Shared pieces of the composed encoders' reducers.
 enum ScopedComposition {
     /// Marks every upstream leaf change as reshaping, so acceptance triggers a full rebuild.
     static func reshaping(_ upstreamProbe: EncoderProbe) -> EncoderProbe {

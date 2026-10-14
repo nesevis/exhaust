@@ -1,23 +1,19 @@
 //
-//  ScopedValueSearch.swift
+//  ScopedIntegerSearch.swift
 //  Exhaust
 //
 
-// MARK: - Value Search
+// MARK: - Integer Search
 
-/// Drives leaf values toward their semantic simplest without changing graph structure.
-///
-/// Operates in one of two modes, chosen by the scope:
-/// - **Integer leaves**: batch zeroing attempt followed by per-leaf interpolation search via ``InterpolationSearchStepper`` (falling back to binary search below a threshold), with cross-zero phase for signed integers.
-/// - **Float leaves**: four-stage IEEE 754 pipeline (special values, truncation, integral binary search, ratio binary search).
+/// Drives integer leaves toward their semantic simplest without changing graph structure: a batch zeroing attempt followed by per-leaf interpolation search via ``InterpolationSearchStepper`` (falling back to binary search below a threshold), with a cross-zero phase for signed integers.
 ///
 /// All leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions, and an acceptance advances the baseline to the accepted candidate.
 ///
-/// The integer- and float-mode implementations live in `ScopedValueSearch+Integer.swift` and `ScopedValueSearch+Float.swift`. State types are nested here so both extensions can reference them.
-struct ScopedValueSearch: ScopedSearch {
+/// The phases live in `ScopedIntegerSearch+Probing.swift`.
+struct ScopedIntegerSearch: ScopedSearch {
     // MARK: - State
 
-    var mode: Mode = .idle
+    var state: State
     let linearScanThreshold: UInt64
     let bisectionInitialDivisor: UInt64
     let bisectionBinaryThreshold: UInt64
@@ -25,26 +21,10 @@ struct ScopedValueSearch: ScopedSearch {
     let interpolationInitialDivisor: UInt64
     var convergenceStore: [Int: ConvergedOrigin] = [:]
 
-    /// Controls which leaf reduction phase is active. The encoder is either idle (no scope loaded), reducing integer leaves, or reducing float leaves; each mode carries its own state type because the search strategies differ fundamentally.
-    enum Mode {
-        case idle
-        case valueLeaves(IntegerState)
-        case floatLeaves(FloatState)
-    }
-
-    // MARK: - Leaf Mutation Source
-
-    /// Common fields needed by ``buildLeafValuesMutation`` to diff a candidate against a baseline.
-    protocol LeafMutationSource {
-        var nodeID: Int { get }
-        var sequenceIndex: Int { get }
-        var mayReshape: Bool { get }
-    }
-
-    // MARK: - Integer Leaf Position
+    // MARK: - Leaf Position
 
     /// Metadata for a single integer leaf under value search.
-    struct IntegerLeafPosition: LeafMutationSource {
+    struct LeafPosition: ScopedLeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
         let validRange: ClosedRange<UInt64>?
@@ -56,13 +36,13 @@ struct ScopedValueSearch: ScopedSearch {
         let characterSimplifications: CharacterSimplifications?
     }
 
-    // MARK: - Integer State
+    // MARK: - Phase State
 
     /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, the active stepper, and auxiliary state for cross-zero and linear scan recovery.
-    struct IntegerState {
+    struct State {
         var sequence: ChoiceSequence
-        var leafPositions: [IntegerLeafPosition]
-        var phase: IntegerPhase
+        var leafPositions: [LeafPosition]
+        var phase: Phase
         var leafIndex: Int
         var stepper: DirectionalStepper?
         var warmStartRecords: [Int: ConvergedOrigin]
@@ -74,11 +54,11 @@ struct ScopedValueSearch: ScopedSearch {
         var candidateList: CandidateListState?
         /// Cross-zero phase state for the current leaf, or nil when inactive. Set after binary search (and any linear scan recovery) converges on a signed-type leaf whose current shortlex key permits crossing zero.
         var crossZero: CrossZeroState?
-        /// Batch bisection state, active during the ``IntegerPhase/batchBisect`` phase.
+        /// Batch bisection state, active during the ``Phase/batchBisect`` phase.
         var bisection: BisectionState?
         /// Whether the reduction target has been probed directly for the current leaf. Reset when advancing to the next leaf.
         var semanticSimplestProbed: Bool = false
-        /// Per-leaf-zero pre-round state, active during the ``IntegerPhase/perLeafZero`` phase.
+        /// Per-leaf-zero pre-round state, active during the ``Phase/perLeafZero`` phase.
         var perLeafZero: PerLeafZeroState?
     }
 
@@ -136,7 +116,7 @@ struct ScopedValueSearch: ScopedSearch {
     }
 
     /// Sub-phases of integer reduction, ordered from cheapest to most granular: batch zero tries all leaves at once, per-leaf zero probes each individually, batch bisect does group interpolation search, and per-leaf runs individual interpolation or binary search.
-    enum IntegerPhase {
+    enum Phase {
         case batchZero
         case perLeafZero
         case batchBisect
@@ -153,7 +133,7 @@ struct ScopedValueSearch: ScopedSearch {
     ///
     /// Performs joint interpolation search across groups of leaves. Each group probe moves all leaves in the group one interpolation step toward their targets simultaneously. On acceptance, the group's values update and the next step is tried. On rejection, the group is bisected into two halves that are searched independently. When a group is reduced to a single leaf, it is deferred to the per-leaf phase.
     struct BisectionState {
-        /// Stack of leaf groups to search. Each group is a half-open interval into ``IntegerState/leafPositions``.
+        /// Stack of leaf groups to search. Each group is a half-open interval into ``State/leafPositions``.
         var pendingGroups: [(start: Int, end: Int)]
         /// The group currently being searched. `nil` when no group is active (need to pop next from pending).
         var activeGroup: (start: Int, end: Int)?
@@ -205,66 +185,11 @@ struct ScopedValueSearch: ScopedSearch {
         }
     }
 
-    // MARK: - Float State
-
-    /// Tracks the reduction state for a single float leaf node, including its current value, bit pattern, type tag, and valid range constraints. Mutable fields update as probes are accepted so subsequent stages operate on the reduced value.
-    struct FloatTarget: LeafMutationSource {
-        let nodeID: Int
-        let sequenceIndex: Int
-        let typeTag: TypeTag
-        let validRange: ClosedRange<UInt64>?
-        let isRangeExplicit: Bool
-        var currentValue: Double
-        var currentBitPattern: UInt64
-        let mayReshape: Bool
-    }
-
-    /// Represents the four stages of float reduction in ascending complexity: special values (zero, subnormal, normal), mantissa truncation, integral binary search, and ratio binary search. Ordered so that cheap constant-time probes run before iterative searches.
-    enum FloatStage: Int, Comparable {
-        case specialValues = 0
-        case truncation = 1
-        case integralBinarySearch = 2
-        case ratioBinarySearch = 3
-
-        static func < (lhs: FloatStage, rhs: FloatStage) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
-    }
-
-    /// Tracks the overall state of float leaf reduction across all targets and stages, including the working sequence, the list of ``FloatTarget`` nodes, the current stage and target index, and binary search context shared between the integral and ratio stages.
-    struct FloatState {
-        var sequence: ChoiceSequence
-        var targets: [FloatTarget]
-        var currentTargetIndex: Int
-        var stage: FloatStage
-        var batchCandidates: [UInt64]
-        var batchIndex: Int
-        var stepper: FindIntegerStepper
-        var needsFirstProbe: Bool
-        var lastEmittedCandidate: ChoiceSequence?
-        // Stage 2/3 binary search context.
-        var binarySearchMinDelta: UInt64
-        var binarySearchMaxQuantum: UInt64
-        var binarySearchMovesUp: Bool
-        var binarySearchCurrentInt: Int64
-        // Stage 3 ratio context.
-        var ratioDenominator: Int64
-        var ratioRemainder: Int64
-        var ratioIntegerPart: Int64
-        var ratioDistance: UInt64
-    }
-
     // MARK: - Search
 
-    /// The leaves a value search drives toward their targets.
-    enum Scope {
-        case integer(ValueMinimizationScope)
-        case float(FloatMinimizationScope)
-    }
-
-    /// Starts on `scope` over `sequence`. Integer searches warm-start from `warmStarts`, keyed by node ID, and read their scan, bisection, and interpolation limits from `tuning`.
+    /// Starts on `scope` over `sequence`, warm-starting from `warmStarts`, keyed by node ID, and reading its scan, bisection, and interpolation limits from `tuning`.
     init(
-        scope: Scope,
+        scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin],
@@ -275,38 +200,19 @@ struct ScopedValueSearch: ScopedSearch {
         bisectionBinaryThreshold = tuning.valueBisectionBinaryThreshold
         interpolationBinaryThreshold = tuning.interpolationBinaryThreshold
         interpolationInitialDivisor = tuning.interpolationInitialDivisor
-        switch scope {
-            case let .integer(integerScope):
-                startInteger(scope: integerScope, sequence: sequence, graph: graph, warmStarts: warmStarts)
-            case let .float(floatScope):
-                startFloat(scope: floatScope, sequence: sequence, graph: graph)
-        }
+        state = Self.initialState(scope: scope, sequence: sequence, graph: graph, warmStarts: warmStarts)
     }
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
-        let lastAccepted = feedback.isAccepted
-        switch mode {
-            case .idle:
-                return nil
-            case var .valueLeaves(state):
-                guard let built = nextIntegerProbe(state: &state, lastAccepted: lastAccepted) else {
-                    mode = .valueLeaves(state)
-                    return nil
-                }
-                buffer = built
-                let mutation = buildIntegerLeafValuesMutation(candidate: buffer, state: state)
-                mode = .valueLeaves(state)
-                return .written(mutation: mutation, admission: .standard)
-            case var .floatLeaves(state):
-                guard let built = nextFloatProbe(state: &state, lastAccepted: lastAccepted) else {
-                    mode = .floatLeaves(state)
-                    return nil
-                }
-                buffer = built
-                let mutation = buildFloatLeafValuesMutation(candidate: buffer, state: state)
-                mode = .floatLeaves(state)
-                return .written(mutation: mutation, admission: .standard)
+        var current = state
+        guard let built = nextProbe(state: &current, lastAccepted: feedback.isAccepted) else {
+            state = current
+            return nil
         }
+        buffer = built
+        let mutation = current.leafPositions.leafValuesMutation(candidate: buffer, baseline: current.sequence)
+        state = current
+        return .written(mutation: mutation, admission: .standard)
     }
 
     /// Reports the convergence records gathered so far, first recording a partial bound for the leaf in progress so its search resumes from there on the next dispatch.
@@ -317,9 +223,6 @@ struct ScopedValueSearch: ScopedSearch {
 
     /// Writes a partial convergence record for the current in-progress leaf if the stepper has a best-accepted bound. Without this, the stepper's progress is lost and the search restarts from the warm-start bound on the next dispatch.
     private mutating func flushPartialConvergence() {
-        guard case let .valueLeaves(state) = mode else {
-            return
-        }
         guard state.leafIndex < state.leafPositions.count else {
             return
         }
@@ -336,53 +239,5 @@ struct ScopedValueSearch: ScopedSearch {
             configuration: .binarySearchSemanticSimplest,
             cycle: 0
         )
-    }
-
-    // MARK: - Mutation Builders
-
-    /// Builds a `.leafValues` mutation report by comparing the candidate against the integer state's current baseline.
-    func buildIntegerLeafValuesMutation(
-        candidate: ChoiceSequence,
-        state: IntegerState
-    ) -> ProjectedMutation {
-        buildLeafValuesMutation(candidate: candidate, baseline: state.sequence, leaves: state.leafPositions)
-    }
-
-    /// Builds a `.leafValues` mutation report by comparing the candidate against the float state's current baseline.
-    func buildFloatLeafValuesMutation(
-        candidate: ChoiceSequence,
-        state: FloatState
-    ) -> ProjectedMutation {
-        buildLeafValuesMutation(candidate: candidate, baseline: state.sequence, leaves: state.targets)
-    }
-
-    /// Builds a `.leafValues` mutation by diffing candidate against baseline at each leaf's sequence index.
-    private func buildLeafValuesMutation(
-        candidate: ChoiceSequence,
-        baseline: ChoiceSequence,
-        leaves: some Sequence<LeafMutationSource>
-    ) -> ProjectedMutation {
-        var changes: [LeafChange] = []
-        for leaf in leaves {
-            guard leaf.sequenceIndex < candidate.count,
-                  leaf.sequenceIndex < baseline.count
-            else {
-                continue
-            }
-            guard let candidateChoice = candidate[leaf.sequenceIndex].value?.choice,
-                  let baselineChoice = baseline[leaf.sequenceIndex].value?.choice
-            else {
-                continue
-            }
-            guard candidateChoice != baselineChoice else {
-                continue
-            }
-            changes.append(LeafChange(
-                leafNodeID: leaf.nodeID,
-                newValue: candidateChoice,
-                mayReshape: leaf.mayReshape
-            ))
-        }
-        return .leafValues(changes)
     }
 }

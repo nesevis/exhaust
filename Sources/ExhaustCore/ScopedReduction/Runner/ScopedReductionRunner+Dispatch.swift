@@ -14,7 +14,7 @@ extension ScopedReductionRunner {
         case exploitation
     }
 
-    /// What dispatch does with one opportunity.
+    /// What dispatch does with one encoder scope.
     enum DispatchDecision: Equatable {
         case skip
         case classifyBind(bindNodeID: Int, fingerprint: UInt64)
@@ -30,8 +30,7 @@ extension ScopedReductionRunner {
 
     /// One completed pass: what ran, and what its execution observed.
     struct PassRecord {
-        let opportunity: ScopedOpportunity
-        let encoderName: EncoderName
+        let encoderScope: AnyEncoderScope
         let boundValueFingerprint: UInt64?
         let report: ScopedPassReport
     }
@@ -41,7 +40,7 @@ extension ScopedReductionRunner {
     /// Dispatches the sources' scopes in priority order until every source is exhausted or the deadline passes.
     mutating func dispatchCycle(policy: DispatchPolicy = .main) -> PhaseOutcome {
         while true {
-            let opportunity: ScopedOpportunity
+            let encoderScope: AnyEncoderScope
             let boundValueFingerprint: UInt64?
             switch selectDispatch(policy: policy) {
                 case .skip:
@@ -51,11 +50,11 @@ extension ScopedReductionRunner {
                     chargeElapsed(to: .dispatch)
                     return outcome
                 case let .dispatch(selected, fingerprint):
-                    opportunity = selected
+                    encoderScope = selected
                     boundValueFingerprint = fingerprint
             }
 
-            let pass = runPass(opportunity, boundValueFingerprint: boundValueFingerprint)
+            let pass = runPass(encoderScope, boundValueFingerprint: boundValueFingerprint)
             let action = applyPassPolicy(pass)
             chargeElapsed(to: .passApply)
             switch (policy, action) {
@@ -77,13 +76,13 @@ extension ScopedReductionRunner {
 
     /// What one dispatch step chose.
     private enum DispatchSelection {
-        /// The step consumed an opportunity, or an exhausted source, without running a pass.
+        /// The step consumed an encoder scope, or an exhausted source, without running a pass.
         case skip
         case end(PhaseOutcome)
-        case dispatch(ScopedOpportunity, boundValueFingerprint: UInt64?)
+        case dispatch(AnyEncoderScope, boundValueFingerprint: UInt64?)
     }
 
-    /// Selects the highest-priority source's next opportunity and resolves it under `policy`.
+    /// Selects the highest-priority source's next encoder scope and resolves it under `policy`.
     private mutating func selectDispatch(policy: DispatchPolicy) -> DispatchSelection {
         guard isDeadlineExceeded() == false else {
             return .end(.deadline)
@@ -99,48 +98,48 @@ extension ScopedReductionRunner {
         guard isDeadlineExceeded() == false else {
             return .end(.deadline)
         }
-        let opportunity = priced.opportunity
-        guard isEncoderEnabled(opportunity.encoderName) else {
+        let encoderScope = priced.encoderScope
+        guard isEncoderEnabled(encoderScope.encoder.name) else {
             return .skip
         }
 
         switch policy {
             case .exploitation:
-                guard opportunity.isValid(in: graph), opportunity.requiresGenerator == false else {
+                guard encoderScope.isValid(in: graph), encoderScope.encoder.requiresGenerator == false else {
                     return .skip
                 }
-                return .dispatch(opportunity, boundValueFingerprint: nil)
+                return .dispatch(encoderScope, boundValueFingerprint: nil)
             case .main:
-                switch resolveDispatch(opportunity) {
+                switch resolveDispatch(encoderScope) {
                     case .skip:
                         return .skip
                     case .deadline:
                         return .end(.deadline)
                     case let .dispatch(fingerprint):
-                        return .dispatch(opportunity, boundValueFingerprint: fingerprint)
+                        return .dispatch(encoderScope, boundValueFingerprint: fingerprint)
                 }
         }
     }
 
-    /// The main policy's resolution of one opportunity, including the classification and rematerialization effects it can trigger.
+    /// The main policy's resolution of one encoder scope, including the classification and rematerialization effects it can trigger.
     private enum Resolution {
         case skip
         case deadline
         case dispatch(boundValueFingerprint: UInt64?)
     }
 
-    private mutating func resolveDispatch(_ opportunity: ScopedOpportunity) -> Resolution {
-        if opportunity.encoderName == .migration,
+    private mutating func resolveDispatch(_ encoderScope: AnyEncoderScope) -> Resolution {
+        if encoderScope.encoder.name == .migration,
            tuning.migrationDemotionThreshold > 0,
            migrationConsecutiveRejects >= tuning.migrationDemotionThreshold
         {
             return .skip
         }
 
-        var decision = evaluateDispatch(opportunity)
+        var decision = evaluateDispatch(encoderScope)
 
         if case let .classifyBind(bindNodeID, fingerprint) = decision {
-            guard case let .boundValue(bindScope) = opportunity else {
+            guard case let .boundValue(bindScope) = encoderScope else {
                 return .skip
             }
             let classificationMaterializations = graph.classifyBind(
@@ -181,16 +180,16 @@ extension ScopedReductionRunner {
     }
 
     /// Decides whether to dispatch, skip, classify a bind first, or rematerialize a stripped graph.
-    func evaluateDispatch(_ opportunity: ScopedOpportunity) -> DispatchDecision {
-        guard opportunity.isValid(in: graph) else {
+    func evaluateDispatch(_ encoderScope: AnyEncoderScope) -> DispatchDecision {
+        guard encoderScope.isValid(in: graph) else {
             return .skip
         }
 
-        if scopeRejectionCache.isRejected(opportunity, sequence: sequence, graph: graph) {
+        if scopeRejectionCache.isRejected(encoderScope, sequence: sequence, graph: graph) {
             return .skip
         }
 
-        if case let .boundValue(bindScope) = opportunity {
+        if case let .boundValue(bindScope) = encoderScope {
             guard bindScope.bindNodeID < graph.nodes.count,
                   case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind
             else {
@@ -215,7 +214,7 @@ extension ScopedReductionRunner {
             return .readyToDispatch(boundValueFingerprint: fingerprint)
         }
 
-        if case let .boundExchange(exchange) = opportunity {
+        if case let .boundExchange(exchange) = encoderScope {
             guard anyAccepted == false,
                   Self.isStalledBindInner(bindInnerLeafNodeID: exchange.sourceLeafNodeID, graph: graph, gate: gate)
             else {
@@ -223,7 +222,7 @@ extension ScopedReductionRunner {
             }
         }
 
-        if graphIsStripped, opportunity.isPathChanging {
+        if graphIsStripped, encoderScope.encoder.isPathChanging {
             return .rematerialize
         }
 
@@ -232,14 +231,14 @@ extension ScopedReductionRunner {
 
     // MARK: - Pass
 
-    /// Runs one scope's program in its own interpreter execution, seeded from the runner's state, and adopts the incumbent, graph, and cache it returns.
+    /// Runs the encoder's reducer for one scope in its own interpreter execution, seeded from the runner's state, and adopts the incumbent, graph, and cache it returns.
     ///
     /// - Parameters:
     ///   - boundValueFingerprint: The bind's fingerprint for a bound value scope; its gate supplies the decayed budget and first-dispatch probe cap.
     ///   - usesWarmStarts: Whether value searches start from the graph's convergence records. Post-cycle passes start fresh.
     ///   - checksDeadline: False for the final reorder pass, which always runs to completion.
     mutating func runPass(
-        _ opportunity: ScopedOpportunity,
+        _ encoderScope: AnyEncoderScope,
         boundValueFingerprint: UInt64?,
         usesWarmStarts: Bool = true,
         checksDeadline: Bool = true
@@ -250,8 +249,7 @@ extension ScopedReductionRunner {
             graph: graph,
             warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:]
         )
-        let encoder = opportunity.encoder(tuning: tuning)
-        let program = reducer(for: opportunity, input: input, boundValueFingerprint: boundValueFingerprint)
+        let scopedReducer = reducer(for: encoderScope, input: input, boundValueFingerprint: boundValueFingerprint)
         if let boundValueFingerprint {
             gate.markDispatched(boundValueFingerprint)
         }
@@ -264,7 +262,7 @@ extension ScopedReductionRunner {
         var executionRejectCache: Set<UInt64> = []
         swap(&executionRejectCache, &rejectCache)
         let result = ScopedReductionInterpreter.run(
-            program,
+            scopedReducer,
             context: ScopedReductionInterpreter.Context(
                 incumbent: ScopedCounterexample(
                     sequence: sequence,
@@ -274,7 +272,7 @@ extension ScopedReductionRunner {
                 graph: executionGraph,
                 rejectCache: executionRejectCache,
                 decoder: decoder,
-                encoderName: encoder.name,
+                encoderName: encoderScope.encoder.name,
                 isInstrumented: isInstrumented,
                 deadlineCheck: checksDeadline ? makeDeadlineCheck() : nil,
                 timingMark: collectStats ? timingMark : nil
@@ -288,8 +286,7 @@ extension ScopedReductionRunner {
         rejectCache = result.rejectCache
 
         return PassRecord(
-            opportunity: opportunity,
-            encoderName: encoder.name,
+            encoderScope: encoderScope,
             boundValueFingerprint: boundValueFingerprint,
             report: result.report
         )
@@ -308,13 +305,13 @@ extension ScopedReductionRunner {
         dependencyAdjacency: []
     )
 
-    /// Builds the opportunity's reducer. A bound value scope takes its upstream budget and probe cap from the gate.
+    /// Builds the encoder's reducer for the scope. A bound value scope takes its upstream budget and probe cap from the gate.
     private func reducer(
-        for opportunity: ScopedOpportunity,
+        for encoderScope: AnyEncoderScope,
         input: ScopedEncoderInput,
         boundValueFingerprint: UInt64?
     ) -> ScopedReducer {
-        switch opportunity {
+        switch encoderScope {
             case let .boundValue(bindScope):
                 let fingerprint = boundValueFingerprint ?? 0
                 return ScopedBoundValueEncoder(tuning: tuning).reducer(
@@ -335,6 +332,8 @@ extension ScopedReductionRunner {
                 return ScopedLaneCollapseEncoder(tuning: tuning).reducer(scope, input: input)
             case let .valueSearch(scope):
                 return ScopedValueSearchEncoder(tuning: tuning).reducer(scope, input: input)
+            case let .floatSearch(scope):
+                return ScopedFloatSearchEncoder().reducer(scope, input: input)
             case let .redistribution(scope):
                 return ScopedRedistributionEncoder(tuning: tuning).reducer(scope, input: input)
             case let .lockstep(scope):
@@ -364,7 +363,7 @@ extension ScopedReductionRunner {
     ///
     /// Shared by dispatched and post-cycle passes. The returned action lets each caller choose its own rebuild.
     ///
-    /// - Parameter appliedPasses: Passes this record stands for. A staged joint program runs one search per arity, and each counts as a pass, as each stage did in its own session.
+    /// - Parameter appliedPasses: Passes this record stands for. The staged joint encoder's reducer runs one search per arity, and each counts as a pass, as each stage did in its own session.
     @discardableResult
     mutating func applyPassPolicy(_ pass: PassRecord, appliedPasses: Int = 1) -> PostAcceptanceAction {
         let report = pass.report
@@ -401,7 +400,7 @@ extension ScopedReductionRunner {
             gate.recordOutcome(fingerprint: fingerprint, accepted: report.anyAccepted)
         }
 
-        if pass.encoderName == .migration {
+        if pass.encoderScope.encoder.name == .migration {
             migrationConsecutiveRejects = report.anyAccepted ? 0 : migrationConsecutiveRejects + 1
         }
 
@@ -421,12 +420,12 @@ extension ScopedReductionRunner {
         }
 
         Self.log("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
-            "encoder": pass.encoderName.rawValue, "probes": "\(report.counts.emitted)",
+            "encoder": pass.encoderScope.encoder.name.rawValue, "probes": "\(report.counts.emitted)",
             "accepted": "\(report.counts.accepted)", "cache_hits": "\(report.counts.rejectedByCache)",
             "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(sequence.count)",
         ])
 
-        let isBoundValue = switch pass.opportunity {
+        let isBoundValue = switch pass.encoderScope {
             case .boundValue:
                 true
             default:
@@ -444,7 +443,7 @@ extension ScopedReductionRunner {
         switch action {
             case .continueDispatching:
                 if report.anyAccepted == false {
-                    scopeRejectionCache.recordRejection(pass.opportunity, sequence: sequence, graph: graph)
+                    scopeRejectionCache.recordRejection(pass.encoderScope, sequence: sequence, graph: graph)
                 }
             case .rebuildAndResume:
                 gate.clearFruitless()
@@ -457,7 +456,7 @@ extension ScopedReductionRunner {
     /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families, rebuilds permutation and value families, and clears the scope cache; anything else rebuilds every family and clears the scope cache. A bound value pass also clears convergence in the bind's bound range, which its lifts invalidated.
     mutating func rebuildAfterPass(_ pass: PassRecord) {
         var boundPositionRange: ClosedRange<Int>?
-        if case let .boundValue(bindScope) = pass.opportunity,
+        if case let .boundValue(bindScope) = pass.encoderScope,
            bindScope.bindNodeID < graph.nodes.count,
            case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind,
            graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
@@ -485,7 +484,7 @@ extension ScopedReductionRunner {
         } else if diff.canReuseStructuralSourcesExceptPermutation {
             scopeRejectionCache.clear()
             sources = sources.filter(\.canReuseAfterLeafKindChange)
-                + ScopedSource.preparePermutationSources(from: graph, tuning: tuning)
+                + ScopedSource.preparePermutationSources(from: graph)
                 + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
             Self.log("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
@@ -538,14 +537,14 @@ extension ScopedReductionRunner {
 
     private mutating func recordPassStatistics(_ pass: PassRecord) {
         let report = pass.report
-        stats.record(report.counts, for: pass.encoderName)
+        stats.record(report.counts, for: pass.encoderScope.encoder.name)
         for searchCounts in report.searchCounts {
-            guard case let .stagedJoint(arity) = searchCounts.search else {
+            guard let arity = searchCounts.stagedJointArity else {
                 continue
             }
             stats.numericSearchCountsByArity[arity, default: ReductionProbeCounts()].merge(searchCounts.counts)
         }
-        switch pass.opportunity {
+        switch pass.encoderScope {
             case .bindPivot:
                 stats.recordMaterializations(report.liftAttempts, at: .bindPivotLift)
             case .boundExchange:
@@ -586,7 +585,7 @@ extension ScopedReductionRunner {
         stats.dispatchLog.append(DispatchRecord(
             cycle: cycles,
             passIndex: passCounter,
-            encoderName: pass.encoderName,
+            encoderName: pass.encoderScope.encoder.name,
             probeCount: report.counts.emitted,
             acceptCount: report.counts.accepted,
             cacheHitCount: report.counts.rejectedByCache,
@@ -598,7 +597,7 @@ extension ScopedReductionRunner {
             bindClassification: pass.boundValueFingerprint.flatMap { graph.bindClassifications[$0] }
         ))
 
-        if report.anyAccepted, case .redistribution = pass.opportunity {
+        if report.anyAccepted, case .redistribution = pass.encoderScope {
             stats.redistributionAcceptanceNodeIDs.formUnion(report.acceptedLeafNodeIDs)
         }
     }

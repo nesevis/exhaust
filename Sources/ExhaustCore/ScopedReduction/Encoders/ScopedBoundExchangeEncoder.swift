@@ -5,12 +5,14 @@
 
 // MARK: - Bound Exchange Encoder
 
-/// Bound exchange as a scoped program: propose a sum-preserving proposal, lift it, validate the lifted sink, and search the compound candidate.
+/// Bound exchange: the encoder's reducer proposes a sum-preserving proposal, lifts it, validates the lifted sink, and searches the compound candidate.
 ///
 /// Proposals come from ``BoundExchangeProposalCursor``. Each kept lift runs as one ``ScopedLiftedSeedSearch`` and is decoded exactly.
 struct ScopedBoundExchangeEncoder: ScopedEncoder {
-    let name: EncoderName = .boundExchange
-    let isValueDependent = true
+    static let name: EncoderName = .boundExchange
+    static let isValueDependent = true
+    static let requiresGenerator = true
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ exchange: BoundExchangeScope, input scope: ScopedEncoderInput) -> ScopedReducer {

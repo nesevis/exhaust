@@ -1,18 +1,18 @@
 //
-//  ScopedValueSearch+Float.swift
+//  ScopedFloatSearch+Probing.swift
 //  Exhaust
 //
 
-// MARK: - Float Mode
+// MARK: - Stages
 
-extension ScopedValueSearch {
+extension ScopedFloatSearch {
     /// Initializes float reduction by collecting all float-typed leaf nodes from the scope and preparing the first stage.
-    mutating func startFloat(
+    static func initialState(
         scope: FloatMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
-    ) {
-        var targets: [FloatTarget] = []
+    ) -> State {
+        var targets: [Target] = []
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
@@ -25,7 +25,7 @@ extension ScopedValueSearch {
             guard metadata.value.tag.isFloatingPoint else {
                 continue
             }
-            targets.append(FloatTarget(
+            targets.append(Target(
                 nodeID: nodeID,
                 sequenceIndex: range.lowerBound,
                 typeTag: metadata.typeTag,
@@ -37,7 +37,7 @@ extension ScopedValueSearch {
             ))
         }
 
-        mode = .floatLeaves(FloatState(
+        return State(
             sequence: sequence,
             targets: targets,
             currentTargetIndex: 0,
@@ -55,12 +55,12 @@ extension ScopedValueSearch {
             ratioRemainder: 0,
             ratioIntegerPart: 0,
             ratioDistance: 0
-        ))
+        )
     }
 
     /// Advances through the four-stage float pipeline, returning the next probe candidate or nil when all stages and targets are exhausted.
-    mutating func nextFloatProbe(
-        state: inout FloatState,
+    mutating func nextProbe(
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         // Update baseline on acceptance.
@@ -72,12 +72,12 @@ extension ScopedValueSearch {
         while state.currentTargetIndex < state.targets.count {
             if state.needsFirstProbe {
                 state.needsFirstProbe = false
-                prepareFloatStage(state: &state)
+                prepareStage(state: &state)
             } else if lastAccepted {
-                handleFloatAcceptance(state: &state)
+                handleAcceptance(state: &state)
             }
 
-            if let candidate = nextFloatCandidateForCurrentStage(
+            if let candidate = nextCandidateForCurrentStage(
                 state: &state,
                 lastAccepted: lastAccepted
             ) {
@@ -86,17 +86,17 @@ extension ScopedValueSearch {
             }
 
             // Stage exhausted — advance to next stage or next target.
-            if advanceFloatStageOrTarget(state: &state) == false {
+            if advanceStageOrTarget(state: &state) == false {
                 return nil
             }
         }
         return nil
     }
 
-    // MARK: - Float Stage Preparation
+    // MARK: - Stage Preparation
 
     /// Transitions to the next float reduction stage by dispatching to the appropriate stage-specific preparation method.
-    mutating func prepareFloatStage(state: inout FloatState) {
+    mutating func prepareStage(state: inout State) {
         guard state.currentTargetIndex < state.targets.count else {
             return
         }
@@ -106,18 +106,18 @@ extension ScopedValueSearch {
 
         switch state.stage {
             case .specialValues:
-                prepareFloatSpecialValues(state: &state, target: target)
+                prepareSpecialValues(state: &state, target: target)
             case .truncation:
-                prepareFloatTruncation(state: &state, target: target)
+                prepareTruncation(state: &state, target: target)
             case .integralBinarySearch:
-                prepareFloatIntegralBinarySearch(state: &state, target: target)
+                prepareIntegralBinarySearch(state: &state, target: target)
             case .ratioBinarySearch:
-                prepareFloatRatioBinarySearch(state: &state, target: target)
+                prepareRatioBinarySearch(state: &state, target: target)
         }
     }
 
     /// Sets up probes for special float values (zero, smallest subnormal, smallest normal) that are common reduction targets, skipping any that match the current bit pattern.
-    mutating func prepareFloatSpecialValues(state: inout FloatState, target: FloatTarget) {
+    mutating func prepareSpecialValues(state: inout State, target: Target) {
         var seen = Set<UInt64>()
         seen.insert(target.currentBitPattern)
         var candidates: [UInt64] = []
@@ -152,7 +152,7 @@ extension ScopedValueSearch {
     }
 
     /// Sets up probes that truncate mantissa bits at increasing power-of-two scales, searching for the simplest representable value near the current one.
-    mutating func prepareFloatTruncation(state: inout FloatState, target: FloatTarget) {
+    mutating func prepareTruncation(state: inout State, target: Target) {
         guard target.currentValue.isFinite else {
             state.batchCandidates = []
             return
@@ -189,7 +189,7 @@ extension ScopedValueSearch {
     }
 
     /// Sets up binary search over the integral part of the float value, computing the ULP-aligned step size and maximum quantum for the target's type width.
-    mutating func prepareFloatIntegralBinarySearch(state: inout FloatState, target: FloatTarget) {
+    mutating func prepareIntegralBinarySearch(state: inout State, target: Target) {
         // `Int64(exactly:)` rejects both non-integral values and magnitudes outside Int64. Do not gate on `abs(...) <= Double(Int64.max)`: `Double(Int64.max)` rounds up to 2^63, so that test admits exactly 2^63, which then traps in the `Int64` conversion.
         guard target.currentValue.isFinite,
               let currentInt = Int64(exactly: target.currentValue)
@@ -197,7 +197,7 @@ extension ScopedValueSearch {
             return
         }
 
-        let targetInt = floatIntegerReductionTarget(target: target)
+        let targetInt = integerReductionTarget(target: target)
         let movesUp = targetInt > currentInt
         let distance = movesUp
             ? UInt64(targetInt - currentInt)
@@ -233,7 +233,7 @@ extension ScopedValueSearch {
     }
 
     /// Sets up binary search over the integer part of the float's rational decomposition, preserving the fractional remainder so the search moves through exact rational multiples.
-    mutating func prepareFloatRatioBinarySearch(state: inout FloatState, target: FloatTarget) {
+    mutating func prepareRatioBinarySearch(state: inout State, target: Target) {
         guard target.currentValue.isFinite,
               abs(target.currentValue) <= FloatReduction.maxPreciseInteger(for: target.typeTag),
               let ratio = FloatReduction.integerRatio(for: target.currentValue, tag: target.typeTag)
@@ -247,7 +247,7 @@ extension ScopedValueSearch {
 
         let denominator = Int64(ratio.denominator)
         let (integerPart, remainder) = floorDivMod(ratio.numerator, denominator)
-        let targetInt = floatIntegerReductionTarget(target: target)
+        let targetInt = integerReductionTarget(target: target)
         let movesUp = targetInt > integerPart
         let distance = movesUp
             ? UInt64(targetInt - integerPart)
@@ -263,25 +263,25 @@ extension ScopedValueSearch {
         state.binarySearchMovesUp = movesUp
     }
 
-    // MARK: - Float Candidate Generation
+    // MARK: - Candidate Generation
 
     /// Dispatches to the current stage's candidate generator, returning the next probe or nil when the stage is exhausted.
-    mutating func nextFloatCandidateForCurrentStage(
-        state: inout FloatState,
+    mutating func nextCandidateForCurrentStage(
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         switch state.stage {
             case .specialValues, .truncation:
-                nextFloatBatchCandidate(state: &state)
+                nextBatchCandidate(state: &state)
             case .integralBinarySearch:
-                nextFloatIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
+                nextIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
             case .ratioBinarySearch:
-                nextFloatRatioBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
+                nextRatioBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
         }
     }
 
-    /// Generates a batch candidate by applying the next pre-computed bit pattern from ``FloatState/batchCandidates`` to the current target, skipping candidates that are out of range or not shortlex-smaller.
-    mutating func nextFloatBatchCandidate(state: inout FloatState) -> ChoiceSequence? {
+    /// Generates a batch candidate by applying the next pre-computed bit pattern from ``State/batchCandidates`` to the current target, skipping candidates that are out of range or not shortlex-smaller.
+    mutating func nextBatchCandidate(state: inout State) -> ChoiceSequence? {
         guard state.currentTargetIndex < state.targets.count else {
             return nil
         }
@@ -290,7 +290,7 @@ extension ScopedValueSearch {
             let bp = state.batchCandidates[state.batchIndex]
             state.batchIndex += 1
 
-            guard let candidateChoice = makeFloatChoice(bitPattern: bp, tag: target.typeTag) else {
+            guard let candidateChoice = makeChoice(bitPattern: bp, tag: target.typeTag) else {
                 continue
             }
             if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
@@ -314,8 +314,8 @@ extension ScopedValueSearch {
     }
 
     /// Generates the next binary search probe for integral reduction, stepping through ULP-aligned quanta via ``FindIntegerStepper`` and recording convergence when the stepper is exhausted.
-    mutating func nextFloatIntegralBinarySearchCandidate(
-        state: inout FloatState,
+    mutating func nextIntegralBinarySearchCandidate(
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         guard state.binarySearchMaxQuantum > 0 else {
@@ -335,7 +335,7 @@ extension ScopedValueSearch {
 
             guard let k = quantum else {
                 if state.stepper.bestAccepted > 0 {
-                    applyFloatIntegralBinarySearchBest(state: &state)
+                    applyIntegralBinarySearchBest(state: &state)
                 }
                 convergenceStore[target.nodeID] = ConvergedOrigin(
                     bound: state.targets[state.currentTargetIndex].currentBitPattern,
@@ -393,7 +393,7 @@ extension ScopedValueSearch {
     }
 
     /// Commits the best integral binary search result by writing the accepted value into both the sequence and the target's mutable state.
-    mutating func applyFloatIntegralBinarySearchBest(state: inout FloatState) {
+    mutating func applyIntegralBinarySearchBest(state: inout State) {
         let target = state.targets[state.currentTargetIndex]
         let bestK = UInt64(state.stepper.bestAccepted)
         let delta = bestK * state.binarySearchMinDelta
@@ -416,8 +416,8 @@ extension ScopedValueSearch {
     }
 
     /// Generates the next binary search probe for ratio-based reduction, reconstructing exact rational values from the stepped integer part and fixed remainder.
-    mutating func nextFloatRatioBinarySearchCandidate(
-        state: inout FloatState,
+    mutating func nextRatioBinarySearchCandidate(
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         guard state.ratioDistance > 0 else {
@@ -437,7 +437,7 @@ extension ScopedValueSearch {
 
             guard let k = quantum else {
                 if state.stepper.bestAccepted > 0 {
-                    applyFloatRatioBinarySearchBest(state: &state)
+                    applyRatioBinarySearchBest(state: &state)
                 }
                 convergenceStore[target.nodeID] = ConvergedOrigin(
                     bound: state.targets[state.currentTargetIndex].currentBitPattern,
@@ -504,7 +504,7 @@ extension ScopedValueSearch {
     }
 
     /// Commits the best ratio binary search result by writing the accepted rational value into both the sequence and the target's mutable state.
-    mutating func applyFloatRatioBinarySearchBest(state: inout FloatState) {
+    mutating func applyRatioBinarySearchBest(state: inout State) {
         let target = state.targets[state.currentTargetIndex]
         let bestK = UInt64(state.stepper.bestAccepted)
         let signedDelta = Int64(bestK)
@@ -528,17 +528,17 @@ extension ScopedValueSearch {
         state.targets[state.currentTargetIndex].currentBitPattern = candidateChoice.bitPattern64
     }
 
-    // MARK: - Float Acceptance & Advancement
+    // MARK: - Acceptance & Advancement
 
     /// Processes an accepted probe by updating the current target's value and bit pattern, then advancing to the next target for batch stages or deferring to the stepper for binary search stages.
-    mutating func handleFloatAcceptance(state: inout FloatState) {
+    mutating func handleAcceptance(state: inout State) {
         let target = state.targets[state.currentTargetIndex]
         switch state.stage {
             case .specialValues, .truncation:
                 // Batch stages: the last emitted candidate was accepted.
                 // Update target and restart from stage 0 on the next target.
                 let bp = state.batchCandidates[state.batchIndex - 1]
-                if let choice = makeFloatChoice(bitPattern: bp, tag: target.typeTag) {
+                if let choice = makeChoice(bitPattern: bp, tag: target.typeTag) {
                     let entry = ChoiceSequenceValue.value(.init(
                         choice: choice,
                         validRange: target.validRange,
@@ -561,8 +561,8 @@ extension ScopedValueSearch {
 
     /// Moves to the next stage for the current target, or advances to the next leaf target when all four stages are exhausted, returning false when no targets remain.
     @discardableResult
-    mutating func advanceFloatStageOrTarget(state: inout FloatState) -> Bool {
-        let nextStage: FloatStage? = switch state.stage {
+    mutating func advanceStageOrTarget(state: inout State) -> Bool {
+        let nextStage: Stage? = switch state.stage {
             case .specialValues:
                 .truncation
             case .truncation:
@@ -582,7 +582,7 @@ extension ScopedValueSearch {
             guard state.currentTargetIndex < state.targets.count else {
                 return false
             }
-            prepareFloatStage(state: &state)
+            prepareStage(state: &state)
             return true
         }
 
@@ -594,14 +594,14 @@ extension ScopedValueSearch {
         state.stepper = FindIntegerStepper()
         state.needsFirstProbe = true
         if state.currentTargetIndex < state.targets.count {
-            prepareFloatStage(state: &state)
+            prepareStage(state: &state)
         }
         return state.currentTargetIndex < state.targets.count
     }
 
-    // MARK: - Float Helpers
+    // MARK: - Helpers
 
-    func makeFloatChoice(bitPattern: UInt64, tag: TypeTag) -> ChoiceValue? {
+    func makeChoice(bitPattern: UInt64, tag: TypeTag) -> ChoiceValue? {
         ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)
     }
 
@@ -619,14 +619,14 @@ extension ScopedValueSearch {
         return (quotient, remainder)
     }
 
-    private func floatIntegerReductionTarget(target: FloatTarget) -> Int64 {
+    private func integerReductionTarget(target: Target) -> Int64 {
         guard target.isRangeExplicit, let validRange = target.validRange else {
             return 0
         }
         let targetBitPattern = ChoiceValue(target.currentBitPattern, tag: target.typeTag)
             .reductionTarget(in: validRange)
         let targetValue = target.typeTag.numericDoubleValue(forBitPattern: targetBitPattern)
-        // See `prepareFloatIntegralBinarySearch`: `Double(Int64.max)` rounds to 2^63, so an `abs(...) <= Double(Int64.max)` gate would admit 2^63 and trap. `Int64(exactly:)` on the truncated value cannot overflow.
+        // See `prepareIntegralBinarySearch`: `Double(Int64.max)` rounds to 2^63, so an `abs(...) <= Double(Int64.max)` gate would admit 2^63 and trap. `Int64(exactly:)` on the truncated value cannot overflow.
         guard targetValue.isFinite,
               let truncated = Int64(exactly: targetValue.rounded(.towardZero))
         else {

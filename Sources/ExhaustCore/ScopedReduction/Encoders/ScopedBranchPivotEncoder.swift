@@ -14,8 +14,10 @@ struct ScopedBranchPivotEncoder: ScopedEncoder {
         let targetBranchID: UInt64
     }
 
-    let name: EncoderName = .branchPivot
-    let isValueDependent = false
+    static let name: EncoderName = .branchPivot
+    static let isValueDependent = false
+    static let requiresGenerator = false
+    static let isPathChanging = true
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {

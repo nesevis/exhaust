@@ -9,8 +9,10 @@
 ///
 /// Every candidate reorders the command sequence so prefix commands stay contiguous at the front, which the graph cannot apply in place. Acceptance therefore ends the pass and the next scope is built against the rebuilt graph.
 struct ScopedLaneCollapseEncoder: ScopedEncoder {
-    let name: EncoderName = .laneCollapse
-    let isValueDependent = true
+    static let name: EncoderName = .laneCollapse
+    static let isValueDependent = true
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {

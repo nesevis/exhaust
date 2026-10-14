@@ -21,7 +21,7 @@ struct ScopedBinarySearch: ScopedSearch {
 
     /// Searches the first of `leaves`. The search is empty when that leaf has no position, no value entry, or already sits at its target.
     ///
-    /// - Parameter mayReshape: Whether each candidate's mutation marks the leaf as reshaping. A leaf that controls a bind rebuilds the subtree it governs when accepted, so its mutation has to say so; inside a composition the enclosing program reports the mutation instead.
+    /// - Parameter mayReshape: Whether each candidate's mutation marks the leaf as reshaping. A leaf that controls a bind rebuilds the subtree it governs when accepted, so its mutation has to say so; inside a composition the enclosing encoder's reducer reports the mutation instead.
     init(leaves: [LeafEntry], graph: ChoiceGraph, baseSequence: ChoiceSequence, mayReshape: Bool = false) {
         self.baseSequence = baseSequence
         self.mayReshape = mayReshape

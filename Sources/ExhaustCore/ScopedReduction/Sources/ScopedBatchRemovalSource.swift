@@ -23,7 +23,7 @@ struct ScopedBatchRemovalSource {
     private var triedTail: Bool
     private var exhausted: Bool
     private var cachedPriority: DispatchPriority?
-    private let interiorSeeds: [ScopedPricedOpportunity]
+    private let interiorSeeds: [PricedEncoderScope]
     private var interiorIndex = 0
 
     init(sequenceNodeID: Int, graph: ChoiceGraph) {
@@ -50,14 +50,14 @@ struct ScopedBatchRemovalSource {
         }
         elementList.sort { $0.positionRange.lowerBound < $1.positionRange.lowerBound }
 
-        var seeds: [ScopedPricedOpportunity] = []
+        var seeds: [PricedEncoderScope] = []
         var seedOffset = elementList.count / 2
         while seedOffset > 0 {
             let capacity = min(deletable, elementList.count - seedOffset)
             if capacity >= 2 {
                 let window = elementList[seedOffset ..< seedOffset + capacity]
-                seeds.append(ScopedPricedOpportunity(
-                    opportunity: .removal(.window(WindowRemovalScope(
+                seeds.append(PricedEncoderScope(
+                    encoderScope: .removal(.window(WindowRemovalScope(
                         sequenceNodeID: sequenceNodeID,
                         elementNodeIDs: window.map(\.nodeID)
                     ))),
@@ -89,9 +89,9 @@ struct ScopedBatchRemovalSource {
         cachedPriority
     }
 
-    mutating func nextScope() -> ScopedPricedOpportunity? {
-        if let opportunity = nextHalvingWindow() {
-            return opportunity
+    mutating func nextScope() -> PricedEncoderScope? {
+        if let encoderScope = nextHalvingWindow() {
+            return encoderScope
         }
         return nextInteriorSeed()
     }
@@ -105,7 +105,7 @@ struct ScopedBatchRemovalSource {
         return interiorSeeds[interiorIndex].priority
     }
 
-    private mutating func nextHalvingWindow() -> ScopedPricedOpportunity? {
+    private mutating func nextHalvingWindow() -> PricedEncoderScope? {
         guard exhausted == false, currentBatch > 0 else {
             return nil
         }
@@ -140,8 +140,8 @@ struct ScopedBatchRemovalSource {
             maxElementYield: batchYield
         )
 
-        let opportunity = ScopedPricedOpportunity(
-            opportunity: .removal(.elements(scope)),
+        let encoderScope = PricedEncoderScope(
+            encoderScope: .removal(.elements(scope)),
             priority: DispatchPriority(
                 structuralBenefit: batchYield,
                 valueBenefit: 0,
@@ -164,18 +164,18 @@ struct ScopedBatchRemovalSource {
         }
 
         recomputePriority()
-        return opportunity
+        return encoderScope
     }
 
-    private mutating func nextInteriorSeed() -> ScopedPricedOpportunity? {
+    private mutating func nextInteriorSeed() -> PricedEncoderScope? {
         guard interiorIndex < interiorSeeds.count else {
             cachedPriority = nil
             return nil
         }
-        let opportunity = interiorSeeds[interiorIndex]
+        let encoderScope = interiorSeeds[interiorIndex]
         interiorIndex += 1
         recomputePriority()
-        return opportunity
+        return encoderScope
     }
 
     private mutating func recomputePriority() {

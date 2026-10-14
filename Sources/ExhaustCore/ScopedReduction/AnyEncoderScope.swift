@@ -1,72 +1,73 @@
 //
-//  ScopedOpportunity+Dispatch.swift
+//  AnyEncoderScope.swift
 //  Exhaust
 //
 
-// MARK: - Dispatch Properties
+// MARK: - Any Encoder Scope
 
-extension ScopedOpportunity {
-    /// The encoder that runs this opportunity, by name, for eligibility checks that need no encoder value.
-    var encoderName: EncoderName {
+/// One discovered scope of any encoder, tagged with the encoder that runs it. Family sources yield these in dispatch order.
+///
+/// Each encoder's ``ScopedEncoder/Scope`` is its own type, so sources, priority ordering, the scope rejection cache, and the runner hold scopes of different encoders through this closed enum rather than through existentials.
+enum AnyEncoderScope {
+    case boundValue(BoundValueScope)
+    case boundExchange(BoundExchangeScope)
+    case bindPivot(BindPivotScope)
+    case depthCollapse(ValueMinimizationScope)
+    case laneCollapse(ValueMinimizationScope)
+    case valueSearch(ValueMinimizationScope)
+    case floatSearch(FloatMinimizationScope)
+    case redistribution(RedistributionScope)
+    case lockstep(TandemScope)
+    case relation(RelationScope)
+    case stagedJoint(ScopedStagedJointEncoder.Scope)
+    case removal(ScopedRemovalEncoder.Scope)
+    case substitution(ScopedSubstitutionEncoder.Scope)
+    case branchPivot(ScopedBranchPivotEncoder.Scope)
+    case migration(MigrationScope)
+    case swap(PermutationScope)
+    case reorder(ReorderingScope)
+
+    /// The encoder this scope belongs to, whose static requirements answer every question dispatch asks before the encoder's reducer is built.
+    var encoder: any ScopedEncoder.Type {
         switch self {
             case .boundValue:
-                .boundValueSearch
+                ScopedBoundValueEncoder.self
             case .boundExchange:
-                .boundExchange
+                ScopedBoundExchangeEncoder.self
             case .bindPivot:
-                .bindPivot
+                ScopedBindPivotEncoder.self
             case .depthCollapse:
-                .depthCollapse
+                ScopedDepthCollapseEncoder.self
             case .laneCollapse:
-                .laneCollapse
-            case .valueSearch(.integer):
-                .valueSearch
-            case .valueSearch(.float):
-                .floatSearch
+                ScopedLaneCollapseEncoder.self
+            case .valueSearch:
+                ScopedValueSearchEncoder.self
+            case .floatSearch:
+                ScopedFloatSearchEncoder.self
             case .redistribution:
-                .redistribution
+                ScopedRedistributionEncoder.self
             case .lockstep:
-                .lockstep
+                ScopedLockstepEncoder.self
             case .relation:
-                .relationSearch
+                ScopedRelationEncoder.self
             case .stagedJoint:
-                .stagedJointSearch
+                ScopedStagedJointEncoder.self
             case .removal:
-                .deletion
+                ScopedRemovalEncoder.self
             case .substitution:
-                .substitution
+                ScopedSubstitutionEncoder.self
             case .branchPivot:
-                .branchPivot
+                ScopedBranchPivotEncoder.self
             case .migration:
-                .migration
+                ScopedMigrationEncoder.self
             case .swap:
-                .siblingSwap
+                ScopedSwapEncoder.self
             case .reorder:
-                .numericReorder
+                ScopedReorderEncoder.self
         }
     }
 
-    /// Whether the encoder lifts its probes through a materialization, and so needs the generator in hand. Relax round exploitation has none to give and skips these.
-    var requiresGenerator: Bool {
-        switch self {
-            case .boundValue, .bindPivot, .boundExchange:
-                true
-            case .depthCollapse, .laneCollapse, .valueSearch, .redistribution, .lockstep, .relation, .stagedJoint,
-                 .removal, .substitution, .branchPivot, .migration, .swap, .reorder:
-                false
-        }
-    }
-
-    /// Whether the operation changes the generator's active execution path. Only replacement does, so on a graph stripped of unselected branches it needs them restored first.
-    var isPathChanging: Bool {
-        switch self {
-            case .substitution, .branchPivot:
-                true
-            case .boundValue, .bindPivot, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .redistribution,
-                 .lockstep, .relation, .stagedJoint, .removal, .migration, .swap, .reorder:
-                false
-        }
-    }
+    // MARK: - Validity
 
     /// Whether the operation's target nodes still exist and satisfy its preconditions in `graph`.
     func isValid(in graph: ChoiceGraph) -> Bool {
@@ -109,7 +110,7 @@ extension ScopedOpportunity {
                     && graph.nodes[scope.bindNodeID].positionRange != nil
                     && scope.pickNodeID < graph.nodes.count
                     && graph.nodes[scope.pickNodeID].positionRange != nil
-            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .redistribution, .lockstep,
+            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .floatSearch, .redistribution, .lockstep,
                  .relation, .stagedJoint, .reorder:
                 return true
         }
@@ -176,7 +177,7 @@ extension ScopedOpportunity {
                     body(nodeID)
                 }
                 body(scope.receiverSequenceNodeID)
-            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .redistribution, .lockstep,
+            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .floatSearch, .redistribution, .lockstep,
                  .relation, .stagedJoint, .reorder:
                 return false
         }

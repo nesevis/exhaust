@@ -186,12 +186,12 @@ extension ScopedReductionInterpreter {
 
     /// Interprets one branch's pipeline until it reaches a search, a nested `propose`, or a failure, answering its lifts. The search or level is returned unstarted, so the search pool can interleave it with other branches.
     private static func buildBranch(
-        _ program: ScopedReducer,
+        _ reducer: ScopedReducer,
         depth: Int,
         accountingStage: BoundValueStage?,
         context: inout Context
     ) -> ScopedSearchPool.Source? {
-        switch program {
+        switch reducer {
             case .pure:
                 return nil
             case let .impure(.lift(prefix, fallbackTree, maximumSequenceCount), continuation):

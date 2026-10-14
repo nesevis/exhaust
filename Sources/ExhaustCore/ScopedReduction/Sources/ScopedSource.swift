@@ -3,34 +3,34 @@
 //  Exhaust
 //
 
-// MARK: - Priced Opportunity
+// MARK: - Priced Encoder Scope
 
 /// A discovered scope with the priority it advertises for dispatch.
-struct ScopedPricedOpportunity {
-    let opportunity: ScopedOpportunity
+struct PricedEncoderScope {
+    let encoderScope: AnyEncoderScope
     let priority: DispatchPriority
 }
 
 // MARK: - Sorted Source
 
-/// Yields opportunities that were priced and sorted when the source was prepared.
+/// Yields encoder scopes that were priced and sorted when the source was prepared.
 ///
-/// Priority inspection reads the next opportunity without consuming it. The invalidation metadata describes everything the source was prepared with and stays available after exhaustion.
+/// Priority inspection reads the next encoder scope without consuming it. The invalidation metadata describes everything the source was prepared with and stays available after exhaustion.
 struct ScopedSortedSource {
-    private var cursor: BufferedScopeCursor<ScopedPricedOpportunity>
+    private var cursor: BufferedScopeCursor<PricedEncoderScope>
     let isValueDependent: Bool
 
-    /// - Precondition: `opportunities` is already in dispatch order.
-    init(_ opportunities: [ScopedPricedOpportunity], tuning: ScopedReductionTuning) {
-        cursor = BufferedScopeCursor(opportunities)
-        isValueDependent = opportunities.contains { $0.opportunity.encoder(tuning: tuning).isValueDependent }
+    /// - Precondition: `encoderScopes` is already in dispatch order.
+    init(_ encoderScopes: [PricedEncoderScope]) {
+        cursor = BufferedScopeCursor(encoderScopes)
+        isValueDependent = encoderScopes.contains { $0.encoderScope.encoder.isValueDependent }
     }
 
     var dispatchPriority: DispatchPriority? {
         cursor.peekScope?.priority
     }
 
-    mutating func nextScope() -> ScopedPricedOpportunity? {
+    mutating func nextScope() -> PricedEncoderScope? {
         cursor.next()
     }
 }
@@ -58,7 +58,7 @@ struct ScopedStagedJointSource {
 
     private enum State {
         case pending(Discovery)
-        case discovered(ScopedPricedOpportunity?)
+        case discovered(PricedEncoderScope?)
     }
 
     private var state: State
@@ -66,7 +66,7 @@ struct ScopedStagedJointSource {
 
     /// - Parameters:
     ///   - isFruitlessBind: Whether bound value search came back fruitless for the bind with this fingerprint.
-    ///   - exhausted: The checkpoint the last staged joint program searched, if any.
+    ///   - exhausted: The checkpoint the staged joint encoder's reducer last searched, if any.
     init(
         graph: ChoiceGraph,
         sequence: ChoiceSequence,
@@ -87,31 +87,31 @@ struct ScopedStagedJointSource {
 
     var dispatchPriority: DispatchPriority? {
         mutating get {
-            discoveredOpportunity()?.priority
+            discoveredEncoderScope()?.priority
         }
     }
 
-    mutating func nextScope() -> ScopedPricedOpportunity? {
-        let next = discoveredOpportunity()
+    mutating func nextScope() -> PricedEncoderScope? {
+        let next = discoveredEncoderScope()
         state = .discovered(nil)
         return next
     }
 
     // MARK: - Helpers
 
-    private mutating func discoveredOpportunity() -> ScopedPricedOpportunity? {
+    private mutating func discoveredEncoderScope() -> PricedEncoderScope? {
         switch state {
-            case let .discovered(opportunity):
-                return opportunity
+            case let .discovered(encoderScope):
+                return encoderScope
             case let .pending(discovery):
-                let opportunity = Self.discover(discovery)
-                state = .discovered(opportunity)
-                return opportunity
+                let encoderScope = Self.discover(discovery)
+                state = .discovered(encoderScope)
+                return encoderScope
         }
     }
 
     /// Offers the checkpoint when pairs exist and it differs from the exhausted one. Priced with no benefit and the first stage's budget as cost.
-    private static func discover(_ discovery: Discovery) -> ScopedPricedOpportunity? {
+    private static func discover(_ discovery: Discovery) -> PricedEncoderScope? {
         let tuning = discovery.tuning
         guard tuning.stagedJointProbeBudget > 0, discovery.deferBindInner == false else {
             return nil
@@ -139,8 +139,8 @@ struct ScopedStagedJointSource {
             remaining: tuning.stagedJointProbeBudget,
             calculationsRemaining: tuning.numericJointGroupCalculationLimit
         )
-        return ScopedPricedOpportunity(
-            opportunity: .stagedJoint(scope),
+        return PricedEncoderScope(
+            encoderScope: .stagedJoint(scope),
             priority: DispatchPriority(
                 structuralBenefit: 0,
                 valueBenefit: 0,
@@ -153,9 +153,9 @@ struct ScopedStagedJointSource {
 
 // MARK: - Family Sources
 
-/// One source per discovery family. A family yields several encoders' opportunities in one priority order, so ties keep the order the family's query emits them in.
+/// One source per discovery family. A family yields several encoders' scopes in one priority order, so ties keep the order the family's query emits them in.
 ///
-/// Families hold only opportunities for registered encoders. Scopes the family's query finds for other operations are dropped at preparation.
+/// Families hold only encoder scopes for registered encoders. Scopes the family's query finds for other operations are dropped at preparation.
 enum ScopedSource {
     // MARK: Value Families
 
@@ -258,7 +258,7 @@ enum ScopedSource {
     }
 
     /// Releases the source's storage before advancing, so its buffer stays uniquely referenced.
-    mutating func nextScope() -> ScopedPricedOpportunity? {
+    mutating func nextScope() -> PricedEncoderScope? {
         switch consume self {
             case var .laneCollapse(source):
                 let next = source.nextScope()
@@ -339,23 +339,23 @@ extension ScopedSource {
     ) -> [ScopedSource] {
         var sources: [ScopedSource] = []
 
-        if let laneCollapse = laneCollapseOpportunity(graph: graph) {
-            sources.append(.laneCollapse(ScopedSortedSource([laneCollapse], tuning: tuning)))
+        if let laneCollapse = laneCollapseEncoderScope(graph: graph) {
+            sources.append(.laneCollapse(ScopedSortedSource([laneCollapse])))
         }
 
-        let depthCollapse = depthCollapseOpportunities(graph: graph)
+        let depthCollapse = depthCollapseEncoderScopes(graph: graph)
         if depthCollapse.isEmpty == false {
-            sources.append(.depthCollapse(ScopedSortedSource(depthCollapse, tuning: tuning)))
+            sources.append(.depthCollapse(ScopedSortedSource(depthCollapse)))
         }
 
-        let minimization = minimizationOpportunities(graph: graph, deferBindInner: deferBindInner, tuning: tuning)
+        let minimization = minimizationEncoderScopes(graph: graph, deferBindInner: deferBindInner, tuning: tuning)
         if minimization.isEmpty == false {
-            sources.append(.minimization(ScopedSortedSource(minimization, tuning: tuning)))
+            sources.append(.minimization(ScopedSortedSource(minimization)))
         }
 
-        let exchange = exchangeOpportunities(graph: graph, tuning: tuning)
+        let exchange = exchangeEncoderScopes(graph: graph, tuning: tuning)
         if exchange.isEmpty == false {
-            sources.append(.exchange(ScopedSortedSource(exchange, tuning: tuning)))
+            sources.append(.exchange(ScopedSortedSource(exchange)))
         }
 
         return sources
@@ -365,7 +365,7 @@ extension ScopedSource {
     ///
     /// - Parameters:
     ///   - isFruitlessBind: Whether bound value search came back fruitless for the bind with this fingerprint.
-    ///   - exhausted: The checkpoint the last staged joint program searched, if any.
+    ///   - exhausted: The checkpoint the staged joint encoder's reducer last searched, if any.
     static func prepareStagedJointSource(
         from graph: ChoiceGraph,
         sequence: ChoiceSequence,
@@ -408,13 +408,13 @@ extension ScopedSource {
         return bestIndex
     }
 
-    /// The one lane collapse opportunity, covering every nonzero lane marker. It advertises a unit structural benefit, so it runs before any value work.
-    private static func laneCollapseOpportunity(graph: ChoiceGraph) -> ScopedPricedOpportunity? {
+    /// The one lane collapse encoder scope, covering every nonzero lane marker. It advertises a unit structural benefit, so it runs before any value work.
+    private static func laneCollapseEncoderScope(graph: ChoiceGraph) -> PricedEncoderScope? {
         guard case let .laneCollapse(laneScope) = LaneCollapseQuery.build(graph: graph) else {
             return nil
         }
-        return ScopedPricedOpportunity(
-            opportunity: .laneCollapse(laneScope),
+        return PricedEncoderScope(
+            encoderScope: .laneCollapse(laneScope),
             priority: DispatchPriority(
                 structuralBenefit: 1,
                 valueBenefit: 0,
@@ -424,14 +424,14 @@ extension ScopedSource {
         )
     }
 
-    /// One opportunity per depth-control leaf, in the query's deepest-first order. Every layer dropped removes a whole subtree, so the benefit is structural: the leaf's distance to its floor. The cost is the binary search's step count over that distance.
-    private static func depthCollapseOpportunities(graph: ChoiceGraph) -> [ScopedPricedOpportunity] {
+    /// One encoder scope per depth-control leaf, in the query's deepest-first order. Every layer dropped removes a whole subtree, so the benefit is structural: the leaf's distance to its floor. The cost is the binary search's step count over that distance.
+    private static func depthCollapseEncoderScopes(graph: ChoiceGraph) -> [PricedEncoderScope] {
         DepthCollapseQuery.build(graph: graph).compactMap { scope in
             guard case let .depthCollapse(valueScope) = scope else {
                 return nil
             }
-            return ScopedPricedOpportunity(
-                opportunity: .depthCollapse(valueScope),
+            return PricedEncoderScope(
+                encoderScope: .depthCollapse(valueScope),
                 priority: DispatchPriority(
                     structuralBenefit: DepthCollapseQuery.distanceToFloor(of: scope, graph: graph),
                     valueBenefit: 0,
@@ -443,46 +443,46 @@ extension ScopedSource {
     }
 
     /// Prices minimization scopes by the bound subtree they could unlock, with the expected probe count as cost. A value leaf unlocks the subtree of the bind it controls, if any. A bound value scope's cost scales with ``ScopedReductionTuning/boundValueBaseBudget``, its upstream budget.
-    private static func minimizationOpportunities(
+    private static func minimizationEncoderScopes(
         graph: ChoiceGraph,
         deferBindInner: Bool,
         tuning: ScopedReductionTuning
-    ) -> [ScopedPricedOpportunity] {
-        var results: [ScopedPricedOpportunity] = []
+    ) -> [PricedEncoderScope] {
+        var results: [PricedEncoderScope] = []
 
         for scope in MinimizationQuery.build(graph: graph, deferBindInner: deferBindInner) {
-            let opportunity: ScopedOpportunity
+            let encoderScope: AnyEncoderScope
             let valueYield: Int
             let estimatedCost: Int
             switch scope {
                 case let .valueLeaves(integerScope):
-                    opportunity = .valueSearch(.integer(integerScope))
+                    encoderScope = .valueSearch(integerScope)
                     valueYield = integerScope.leaves.reduce(0) { maxSoFar, leaf in
                         max(maxSoFar, computeValueYield(leafNodeID: leaf.nodeID, graph: graph))
                     }
                     estimatedCost = 1 + integerScope.leaves.count * 16
                 case let .floatLeaves(floatScope):
-                    opportunity = .valueSearch(.float(floatScope))
+                    encoderScope = .floatSearch(floatScope)
                     valueYield = floatScope.leaves.reduce(0) { maxSoFar, leaf in
                         max(maxSoFar, computeValueYield(leafNodeID: leaf.nodeID, graph: graph))
                     }
                     estimatedCost = floatScope.leaves.count * 15
                 case let .boundValue(bindScope):
-                    opportunity = .boundValue(bindScope)
+                    encoderScope = .boundValue(bindScope)
                     valueYield = bindScope.boundSubtreeSize
                     estimatedCost = tuning.boundValueBaseBudget * (bindScope.downstreamNodeIDs.count == 1
                         ? 16
                         : min(64, bindScope.downstreamNodeIDs.count * 8))
                 case let .bindPivot(pivotScope):
-                    opportunity = .bindPivot(pivotScope)
+                    encoderScope = .bindPivot(pivotScope)
                     valueYield = pivotScope.boundSubtreeSize
                     estimatedCost = pivotScope.estimatedProbes
                 case .laneCollapse, .depthCollapse:
                     continue
             }
 
-            results.append(ScopedPricedOpportunity(
-                opportunity: opportunity,
+            results.append(PricedEncoderScope(
+                encoderScope: encoderScope,
                 priority: DispatchPriority(
                     structuralBenefit: 0,
                     valueBenefit: valueYield,
@@ -497,16 +497,16 @@ extension ScopedSource {
     }
 
     /// Prices exchange scopes by how far their sources are from their targets, with the expected probe count as cost.
-    private static func exchangeOpportunities(graph: ChoiceGraph, tuning: ScopedReductionTuning) -> [ScopedPricedOpportunity] {
-        var results: [ScopedPricedOpportunity] = []
+    private static func exchangeEncoderScopes(graph: ChoiceGraph, tuning: ScopedReductionTuning) -> [PricedEncoderScope] {
+        var results: [PricedEncoderScope] = []
 
         for scope in ExchangeQuery.build(graph: graph) {
-            let opportunity: ScopedOpportunity
+            let encoderScope: AnyEncoderScope
             let estimatedCost: Int
             let sourceDistance: Int
             switch scope {
                 case let .redistribution(redistributionScope):
-                    opportunity = .redistribution(redistributionScope)
+                    encoderScope = .redistribution(redistributionScope)
                     sourceDistance = Int(min(redistributionScope.maximumSourceDistance, UInt64(Int.max)))
                     estimatedCost = min(24, redistributionScope.pairCount)
                 case let .boundExchange(exchange):
@@ -518,7 +518,7 @@ extension ScopedSource {
                     let distance = metadata.value.bitPattern64 > target
                         ? metadata.value.bitPattern64 - target
                         : target - metadata.value.bitPattern64
-                    opportunity = .boundExchange(exchange)
+                    encoderScope = .boundExchange(exchange)
                     sourceDistance = Int(min(distance, UInt64(Int.max)))
                     estimatedCost = tuning.keptExchangeLiftBudget
                 case let .tandem(tandemScope):
@@ -535,20 +535,20 @@ extension ScopedSource {
                         }
                         return max(maxSoFar, groupMax)
                     }
-                    opportunity = .lockstep(tandemScope)
+                    encoderScope = .lockstep(tandemScope)
                     sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
                     estimatedCost = tandemScope.groups.count * 8
                 case let .relation(relationScope):
                     // Zero magnitude ranks relation search below redistribution and lockstep: it is the last-resort joint move for pairs where every cheaper encoder has already stalled.
-                    opportunity = .relation(relationScope)
+                    encoderScope = .relation(relationScope)
                     sourceDistance = 0
                     estimatedCost = relationScope.pairs.count * 8
                 case .stagedNumericPairs, .numericJoint:
                     continue
             }
 
-            results.append(ScopedPricedOpportunity(
-                opportunity: opportunity,
+            results.append(PricedEncoderScope(
+                encoderScope: encoderScope,
                 priority: DispatchPriority(
                     structuralBenefit: 0,
                     valueBenefit: 0,

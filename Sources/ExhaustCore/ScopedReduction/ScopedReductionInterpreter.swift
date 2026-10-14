@@ -5,7 +5,7 @@
 
 // MARK: - Pass Report
 
-/// Everything one execution observed, harvested by the interpreter rather than reported by programs.
+/// Everything one execution observed, harvested by the interpreter rather than reported by the encoder's reducer.
 struct ScopedPassReport {
     var counts = ReductionProbeCounts()
     var anyAccepted = false
@@ -31,7 +31,7 @@ struct ScopedPassReport {
 
 // MARK: - Interpreter
 
-/// Executes one scope's program against a context the runner seeds.
+/// Executes the encoder's reducer for one scope against a context the runner seeds.
 ///
 /// Holds no decoding logic: it pulls candidates from searches, checks the rejection cache, asks the decoder to decode it, checks the result's ordering against the incumbent, and feeds the outcome back. Inside a `propose` it schedules searches in turns: a new branch is built before any suspended search resumes, suspended searches resume in FIFO order with a fresh turn, and the first acceptance ends every search. A branch whose pipeline reaches another `propose` becomes a nested level, which its parent schedules like any other search; a nested level's turn counts the parent's probes.
 enum ScopedReductionInterpreter {
@@ -45,9 +45,9 @@ enum ScopedReductionInterpreter {
         let probeTiming: ProbeTiming?
     }
 
-    /// Runs `program` until it finishes or the pass ends, and returns the restorable state with everything the execution observed.
-    static func run(_ program: ScopedReducer, context: consuming Context) -> Result {
-        _ = interpret(program, context: &context)
+    /// Runs `reducer` until it finishes or the pass ends, and returns the restorable state with everything the execution observed.
+    static func run(_ reducer: ScopedReducer, context: consuming Context) -> Result {
+        _ = interpret(reducer, context: &context)
         return Result(
             incumbent: context.incumbent,
             graph: context.graph,
@@ -57,11 +57,11 @@ enum ScopedReductionInterpreter {
         )
     }
 
-    /// Answers the program's next request and continues with the program its continuation returns.
+    /// Answers the next request of the encoder's reducer and continues with the reducer its continuation returns.
     ///
-    /// - Returns: Why the pass ended, or nil when the program finished without ending it. A deadline, or an acceptance that ends the search, stops the program at the request that observed it, and its continuation never runs.
-    static func interpret(_ program: ScopedReducer, context: inout Context) -> ScopedStopReason? {
-        switch program {
+    /// - Returns: Why the pass ended, or nil when the encoder's reducer finished without ending it. A deadline, or an acceptance that ends the search, stops the encoder's reducer at the request that observed it, and its continuation never runs.
+    static func interpret(_ reducer: ScopedReducer, context: inout Context) -> ScopedStopReason? {
+        switch reducer {
             case .pure:
                 return nil
             case let .impure(.lift(prefix, fallbackTree, maximumSequenceCount), continuation):

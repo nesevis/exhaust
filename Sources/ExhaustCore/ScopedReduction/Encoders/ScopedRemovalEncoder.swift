@@ -19,8 +19,10 @@ struct ScopedRemovalEncoder: ScopedEncoder {
         case window(WindowRemovalScope)
     }
 
-    let name: EncoderName = .deletion
-    let isValueDependent = false
+    static let name: EncoderName = .deletion
+    static let isValueDependent = false
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {

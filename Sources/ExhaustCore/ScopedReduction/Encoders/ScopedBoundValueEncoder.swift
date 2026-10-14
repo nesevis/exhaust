@@ -5,7 +5,7 @@
 
 // MARK: - Bound Value Encoder
 
-/// Bound value search as a scoped program: propose a controller value, lift it, relocate the bind, and either descend into the next nested bind or search the bound leaves.
+/// Bound value search: the encoder's reducer proposes a controller value, lifts it, relocates the bind, and either descends into the next nested bind or searches the bound leaves.
 ///
 /// A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
 struct ScopedBoundValueEncoder: ScopedEncoder {
@@ -18,8 +18,10 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
         let totalProbeCap: Int
     }
 
-    let name: EncoderName = .composed
-    let isValueDependent = true
+    static let name: EncoderName = .boundValueSearch
+    static let isValueDependent = true
+    static let requiresGenerator = true
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -54,7 +56,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
         )
     }
 
-    /// Values every level of one chain shares. The generator, build tally, and build pool belong to the decoder and interpreter, so programs capture none of them.
+    /// Values every level of one chain shares. The generator, build tally, and build pool belong to the decoder and interpreter, so the encoder's reducer captures none of them.
     private struct Chain {
         let upstreamBudget: Int
         let rootSequenceCount: Int

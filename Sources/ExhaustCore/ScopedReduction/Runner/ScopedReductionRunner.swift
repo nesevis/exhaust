@@ -7,7 +7,7 @@
 
 /// Owns a complete scoped reduction: setup, cycles of dispatch over the family sources, post-cycle actions, relax rounds, and the final reorder pass.
 ///
-/// The runner is written in direct style. Each scope's program runs to completion in its own interpreter execution, which the runner seeds from its memory and reconciles afterwards; cycles, post-cycle actions, and relax rounds are ordinary nested calls. The schedule reproduces the current reducer's exactly, so any change to it is a measured behavior change.
+/// The runner is written in direct style. The encoder's reducer for each scope runs to completion in its own interpreter execution, which the runner seeds from its memory and reconciles afterwards; cycles, post-cycle actions, and relax rounds are ordinary nested calls. The schedule reproduces the current reducer's exactly, so any change to it is a measured behavior change.
 ///
 /// ## Cycle
 ///

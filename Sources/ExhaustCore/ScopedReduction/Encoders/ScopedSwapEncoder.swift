@@ -9,8 +9,10 @@
 ///
 /// The search keeps going after an acceptance, building its next probe on the recovered sequence.
 struct ScopedSwapEncoder: ScopedEncoder {
-    let name: EncoderName = .siblingSwap
-    let isValueDependent = false
+    static let name: EncoderName = .siblingSwap
+    static let isValueDependent = false
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: PermutationScope, input: ScopedEncoderInput) -> ScopedReducer {

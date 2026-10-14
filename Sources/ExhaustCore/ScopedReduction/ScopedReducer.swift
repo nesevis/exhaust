@@ -7,7 +7,7 @@
 
 /// The answer an interpreter gives a ``ScopedReducer`` request.
 ///
-/// A closed vocabulary rather than `Any`: every value lives in the choice substrate, so a suspended program is an ordinary value that can be copied at a `propose`. Authors never match these cases directly; the verbs on ``ScopedReducer`` match the case their request produces and trap on any other, which can only be an interpreter fault.
+/// A closed vocabulary rather than `Any`: every value lives in the choice substrate, so the encoder's reducer is an ordinary value even while suspended, and can be copied at a `propose`. Authors never match these cases directly; the verbs on ``ScopedReducer`` match the case their request produces and trap on any other, which can only be an interpreter fault.
 enum ScopedReductionResult {
     /// Answers `propose` with one branch's proposal.
     case proposal(LiftProposal)
@@ -15,15 +15,15 @@ enum ScopedReductionResult {
     case lifted(LiftResult?)
     /// Answers `search` once the search has finished.
     case outcome(ScopedSearchOutcome)
-    /// A program's terminal value.
+    /// The terminal value of the encoder's reducer.
     case finished
 }
 
 // MARK: - Operations
 
-/// The requests a scoped encoder program can make.
+/// The requests the encoder's reducer can make.
 ///
-/// `propose`, `fail`, and the per-branch cost follow Spivey's bunch operations (`⊕`, `zero`, `wrap`); `lift` and `search` are effects outside that algebra. The interpreter, not the program, decides the order in which `propose` branches are visited.
+/// `propose`, `fail`, and the per-branch cost follow Spivey's bunch operations (`⊕`, `zero`, `wrap`); `lift` and `search` are effects outside that algebra. The interpreter, not the encoder's reducer, decides the order in which `propose` branches are visited.
 enum ScopedReductionOperation {
     /// Offers alternatives. The interpreter resumes the continuation once per branch it visits, so continuations must be re-entrant and capture only values.
     case propose([ScopedBranch], configuration: ScopedChoiceConfiguration)
@@ -35,9 +35,9 @@ enum ScopedReductionOperation {
     case search(ScopedSearchBox, configuration: ScopedSearchConfiguration)
 }
 
-/// Holds a search inside a program.
+/// Holds a search inside the encoder's reducer.
 ///
-/// A reference, so the operation, each `bind` that re-wraps it, and the interpreter's pattern match copy a pointer rather than the search's state, which runs to hundreds of bytes. Immutable, so a program stays a value: the interpreter copies the search out once before advancing it.
+/// A reference, so the operation, each `bind` that re-wraps it, and the interpreter's pattern match copy a pointer rather than the search's state, which runs to hundreds of bytes. Immutable, so the encoder's reducer stays a value: the interpreter copies the search out once before advancing it.
 final class ScopedSearchBox {
     let search: ScopedSearchKind
 
@@ -96,7 +96,7 @@ enum ScopedAcceptance {
     case stop
 }
 
-/// Summarizes a finished search for the program that requested it.
+/// Summarizes a finished search for the encoder's reducer that requested it.
 struct ScopedSearchOutcome {
     let anyAccepted: Bool
     let stopReason: ScopedStopReason
@@ -104,9 +104,9 @@ struct ScopedSearchOutcome {
     let counts: ReductionProbeCounts
 }
 
-// MARK: - Program
+// MARK: - Reducer
 
-/// An encoder program in ``FreerMonad`` form over ``ScopedReductionOperation``.
+/// The encoder's reducer in ``FreerMonad`` form over ``ScopedReductionOperation``.
 ///
 /// A separate type rather than `FreerMonad<ScopedReductionOperation, Void>` so every answer stays in the closed ``ScopedReductionResult`` instead of `Any`.
 indirect enum ScopedReducer {
@@ -167,12 +167,12 @@ extension ScopedReducer {
         }
     }
 
-    /// A one-step program whose result is the interpreter's answer to `operation`.
+    /// A one-step reducer whose result is the interpreter's answer to `operation`.
     private static func request(_ operation: ScopedReductionOperation) -> ScopedReducer {
         .impure(operation) { .pure($0) }
     }
 
-    /// Sequences this program with one built from its result, as ``FreerMonad/bind(_:)`` does.
+    /// Sequences this reducer with one built from its result, as ``FreerMonad/bind(_:)`` does.
     private func bind(_ transform: @escaping (ScopedReductionResult) -> ScopedReducer) -> ScopedReducer {
         switch self {
             case let .pure(result):

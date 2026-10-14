@@ -34,7 +34,7 @@ struct ScopedMigrationSource {
     private var dependencyReachability: DependencyReachabilityCache
     private var sourceIndex = 0
     private var receiverIndex: Int
-    private var pendingOpportunity: ScopedPricedOpportunity?
+    private var pendingEncoderScope: PricedEncoderScope?
 
     /// Collects source payloads before pair enumeration so receiver count does not multiply extent collection or storage.
     init(graph: ChoiceGraph) {
@@ -104,7 +104,7 @@ struct ScopedMigrationSource {
 
     /// Searches only far enough to buffer the next valid pair, preserving capacity, containment, and dependency gates.
     private mutating func prepareNext() {
-        pendingOpportunity = nil
+        pendingEncoderScope = nil
         while sourceIndex < sources.count {
             let source = sources[sourceIndex]
             let sourceSequence = sequences[source.sequenceIndex]
@@ -118,8 +118,8 @@ struct ScopedMigrationSource {
                 else {
                     continue
                 }
-                pendingOpportunity = ScopedPricedOpportunity(
-                    opportunity: .migration(MigrationScope(
+                pendingEncoderScope = PricedEncoderScope(
+                    encoderScope: .migration(MigrationScope(
                         sourceSequenceNodeID: sourceSequence.nodeID,
                         receiverSequenceNodeID: receiver.nodeID,
                         elementNodeIDs: source.elementNodeIDs,
@@ -153,14 +153,14 @@ struct ScopedMigrationSource {
     }
 
     var dispatchPriority: DispatchPriority? {
-        pendingOpportunity?.priority
+        pendingEncoderScope?.priority
     }
 
-    mutating func nextScope() -> ScopedPricedOpportunity? {
-        guard let opportunity = pendingOpportunity else {
+    mutating func nextScope() -> PricedEncoderScope? {
+        guard let encoderScope = pendingEncoderScope else {
             return nil
         }
         prepareNext()
-        return opportunity
+        return encoderScope
     }
 }

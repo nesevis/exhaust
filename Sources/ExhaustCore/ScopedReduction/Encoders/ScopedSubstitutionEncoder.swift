@@ -15,8 +15,10 @@ struct ScopedSubstitutionEncoder: ScopedEncoder {
         case descendantPromotion(ancestorPickNodeID: Int, descendantPickNodeID: Int)
     }
 
-    let name: EncoderName = .substitution
-    let isValueDependent = false
+    static let name: EncoderName = .substitution
+    static let isValueDependent = false
+    static let requiresGenerator = false
+    static let isPathChanging = true
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {

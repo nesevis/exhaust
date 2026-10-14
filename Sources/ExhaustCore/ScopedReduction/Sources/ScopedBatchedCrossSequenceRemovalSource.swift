@@ -46,7 +46,7 @@ struct ScopedBatchedCrossSequenceRemovalSource {
     }
 
     /// Continuing the same graph snapshot bisects the previous unsuccessful scope; accepted structural edits discard this source.
-    mutating func nextScope() -> ScopedPricedOpportunity? {
+    mutating func nextScope() -> PricedEncoderScope? {
         prefersInitialDispatch = false
         guard exhausted == false else {
             return nil
@@ -91,8 +91,8 @@ struct ScopedBatchedCrossSequenceRemovalSource {
 
         recomputePriority()
 
-        return ScopedPricedOpportunity(
-            opportunity: .removal(.elements(scope)),
+        return PricedEncoderScope(
+            encoderScope: .removal(.elements(scope)),
             priority: DispatchPriority(
                 structuralBenefit: totalYield,
                 valueBenefit: 0,

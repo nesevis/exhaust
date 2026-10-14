@@ -7,7 +7,7 @@
 
 /// Searches stalled numeric leaves jointly: pairs first, then three-way and four-way groups while each preceding stage stalls.
 ///
-/// One program covers a whole checkpoint, as a chain of stages that follow one rule. A stage searches its arity's candidates; a stage that accepts ends the chain, because every group's addresses and domain samples belong to the checkpoint. A stage that exhausts widens the search to one more leaf per group when probes and group calculations remain and a wider group is cheap enough to search: its cheapest sampled grid fits that arity's work limit. All stages share ``ScopedReductionTuning/stagedJointProbeBudget``, and a stage after which the search can widen reserves half of what remains for the wider stage.
+/// The encoder's reducer covers a whole checkpoint, as a chain of stages that follow one rule. A stage searches its arity's candidates; a stage that accepts ends the chain, because every group's addresses and domain samples belong to the checkpoint. A stage that exhausts widens the search to one more leaf per group when probes and group calculations remain and a wider group is cheap enough to search: its cheapest sampled grid fits that arity's work limit. All stages share ``ScopedReductionTuning/stagedJointProbeBudget``, and a stage after which the search can widen reserves half of what remains for the wider stage.
 struct ScopedStagedJointEncoder: ScopedEncoder {
     /// One checkpoint: the pairs to search and the candidate pool that three-way and four-way groups are drawn from, both discovered against the same graph.
     struct Scope: Equatable {
@@ -17,8 +17,10 @@ struct ScopedStagedJointEncoder: ScopedEncoder {
 
     static let maximumArity = 4
 
-    let name: EncoderName = .stagedJointSearch
-    let isValueDependent = true
+    static let name: EncoderName = .stagedJointSearch
+    static let isValueDependent = true
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {

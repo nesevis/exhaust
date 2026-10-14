@@ -44,7 +44,7 @@ struct ScopedImprovingPivotCursor {
         var prepared: [Pivot] = []
         var source = ScopedReplacementSource(pivotGraph: graph)
         while deadlineCheck() == false, let priced = source.nextScope() {
-            guard case let .branchPivot(scope) = priced.opportunity,
+            guard case let .branchPivot(scope) = priced.encoderScope,
                   let splice = ScopedPivotCandidates.branchPivotSplice(
                       pickNodeID: scope.pickNodeID,
                       targetBranchID: scope.targetBranchID,

@@ -24,7 +24,7 @@ extension ScopedSource {
     static func prepareStructuralSources(
         from graph: ChoiceGraph,
         previousGraph: ChoiceGraph? = nil,
-        tuning: ScopedReductionTuning
+        tuning _: ScopedReductionTuning
     ) -> [ScopedSource] {
         var sources: [ScopedSource] = []
 
@@ -35,9 +35,9 @@ extension ScopedSource {
             sources.append(batchedCrossSequence)
         }
 
-        let emptying = emptyingOpportunities(graph: graph, elementScopes: elementScopes)
+        let emptying = emptyingEncoderScopes(graph: graph, elementScopes: elementScopes)
         if emptying.isEmpty == false {
-            sources.append(.emptying(ScopedSortedSource(emptying, tuning: tuning)))
+            sources.append(.emptying(ScopedSortedSource(emptying)))
         }
 
         for scope in elementScopes {
@@ -50,14 +50,14 @@ extension ScopedSource {
             }
         }
 
-        let centered = centeredWindowOpportunities(graph: graph, elementScopes: elementScopes)
+        let centered = centeredWindowEncoderScopes(graph: graph, elementScopes: elementScopes)
         if centered.isEmpty == false {
-            sources.append(.centeredWindows(ScopedSortedSource(centered, tuning: tuning)))
+            sources.append(.centeredWindows(ScopedSortedSource(centered)))
         }
 
-        let symmetric = symmetricWindowOpportunities(graph: graph, elementScopes: elementScopes)
+        let symmetric = symmetricWindowEncoderScopes(graph: graph, elementScopes: elementScopes)
         if symmetric.isEmpty == false {
-            sources.append(.symmetricWindows(ScopedSortedSource(symmetric, tuning: tuning)))
+            sources.append(.symmetricWindows(ScopedSortedSource(symmetric)))
         }
 
         var migration = ScopedSource.migration(ScopedMigrationSource(graph: graph))
@@ -65,14 +65,14 @@ extension ScopedSource {
             sources.append(migration)
         }
 
-        let perElement = perElementRemovalOpportunities(graph: graph, elementScopes: elementScopes)
+        let perElement = perElementRemovalEncoderScopes(graph: graph, elementScopes: elementScopes)
         if perElement.isEmpty == false {
-            sources.append(.perElementRemoval(ScopedSortedSource(perElement, tuning: tuning)))
+            sources.append(.perElementRemoval(ScopedSortedSource(perElement)))
         }
 
-        let aligned = alignedRemovalOpportunities(graph: graph)
+        let aligned = alignedRemovalEncoderScopes(graph: graph)
         if aligned.isEmpty == false {
-            sources.append(.alignedRemoval(ScopedSortedSource(aligned, tuning: tuning)))
+            sources.append(.alignedRemoval(ScopedSortedSource(aligned)))
         }
 
         var replacement = ScopedSource.replacement(ScopedReplacementSource(graph: graph, previousGraph: previousGraph))
@@ -80,39 +80,38 @@ extension ScopedSource {
             sources.append(replacement)
         }
 
-        sources += preparePermutationSources(from: graph, tuning: tuning)
+        sources += preparePermutationSources(from: graph)
 
         return sources
     }
 
     /// The permutation family alone, which depends on sibling shapes, so a leaf-kind change rebuilds it while other structural families survive.
-    static func preparePermutationSources(from graph: ChoiceGraph, tuning: ScopedReductionTuning) -> [ScopedSource] {
-        let permutation = permutationOpportunities(graph: graph)
+    static func preparePermutationSources(from graph: ChoiceGraph) -> [ScopedSource] {
+        let permutation = permutationEncoderScopes(graph: graph)
         guard permutation.isEmpty == false else {
             return []
         }
-        return [.permutation(ScopedSortedSource(permutation, tuning: tuning))]
+        return [.permutation(ScopedSortedSource(permutation))]
     }
 
     /// The numeric reorder family over the current graph: one scope holding every reorderable sibling group, or nil when there is none. Reordering is for presentation, so the runner drains this family only in the final pass.
-    static func prepareReorderSource(from graph: ChoiceGraph, tuning: ScopedReductionTuning) -> ScopedSource? {
+    static func prepareReorderSource(from graph: ChoiceGraph) -> ScopedSource? {
         guard let reorderScope = ReorderingQuery.build(graph: graph) else {
             return nil
         }
         return .numericReorder(ScopedSortedSource(
-            [ScopedPricedOpportunity(
-                opportunity: .reorder(reorderScope),
+            [PricedEncoderScope(
+                encoderScope: .reorder(reorderScope),
                 priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
-            )],
-            tuning: tuning
+            )]
         ))
     }
 
     // MARK: - Removal Families
 
     /// One scope per sequence whose minimum length is zero, removing all its elements: the largest structural reduction per sequence. Largest yield first.
-    private static func emptyingOpportunities(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [ScopedPricedOpportunity] {
-        var results: [ScopedPricedOpportunity] = []
+    private static func emptyingEncoderScopes(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [PricedEncoderScope] {
+        var results: [PricedEncoderScope] = []
         for scope in elementScopes {
             // Only single-target (per-parent) scopes are emptied.
             guard scope.targets.count == 1, let target = scope.targets.first else {
@@ -141,8 +140,8 @@ extension ScopedSource {
                 maxElementYield: totalYield
             )
 
-            results.append(ScopedPricedOpportunity(
-                opportunity: .removal(.elements(emptyingScope)),
+            results.append(PricedEncoderScope(
+                encoderScope: .removal(.elements(emptyingScope)),
                 priority: DispatchPriority(
                     structuralBenefit: totalYield,
                     valueBenefit: 0,
@@ -158,8 +157,8 @@ extension ScopedSource {
     /// Seeds center-out deletion with the largest centered window allowed by each sequence's minimum length.
     ///
     /// Keeping the window's parity equal to the sequence's makes the first probe remove its middle element or middle pair. Its dispatch priority reflects only that first probe; later growth is driven by acceptance feedback.
-    private static func centeredWindowOpportunities(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [ScopedPricedOpportunity] {
-        var results: [ScopedPricedOpportunity] = []
+    private static func centeredWindowEncoderScopes(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [PricedEncoderScope] {
+        var results: [PricedEncoderScope] = []
         for scope in elementScopes {
             guard scope.targets.count == 1, let target = scope.targets.first else {
                 continue
@@ -184,8 +183,8 @@ extension ScopedSource {
             let initialYield = initialNodeIDs.reduce(0) { total, nodeID in
                 total + (graph.nodes[nodeID].positionRange?.count ?? 0)
             }
-            results.append(ScopedPricedOpportunity(
-                opportunity: .removal(.window(window)),
+            results.append(PricedEncoderScope(
+                encoderScope: .removal(.window(window)),
                 priority: DispatchPriority(
                     structuralBenefit: initialYield,
                     valueBenefit: 0,
@@ -201,8 +200,8 @@ extension ScopedSource {
     /// Seeds equal prefix and suffix deletions within each sequence's minimum-length budget.
     ///
     /// The first probe removes both edge elements together. Increasing the search step grows both arms inward; the retained middle is omitted from the scope so it cannot be deleted or counted twice. Priority reflects only the first pair's yield.
-    private static func symmetricWindowOpportunities(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [ScopedPricedOpportunity] {
-        var results: [ScopedPricedOpportunity] = []
+    private static func symmetricWindowEncoderScopes(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [PricedEncoderScope] {
+        var results: [PricedEncoderScope] = []
         for scope in elementScopes {
             guard scope.targets.count == 1, let target = scope.targets.first else {
                 continue
@@ -219,8 +218,8 @@ extension ScopedSource {
             )
             let initialYield = (graph.nodes[elements[0]].positionRange?.count ?? 0)
                 + (graph.nodes[elements[elements.count - 1]].positionRange?.count ?? 0)
-            results.append(ScopedPricedOpportunity(
-                opportunity: .removal(.window(window)),
+            results.append(PricedEncoderScope(
+                encoderScope: .removal(.window(window)),
                 priority: DispatchPriority(
                     structuralBenefit: initialYield,
                     valueBenefit: 0,
@@ -234,7 +233,7 @@ extension ScopedSource {
     }
 
     /// One scope per deletable element, removing it alone. Elements already at their reduction target come first, because removing an already-minimal element is more likely to keep the property failing; the rest follow in position order.
-    private static func perElementRemovalOpportunities(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [ScopedPricedOpportunity] {
+    private static func perElementRemovalEncoderScopes(graph: ChoiceGraph, elementScopes: [ElementRemovalScope]) -> [PricedEncoderScope] {
         var entries: [(sequenceNodeID: Int, nodeID: Int, positionRange: ClosedRange<Int>, isZero: Bool)] = []
         for scope in elementScopes {
             // Only single-target scopes are split into elements.
@@ -276,8 +275,8 @@ extension ScopedSource {
                 maxBatch: 1,
                 maxElementYield: element.positionRange.count
             )
-            return ScopedPricedOpportunity(
-                opportunity: .removal(.elements(scope)),
+            return PricedEncoderScope(
+                encoderScope: .removal(.elements(scope)),
                 priority: DispatchPriority(
                     structuralBenefit: element.positionRange.count,
                     valueBenefit: 0,
@@ -289,13 +288,13 @@ extension ScopedSource {
     }
 
     /// One covering-array scope per zip with two or more deletable sibling sequences, largest single-element yield first. The cost is the rows one dispatch can pull: the generator's remaining rows, up to ``CoveringAlignedRemovalScope/rowBudget``.
-    private static func alignedRemovalOpportunities(graph: ChoiceGraph) -> [ScopedPricedOpportunity] {
+    private static func alignedRemovalEncoderScopes(graph: ChoiceGraph) -> [PricedEncoderScope] {
         let scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { $0.maxElementYield > $1.maxElementYield }
 
         return scopes.map { scope in
-            ScopedPricedOpportunity(
-                opportunity: .removal(.coveringAligned(scope)),
+            PricedEncoderScope(
+                encoderScope: .removal(.coveringAligned(scope)),
                 priority: DispatchPriority(
                     structuralBenefit: scope.maxElementYield,
                     valueBenefit: 0,
@@ -309,7 +308,7 @@ extension ScopedSource {
     // MARK: - Permutation Family
 
     /// One scope per same-shaped sibling group, earliest group first, since earlier positions affect shortlex order most. The cost is the swap's probe count: one for a pair, otherwise one plus the extension's logarithmic bound.
-    private static func permutationOpportunities(graph: ChoiceGraph) -> [ScopedPricedOpportunity] {
+    private static func permutationEncoderScopes(graph: ChoiceGraph) -> [PricedEncoderScope] {
         var entries: [(parentNodeID: Int, group: [Int], position: Int)] = []
         for scope in PermutationQuery.build(graph: graph) {
             let parentNodeID = scope.parentNodeID
@@ -325,8 +324,8 @@ extension ScopedSource {
 
         return entries.map { entry in
             let estimatedCost = entry.group.count <= 2 ? 1 : (1 + Int(log2(Double(entry.group.count))))
-            return ScopedPricedOpportunity(
-                opportunity: .swap(PermutationScope(
+            return PricedEncoderScope(
+                encoderScope: .swap(PermutationScope(
                     parentNodeID: entry.parentNodeID,
                     swappableGroups: [entry.group]
                 )),

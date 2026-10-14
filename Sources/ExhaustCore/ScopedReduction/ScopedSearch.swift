@@ -50,27 +50,9 @@ enum ScopedStopReason {
 
 /// One top-level search's share of a pass's probe counts.
 struct ScopedSearchCounts: Equatable {
-    let search: ScopedSearchTag
+    /// The number of leaves each candidate moves when the search is a staged joint stage, which the runner attributes counts to. Nil for every other search.
+    let stagedJointArity: Int?
     let counts: ReductionProbeCounts
-}
-
-/// Identifies a registered search without its state, so reports can attribute work to it.
-enum ScopedSearchTag: Equatable {
-    case liftedSeed
-    case binarySearch
-    case covering
-    case laneCollapse
-    case valueSearch
-    case redistribution
-    case lockstep
-    case relation
-    /// Staged joint stages are told apart by the number of leaves each candidate moves.
-    case stagedJoint(arity: Int)
-    case singleCandidate
-    case coveringAlignedRemoval
-    case windowRemoval
-    case swap
-    case reorder
 }
 
 /// Search knowledge a search hands back when it finishes.
@@ -110,7 +92,8 @@ enum ScopedSearchKind {
     case binarySearch(ScopedBinarySearch)
     case covering(ScopedCoveringSearch)
     case laneCollapse(ScopedLaneCollapseSearch)
-    case valueSearch(ScopedValueSearch)
+    case integerSearch(ScopedIntegerSearch)
+    case floatSearch(ScopedFloatSearch)
     case redistribution(ScopedRedistributionSearch)
     case lockstep(ScopedLockstepSearch)
     case relation(ScopedRelationSearch)
@@ -120,39 +103,6 @@ enum ScopedSearchKind {
     case windowRemoval(ScopedWindowRemovalSearch)
     case swap(ScopedSwapSearch)
     case reorder(ScopedReorderSearch)
-
-    var tag: ScopedSearchTag {
-        switch self {
-            case .liftedSeed:
-                .liftedSeed
-            case .binarySearch:
-                .binarySearch
-            case .covering:
-                .covering
-            case .laneCollapse:
-                .laneCollapse
-            case .valueSearch:
-                .valueSearch
-            case .redistribution:
-                .redistribution
-            case .lockstep:
-                .lockstep
-            case .relation:
-                .relation
-            case let .stagedJoint(search):
-                .stagedJoint(arity: search.arity)
-            case .singleCandidate:
-                .singleCandidate
-            case .coveringAlignedRemoval:
-                .coveringAlignedRemoval
-            case .windowRemoval:
-                .windowRemoval
-            case .swap:
-                .swap
-            case .reorder:
-                .reorder
-        }
-    }
 
     /// Consumes `self` before advancing, so the search's storage stays uniquely referenced and is not copied per candidate.
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
@@ -173,9 +123,13 @@ enum ScopedSearchKind {
                 let candidate = search.next(feedback, into: &buffer)
                 self = .laneCollapse(search)
                 return candidate
-            case var .valueSearch(search):
+            case var .integerSearch(search):
                 let candidate = search.next(feedback, into: &buffer)
-                self = .valueSearch(search)
+                self = .integerSearch(search)
+                return candidate
+            case var .floatSearch(search):
+                let candidate = search.next(feedback, into: &buffer)
+                self = .floatSearch(search)
                 return candidate
             case var .redistribution(search):
                 let candidate = search.next(feedback, into: &buffer)
@@ -226,7 +180,9 @@ enum ScopedSearchKind {
                 search.finish(reason: reason, undelivered: undelivered)
             case let .laneCollapse(search):
                 search.finish(reason: reason, undelivered: undelivered)
-            case let .valueSearch(search):
+            case let .integerSearch(search):
+                search.finish(reason: reason, undelivered: undelivered)
+            case let .floatSearch(search):
                 search.finish(reason: reason, undelivered: undelivered)
             case let .redistribution(search):
                 search.finish(reason: reason, undelivered: undelivered)

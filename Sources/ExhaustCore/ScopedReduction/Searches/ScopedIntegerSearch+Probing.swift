@@ -1,19 +1,19 @@
 //
-//  ScopedValueSearch+Integer.swift
+//  ScopedIntegerSearch+Probing.swift
 //  Exhaust
 //
 
-// MARK: - Integer Mode
+// MARK: - Phases
 
-extension ScopedValueSearch {
+extension ScopedIntegerSearch {
     /// Initializes integer reduction by collecting integer-typed leaf nodes that have not yet reached their reduction targets and entering the batch-zero phase (when eligible).
-    mutating func startInteger(
+    static func initialState(
         scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
         warmStarts: [Int: ConvergedOrigin]
-    ) {
-        var leafPositions: [IntegerLeafPosition] = []
+    ) -> State {
+        var leafPositions: [LeafPosition] = []
 
         for entry in scope.leaves {
             let nodeID = entry.nodeID
@@ -26,7 +26,7 @@ extension ScopedValueSearch {
             let current = metadata.value.bitPattern64
             let target = metadata.value.reductionTarget(in: metadata.validRange)
             if current != target {
-                leafPositions.append(IntegerLeafPosition(
+                leafPositions.append(LeafPosition(
                     nodeID: nodeID,
                     sequenceIndex: range.lowerBound,
                     validRange: metadata.validRange,
@@ -40,9 +40,9 @@ extension ScopedValueSearch {
         }
 
         // The all-targets shortcut is worth one probe at the start of a search.
-        let initialPhase: IntegerPhase = scope.batchZeroEligible ? .batchZero : .perLeaf
+        let initialPhase: Phase = scope.batchZeroEligible ? .batchZero : .perLeaf
 
-        mode = .valueLeaves(IntegerState(
+        return State(
             sequence: sequence,
             leafPositions: leafPositions,
             phase: initialPhase,
@@ -54,12 +54,12 @@ extension ScopedValueSearch {
             candidateList: nil,
             crossZero: nil,
             bisection: nil
-        ))
+        )
     }
 
     /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. Updates the baseline sequence on acceptance so subsequent probes build on the improved candidate.
-    mutating func nextIntegerProbe(
-        state: inout IntegerState,
+    mutating func nextProbe(
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         // If the last probe was accepted, update the baseline sequence.
@@ -86,7 +86,7 @@ extension ScopedValueSearch {
                 // Batch zero not shortlex-smaller — skip to per-leaf.
                 state.batchRejected = true
                 state.phase = .perLeaf
-                return nextIntegerProbe(state: &state, lastAccepted: false)
+                return nextProbe(state: &state, lastAccepted: false)
 
             case .perLeafZero:
                 return nextPerLeafZeroProbe(state: &state, lastAccepted: lastAccepted)
@@ -106,12 +106,12 @@ extension ScopedValueSearch {
 
     /// Tries each leaf individually at its reduction target. Leaves that accept converge immediately and are excluded from batch bisection. After all leaves are tried, transitions to batch bisection with only the survivors.
     mutating func nextPerLeafZeroProbe(
-        state: inout IntegerState,
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         guard var plz = state.perLeafZero else {
             state.phase = .perLeaf
-            return nextIntegerProbe(state: &state, lastAccepted: lastAccepted)
+            return nextProbe(state: &state, lastAccepted: lastAccepted)
         }
 
         // Process feedback from the previous per-leaf-zero probe.
@@ -168,11 +168,11 @@ extension ScopedValueSearch {
                 awaitingFeedback: false,
                 convergedIndices: plz.convergedIndices
             )
-            return nextIntegerProbe(state: &state, lastAccepted: false)
+            return nextProbe(state: &state, lastAccepted: false)
         }
 
         state.phase = .perLeaf
-        return nextIntegerProbe(state: &state, lastAccepted: false)
+        return nextProbe(state: &state, lastAccepted: false)
     }
 
     // MARK: - Batch Bisection
@@ -181,7 +181,7 @@ extension ScopedValueSearch {
     ///
     /// Each group of leaves is searched in tandem — all leaves in the group move one interpolation step toward their targets simultaneously. On acceptance, the group continues stepping (divisor resets). On rejection, the divisor halves; when the divisor reaches the binary threshold and the group has two or more leaves, the group is bisected and each half is searched independently. Single-leaf groups that stall are deferred to the per-leaf phase.
     mutating func nextBatchBisectProbe(
-        state: inout IntegerState,
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         guard var bisection = state.bisection else {
@@ -321,7 +321,7 @@ extension ScopedValueSearch {
 
     /// Orchestrates per-leaf reduction by iterating over leaf nodes in sequence. For each leaf, emits a direct shot at the reduction target, then drives bit-pattern binary search, then optionally probes a candidate list (a linear scan over any non-monotone gap, or simpler forms of a character), and finally enters the cross-zero phase for signed types. Returns nil when all leaves have been processed.
     mutating func nextPerLeafProbe(
-        state: inout IntegerState,
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         while state.leafIndex < state.leafPositions.count {
@@ -426,7 +426,7 @@ extension ScopedValueSearch {
     ///
     /// Returns the next candidate, or nil when the stepper converges. On convergence, records the convergence signal and enters the cross-zero phase for signed types.
     mutating func nextBitPatternSearchProbe(
-        state: inout IntegerState,
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         let leaf = state.leafPositions[state.leafIndex]
@@ -583,7 +583,7 @@ extension ScopedValueSearch {
     ///
     /// Returns nil when the list is exhausted, or after the first acceptance when ``CandidateListSource/endsOnFirstAcceptance`` holds.
     func nextCandidateListProbe(
-        state: inout IntegerState,
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         guard var list = state.candidateList else {
@@ -619,7 +619,7 @@ extension ScopedValueSearch {
     }
 
     /// Records the convergence of a finished candidate list and clears it.
-    mutating func finishCandidateList(state: inout IntegerState) {
+    mutating func finishCandidateList(state: inout State) {
         guard let list = state.candidateList else {
             return
         }
@@ -655,10 +655,10 @@ extension ScopedValueSearch {
 
     /// Attempts to arm the cross-zero phase for the current leaf.
     ///
-    /// Returns `true` when the leaf is a signed type with a current shortlex key > 0 (there is at least one strictly simpler value to try). On success, ``IntegerState/crossZero`` is set and the per-leaf dispatch loop will emit the first probe on its next iteration.
+    /// Returns `true` when the leaf is a signed type with a current shortlex key > 0 (there is at least one strictly simpler value to try). On success, ``State/crossZero`` is set and the per-leaf dispatch loop will emit the first probe on its next iteration.
     ///
     /// The probe budget adapts to the current shortlex key: roughly `log₂(key) + 4`, clamped to `[4, 16]`. Rationale: bit-pattern binary search has already covered the large-magnitude neighborhood by the time cross-zero runs, so cross-zero's contribution is bounded to the last few shortlex keys near zero. Small-magnitude leaves get full coverage of every key below their current one; large-magnitude leaves get the simplest 16 keys. A fixed 16-probe cap is a special case of this at the upper end of the range.
-    mutating func tryEnterCrossZero(state: inout IntegerState) -> Bool {
+    mutating func tryEnterCrossZero(state: inout State) -> Bool {
         let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else {
             return false
@@ -709,9 +709,9 @@ extension ScopedValueSearch {
     ///
     /// Walks shortlex keys from 0 upward, emitting one candidate per call and exiting on the first acceptance — walking upward guarantees that the first accepted probe is the simplest possible value for this leaf, so there is no benefit to continuing once one is found.
     ///
-    /// Returns `nil` when the walk is exhausted (all probes rejected or budget reached) or when the caller should advance to the next leaf (acceptance happened on the prior call). The caller clears ``IntegerState/crossZero`` and advances `leafIndex` when `nil` is returned.
+    /// Returns `nil` when the walk is exhausted (all probes rejected or budget reached) or when the caller should advance to the next leaf (acceptance happened on the prior call). The caller clears ``State/crossZero`` and advances `leafIndex` when `nil` is returned.
     mutating func nextCrossZeroProbe(
-        state: inout IntegerState,
+        state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         guard var crossZero = state.crossZero else {
@@ -722,7 +722,7 @@ extension ScopedValueSearch {
         if let acceptedKey = crossZero.lastEmittedKey {
             crossZero.lastEmittedKey = nil
             if lastAccepted {
-                // Acceptance — nextIntegerProbe has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
+                // Acceptance — nextProbe has already advanced state.sequence to the accepted candidate. Record the convergence at the new bit pattern so the next cycle's binary search can warm-start from here, then exit.
                 let leaf = state.leafPositions[state.leafIndex]
                 let acceptedChoice = ChoiceValue.fromShortlexKey(
                     acceptedKey,

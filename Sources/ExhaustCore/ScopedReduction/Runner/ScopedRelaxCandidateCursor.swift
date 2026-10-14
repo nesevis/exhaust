@@ -30,8 +30,8 @@ struct ScopedRelaxCandidateCursor {
             ? ScopedReplacementSource(graph: graph, order: .discovery)
             : ScopedReplacementSource(pivotGraph: graph)
         while let priced = source.nextScope() {
-            guard isEncoderEnabled(priced.opportunity.encoderName),
-                  let splice = cache.splice(for: priced.opportunity, sequence: sequence, graph: graph)
+            guard isEncoderEnabled(priced.encoderScope.encoder.name),
+                  let splice = cache.splice(for: priced.encoderScope, sequence: sequence, graph: graph)
             else {
                 continue
             }
@@ -78,10 +78,10 @@ struct ScopedRelaxCandidateCursor {
         var expandedIdentityByNodeID: [Int: Int] = [:]
 
         /// Shares donor storage across the bounded set and rejects unchanged substitutions without copying the baseline.
-        mutating func splice(for opportunity: ScopedOpportunity, sequence: ChoiceSequence, graph: ChoiceGraph) -> ChoiceSequenceSplice? {
+        mutating func splice(for encoderScope: AnyEncoderScope, sequence: ChoiceSequence, graph: ChoiceGraph) -> ChoiceSequenceSplice? {
             let targetNodeID: Int
             let donorNodeID: Int
-            switch opportunity {
+            switch encoderScope {
                 case let .branchPivot(scope):
                     return ScopedPivotCandidates.branchPivotSplice(
                         pickNodeID: scope.pickNodeID,

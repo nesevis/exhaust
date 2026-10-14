@@ -15,14 +15,14 @@ extension ScopedReductionRunner {
             endTimingOwnership(restoring: previousOwner)
         }
         guard isEncoderEnabled(.numericReorder),
-              var source = ScopedSource.prepareReorderSource(from: graph, tuning: tuning),
+              var source = ScopedSource.prepareReorderSource(from: graph),
               let priced = source.nextScope()
         else {
             return false
         }
         let savedRejectCache = rejectCache
         rejectCache = []
-        let pass = runPass(priced.opportunity, boundValueFingerprint: nil, usesWarmStarts: false, checksDeadline: false)
+        let pass = runPass(priced.encoderScope, boundValueFingerprint: nil, usesWarmStarts: false, checksDeadline: false)
         rejectCache = savedRejectCache
         applyPassPolicy(pass)
         if isInstrumented, pass.report.anyAccepted {

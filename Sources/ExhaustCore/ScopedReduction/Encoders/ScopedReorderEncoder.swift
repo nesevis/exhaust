@@ -9,8 +9,10 @@
 ///
 /// A reordering need not precede the incumbent: the interpreter admits it under ``ReductionOrder/unordered``. The first accepted reordering requires a rebuild, which ends the pass.
 struct ScopedReorderEncoder: ScopedEncoder {
-    let name: EncoderName = .numericReorder
-    let isValueDependent = false
+    static let name: EncoderName = .numericReorder
+    static let isValueDependent = false
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: ReorderingScope, input: ScopedEncoderInput) -> ScopedReducer {

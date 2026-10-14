@@ -10,7 +10,7 @@ extension ScopedReductionRunner {
     ///
     /// Each span runs from the previous charge to the next, so the buckets partition the run's time from the start of ``run()`` onward. The interpreter splits a pass's probing into encode and decode spans itself.
     enum TimingBucket {
-        /// Selecting a scope, including skips, exhausted sources, classification, rematerialization, and building the pass's program.
+        /// Selecting a scope, including skips, exhausted sources, classification, rematerialization, and building the encoder's reducer for the pass.
         case dispatch
         /// Applying a completed pass's report.
         case passApply

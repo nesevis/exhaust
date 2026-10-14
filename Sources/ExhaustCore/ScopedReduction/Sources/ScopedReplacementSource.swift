@@ -87,8 +87,8 @@ struct ScopedReplacementSource {
     private let containment: ContainmentIndex
     private var dependencyReachability: DependencyReachabilityCache
     private var pendingRows: ScopePriorityQueue<Entry>
-    private var bufferedScopes: BufferedScopeCursor<ScopedPricedOpportunity>?
-    private var pendingOpportunity: ScopedPricedOpportunity?
+    private var bufferedScopes: BufferedScopeCursor<PricedEncoderScope>?
+    private var pendingEncoderScope: PricedEncoderScope?
 
     /// Candidate rows above which enumeration merges rows through the heap instead of buffering every scope.
     static let defaultEagerRowLimit = 1024
@@ -215,7 +215,7 @@ struct ScopedReplacementSource {
     /// Emits the same stream as the merged heap: discovery order is the loop order, and priority order breaks benefit ties by that discovery order.
     ///
     /// Promotion eligibility queries containment before dependency reachability, as heap selection does, so the dependency cache sees the same searches.
-    private mutating func enumerateEagerly(graph: ChoiceGraph, order: EnumerationOrder) -> [ScopedPricedOpportunity] {
+    private mutating func enumerateEagerly(graph: ChoiceGraph, order: EnumerationOrder) -> [PricedEncoderScope] {
         var scopes: [(scope: ReplacementScope, benefit: Int)] = []
         for family in families {
             for firstIndex in family.members.indices {
@@ -267,8 +267,8 @@ struct ScopedReplacementSource {
                 }.map(\.element)
         }
         return ordered.map { entry in
-            ScopedPricedOpportunity(
-                opportunity: Self.opportunity(for: entry.scope),
+            PricedEncoderScope(
+                encoderScope: Self.encoderScope(for: entry.scope),
                 priority: DispatchPriority(structuralBenefit: entry.benefit, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
             )
         }
@@ -367,10 +367,10 @@ struct ScopedReplacementSource {
     /// Advances only the selected row, skipping ineligible descendant promotions without buffering their scopes.
     private mutating func prepareNext() {
         guard bufferedScopes == nil else {
-            pendingOpportunity = bufferedScopes?.next()
+            pendingEncoderScope = bufferedScopes?.next()
             return
         }
-        pendingOpportunity = nil
+        pendingEncoderScope = nil
         while let entry = pendingRows.popFirst() {
             let scope = scope(for: entry)
             switch entry.row {
@@ -386,8 +386,8 @@ struct ScopedReplacementSource {
             guard let scope else {
                 continue
             }
-            pendingOpportunity = ScopedPricedOpportunity(
-                opportunity: Self.opportunity(for: scope),
+            pendingEncoderScope = PricedEncoderScope(
+                encoderScope: Self.encoderScope(for: scope),
                 priority: DispatchPriority(structuralBenefit: entry.benefit, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
             )
             return
@@ -432,19 +432,19 @@ struct ScopedReplacementSource {
     }
 
     var dispatchPriority: DispatchPriority? {
-        pendingOpportunity?.priority
+        pendingEncoderScope?.priority
     }
 
-    mutating func nextScope() -> ScopedPricedOpportunity? {
-        guard let opportunity = pendingOpportunity else {
+    mutating func nextScope() -> PricedEncoderScope? {
+        guard let encoderScope = pendingEncoderScope else {
             return nil
         }
         prepareNext()
-        return opportunity
+        return encoderScope
     }
 
     /// Routes a replacement to the encoder that runs it: substitution for self-similar replacement and descendant promotion, branch pivot otherwise.
-    private static func opportunity(for scope: ReplacementScope) -> ScopedOpportunity {
+    private static func encoderScope(for scope: ReplacementScope) -> AnyEncoderScope {
         switch scope {
             case let .selfSimilar(targetNodeID, donorNodeID, _):
                 .substitution(.selfSimilar(targetNodeID: targetNodeID, donorNodeID: donorNodeID))

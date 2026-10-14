@@ -9,8 +9,10 @@
 ///
 /// The scope fully determines the probe, and an accepted migration requires a rebuild, which ends the pass.
 struct ScopedMigrationEncoder: ScopedEncoder {
-    let name: EncoderName = .migration
-    let isValueDependent = false
+    static let name: EncoderName = .migration
+    static let isValueDependent = false
+    static let requiresGenerator = false
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: MigrationScope, input: ScopedEncoderInput) -> ScopedReducer {

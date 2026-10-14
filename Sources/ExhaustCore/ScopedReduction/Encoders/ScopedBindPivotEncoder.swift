@@ -5,12 +5,14 @@
 
 // MARK: - Bind Pivot Encoder
 
-/// Bind pivot as a scoped program: propose a pivot seed, lift it, relocate the bind, and search the lifted seed followed by covering over its bound subtree.
+/// Bind pivot: the encoder's reducer proposes a pivot seed, lifts it, relocates the bind, and searches the lifted seed followed by covering over its bound subtree.
 ///
 /// The lifted seed and its covering run as one ``ScopedLiftedSeedSearch``. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
 struct ScopedBindPivotEncoder: ScopedEncoder {
-    let name: EncoderName = .bindPivot
-    let isValueDependent = true
+    static let name: EncoderName = .bindPivot
+    static let isValueDependent = true
+    static let requiresGenerator = true
+    static let isPathChanging = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {

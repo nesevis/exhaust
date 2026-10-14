@@ -36,21 +36,26 @@ extension ScopedReductionInterpreter {
         continuation: (ScopedReductionResult) -> ScopedReducer,
         context: inout Context
     ) -> ScopedStopReason? {
-        let tag = box.search.tag
+        let stagedJointArity: Int? = switch box.search {
+            case let .stagedJoint(search):
+                search.arity
+            default:
+                nil
+        }
         var pool = ScopedSearchPool(single: box.search, configuration: configuration)
-        // A search that follows another one in the same program is not started past the deadline, so no work is recorded for a stage that did not run. The runner checks the deadline before a program's first search.
+        // A search that follows another one in the encoder's reducer is not started past the deadline, so no work is recorded for a stage that did not run. The runner checks the deadline before the first search of the encoder's reducer.
         if context.report.searchCounts.isEmpty == false, context.isExpired {
             finishAll(&pool, reason: .deadline, keepsSearchReports: true, context: &context)
             return .deadline
         }
-        // Counts this search alone, then folds them back into the pass, so a program can branch on its search's work and the runner can attribute it.
+        // Counts this search alone, then folds them back into the pass, so the encoder's reducer can branch on its search's work and the runner can attribute it.
         let passCounts = context.report.counts
         context.report.counts = ReductionProbeCounts()
         let driven = drive(&pool, keepsSearchReports: true, context: &context)
         let searchCounts = context.report.counts
         context.report.counts = passCounts
         context.report.counts.merge(searchCounts)
-        context.report.searchCounts.append(ScopedSearchCounts(search: tag, counts: searchCounts))
+        context.report.searchCounts.append(ScopedSearchCounts(stagedJointArity: stagedJointArity, counts: searchCounts))
         if endsPass(driven.stopReason) {
             return driven.stopReason
         }

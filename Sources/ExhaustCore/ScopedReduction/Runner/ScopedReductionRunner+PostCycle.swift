@@ -236,13 +236,13 @@ extension ScopedReductionRunner {
         return source.dispatchPriority != nil
     }
 
-    /// Searches the pending checkpoint, marking it searched before the program starts so a deadline interruption does not repeat it. An acceptance invalidates every floor, cached rejection, and bind search history, because the property couples the moved values.
+    /// Searches the pending checkpoint, marking it searched before the encoder's reducer starts so a deadline interruption does not repeat it. An acceptance invalidates every floor, cached rejection, and bind search history, because the property couples the moved values.
     private mutating func runStagedJointPass() {
         guard isEncoderEnabled(.stagedJointSearch), isDeadlineExceeded() == false else {
             return
         }
         var source = stagedJointSource()
-        guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.opportunity else {
+        guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.encoderScope else {
             return
         }
         exhaustedStagedJoint = ScopedStagedJointSource.Checkpoint(base: sequence, scope: scope)
