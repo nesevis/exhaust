@@ -12,6 +12,13 @@ extension ScopedReductionInterpreter {
         let stopReason: ScopedStopReason
     }
 
+    /// What building a branch or choosing the next member produced. Building stops at the deadline, because each build can lift.
+    enum BuildResult<Value> {
+        case built(Value)
+        case nothing
+        case deadline
+    }
+
     /// What one pull from a search pool produced.
     enum PullResult {
         case emitted(Evaluation)
@@ -46,7 +53,7 @@ extension ScopedReductionInterpreter {
         }
     }
 
-    /// Emits and evaluates exactly one candidate from `pool`, recursing into nested levels. Only the outermost pull checks the deadline, once per candidate, so a nested level never checks it a second time for the same candidate.
+    /// Emits and evaluates exactly one candidate from `pool`, recursing into nested levels. Only the outermost pull checks the deadline per candidate, so a nested level never checks it a second time for the same candidate. Building a branch checks it too, before each build and each lift, at every level.
     static func pull(
         _ pool: inout ScopedSearchPool,
         keepsSearchReports: Bool,
@@ -61,7 +68,14 @@ extension ScopedReductionInterpreter {
                 return .budgetExhausted
             }
             if pool.active == nil {
-                pool.active = nextMember(&pool, context: &context)
+                switch nextMember(&pool, context: &context) {
+                    case let .built(member):
+                        pool.active = member
+                    case .nothing:
+                        break
+                    case .deadline:
+                        return .deadline
+                }
             }
             guard var member = pool.active else {
                 return .exhausted
@@ -74,11 +88,16 @@ extension ScopedReductionInterpreter {
                     guard let candidate = slot.search.next(slot.feedback, into: &context.candidateBuffer) else {
                         absorb(slot.search.finish(reason: .exhausted, undelivered: nil), keepsSearchReports: keepsSearchReports, context: &context)
                         // The branch continues with the search's outcome, in the same member, so its turn carries on.
-                        if let continuation = slot.continuation,
-                           let next = buildBranch(continuation(.outcome(slot.outcome)), depth: pool.depth, context: &context)
-                        {
-                            member.source = next
-                            pool.active = member
+                        if let continuation = slot.continuation {
+                            switch buildBranch(continuation(.outcome(slot.outcome)), depth: pool.depth, context: &context) {
+                                case let .built(next):
+                                    member.source = next
+                                    pool.active = member
+                                case .nothing:
+                                    break
+                                case .deadline:
+                                    return .deadline
+                            }
                         }
                         continue
                     }
@@ -98,10 +117,14 @@ extension ScopedReductionInterpreter {
                         preconditionFailure("A level member must hold a level")
                     }
                     switch pull(&child, keepsSearchReports: keepsSearchReports, checksDeadline: false, context: &context) {
-                        case .exhausted, .budgetExhausted, .deadline:
+                        case .exhausted, .budgetExhausted:
                             // A nested level that returns nothing has no candidates left, so it is dropped.
                             finishAll(&child, reason: .exhausted, keepsSearchReports: keepsSearchReports, context: &context)
                             continue
+                        case .deadline:
+                            // A nested level reaches the deadline only while building, which ends the whole pool.
+                            finishAll(&child, reason: .deadline, keepsSearchReports: keepsSearchReports, context: &context)
+                            return .deadline
                         case let .emitted(childEvaluation):
                             evaluation = childEvaluation
                             member.source = .level(child)
@@ -155,39 +178,49 @@ extension ScopedReductionInterpreter {
     // MARK: - Branches
 
     /// Builds the next branch's member, or resumes the oldest suspended member once branches are exhausted or over budget.
-    private static func nextMember(_ pool: inout ScopedSearchPool, context: inout Context) -> ScopedSearchPool.Member? {
-        if let built = buildNextBranch(&pool, context: &context) {
-            return built
+    private static func nextMember(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
+        switch buildNextBranch(&pool, context: &context) {
+            case let .built(member):
+                return .built(member)
+            case .deadline:
+                return .deadline
+            case .nothing:
+                break
         }
         guard pool.suspended.isEmpty == false else {
-            return nil
+            return .nothing
         }
         var resumed = pool.suspended.removeFirst()
         resumed.probesRemainingInTurn = pool.turn
-        return resumed
+        return .built(resumed)
     }
 
     /// Advances branches until one constructs a search or a nested level. The search budget counts empty searches but not failed builds; chain limits count every attempted branch.
-    private static func buildNextBranch(_ pool: inout ScopedSearchPool, context: inout Context) -> ScopedSearchPool.Member? {
+    ///
+    /// Branches that fail construction are built back to back without a pull in between, so the deadline is checked before each build.
+    private static func buildNextBranch(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
         while pool.branchesExhausted == false, pool.constructed < pool.searchBudget {
             guard let continuation = pool.continuation, pool.nextBranch < pool.branches.count else {
                 pool.branchesExhausted = true
-                return nil
+                return .nothing
+            }
+            guard context.isExpired == false else {
+                return .deadline
             }
             let branch = pool.branches[pool.nextBranch]
             pool.nextBranch += 1
             if let limits = pool.chainLimits {
                 guard pool.buildsThisStart < limits.maxBuildsPerStart, consumeBuildPool(capacity: limits.poolCapacity, context: &context) else {
                     pool.branchesExhausted = true
-                    return nil
+                    return .nothing
                 }
             }
             pool.buildsThisStart += 1
-            guard let source = buildBranch(
-                continuation(.proposal(branch.proposal)),
-                depth: pool.depth,
-                context: &context
-            ) else {
+            let built = buildBranch(continuation(.proposal(branch.proposal)), depth: pool.depth, context: &context)
+            if case .deadline = built {
+                return .deadline
+            }
+            guard case let .built(source) = built else {
                 continue
             }
             pool.constructed += 1
@@ -196,9 +229,9 @@ extension ScopedReductionInterpreter {
             } else {
                 context.report.nestedConstructedSearches += 1
             }
-            return ScopedSearchPool.Member(source: source, probesRemainingInTurn: pool.turn)
+            return .built(ScopedSearchPool.Member(source: source, probesRemainingInTurn: pool.turn))
         }
-        return nil
+        return .nothing
     }
 
     /// Takes one build from the chain's shared build pool, creating it on first use.
@@ -215,15 +248,20 @@ extension ScopedReductionInterpreter {
     /// Interprets one branch's pipeline until it reaches a search, a nested `propose`, or a failure, answering its lifts. The search or level is returned unstarted, so the search pool can interleave it with other branches.
     ///
     /// A search keeps its continuation: when it exhausts, the pool resumes the branch with the search's outcome, as a top-level search does. An acceptance that ends the search, the level's probe cap, or the deadline ends every branch in the level, so no continuation runs after them.
+    ///
+    /// The deadline is checked before each lift, because a branch can lift more than once before it reaches a search.
     private static func buildBranch(
         _ reducer: ScopedReducer,
         depth: Int,
         context: inout Context
-    ) -> ScopedSearchPool.Source? {
+    ) -> BuildResult<ScopedSearchPool.Source> {
         switch reducer {
             case .pure:
-                return nil
+                return .nothing
             case let .impure(.lift(prefix, fallbackTree, maximumSequenceCount), continuation):
+                guard context.isExpired == false else {
+                    return .deadline
+                }
                 let lifted = lift(
                     prefix,
                     fallbackTree: fallbackTree,
@@ -233,13 +271,13 @@ extension ScopedReductionInterpreter {
                 return buildBranch(continuation(.lifted(lifted)), depth: depth, context: &context)
             case let .impure(.fail(reason), _):
                 recordBuildOutcome(.failed(reason), depth: depth + 1, context: &context)
-                return nil
+                return .nothing
             case let .impure(.search(box, configuration), continuation):
                 recordBuildOutcome(.terminalSearch, depth: depth + 1, context: &context)
-                return .search(ScopedSearchPool.SearchSlot(search: box.search, configuration: configuration, continuation: continuation))
+                return .built(.search(ScopedSearchPool.SearchSlot(search: box.search, configuration: configuration, continuation: continuation)))
             case let .impure(.propose(branches, configuration), continuation):
                 recordBuildOutcome(.nestedLevel, depth: depth + 1, context: &context)
-                return .level(ScopedSearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: depth + 1))
+                return .built(.level(ScopedSearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: depth + 1)))
         }
     }
 

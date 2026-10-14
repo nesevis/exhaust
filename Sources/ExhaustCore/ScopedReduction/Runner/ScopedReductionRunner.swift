@@ -325,7 +325,7 @@ package struct ScopedReductionRunner {
         if continues {
             if deferralReleasedThisCycle == false {
                 Self.log("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
-                    "cycle": "\(cycles)", "improved": "\(sequence != sequenceBeforeCycle ? "true" : "false")",
+                    "cycle": "\(cycles)", "improved": "\(sequence != sequenceBeforeCycle)",
                     "seq_len": "\(sequence.count)", "total_mats": "\(stats.totalMaterializations)",
                 ])
             }

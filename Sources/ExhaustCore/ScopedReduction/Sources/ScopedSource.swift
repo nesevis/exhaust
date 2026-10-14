@@ -470,9 +470,9 @@ extension ScopedSource {
                 case let .boundValue(bindScope):
                     encoderScope = .boundValue(bindScope)
                     valueYield = bindScope.boundSubtreeSize
-                    estimatedCost = tuning.boundValueBaseBudget * (bindScope.downstreamNodeIDs.count == 1
-                        ? 16
-                        : min(64, bindScope.downstreamNodeIDs.count * 8))
+                    estimatedCost = bindScope.downstreamNodeIDs.count == 1
+                        ? tuning.boundValueBaseBudget * 16
+                        : tuning.boundValueBaseBudget * min(64, bindScope.downstreamNodeIDs.count * 8)
                 case let .bindPivot(pivotScope):
                     encoderScope = .bindPivot(pivotScope)
                     valueYield = pivotScope.boundSubtreeSize

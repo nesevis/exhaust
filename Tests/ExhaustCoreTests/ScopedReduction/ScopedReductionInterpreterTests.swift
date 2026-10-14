@@ -36,6 +36,31 @@ struct ScopedReductionInterpreterTests {
         #expect(outcome.anyAccepted == false)
         #expect(outcome.counts.emitted == 0)
     }
+
+    @Test("A level whose branches fail construction stops building at the deadline")
+    func failedBuildsStopAtDeadline() throws {
+        let fixture = try InterpreterFixture()
+        var branchesBuilt = 0
+        let branches = (0 ..< 4).map { index in
+            ScopedBranch(proposal: LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), cost: index)
+        }
+        let reducer: ScopedReducer = .propose(
+            branches,
+            configuration: ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0)
+        ) { proposal in
+            branchesBuilt += 1
+            return .lift(proposal.prefix, fallbackTree: fixture.tree) { _ in
+                .fail(.bindNotFound)
+            }
+        }
+
+        // Expires once the second branch has started building, so only the first branch's lift runs.
+        let report = fixture.run(reducer, deadlineCheck: { branchesBuilt > 1 })
+
+        #expect(branchesBuilt == 2)
+        #expect(report.liftAttempts == 1)
+        #expect(report.buildOutcomes[CompositionBuildRecord(depth: 1, outcome: .failed(.bindNotFound))] == 1)
+    }
 }
 
 // MARK: - Fixture
@@ -55,7 +80,7 @@ private struct InterpreterFixture {
         try ChoiceSequence(#require(try Interpreters.reflect(generator, with: value)))
     }
 
-    func run(_ reducer: ScopedReducer) -> ScopedPassReport {
+    func run(_ reducer: ScopedReducer, deadlineCheck: (() -> Bool)? = nil) -> ScopedPassReport {
         ScopedReductionInterpreter.run(
             reducer,
             context: ScopedReductionInterpreter.Context(
@@ -72,7 +97,8 @@ private struct InterpreterFixture {
                     probeWrapper: nil,
                     hasBind: false
                 ),
-                encoderName: .valueSearch
+                encoderName: .valueSearch,
+                deadlineCheck: deadlineCheck
             )
         ).report
     }

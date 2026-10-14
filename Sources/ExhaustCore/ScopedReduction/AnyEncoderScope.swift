@@ -3,8 +3,6 @@
 //  Exhaust
 //
 
-// MARK: - Any Encoder Scope
-
 /// One discovered scope of any encoder, tagged with the encoder that runs it. Family sources yield these in dispatch order.
 ///
 /// Each encoder's ``ScopedEncoder/Scope`` is its own type, so sources, priority ordering, the scope rejection cache, and the runner hold scopes of different encoders through this closed enum rather than through existentials.

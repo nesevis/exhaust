@@ -102,8 +102,10 @@ extension ScopedReductionInterpreter {
                 .materializationRejected
             case .propertyPassed:
                 .propertyPassed
-            case let .propertyFailed(reduction, _):
-                .propertyFailedNotAdmitted(reduction == nil ? .decoderReturnedNoReduction : .enlargingCommit)
+            case .propertyFailed(nil, _):
+                .propertyFailedNotAdmitted(.decoderReturnedNoReduction)
+            case .propertyFailed:
+                .propertyFailedNotAdmitted(.enlargingCommit)
         }
         terminate(observationID, disposition, materializationAttempts: outcome.materializationAttempts, context: &context)
 
