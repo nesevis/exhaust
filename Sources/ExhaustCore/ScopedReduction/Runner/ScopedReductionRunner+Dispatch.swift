@@ -408,8 +408,9 @@ extension ScopedReductionRunner {
             hadUnresolvedReplacement = true
         }
 
-        boundValueBuildOutcomes.merge(report.boundValueBuildOutcomes, uniquingKeysWith: +)
-        boundValueLiftAttempts += report.boundValueLiftAttempts
+        if report.buildOutcomes.isEmpty == false {
+            stats.compositionBuildOutcomes[pass.encoderScope.encoder.name, default: [:]].merge(report.buildOutcomes, uniquingKeysWith: +)
+        }
 
         if collectStats {
             recordPassStatistics(pass)
@@ -545,6 +546,8 @@ extension ScopedReductionRunner {
             stats.numericSearchCountsByArity[arity, default: ReductionProbeCounts()].merge(searchCounts.counts)
         }
         switch pass.encoderScope {
+            case .boundValue:
+                stats.recordMaterializations(report.liftAttempts, at: .boundValueLift)
             case .bindPivot:
                 stats.recordMaterializations(report.liftAttempts, at: .bindPivotLift)
             case .boundExchange:

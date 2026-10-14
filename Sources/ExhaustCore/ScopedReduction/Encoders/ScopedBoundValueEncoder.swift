@@ -113,8 +113,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
             probesPerSearchTurn: chainLimits == nil ? nil : chain.tuning.probesPerControllerCandidateTurn,
             searchBudget: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
-            chainLimits: chainLimits,
-            accountingStage: stage
+            chainLimits: chainLimits
         )
         return .propose(branches, configuration: configuration) { proposal in
             let reportedMutation = rootMutation ?? ScopedComposition.reshaping(proposal.mutation)

@@ -18,7 +18,7 @@ struct LiftResult {
 }
 
 /// Describes why construction stopped after an attempted lift.
-enum DownstreamBuildFailure {
+package enum DownstreamBuildFailure: String, Hashable, Sendable, CaseIterable {
     case materializationFailed
     case liftedTooLong
     case bindNotFound

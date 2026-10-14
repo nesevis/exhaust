@@ -117,3 +117,26 @@ package struct BoundValueBuildRecord: Hashable, Sendable {
         self.outcome = outcome
     }
 }
+
+// MARK: - Composition Build Records
+
+/// What one branch of a composition's `propose` built after its lifts.
+package enum CompositionBuildOutcome: Hashable, Sendable {
+    /// A nested `propose`, one level deeper.
+    case nestedLevel
+    /// A search over the lifted candidate.
+    case terminalSearch
+    /// Construction stopped, for the given reason.
+    case failed(DownstreamBuildFailure)
+}
+
+/// One composition build outcome, keyed by how many `propose` levels enclose the build. A failure outside any `propose` has depth zero.
+package struct CompositionBuildRecord: Hashable, Sendable {
+    package let depth: Int
+    package let outcome: CompositionBuildOutcome
+
+    package init(depth: Int, outcome: CompositionBuildOutcome) {
+        self.depth = depth
+        self.outcome = outcome
+    }
+}

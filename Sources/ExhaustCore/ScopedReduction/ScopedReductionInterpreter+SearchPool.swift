@@ -157,7 +157,6 @@ extension ScopedReductionInterpreter {
             guard let source = buildBranch(
                 continuation(.proposal(branch.proposal)),
                 depth: pool.depth,
-                accountingStage: pool.accountingStage,
                 context: &context
             ) else {
                 continue
@@ -188,7 +187,6 @@ extension ScopedReductionInterpreter {
     private static func buildBranch(
         _ reducer: ScopedReducer,
         depth: Int,
-        accountingStage: BoundValueStage?,
         context: inout Context
     ) -> ScopedSearchPool.Source? {
         switch reducer {
@@ -199,18 +197,17 @@ extension ScopedReductionInterpreter {
                     prefix,
                     fallbackTree: fallbackTree,
                     maximumSequenceCount: maximumSequenceCount,
-                    accountingStage: accountingStage,
                     context: &context
                 )
-                return buildBranch(continuation(.lifted(lifted)), depth: depth, accountingStage: accountingStage, context: &context)
+                return buildBranch(continuation(.lifted(lifted)), depth: depth, context: &context)
             case let .impure(.fail(reason), _):
-                recordFailure(reason, accountingStage: accountingStage, context: &context)
+                recordBuildOutcome(.failed(reason), depth: depth + 1, context: &context)
                 return nil
             case let .impure(.search(box, configuration), _):
-                recordBuildOutcome(.terminalSearch, accountingStage: accountingStage, context: &context)
+                recordBuildOutcome(.terminalSearch, depth: depth + 1, context: &context)
                 return .search(ScopedSearchPool.SearchSlot(search: box.search, configuration: configuration, feedback: .initial))
             case let .impure(.propose(branches, configuration), continuation):
-                recordBuildOutcome(.nestedStage, accountingStage: accountingStage, context: &context)
+                recordBuildOutcome(.nestedLevel, depth: depth + 1, context: &context)
                 return .level(ScopedSearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: depth + 1))
         }
     }
@@ -313,7 +310,6 @@ struct ScopedSearchPool {
     let searchBudget: Int
     let totalProbeCap: Int
     let chainLimits: ScopedChainLimits?
-    let accountingStage: BoundValueStage?
     let deliversUniformFeedback: Bool
     var nextBranch = 0
     var branchesExhausted = false
@@ -336,7 +332,6 @@ struct ScopedSearchPool {
         searchBudget = configuration.searchBudget ?? .max
         totalProbeCap = configuration.totalProbeCap
         chainLimits = configuration.chainLimits
-        accountingStage = configuration.accountingStage
         deliversUniformFeedback = configuration.deliversUniformFeedback
     }
 
@@ -348,7 +343,6 @@ struct ScopedSearchPool {
         searchBudget = 0
         totalProbeCap = 0
         chainLimits = nil
-        accountingStage = nil
         deliversUniformFeedback = false
         branchesExhausted = true
         active = Member(source: .search(SearchSlot(search: search, configuration: configuration, feedback: .initial)), probesRemainingInTurn: .max)

@@ -31,6 +31,9 @@ package struct ReductionStats: Sendable {
     /// Bound value composition downstream builds by stage and outcome. Diagnostic: shows where ``MaterializationSite/boundValueLift`` materializations went.
     package var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
 
+    /// Scoped composition build outcomes by encoder. The scoped reducer records these instead of ``boundValueBuildOutcomes``.
+    package var compositionBuildOutcomes: [EncoderName: [CompositionBuildRecord: Int]] = [:]
+
     /// Reduction proposals opened across encoder passes and structural relax rounds.
     package var reductionProbes: Int {
         probeCounts.emitted
@@ -212,6 +215,9 @@ package struct ReductionStats: Sendable {
         }
         for (record, count) in other.boundValueBuildOutcomes {
             boundValueBuildOutcomes[record, default: 0] += count
+        }
+        for (encoderName, records) in other.compositionBuildOutcomes {
+            compositionBuildOutcomes[encoderName, default: [:]].merge(records, uniquingKeysWith: +)
         }
         cycles += other.cycles
         structuralFloorMotionEvents += other.structuralFloorMotionEvents

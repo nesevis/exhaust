@@ -22,11 +22,8 @@ struct ScopedPassReport {
     var constructedSearches = 0
     /// Searches constructed by nested `propose` levels.
     var nestedConstructedSearches = 0
-    var buildFailures: [DownstreamBuildFailure: Int] = [:]
-    /// Lift attempts at levels the bound value build tally covers.
-    var boundValueLiftAttempts = 0
-    /// Build outcomes at levels the bound value build tally covers.
-    var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
+    /// What each `propose` branch built after its lifts, and every failure, by how many `propose` levels enclose it.
+    var buildOutcomes: [CompositionBuildRecord: Int] = [:]
 }
 
 // MARK: - Interpreter

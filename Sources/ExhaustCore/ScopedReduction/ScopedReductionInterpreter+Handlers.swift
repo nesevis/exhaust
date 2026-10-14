@@ -6,7 +6,7 @@
 // MARK: - Operation Handlers
 
 extension ScopedReductionInterpreter {
-    /// Lifts a top-level prefix. Lifts inside a `propose` go through ``buildBranch(_:depth:accountingStage:context:)``, which keys them for the build tally.
+    /// Lifts a top-level prefix. Lifts inside a `propose` go through ``buildBranch(_:depth:context:)``.
     static func handleLift(
         _ prefix: ChoiceSequence,
         fallbackTree: ChoiceTree,
@@ -18,14 +18,13 @@ extension ScopedReductionInterpreter {
             prefix,
             fallbackTree: fallbackTree,
             maximumSequenceCount: maximumSequenceCount,
-            accountingStage: nil,
             context: &context
         )
         return interpret(continuation(.lifted(lifted)), context: &context)
     }
 
     static func handleFail(_ reason: DownstreamBuildFailure, context: inout Context) -> ScopedStopReason? {
-        recordFailure(reason, accountingStage: nil, context: &context)
+        recordBuildOutcome(.failed(reason), depth: 0, context: &context)
         return nil
     }
 
@@ -95,39 +94,16 @@ extension ScopedReductionInterpreter {
         _ prefix: ChoiceSequence,
         fallbackTree: ChoiceTree,
         maximumSequenceCount: Int?,
-        accountingStage: BoundValueStage?,
         context: inout Context
     ) -> LiftResult? {
         context.report.liftAttempts += 1
-        if accountingStage != nil {
-            context.report.boundValueLiftAttempts += 1
-        }
         return context.decoder.lift(prefix, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount)
     }
 
     // MARK: - Accounting
 
-    static func recordFailure(_ reason: DownstreamBuildFailure, accountingStage: BoundValueStage?, context: inout Context) {
-        context.report.buildFailures[reason, default: 0] += 1
-        let outcome: BoundValueBuildOutcome = switch reason {
-            case .materializationFailed:
-                .materializationFailed
-            case .liftedTooLong:
-                .liftedTooLong
-            case .bindNotFound:
-                .bindNotFound
-            case .noDownstreamLeaves:
-                .noDownstreamLeaves
-            case .sinkValueMismatch:
-                .sinkValueMismatch
-        }
-        recordBuildOutcome(outcome, accountingStage: accountingStage, context: &context)
-    }
-
-    static func recordBuildOutcome(_ outcome: BoundValueBuildOutcome, accountingStage: BoundValueStage?, context: inout Context) {
-        guard let accountingStage else {
-            return
-        }
-        context.report.boundValueBuildOutcomes[BoundValueBuildRecord(stage: accountingStage, outcome: outcome), default: 0] += 1
+    /// - Parameter depth: How many `propose` levels enclose the build.
+    static func recordBuildOutcome(_ outcome: CompositionBuildOutcome, depth: Int, context: inout Context) {
+        context.report.buildOutcomes[CompositionBuildRecord(depth: depth, outcome: outcome), default: 0] += 1
     }
 }

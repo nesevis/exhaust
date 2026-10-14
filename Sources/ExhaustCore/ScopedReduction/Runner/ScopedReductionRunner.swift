@@ -104,12 +104,8 @@ package struct ScopedReductionRunner {
     /// Monotonic count of applied passes.
     var passCounter = 0
 
-    // MARK: - Accounting
+    // MARK: - Step Timing
 
-    /// Bound value build outcomes across the run, folded into ``stats`` at the end.
-    var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
-    /// Bound value lift attempts across the run, recorded as ``MaterializationSite/boundValueLift`` materializations at the end.
-    var boundValueLiftAttempts = 0
     /// When the last step timing span ended.
     var timingMark: UInt64 = 0
     /// The post-cycle bucket that every span is charged to while its pass runs.
@@ -360,15 +356,11 @@ package struct ScopedReductionRunner {
 
     // MARK: - Result
 
-    /// The reduced counterexample and the run's statistics, with the graph-level and bound value accounting folded in.
+    /// The reduced counterexample and the run's statistics, with the graph-level accounting folded in.
     mutating func result<Output>() -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
-        stats.boundValueBuildOutcomes = boundValueBuildOutcomes
-        if collectStats {
-            stats.recordMaterializations(boundValueLiftAttempts, at: .boundValueLift)
-        }
         let typedOutput = output as! Output // swiftlint:disable:this force_cast
         let outcome: ReductionOutcome<Output> = sequence != initialSequence
             ? .reduced(sequence, tree, typedOutput)

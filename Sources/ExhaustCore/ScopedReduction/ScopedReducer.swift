@@ -64,8 +64,6 @@ struct ScopedChoiceConfiguration {
     let totalProbeCap: Int
     /// Build limits for one level of a nested bind chain; nil outside chains.
     var chainLimits: ScopedChainLimits?
-    /// Keys this level's lift and build outcomes in the bound value build tally; nil for compositions the tally does not cover.
-    var accountingStage: BoundValueStage?
     /// Gives this level's searches one undifferentiated rejection for every outcome, including acceptances that do not end the search. Required when branches can emit the same candidate, because a cached rejection would then depend on visiting order.
     var deliversUniformFeedback = false
 }
