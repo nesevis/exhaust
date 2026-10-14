@@ -23,7 +23,7 @@ extension GraphLockstepEncoder {
             guard indices.count >= 2 else { continue }
 
             // Build suffix windows: drop leading entries one at a time, capped to avoid O(n) plan construction on large groups.
-            let maxWindows = min(indices.count - 1, SchedulerTuning.maxPairLookahead)
+            let maxWindows = min(indices.count - 1, TypeCompatibilityCursor.maxPairLookahead)
             var offset = 0
             while offset < maxWindows {
                 let windowIndices = Array(indices[offset...])

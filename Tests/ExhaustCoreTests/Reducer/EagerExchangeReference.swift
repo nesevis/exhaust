@@ -269,7 +269,7 @@ extension EagerExchangeReference {
 
             var indexA = 0
             while indexA < siblings.count {
-                let limit = min(siblings.count, indexA + 1 + SchedulerTuning.maxPairLookahead)
+                let limit = min(siblings.count, indexA + 1 + TypeCompatibilityCursor.maxPairLookahead)
                 var indexB = indexA + 1
                 while indexB < limit {
                     let tagA = siblings[indexA].tag
@@ -326,7 +326,7 @@ extension EagerExchangeReference {
                         groupB += 1
                         continue
                     }
-                    let leafLimit = SchedulerTuning.maxPairLookahead
+                    let leafLimit = TypeCompatibilityCursor.maxPairLookahead
                     for (indexA, leafA) in perChildLeaves[groupA].enumerated() {
                         let secondGroupLimit = min(perChildLeaves[groupB].count, leafLimit)
                         for indexB in 0 ..< secondGroupLimit {
