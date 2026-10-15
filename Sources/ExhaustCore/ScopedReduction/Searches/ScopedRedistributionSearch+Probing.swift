@@ -213,7 +213,7 @@ extension ScopedRedistributionSearch {
         // Same-tag integer: bit-pattern distance.
         let sourceBitPattern = sourceValue.choice.bitPattern64
         let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
-        let distance = sourceBitPattern > targetBitPattern ? sourceBitPattern - targetBitPattern : targetBitPattern - sourceBitPattern
+        let distance = sourceBitPattern.absoluteDifference(targetBitPattern)
         return (distance, nil)
     }
 

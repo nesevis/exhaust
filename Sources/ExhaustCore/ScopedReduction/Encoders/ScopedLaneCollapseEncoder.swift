@@ -24,11 +24,7 @@ struct ScopedLaneCollapseEncoder: ScopedEncoder {
                 graph: input.graph,
                 baseSequence: input.baseSequence
             )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: .standard
         )
     }
 }

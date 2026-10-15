@@ -34,7 +34,7 @@ struct ScopedMigrationEncoder: ScopedEncoder {
         }
         return .search(
             .singleCandidate(search),
-            configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+            configuration: .standard
         )
     }
 }

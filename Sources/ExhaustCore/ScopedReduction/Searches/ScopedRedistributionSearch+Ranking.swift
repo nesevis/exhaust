@@ -108,9 +108,7 @@ extension ScopedRedistributionSearch {
                 maxDelta = mixedContext.distanceInSteps
             case false:
                 let sourceTarget = sourceMetadata.value.reductionTarget(in: sourceMetadata.validRange)
-                maxDelta = sourceMetadata.value.bitPattern64 > sourceTarget
-                    ? sourceMetadata.value.bitPattern64 - sourceTarget
-                    : sourceTarget - sourceMetadata.value.bitPattern64
+                maxDelta = sourceMetadata.value.bitPattern64.absoluteDifference(sourceTarget)
                 guard maxDelta > 0 else {
                     return nil
                 }

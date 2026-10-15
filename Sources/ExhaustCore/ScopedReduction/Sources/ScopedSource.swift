@@ -515,9 +515,7 @@ extension ScopedSource {
                         continue
                     }
                     let target = metadata.value.reductionTarget(in: metadata.validRange)
-                    let distance = metadata.value.bitPattern64 > target
-                        ? metadata.value.bitPattern64 - target
-                        : target - metadata.value.bitPattern64
+                    let distance = metadata.value.bitPattern64.absoluteDifference(target)
                     encoderScope = .boundExchange(exchange)
                     sourceDistance = Int(min(distance, UInt64(Int.max)))
                     estimatedCost = tuning.keptExchangeLiftBudget
@@ -528,9 +526,7 @@ extension ScopedSource {
                                 return leafMax
                             }
                             let target = metadata.value.reductionTarget(in: metadata.validRange)
-                            let distance = metadata.value.bitPattern64 > target
-                                ? metadata.value.bitPattern64 - target
-                                : target - metadata.value.bitPattern64
+                            let distance = metadata.value.bitPattern64.absoluteDifference(target)
                             return max(leafMax, distance)
                         }
                         return max(maxSoFar, groupMax)

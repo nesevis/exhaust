@@ -25,11 +25,7 @@ struct ScopedLockstepEncoder: ScopedEncoder {
                 graph: input.graph,
                 maxSuffixWindows: tuning.lockstepMaxSuffixWindows
             )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: .standard
         )
     }
 }

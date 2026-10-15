@@ -20,7 +20,7 @@ struct ScopedReorderEncoder: ScopedEncoder {
     func reducer(_ scope: ReorderingScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
             .reorder(ScopedReorderSearch(scope: scope, baseSequence: input.baseSequence)),
-            configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+            configuration: .standard
         )
     }
 }

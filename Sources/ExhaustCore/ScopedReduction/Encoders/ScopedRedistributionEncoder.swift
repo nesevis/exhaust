@@ -25,11 +25,7 @@ struct ScopedRedistributionEncoder: ScopedEncoder {
                 graph: input.graph,
                 tuning: tuning
             )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: .standard
         )
     }
 }

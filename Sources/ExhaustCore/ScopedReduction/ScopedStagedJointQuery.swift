@@ -145,7 +145,7 @@ enum ScopedStagedJointQuery {
         return leaves.map { leaf in
             let target = leaf.choice.reductionTarget(in: leaf.range)
             let pattern = leaf.choice.bitPattern64
-            let distance = pattern > target ? pattern - target : target - pattern
+            let distance = pattern.absoluteDifference(target)
             return (
                 leaf: leaf,
                 stalled: isStalled(leaf, graph: graph, isFruitlessBind: isFruitlessBind),

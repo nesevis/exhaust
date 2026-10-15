@@ -9,7 +9,7 @@ extension ScopedReductionRunner {
     /// Runs the cycle's post-cycle actions in order, stopping at the deadline.
     mutating func runPostCycleActions(_ actions: [PostCycleAction]) -> PhaseOutcome {
         for action in actions {
-            guard isDeadlineExceeded() == false else {
+            guard deadline.isExpired == false else {
                 return .deadline
             }
             switch action {
@@ -42,7 +42,7 @@ extension ScopedReductionRunner {
                 case .releaseDeferral:
                     // Worth a cycle only when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none.
                     deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
-                    Self.log("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
+                    ScopedReductionLog.reducer("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
                         "cycle": "\(cycles)", "seq_len": "\(incumbent.sequence.count)",
                     ])
                     chargeElapsed(to: .untimed)
@@ -102,7 +102,7 @@ extension ScopedReductionRunner {
         let baseHash = ZobristHash.hash(of: incumbent.sequence)
 
         for nodeID in graph.leafNodes {
-            if isDeadlineExceeded() {
+            if deadline.isExpired {
                 break
             }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
@@ -131,10 +131,10 @@ extension ScopedReductionRunner {
             if result == .accepted {
                 anyStale = true
                 graph.clearConvergence(nodeID)
-                Self.log("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
+                ScopedReductionLog.reducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
                     "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
                 ])
-            } else if result == .rejected, origin.bound - minimumBound >= 2, isDeadlineExceeded() == false {
+            } else if result == .rejected, origin.bound - minimumBound >= 2, deadline.isExpired == false {
                 let gapResult = probeBelow(
                     value: origin.bound - 2,
                     at: range.lowerBound,
@@ -145,7 +145,7 @@ extension ScopedReductionRunner {
                 if gapResult == .accepted {
                     anyStale = true
                     graph.clearConvergence(nodeID)
-                    Self.log("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
+                    ScopedReductionLog.reducer("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
                         "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(origin.bound - 2)",
                     ])
                 }
@@ -205,7 +205,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.relationSearch), let scope = RelationQuery.build(graph: graph) else {
             return
         }
-        guard isDeadlineExceeded() == false else {
+        guard deadline.isExpired == false else {
             stats.reductionWasCapped = true
             return
         }
@@ -229,7 +229,7 @@ extension ScopedReductionRunner {
 
     /// Searches the pending checkpoint, marking it searched before the encoder's reducer starts so a deadline interruption does not repeat it. An acceptance invalidates every floor, cached rejection, and bind search history, because the property couples the moved values.
     private mutating func runStagedJointPass() {
-        guard isEncoderEnabled(.stagedJointSearch), isDeadlineExceeded() == false else {
+        guard isEncoderEnabled(.stagedJointSearch), deadline.isExpired == false else {
             return
         }
         var source = stagedJointSource()
@@ -262,7 +262,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 else {
             return false
         }
-        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: makeDeadlineCheck())
+        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadline: deadline)
         return cursor.next() != nil
     }
 
@@ -277,7 +277,6 @@ extension ScopedReductionRunner {
         guard budget > 0 else {
             return false
         }
-        let deadlineCheck = makeDeadlineCheck()
         var probesUsed = 0
         var probeCounts = ReductionProbeCounts()
         defer {
@@ -286,9 +285,9 @@ extension ScopedReductionRunner {
                 stats.relaxImprovingProbes += probesUsed
             }
         }
-        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadlineCheck: deadlineCheck)
+        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadline: deadline)
         while probesUsed < budget {
-            guard let probe = candidates.next(), deadlineCheck() == false else {
+            guard let probe = candidates.next(), deadline.isExpired == false else {
                 break
             }
             let candidate = probe.sequence
@@ -307,7 +306,7 @@ extension ScopedReductionRunner {
                 stats.relaxImprovingAcceptances += 1
             }
             rebuildAndUpdateGraph()
-            Self.log("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
+            ScopedReductionLog.reducer("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "probes": "\(probesUsed)",
             ])
             return true

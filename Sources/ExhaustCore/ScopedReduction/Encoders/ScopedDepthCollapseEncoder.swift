@@ -25,11 +25,7 @@ struct ScopedDepthCollapseEncoder: ScopedEncoder {
                 baseSequence: input.baseSequence,
                 mayReshape: true
             )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: .standard
         )
     }
 }

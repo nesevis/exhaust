@@ -70,10 +70,8 @@ package struct ScopedReductionRunner {
     var gate: BoundValueGate
     /// Whether the latest tree lacks unselected branches, so pick nodes cannot offer pivots until rematerialized.
     var graphIsStripped = false
-    let deadlineNanoseconds: UInt64
-    let startNanoseconds: UInt64
-    /// The production monotonic clock unless a test injects one to make deadline boundaries deterministic.
-    let currentNanoseconds: () -> UInt64
+    /// Read from the production monotonic clock unless a test injects one to make deadline boundaries deterministic. A value, so passes that hold the runner `inout` can carry it.
+    let deadline: ScopedDeadline
 
     // MARK: - Per-Cycle State
 
@@ -204,16 +202,15 @@ package struct ScopedReductionRunner {
         maxStalls = configuration.maxStalls
         deferBindInner = graph.reductionEdges.isEmpty == false
         gate = BoundValueGate(baseBudget: configuration.tuning.boundValueBaseBudget)
-        deadlineNanoseconds = configuration.wallClockDeadlineNanoseconds
-        self.currentNanoseconds = currentNanoseconds
-        startNanoseconds = deadlineNanoseconds > 0 ? currentNanoseconds() : 0
+        let budget = configuration.wallClockDeadlineNanoseconds
+        deadline = ScopedDeadline(start: budget > 0 ? currentNanoseconds() : 0, budget: budget, clock: currentNanoseconds)
 
         if collectStats {
             stats.graphStats = ChoiceGraphStats.from(graph)
             stats.recordMaterializations(setupMaterializations, at: .setup)
         }
 
-        Self.log("graph_reducer_start", isInstrumented: isInstrumented, metadata: [
+        ScopedReductionLog.reducer("graph_reducer_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(incumbent.sequence.count)", "max_stalls": "\(configuration.maxStalls)", "nodes": "\(graph.nodes.count)",
         ])
     }
@@ -226,25 +223,25 @@ package struct ScopedReductionRunner {
             timingMark = MonotonicClock.nanoseconds()
         }
         while true {
-            guard isDeadlineExceeded() == false else {
+            guard deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             beginCycle()
             chargeElapsed(to: .untimed)
-            guard isDeadlineExceeded() == false else {
+            guard deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             buildCycleSources()
             chargeElapsed(to: .buildSources)
-            guard dispatchCycle() == .completed, isDeadlineExceeded() == false else {
+            guard dispatchCycle() == .completed, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             let actions = endCycle()
             chargeElapsed(to: .untimed)
-            guard runPostCycleActions(actions) == .completed, isDeadlineExceeded() == false else {
+            guard runPostCycleActions(actions) == .completed, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
@@ -277,7 +274,7 @@ package struct ScopedReductionRunner {
 
     private mutating func buildCycleSources() {
         sources = prepareAllSources(previousGraph: nil)
-        Self.log("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
+        ScopedReductionLog.reducer("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
             "cycle": "\(cycles)", "seq_len": "\(incumbent.sequence.count)",
             "sources": "\(sources.count)", "stall_budget": "\(stallBudget)",
         ])
@@ -320,7 +317,7 @@ package struct ScopedReductionRunner {
         let continues = shouldRunAnotherCycle()
         if continues {
             if deferralReleasedThisCycle == false {
-                Self.log("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
+                ScopedReductionLog.reducer("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
                     "cycle": "\(cycles)", "improved": "\(incumbent.sequence != sequenceBeforeCycle)",
                     "seq_len": "\(incumbent.sequence.count)", "total_mats": "\(stats.totalMaterializations)",
                 ])
@@ -371,27 +368,6 @@ package struct ScopedReductionRunner {
         enabledEncoders?.contains(name) != false
     }
 
-    /// Zero is unlimited; otherwise compares elapsed time on the clock read at setup.
-    func isDeadlineExceeded() -> Bool {
-        guard deadlineNanoseconds > 0 else {
-            return false
-        }
-        return currentNanoseconds() - startNanoseconds >= deadlineNanoseconds
-    }
-
-    /// Captures the deadline bounds rather than the runner, for passes that hold the runner `inout`.
-    func makeDeadlineCheck() -> () -> Bool {
-        let deadline = deadlineNanoseconds
-        let start = startNanoseconds
-        let clock = currentNanoseconds
-        return {
-            guard deadline > 0 else {
-                return false
-            }
-            return clock() - start >= deadline
-        }
-    }
-
     var hasBind: Bool {
         incumbent.sequence.contains { entry in
             guard case .bind = entry else {
@@ -428,7 +404,7 @@ package struct ScopedReductionRunner {
             }
             let bitPattern = value.choice.bitPattern64
             let target = value.choice.reductionTarget(in: value.validRange)
-            let distance = bitPattern > target ? bitPattern - target : target - bitPattern
+            let distance = bitPattern.absoluteDifference(target)
             total += Double(distance)
         }
         return total
@@ -484,17 +460,5 @@ package struct ScopedReductionRunner {
         rebuildAndUpdateGraph()
         graphIsStripped = false
         return graphBefore
-    }
-
-    @inline(__always)
-    static func log(
-        _ event: String,
-        isInstrumented: Bool,
-        metadata: @autoclosure () -> [String: String]
-    ) {
-        guard isInstrumented else {
-            return
-        }
-        ExhaustLog.debug(category: .reducer, event: event, metadata: metadata())
     }
 }

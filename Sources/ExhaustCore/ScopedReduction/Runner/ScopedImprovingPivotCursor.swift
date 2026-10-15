@@ -33,17 +33,17 @@ struct ScopedImprovingPivotCursor {
     private var isRecordedFillImproving = false
 
     /// Captures the cache at entry, so duplicate fills generated within the pass stay independently eligible.
-    init(sequence: ChoiceSequence, graph: ChoiceGraph, rejectCache: Set<UInt64>, deadlineCheck: () -> Bool = { false }) {
+    init(sequence: ChoiceSequence, graph: ChoiceGraph, rejectCache: Set<UInt64>, deadline: ScopedDeadline) {
         self.sequence = sequence
         self.graph = graph
         self.rejectCache = rejectCache
-        guard deadlineCheck() == false else {
+        guard deadline.isExpired == false else {
             pivots = []
             return
         }
         var prepared: [Pivot] = []
         var source = ScopedReplacementSource(pivotGraph: graph)
-        while deadlineCheck() == false, let priced = source.nextScope() {
+        while deadline.isExpired == false, let priced = source.nextScope() {
             guard case let .branchPivot(scope) = priced.encoderScope,
                   let splice = ScopedPivotCandidates.branchPivotSplice(
                       pickNodeID: scope.pickNodeID,

@@ -55,7 +55,7 @@ struct ScopedReductionInterpreterTests {
         }
 
         // Expires once the second branch has started building, so only the first branch's lift runs.
-        let report = fixture.run(reducer, deadlineCheck: { branchesBuilt > 1 })
+        let report = fixture.run(reducer, deadline: ScopedDeadline(start: 0, budget: 2, clock: { UInt64(branchesBuilt) }))
 
         #expect(branchesBuilt == 2)
         #expect(report.liftAttempts == 1)
@@ -80,7 +80,7 @@ private struct InterpreterFixture {
         try ChoiceSequence(#require(try Interpreters.reflect(generator, with: value)))
     }
 
-    func run(_ reducer: ScopedReducer, deadlineCheck: (() -> Bool)? = nil) -> ScopedPassReport {
+    func run(_ reducer: ScopedReducer, deadline: ScopedDeadline = .none) -> ScopedPassReport {
         ScopedReductionInterpreter.run(
             reducer,
             context: ScopedReductionInterpreter.Context(
@@ -98,7 +98,7 @@ private struct InterpreterFixture {
                     hasBind: false
                 ),
                 encoder: ScopedValueSearchEncoder.self,
-                deadlineCheck: deadlineCheck
+                deadline: deadline
             )
         ).report
     }

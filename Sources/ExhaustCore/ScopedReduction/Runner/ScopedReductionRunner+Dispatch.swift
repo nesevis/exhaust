@@ -58,7 +58,7 @@ extension ScopedReductionRunner {
             let action = applyPassPolicy(pass)
             chargeElapsed(to: .passApply)
             switch (policy, action) {
-                case (.main, _) where isDeadlineExceeded():
+                case (.main, _) where deadline.isExpired:
                     rebuildGraphAtDeadline(after: pass)
                     chargeElapsed(to: .rebuild)
                     return .deadline
@@ -84,7 +84,7 @@ extension ScopedReductionRunner {
 
     /// Selects the highest-priority source's next encoder scope and resolves it under `policy`.
     private mutating func selectDispatch(policy: DispatchPolicy) -> DispatchSelection {
-        guard isDeadlineExceeded() == false else {
+        guard deadline.isExpired == false else {
             return .end(.deadline)
         }
         guard let sourceIndex = ScopedSource.highestPrioritySourceIndex(&sources) else {
@@ -95,7 +95,7 @@ extension ScopedReductionRunner {
             sources.removeLast()
             return .skip
         }
-        guard isDeadlineExceeded() == false else {
+        guard deadline.isExpired == false else {
             return .end(.deadline)
         }
         let encoderScope = priced.encoderScope
@@ -151,7 +151,7 @@ extension ScopedReductionRunner {
             if collectStats {
                 stats.recordMaterializations(classificationMaterializations, at: .classification)
             }
-            guard isDeadlineExceeded() == false else {
+            guard deadline.isExpired == false else {
                 return .deadline
             }
             guard case let .bind(updatedMetadata) = graph.nodes[bindNodeID].kind,
@@ -279,7 +279,7 @@ extension ScopedReductionRunner {
                 decoder: decoder,
                 encoder: typed.encoder,
                 isInstrumented: isInstrumented,
-                deadlineCheck: checksDeadline ? makeDeadlineCheck() : nil,
+                deadline: checksDeadline ? deadline : .none,
                 timingMark: collectStats ? timingMark : nil
             )
         )
@@ -373,7 +373,7 @@ extension ScopedReductionRunner {
             recordDispatch(pass)
         }
 
-        Self.log("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
+        ScopedReductionLog.reducer("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
             "encoder": pass.encoderScope.encoder.name.rawValue, "probes": "\(report.counts.emitted)",
             "accepted": "\(report.counts.accepted)", "cache_hits": "\(report.counts.rejectedByCache)",
             "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(incumbent.sequence.count)",
@@ -418,7 +418,7 @@ extension ScopedReductionRunner {
         if diff.canReuseStructuralSources {
             sources = sources.filter { $0.isValueDependent == false }
                 + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
-            Self.log("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
+            ScopedReductionLog.reducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
@@ -426,13 +426,13 @@ extension ScopedReductionRunner {
             sources = sources.filter(\.canReuseAfterLeafKindChange)
                 + ScopedSource.preparePermutationSources(from: graph)
                 + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
-            Self.log("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
+            ScopedReductionLog.reducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
             scopeRejectionCache.clear()
             sources = prepareAllSources(previousGraph: graphBefore)
-            Self.log("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
+            ScopedReductionLog.reducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         }
@@ -450,7 +450,7 @@ extension ScopedReductionRunner {
     /// Rebuilds the graph and every source without updating stripped-graph state or clearing diagnostic history.
     mutating func rebuildForExploitation(after pass: PassRecord) {
         rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-        sources = isDeadlineExceeded() ? [] : prepareExploitationSources()
+        sources = deadline.isExpired ? [] : prepareExploitationSources()
     }
 
     /// Every family over the current graph, with no bind-inner deferral.

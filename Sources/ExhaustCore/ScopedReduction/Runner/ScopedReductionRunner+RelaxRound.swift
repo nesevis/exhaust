@@ -38,7 +38,7 @@ extension ScopedReductionRunner {
             hadUnresolvedReplacement: hadUnresolvedReplacement
         )
         let budget = tuning.relaxMaterializationBudget
-        Self.log("relax_round_start", isInstrumented: isInstrumented, metadata: [
+        ScopedReductionLog.reducer("relax_round_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(incumbent.sequence.count)",
         ])
         var candidates = ScopedRelaxCandidateCursor(
@@ -48,20 +48,20 @@ extension ScopedReductionRunner {
             isEncoderEnabled: isEncoderEnabled
         )
         guard candidates.candidateCount > 0 else {
-            Self.log("relax_round_no_candidates", isInstrumented: isInstrumented, metadata: [:])
+            ScopedReductionLog.reducer("relax_round_no_candidates", isInstrumented: isInstrumented, metadata: [:])
             return false
         }
         var tally = RelaxRoundTally(candidateCount: candidates.candidateCount)
-        Self.log("relax_round_candidates", isInstrumented: isInstrumented, metadata: [
+        ScopedReductionLog.reducer("relax_round_candidates", isInstrumented: isInstrumented, metadata: [
             "count": "\(candidates.candidateCount)",
         ])
 
         // Perturb.
         while tally.perturbationAccepted == false {
-            guard isDeadlineExceeded() == false,
+            guard deadline.isExpired == false,
                   tally.materializationsUsed < budget,
                   let candidate = candidates.next(),
-                  isDeadlineExceeded() == false
+                  deadline.isExpired == false
             else {
                 return completeWithoutPerturbation(tally)
             }
@@ -75,13 +75,13 @@ extension ScopedReductionRunner {
             tally.probeCounts.recordAcceptance()
             incumbent = ScopedCounterexample(result)
             tally.perturbationAccepted = true
-            Self.log("relax_round_perturbation_accepted", isInstrumented: isInstrumented, metadata: [
+            ScopedReductionLog.reducer("relax_round_perturbation_accepted", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)",
             ])
         }
 
         // A deadline before exploitation keeps a directly improving perturbation and rolls back any other, without a rebuild, since the graph still describes the checkpoint.
-        guard isDeadlineExceeded() == false else {
+        guard deadline.isExpired == false else {
             let improved = incumbent.sequence.shortLexPrecedes(checkpoint.incumbent.sequence)
             if improved {
                 rebuildAndUpdateGraph()
@@ -96,8 +96,8 @@ extension ScopedReductionRunner {
         // Exploit.
         rebuildAndUpdateGraph()
         let outerSources = sources
-        sources = isDeadlineExceeded() ? [] : prepareExploitationSources()
-        Self.log("relax_round_exploitation_start", isInstrumented: isInstrumented, metadata: [
+        sources = deadline.isExpired ? [] : prepareExploitationSources()
+        ScopedReductionLog.reducer("relax_round_exploitation_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(incumbent.sequence.count)", "sources": "\(sources.count)",
         ])
         let savedRejectCache = rejectCache
@@ -110,7 +110,7 @@ extension ScopedReductionRunner {
         let committed = incumbent.sequence.shortLexPrecedes(checkpoint.incumbent.sequence)
         recordRelaxRound(tally, committed: committed)
         if committed {
-            Self.log("relax_round_committed", isInstrumented: isInstrumented, metadata: [
+            ScopedReductionLog.reducer("relax_round_committed", isInstrumented: isInstrumented, metadata: [
                 "old_seq_len": "\(checkpoint.incumbent.sequence.count)", "new_seq_len": "\(incumbent.sequence.count)",
             ])
             completeRelaxRound(tally)
@@ -123,7 +123,7 @@ extension ScopedReductionRunner {
         graph.couplingDependents.removeAll()
         couplingTracker = CouplingTracker()
         Self.transferConvergence(checkpoint.convergence, to: &graph)
-        Self.log("relax_round_rolled_back", isInstrumented: isInstrumented, metadata: [
+        ScopedReductionLog.reducer("relax_round_rolled_back", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(incumbent.sequence.count)",
         ])
         completeRelaxRound(tally)
@@ -135,7 +135,7 @@ extension ScopedReductionRunner {
     /// Records the round when no perturbation decoded within the budget.
     private mutating func completeWithoutPerturbation(_ tally: RelaxRoundTally) -> Bool {
         recordRelaxRound(tally, committed: false)
-        Self.log("relax_round_no_perturbation", isInstrumented: isInstrumented, metadata: [:])
+        ScopedReductionLog.reducer("relax_round_no_perturbation", isInstrumented: isInstrumented, metadata: [:])
         completeRelaxRound(tally)
         return false
     }

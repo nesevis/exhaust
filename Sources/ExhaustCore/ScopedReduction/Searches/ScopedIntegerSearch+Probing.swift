@@ -508,9 +508,7 @@ extension ScopedIntegerSearch {
 
         // Stepper converged — check for non-monotone gap.
         if let bestAccepted = state.stepper?.bestAccepted {
-            let remaining: UInt64 = bestAccepted > leaf.targetBitPattern
-                ? bestAccepted - leaf.targetBitPattern
-                : leaf.targetBitPattern - bestAccepted
+            let remaining: UInt64 = bestAccepted.absoluteDifference(leaf.targetBitPattern)
 
             if state.batchRejected, bestAccepted == leaf.targetBitPattern {
                 // Leaf converged at target but batch-zero failed — zeroing dependency.

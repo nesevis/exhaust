@@ -68,9 +68,7 @@ extension ScopedReductionRunner {
                 continue
             }
             stalledCount += 1
-            residualDistance += bitPattern > target
-                ? Double(bitPattern - target)
-                : Double(target - bitPattern)
+            residualDistance += Double(bitPattern.absoluteDifference(target))
         }
         stats.stalledLeafCount = stalledCount
         stats.stalledLeafResidualDistance = residualDistance

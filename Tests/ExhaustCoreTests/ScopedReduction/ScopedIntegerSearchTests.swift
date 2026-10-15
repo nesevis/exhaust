@@ -157,7 +157,7 @@ private struct IntegerSearchRun {
                     hasBind: false
                 ),
                 encoder: ScopedValueSearchEncoder.self,
-                deadlineCheck: { isExpired }
+                deadline: ScopedDeadline(start: 0, budget: 1, clock: { isExpired ? 1 : 0 })
             )
         )
 

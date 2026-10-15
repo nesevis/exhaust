@@ -54,12 +54,6 @@ struct ScopedStagedJointEncoder: ScopedEncoder {
         case groups([NumericJointQuery.Group])
     }
 
-    private static let configuration = ScopedSearchConfiguration(
-        acceptance: .continue,
-        requiresExactDecoder: false,
-        reportedMutation: nil
-    )
-
     /// Searches one arity, then widens to the next while the stage stalls and the search can widen.
     private func stage(
         arity: Int,
@@ -81,7 +75,7 @@ struct ScopedStagedJointEncoder: ScopedEncoder {
             case let .groups(groups):
                 ScopedStagedJointSearch(groups: groups, base: input.baseSequence, probeBudget: budget)
         }
-        return .search(.stagedJoint(search), configuration: Self.configuration) { outcome in
+        return .search(.stagedJoint(search), configuration: .standard) { outcome in
             let nextArity = arity + 1
             let remaining = remaining - outcome.counts.emitted
             guard outcome.anyAccepted == false,

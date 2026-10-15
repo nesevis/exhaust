@@ -26,11 +26,7 @@ struct ScopedValueSearchEncoder: ScopedEncoder {
                 warmStarts: input.warmStartRecords,
                 tuning: tuning
             )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: .standard
         )
     }
 }

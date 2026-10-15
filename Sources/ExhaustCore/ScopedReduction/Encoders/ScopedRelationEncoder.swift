@@ -24,11 +24,7 @@ struct ScopedRelationEncoder: ScopedEncoder {
                 sequence: input.baseSequence,
                 graph: input.graph
             )),
-            configuration: ScopedSearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: .standard
         )
     }
 }

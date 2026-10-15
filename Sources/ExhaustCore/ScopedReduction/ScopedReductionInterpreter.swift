@@ -66,7 +66,7 @@ extension ScopedReductionInterpreter {
         let isInstrumented: Bool
         let observer: ((ProbeObservation) -> Void)?
         /// Checked before each encode and before each decode.
-        let deadlineCheck: (() -> Bool)?
+        let deadline: ScopedDeadline
 
         var incumbent: ScopedCounterexample
         var graph: ChoiceGraph
@@ -87,7 +87,7 @@ extension ScopedReductionInterpreter {
             decoder: ScopedDecoder,
             encoder: any ScopedEncoder.Type,
             isInstrumented: Bool = false,
-            deadlineCheck: (() -> Bool)? = nil,
+            deadline: ScopedDeadline = .none,
             observer: ((ProbeObservation) -> Void)? = nil,
             timingMark: UInt64? = nil
         ) {
@@ -97,7 +97,7 @@ extension ScopedReductionInterpreter {
             self.decoder = decoder
             self.encoder = encoder
             self.isInstrumented = isInstrumented
-            self.deadlineCheck = deadlineCheck
+            self.deadline = deadline
             self.observer = observer
             baseHash = ZobristHash.hash(of: incumbent.sequence)
             candidateBuffer = incumbent.sequence
@@ -105,7 +105,7 @@ extension ScopedReductionInterpreter {
         }
 
         var isExpired: Bool {
-            deadlineCheck?() == true
+            deadline.isExpired
         }
     }
 }

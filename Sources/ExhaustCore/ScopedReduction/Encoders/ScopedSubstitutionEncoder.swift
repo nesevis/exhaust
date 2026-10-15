@@ -47,7 +47,7 @@ struct ScopedSubstitutionEncoder: ScopedEncoder {
         }
         return .search(
             .singleCandidate(ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: sequence)),
-            configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+            configuration: .standard
         )
     }
 }

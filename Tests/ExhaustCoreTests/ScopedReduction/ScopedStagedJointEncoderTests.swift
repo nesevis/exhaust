@@ -80,12 +80,10 @@ private struct StagedJointFixture {
                     hasBind: false
                 ),
                 encoder: ScopedStagedJointEncoder.self,
-                deadlineCheck: {
+                // Every check reads the clock once, so the clock counts checks. Without a limit the budget is never reached, but each check still reads it.
+                deadline: ScopedDeadline(start: 0, budget: deadlineAfterChecks.map { UInt64($0) + 1 } ?? .max) {
                     checks.count += 1
-                    guard let deadlineAfterChecks else {
-                        return false
-                    }
-                    return checks.count > deadlineAfterChecks
+                    return UInt64(checks.count)
                 },
                 observer: { observation in
                     if case let .terminated(probeID, _, _) = observation {
