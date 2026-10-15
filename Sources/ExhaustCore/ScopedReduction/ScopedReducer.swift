@@ -23,13 +23,13 @@ indirect enum ScopedReducer {
 // MARK: - Verbs
 
 extension ScopedReducer {
-    /// Offers `branches` and continues with whichever proposal the interpreter visits. The interpreter runs `next` once per branch it builds.
+    /// Offers the proposals `makeProposals` constructs and continues with whichever proposal the interpreter visits. The interpreter runs `next` once per branch it builds, and constructs each prefix only when its branch is selected. The factory runs once per reached pool execution, after deadline and build-budget checks.
     static func propose(
-        _ branches: [ScopedBranch],
+        _ makeProposals: @escaping ScopedProposalFactory,
         configuration: ScopedChoiceConfiguration,
         then next: @escaping (LiftProposal) -> ScopedReducer
     ) -> ScopedReducer {
-        request(.propose(branches, configuration: configuration)).bind { result in
+        request(.propose(makeProposals, configuration: configuration)).bind { result in
             guard case let .proposal(proposal) = result else {
                 preconditionFailure("A propose request must be answered with a proposal")
             }
@@ -93,12 +93,12 @@ extension ScopedReducer {
 
 /// The requests the encoder's reducer can make.
 ///
-/// `propose`, `fail`, and the per-branch cost follow Spivey's bunch operations (`⊕`, `zero`, `wrap`).
+/// `propose`, `fail`, and each branch's position-based starting grade follow Spivey's bunch operations (`⊕`, `zero`, `wrap`).
 /// `lift` comes from SJ's effectful reduction composition, and `search` runs the downstream solver; both are effects outside Spivey's bunch algebra.
 /// The interpreter, not the encoder's reducer, decides the order in which `propose` branches are visited.
 enum ScopedReductionOperation {
     /// Offers alternatives. The interpreter resumes the continuation once per branch it visits, so continuations must be re-entrant and capture only values.
-    case propose([ScopedBranch], configuration: ScopedChoiceConfiguration)
+    case propose(ScopedProposalFactory, configuration: ScopedChoiceConfiguration)
     /// Materializes a prefix through the generator in guided mode, without running the property. `fallbackTree` resolves entries the prefix does not fix; a lift longer than `maximumSequenceCount` fails.
     case lift(ChoiceSequence, fallbackTree: ChoiceTree, maximumSequenceCount: Int?)
     /// Abandons the current branch. Never resumed.
@@ -107,17 +107,9 @@ enum ScopedReductionOperation {
     case search(any ScopedSearch, configuration: ScopedSearchConfiguration)
 }
 
-/// One alternative of a `propose`.
-///
-/// The cost is the branch's starting grade under diagonal scheduling. Each emitted candidate increases its grade by one; ties keep the original branch order. Turn-based scheduling ignores the cost.
-struct ScopedBranch {
-    let proposal: LiftProposal
-    let cost: UInt
-}
-
 /// Chooses how one pool interleaves its branches, independently of any nested pool's priorities.
 enum ScopedChoiceScheduling {
-    /// Selects the smallest branch cost plus emitted candidate count, breaking ties by original branch order.
+    /// Selects the smallest branch index plus emitted candidate count, breaking ties by branch index.
     case diagonal
     /// Builds new branches before resuming suspended searches in FIFO order, with a fresh turn on each resumption.
     case turnBased

@@ -80,17 +80,6 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         totalProbeCap: Int,
         rootMutation: EncoderProbe?
     ) -> ScopedReducer {
-        var branches: [ScopedBranch] = []
-        if var proposals = controllerProposals(
-            scope: scope,
-            controllerLeafNodeID: controllerLeafNodeID,
-            stage: stage
-        ) {
-            var buffer = scope.baseSequence
-            while let proposal = proposals.next(into: &buffer) {
-                branches.append(ScopedBranch(proposal: proposal, cost: UInt(branches.count)))
-            }
-        }
         let chainLimits: ScopedChainLimits? = switch stage {
             case .single:
                 nil
@@ -109,28 +98,32 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             chainLimits: chainLimits,
             scheduling: scheduling
         )
-        return .propose(branches, configuration: configuration) { proposal in
-            let reportedMutation = rootMutation ?? ScopedComposition.reshaping(proposal.mutation)
-            return .lift(
-                proposal.prefix,
-                fallbackTree: scope.tree,
-                maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
-            ) { lifted in
-                guard let lifted else {
-                    return .fail(.materializationFailed)
+        return .propose(
+            { controllerProposals(scope: scope, controllerLeafNodeID: controllerLeafNodeID, stage: stage) },
+            configuration: configuration,
+            then: { proposal in
+                let reportedMutation = rootMutation ?? ScopedComposition.reshaping(proposal.mutation)
+                return .lift(
+                    proposal.prefix,
+                    fallbackTree: scope.tree,
+                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
+                ) { lifted in
+                    guard let lifted else {
+                        return .fail(.materializationFailed)
+                    }
+                    return downstream(
+                        lifted: lifted,
+                        proposal: proposal,
+                        scope: scope,
+                        bindNodeID: bindNodeID,
+                        controllerLeafNodeID: controllerLeafNodeID,
+                        stage: stage,
+                        chain: chain,
+                        reportedMutation: reportedMutation
+                    )
                 }
-                return downstream(
-                    lifted: lifted,
-                    proposal: proposal,
-                    scope: scope,
-                    bindNodeID: bindNodeID,
-                    controllerLeafNodeID: controllerLeafNodeID,
-                    stage: stage,
-                    chain: chain,
-                    reportedMutation: reportedMutation
-                )
             }
-        }
+        )
     }
 
     /// Relocates the bind, then descends into a composable nested bind or builds the terminal search.

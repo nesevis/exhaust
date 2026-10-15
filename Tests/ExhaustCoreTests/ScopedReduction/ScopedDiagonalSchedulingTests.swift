@@ -3,69 +3,31 @@ import Testing
 
 @Suite("Scoped diagonal scheduling")
 struct ScopedDiagonalSchedulingTests {
-    @Test("Costs and candidate counts form diagonals, and later branches are built only when selected")
+    @Test("Branch positions and candidate counts form diagonals, and later branches are built only when selected")
     func diagonalOrderAndLazyBuilds() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [0, 1, 2], recorder: recorder) { index in
+        let reducer = fixture.pool(count: 3, recorder: recorder) { index in
             fixture.search(["A", "B", "C"][index], recorder: recorder)
         }
 
         let report = fixture.run(reducer)
 
         #expect(recorder.emissions == ["A0", "A1", "B0", "A2", "B1", "C0", "B2", "C1", "C2"])
-        #expect(Array(recorder.events.prefix(9)) == ["build 0", "A0", "A1", "build 1", "B0", "A2", "B1", "build 2", "C0"])
+        #expect(Array(recorder.events.prefix(13)) == [
+            "setup", "proposal 0", "build 0", "A0", "A1", "proposal 1", "build 1", "B0", "A2", "B1", "proposal 2", "build 2", "C0",
+        ])
         #expect(report.counts.emitted == 9)
         #expect(report.constructedSearches == 3)
         #expect(recorder.finished.values.allSatisfy { $0 == ["initial"] })
         #expect(recorder.finished.count == 3)
     }
 
-    @Test("Branch cost takes precedence over array position")
-    func unorderedCosts() throws {
-        let fixture = try SchedulingFixture()
-        let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [2, 0, 1], recorder: recorder) { index in
-            fixture.search(["A", "B", "C"][index], values: [10], recorder: recorder)
-        }
-
-        _ = fixture.run(reducer)
-
-        #expect(recorder.emissions == ["B0", "C0", "A0"])
-        #expect(recorder.builds == [1, 2, 0])
-    }
-
-    @Test("Equal grades keep original branch order, including after each branch resumes")
-    func equalCosts() throws {
-        let fixture = try SchedulingFixture()
-        let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [0, 0, 0], recorder: recorder) { index in
-            fixture.search(["A", "B", "C"][index], values: [10, 11], recorder: recorder)
-        }
-
-        _ = fixture.run(reducer)
-
-        #expect(recorder.emissions == ["A0", "B0", "C0", "A1", "B1", "C1"])
-    }
-
-    @Test("Branch costs at UInt.max still advance without overflowing")
-    func largeCosts() throws {
-        let fixture = try SchedulingFixture()
-        let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [.max, .max], recorder: recorder) { index in
-            fixture.search(["A", "B"][index], values: [10, 11], recorder: recorder)
-        }
-
-        _ = fixture.run(reducer)
-
-        #expect(recorder.emissions == ["A0", "B0", "A1", "B1"])
-    }
-
     @Test("A failed build returns to priority selection before a more expensive branch is built")
     func failedBuildReselects() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [0, 1, 100], recorder: recorder) { index in
+        let reducer = fixture.pool(count: 3, recorder: recorder) { index in
             switch index {
                 case 0:
                     fixture.search("A", recorder: recorder)
@@ -78,7 +40,7 @@ struct ScopedDiagonalSchedulingTests {
 
         let report = fixture.run(reducer)
 
-        #expect(recorder.events == ["build 0", "A0", "A1", "build 1", "A2", "build 2", "C0"])
+        #expect(recorder.events == ["setup", "proposal 0", "build 0", "A0", "A1", "proposal 1", "build 1", "A2", "proposal 2", "build 2", "C0"])
         #expect(report.constructedSearches == 2)
         #expect(report.buildOutcomes[CompositionBuildRecord(depth: 1, outcome: .failed(.bindNotFound))] == 1)
     }
@@ -87,8 +49,8 @@ struct ScopedDiagonalSchedulingTests {
     func continuationKeepsProgress() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [1, 0], recorder: recorder) { index in
-            guard index == 1 else {
+        let reducer = fixture.pool(count: 2, recorder: recorder) { index in
+            guard index == 0 else {
                 return fixture.search("B", recorder: recorder)
             }
             return .search(
@@ -102,27 +64,31 @@ struct ScopedDiagonalSchedulingTests {
 
         _ = fixture.run(reducer)
 
-        #expect(recorder.emissions == ["first0", "B0", "first1", "B1", "second0", "B2", "second1"])
+        #expect(recorder.emissions == ["first0", "first1", "B0", "second0", "B1", "second1", "B2"])
     }
 
-    @Test("Nested pools schedule independently without adding their costs to the parent")
+    @Test("Nested pools schedule independently without adding their grades to the parent")
     func nestedPoolsStayLocal() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [0, 1], recorder: recorder) { index in
+        let reducer = fixture.pool(count: 2, recorder: recorder) { index in
             guard index == 0 else {
                 return fixture.search("B", values: [20], recorder: recorder)
             }
-            return fixture.pool(costs: [100, 101], recorder: recorder) { childIndex in
-                fixture.search(["X", "Y"][childIndex], values: [10, 11], recorder: recorder)
+            // Two failed builds start the child's only search at grade 2, which would put B ahead of X1 if it reached the parent.
+            return fixture.pool(count: 3, recorder: recorder) { childIndex in
+                guard childIndex == 2 else {
+                    return .fail(.bindNotFound)
+                }
+                return fixture.search("X", values: [10, 11], recorder: recorder)
             }
         }
 
         let report = fixture.run(reducer)
 
-        #expect(recorder.emissions == ["X0", "X1", "B0", "Y0", "Y1"])
+        #expect(recorder.emissions == ["X0", "X1", "B0"])
         #expect(report.constructedSearches == 2)
-        #expect(report.nestedConstructedSearches == 2)
+        #expect(report.nestedConstructedSearches == 1)
     }
 
     @Test("The probe cap stops before opening another branch and finishes the pending search once")
@@ -130,7 +96,7 @@ struct ScopedDiagonalSchedulingTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 2)
-        let reducer = fixture.pool(costs: [0, 100], configuration: configuration, recorder: recorder) { index in
+        let reducer = fixture.pool(count: 2, configuration: configuration, recorder: recorder) { index in
             fixture.search(["A", "B"][index], recorder: recorder)
         }
 
@@ -148,7 +114,7 @@ struct ScopedDiagonalSchedulingTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: 1, totalProbeCap: 0)
-        let reducer = fixture.pool(costs: [0, 1, 2], configuration: configuration, recorder: recorder) { index in
+        let reducer = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { index in
             guard index > 0 else {
                 return .fail(.bindNotFound)
             }
@@ -173,7 +139,7 @@ struct ScopedDiagonalSchedulingTests {
             totalProbeCap: 0,
             chainLimits: ScopedChainLimits(maxBuildsPerStart: 2, poolCapacity: 2)
         )
-        let reducer = fixture.pool(costs: [0, 1, 2], configuration: configuration, recorder: recorder) { _ in
+        let reducer = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { _ in
             .fail(.bindNotFound)
         }
 
@@ -194,7 +160,7 @@ struct ScopedDiagonalSchedulingTests {
             totalProbeCap: 0,
             deliversUniformFeedback: uniform
         )
-        let reducer = fixture.pool(costs: [0, 0], configuration: configuration, recorder: recorder) { index in
+        let reducer = fixture.pool(count: 2, configuration: configuration, recorder: recorder) { index in
             fixture.search(["A", "B"][index], values: index == 0 ? [10, 10] : [20, 20], recorder: recorder)
         }
 
@@ -209,7 +175,7 @@ struct ScopedDiagonalSchedulingTests {
     func acceptanceStopsPool() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [0, 1], recorder: recorder) { index in
+        let reducer = fixture.pool(count: 2, recorder: recorder) { index in
             fixture.search(
                 ["A", "B"][index],
                 values: [0],
@@ -231,7 +197,7 @@ struct ScopedDiagonalSchedulingTests {
     func deadlineStopsPool() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let reducer = fixture.pool(costs: [0, 1], recorder: recorder) { index in
+        let reducer = fixture.pool(count: 2, recorder: recorder) { index in
             fixture.search(["A", "B"][index], recorder: recorder)
         }
         let deadline = ScopedDeadline(start: 0, budget: 1, clock: { recorder.propertyCalls == 0 ? 0 : 1 })
@@ -274,12 +240,12 @@ struct ScopedDiagonalSchedulingTests {
         #expect(result.stats.liftAttemptsByEncoder[.boundValueSearch, default: 0] > 0)
     }
 
-    @Test("The original turn-based policy remains available and ignores branch costs")
+    @Test("The turn-based policy builds every branch before resuming any, with fixed turns")
     func turnBasedComparison() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ScopedChoiceConfiguration(probesPerSearchTurn: 2, searchBudget: nil, totalProbeCap: 0, scheduling: .turnBased)
-        let reducer = fixture.pool(costs: [2, 0, 1], configuration: configuration, recorder: recorder) { index in
+        let reducer = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { index in
             fixture.search(["A", "B", "C"][index], recorder: recorder)
         }
 
@@ -289,10 +255,206 @@ struct ScopedDiagonalSchedulingTests {
     }
 }
 
+@Suite("Scoped lazy proposals")
+struct ScopedLazyProposalTests {
+    @Test("The proposal factory runs once, when the first branch is selected, under either policy", arguments: [ScopedChoiceScheduling.diagonal, .turnBased])
+    func factoryRunsOnceAtFirstSelection(scheduling: ScopedChoiceScheduling) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let configuration = ScopedChoiceConfiguration(probesPerSearchTurn: 2, searchBudget: nil, totalProbeCap: 0, scheduling: scheduling)
+        let reducer = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { index in
+            fixture.search(["A", "B", "C"][index], recorder: recorder)
+        }
+        #expect(recorder.factoryCalls == 0)
+        #expect(recorder.proposals.isEmpty)
+
+        let report = fixture.run(reducer)
+
+        let expectedEmissions = switch scheduling {
+            case .diagonal:
+                ["A0", "A1", "B0", "A2", "B1", "C0", "B2", "C1", "C2"]
+            case .turnBased:
+                ["A0", "A1", "B0", "B1", "C0", "C1", "A2", "B2", "C2"]
+        }
+        #expect(recorder.emissions == expectedEmissions)
+        #expect(recorder.builds == [0, 1, 2])
+        #expect(recorder.factoryCalls == 1)
+        #expect(recorder.proposals == [0, 1, 2])
+        #expect(report.counts.emitted == 9)
+    }
+
+    @Test("A probe cap constructs only the reached prefix, without looking ahead", arguments: [ScopedChoiceScheduling.diagonal, .turnBased])
+    func probeCapDoesNotConstructLaterProposals(scheduling: ScopedChoiceScheduling) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let configuration = ScopedChoiceConfiguration(probesPerSearchTurn: 2, searchBudget: nil, totalProbeCap: 2, scheduling: scheduling)
+        let reducer = fixture.pool(count: 1_000_000, configuration: configuration, recorder: recorder) { _ in
+            fixture.search("A", recorder: recorder)
+        }
+
+        _ = fixture.run(reducer)
+
+        #expect(recorder.events == ["setup", "proposal 0", "build 0", "A0", "A1"])
+        #expect(recorder.proposalRequests == 1)
+        #expect(recorder.finished == ["A": ["passed"]])
+    }
+
+    @Test("Zero search or build allowances do not initialize the cursor", arguments: [0, 1, 2])
+    func zeroBudgetsAvoidSetup(limit: Int) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let configuration = ScopedChoiceConfiguration(
+            probesPerSearchTurn: nil,
+            searchBudget: limit == 0 ? 0 : nil,
+            totalProbeCap: 0,
+            chainLimits: limit == 0 ? nil : ScopedChainLimits(maxBuildsPerStart: limit == 1 ? 0 : 1, poolCapacity: limit == 2 ? 0 : 1)
+        )
+        let reducer = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { _ in
+            fixture.search("unused", recorder: recorder)
+        }
+
+        let report = fixture.run(reducer)
+
+        #expect(recorder.factoryCalls == 0)
+        #expect(recorder.proposalRequests == 0)
+        #expect(report.constructedSearches == 0)
+    }
+
+    @Test("A failed build and an empty search consume only their own proposals", arguments: [ScopedChoiceScheduling.diagonal, .turnBased])
+    func searchBudgetStopsProposalConstruction(scheduling: ScopedChoiceScheduling) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let configuration = ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: 1, totalProbeCap: 0, scheduling: scheduling)
+        let reducer = fixture.pool(count: 1_000_000, configuration: configuration, recorder: recorder) { index in
+            guard index > 0 else {
+                return .fail(.bindNotFound)
+            }
+            return fixture.search("empty", values: [], recorder: recorder)
+        }
+
+        let report = fixture.run(reducer)
+
+        #expect(recorder.proposals == [0, 1])
+        #expect(recorder.proposalRequests == 2)
+        #expect(report.constructedSearches == 1)
+        #expect(recorder.finished == ["empty": ["initial"]])
+    }
+
+    @Test("The chain build cap is checked before constructing another prefix", arguments: [ScopedChoiceScheduling.diagonal, .turnBased])
+    func buildBudgetStopsProposalConstruction(scheduling: ScopedChoiceScheduling) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let configuration = ScopedChoiceConfiguration(
+            probesPerSearchTurn: nil,
+            searchBudget: nil,
+            totalProbeCap: 0,
+            chainLimits: ScopedChainLimits(maxBuildsPerStart: 2, poolCapacity: 2),
+            scheduling: scheduling
+        )
+        let reducer = fixture.pool(count: 1_000_000, configuration: configuration, recorder: recorder) { _ in
+            .fail(.bindNotFound)
+        }
+
+        let report = fixture.run(reducer)
+
+        #expect(recorder.proposals == [0, 1])
+        #expect(recorder.proposalRequests == 2)
+        #expect(report.buildOutcomes[CompositionBuildRecord(depth: 1, outcome: .failed(.bindNotFound))] == 2)
+    }
+
+    @Test("A child cursor's exhaustion spends no shared build allowance", arguments: [ScopedChoiceScheduling.diagonal, .turnBased])
+    func exhaustionDoesNotSpendBuilds(scheduling: ScopedChoiceScheduling) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let configuration = ScopedChoiceConfiguration(
+            probesPerSearchTurn: nil,
+            searchBudget: nil,
+            totalProbeCap: 0,
+            chainLimits: ScopedChainLimits(maxBuildsPerStart: 2, poolCapacity: 3),
+            scheduling: scheduling
+        )
+        let reducer = fixture.pool(count: 2, configuration: configuration, recorder: recorder) { index in
+            guard index > 0 else {
+                return fixture.pool(count: 1, configuration: configuration, recorder: recorder) { _ in
+                    .fail(.bindNotFound)
+                }
+            }
+            return fixture.search("B", values: [10], recorder: recorder)
+        }
+
+        let report = fixture.run(reducer)
+
+        #expect(recorder.builds == [0, 0, 1])
+        #expect(recorder.emissions == ["B0"])
+        #expect(report.constructedSearches == 2)
+        #expect(report.buildOutcomes[CompositionBuildRecord(depth: 2, outcome: .failed(.bindNotFound))] == 1)
+    }
+
+    @Test("Acceptance leaves later prefixes unconstructed")
+    func acceptanceStopsProposalConstruction() throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let reducer = fixture.pool(count: 1_000_000, recorder: recorder) { _ in
+            fixture.search(
+                "A",
+                values: [0],
+                recorder: recorder,
+                configuration: ScopedSearchConfiguration(acceptance: .stop, requiresExactDecoder: false, reportedMutation: nil)
+            )
+        }
+
+        let report = fixture.run(reducer, property: { _ in false })
+
+        #expect(recorder.proposals == [0])
+        #expect(recorder.proposalRequests == 1)
+        #expect(report.counts.accepted == 1)
+        #expect(recorder.finished == ["A": ["accepted"]])
+    }
+
+    @Test("Deadlines prevent cursor setup or subsequent prefix construction", arguments: [false, true])
+    func deadlineStopsProposalConstruction(startsExpired: Bool) throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let reducer = fixture.pool(count: 1_000_000, recorder: recorder) { _ in
+            fixture.search("A", recorder: recorder)
+        }
+        let deadline = ScopedDeadline(start: 0, budget: 1, clock: { startsExpired || recorder.propertyCalls > 0 ? 1 : 0 })
+
+        _ = fixture.run(reducer, deadline: deadline, property: { _ in
+            recorder.propertyCalls += 1
+            return true
+        })
+
+        #expect(recorder.factoryCalls == (startsExpired ? 0 : 1))
+        #expect(recorder.proposals == (startsExpired ? [] : [0]))
+        #expect(recorder.proposalRequests == (startsExpired ? 0 : 1))
+    }
+
+    @Test("Interpreting the same reducer again starts an independent proposal cursor")
+    func repeatedInterpretationStartsFresh() throws {
+        let fixture = try SchedulingFixture()
+        let recorder = SchedulingRecorder()
+        let reducer = fixture.pool(count: 2, recorder: recorder) { index in
+            fixture.search(["A", "B"][index], values: [10], recorder: recorder)
+        }
+
+        let first = fixture.run(reducer)
+        let second = fixture.run(reducer)
+
+        #expect(recorder.factoryCalls == 2)
+        #expect(recorder.proposals == [0, 1, 0, 1])
+        #expect(recorder.emissions == ["A0", "B0", "A0", "B0"])
+        #expect(first.counts == second.counts)
+    }
+}
+
 // MARK: - Fixtures
 
 /// Records actual branch construction, candidate emission, feedback, and finalization across interleaved searches.
 private final class SchedulingRecorder {
+    var factoryCalls = 0
+    var proposalRequests = 0
+    var proposals: [Int] = []
     var builds: [Int] = []
     var emissions: [String] = []
     var events: [String] = []
@@ -315,6 +477,27 @@ private final class SchedulingRecorder {
             case .rejected:
                 "rejected"
         }
+    }
+}
+
+/// Exposes cursor setup and prefix construction separately from branch builds, including requests that discover exhaustion.
+private struct RecordingProposalCursor: ScopedProposalCursor {
+    let count: Int
+    let base: ChoiceSequence
+    let recorder: SchedulingRecorder
+    var position = 0
+
+    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+        recorder.proposalRequests += 1
+        guard position < count else {
+            return nil
+        }
+        recorder.proposals.append(position)
+        recorder.events.append("proposal \(position)")
+        buffer = base
+        buffer[0] = buffer[0].withBitPattern(UInt64(position))
+        position += 1
+        return LiftProposal(prefix: buffer, mutation: .leafValues([]))
     }
 }
 
@@ -358,25 +541,28 @@ private struct SchedulingFixture {
     }
 
     func pool(
-        costs: [UInt],
+        count: Int,
         configuration: ScopedChoiceConfiguration = ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
         recorder: SchedulingRecorder,
         build: @escaping (Int) -> ScopedReducer
     ) -> ScopedReducer {
-        let branches = costs.enumerated().map { index, cost in
-            var prefix = sequence
-            prefix[0] = prefix[0].withBitPattern(UInt64(index))
-            return ScopedBranch(proposal: LiftProposal(prefix: prefix, mutation: .leafValues([])), cost: cost)
-        }
-        return .propose(branches, configuration: configuration) { proposal in
-            guard let value = proposal.prefix[0].value else {
-                preconditionFailure("Every fixture prefix starts with a value entry")
+        .propose(
+            {
+                recorder.factoryCalls += 1
+                recorder.events.append("setup")
+                return RecordingProposalCursor(count: count, base: sequence, recorder: recorder)
+            },
+            configuration: configuration,
+            then: { proposal in
+                guard let value = proposal.prefix[0].value else {
+                    preconditionFailure("Every fixture prefix starts with a value entry")
+                }
+                let index = Int(value.choice.bitPattern64)
+                recorder.builds.append(index)
+                recorder.events.append("build \(index)")
+                return build(index)
             }
-            let index = Int(value.choice.bitPattern64)
-            recorder.builds.append(index)
-            recorder.events.append("build \(index)")
-            return build(index)
-        }
+        )
     }
 
     func search(

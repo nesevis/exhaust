@@ -16,27 +16,23 @@ enum ScopedBoundExchangeEncoder: ScopedEncoder {
     static let rebuildsAfterAcceptance = false
 
     static func reducer(_ exchange: BoundExchangeScope, input scope: ScopedEncoderInput) -> ScopedReducer {
-        guard var cursor = BoundExchangeProposalCursor(graph: scope.graph, baseSequence: scope.baseSequence, exchange: exchange) else {
-            return .pure(.finished)
-        }
-        var buffer = scope.baseSequence
-        var branches: [ScopedBranch] = []
-        while let proposal = cursor.next(into: &buffer) {
-            branches.append(ScopedBranch(proposal: proposal, cost: UInt(branches.count)))
-        }
         let configuration = ScopedChoiceConfiguration(
             probesPerSearchTurn: nil,
             searchBudget: scope.tuning.keptExchangeLiftBudget,
             totalProbeCap: 0
         )
-        return .propose(branches, configuration: configuration) { proposal in
-            .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
-                guard let lifted else {
-                    return .fail(.materializationFailed)
+        return .propose(
+            { BoundExchangeProposalCursor(graph: scope.graph, baseSequence: scope.baseSequence, exchange: exchange) },
+            configuration: configuration,
+            then: { proposal in
+                .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
+                    guard let lifted else {
+                        return .fail(.materializationFailed)
+                    }
+                    return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, exchange: exchange)
                 }
-                return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, exchange: exchange)
             }
-        }
+        )
     }
 
     /// Reads the expected sink value from the joint proposal, before locating the sink's possibly shifted position in the lifted graph. A kept lift constructs exactly one nonempty search.

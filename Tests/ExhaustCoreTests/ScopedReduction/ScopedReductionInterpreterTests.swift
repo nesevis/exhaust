@@ -21,11 +21,12 @@ struct ScopedReductionInterpreterTests {
                 sequenced
             case true:
                 .propose(
-                    [ScopedBranch(proposal: LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), cost: 0)],
-                    configuration: ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0)
-                ) { _ in
-                    sequenced
-                }
+                    { RepeatedProposals(prefix: fixture.sequence, count: 1) },
+                    configuration: ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
+                    then: { _ in
+                        sequenced
+                    }
+                )
         }
 
         let report = fixture.run(reducer)
@@ -41,18 +42,16 @@ struct ScopedReductionInterpreterTests {
     func failedBuildsStopAtDeadline() throws {
         let fixture = try InterpreterFixture()
         var branchesBuilt = 0
-        let branches = (0 ..< 4).map { index in
-            ScopedBranch(proposal: LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), cost: UInt(index))
-        }
         let reducer: ScopedReducer = .propose(
-            branches,
-            configuration: ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0)
-        ) { proposal in
-            branchesBuilt += 1
-            return .lift(proposal.prefix, fallbackTree: fixture.tree) { _ in
-                .fail(.bindNotFound)
+            { RepeatedProposals(prefix: fixture.sequence, count: 4) },
+            configuration: ScopedChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
+            then: { proposal in
+                branchesBuilt += 1
+                return .lift(proposal.prefix, fallbackTree: fixture.tree) { _ in
+                    .fail(.bindNotFound)
+                }
             }
-        }
+        )
 
         // Expires once the second branch has started building, so only the first branch's lift runs.
         let report = fixture.run(reducer, deadline: ScopedDeadline(start: 0, budget: 2, clock: { UInt64(branchesBuilt) }))
@@ -102,5 +101,21 @@ private struct InterpreterFixture {
                 deadline: deadline
             )
         ).report
+    }
+}
+
+/// Proposes the same prefix `count` times.
+private struct RepeatedProposals: ScopedProposalCursor {
+    let prefix: ChoiceSequence
+    let count: Int
+    var emitted = 0
+
+    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+        guard emitted < count else {
+            return nil
+        }
+        emitted += 1
+        buffer = prefix
+        return LiftProposal(prefix: buffer, mutation: .leafValues([]))
     }
 }

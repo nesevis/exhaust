@@ -16,26 +16,24 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
     static let rebuildsAfterAcceptance = false
 
     static func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {
-        guard let pivot = pivotSeeds(pivotScope: pivotScope, scope: scope, maxTransplants: scope.tuning.maxPivotTransplants) else {
-            return .pure(.finished)
-        }
-        let branches = pivot.seeds.enumerated().map { index, seed in
-            ScopedBranch(proposal: LiftProposal(prefix: seed, mutation: pivot.mutation), cost: UInt(index))
-        }
         let configuration = ScopedChoiceConfiguration(
             probesPerSearchTurn: nil,
             searchBudget: nil,
             totalProbeCap: 0,
             deliversUniformFeedback: true
         )
-        return .propose(branches, configuration: configuration) { proposal in
-            .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
-                guard let lifted else {
-                    return .fail(.materializationFailed)
+        return .propose(
+            { PivotProposals(pivotScope: pivotScope, scope: scope) },
+            configuration: configuration,
+            then: { proposal in
+                .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
+                    guard let lifted else {
+                        return .fail(.materializationFailed)
+                    }
+                    return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, pivotScope: pivotScope)
                 }
-                return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, pivotScope: pivotScope)
             }
-        }
+        )
     }
 
     /// Rejects lengthening before graph construction, then reconciles the bind, which encloses the pivoted pick and so keeps its node ID. One search emits the lifted seed before covering its bound range.
@@ -72,53 +70,85 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
         }
     }
 
-    /// The plain pivot candidate followed by its same-family transplants, with the mutation every seed reports. Nil when the pivot candidate cannot be built.
-    private static func pivotSeeds(
-        pivotScope: BindPivotScope,
-        scope: ScopedEncoderInput,
-        maxTransplants: Int
-    ) -> (seeds: [ChoiceSequence], mutation: ProjectedMutation)? {
-        let graph = scope.graph
-        guard pivotScope.bindNodeID < graph.nodes.count,
-              case let .bind(bindMetadata) = graph.nodes[pivotScope.bindNodeID].kind,
-              graph.nodes[pivotScope.bindNodeID].children.count > bindMetadata.boundChildIndex,
-              let pickRange = graph.nodes[pivotScope.pickNodeID].positionRange,
-              let pivotCandidate = ScopedPivotCandidates.branchPivotCandidate(
-                  pickNodeID: pivotScope.pickNodeID,
-                  targetBranchID: pivotScope.targetBranchID,
-                  sequence: scope.baseSequence,
-                  graph: graph
-              )
-        else {
-            return nil
+    /// Emits the plain pivot first, discovers donor IDs only when a transplant is reached, and expands only that donor's sequence. All prefixes use the original dispatched snapshot even if another branch accepts a candidate.
+    private struct PivotProposals: ScopedProposalCursor {
+        let scope: ScopedEncoderInput
+        let pivotCandidate: ChoiceSequence
+        let mutation: ProjectedMutation
+        let boundChildID: Int
+        let boundRange: ClosedRange<Int>?
+        let shiftedBoundRange: ClosedRange<Int>?
+        var emittedPivot = false
+        var donorIDs: [Int]?
+        var donorIndex = 0
+
+        init?(pivotScope: BindPivotScope, scope: ScopedEncoderInput) {
+            let graph = scope.graph
+            guard pivotScope.bindNodeID < graph.nodes.count,
+                  case let .bind(bindMetadata) = graph.nodes[pivotScope.bindNodeID].kind,
+                  graph.nodes[pivotScope.bindNodeID].children.count > bindMetadata.boundChildIndex,
+                  let pickRange = graph.nodes[pivotScope.pickNodeID].positionRange,
+                  let pivotCandidate = ScopedPivotCandidates.branchPivotCandidate(
+                      pickNodeID: pivotScope.pickNodeID,
+                      targetBranchID: pivotScope.targetBranchID,
+                      sequence: scope.baseSequence,
+                      graph: graph
+                  )
+            else {
+                return nil
+            }
+            self.scope = scope
+            self.pivotCandidate = pivotCandidate
+            mutation = .branchSelected(pickNodeID: pivotScope.pickNodeID, newSelectedID: pivotScope.targetBranchID)
+            boundChildID = graph.nodes[pivotScope.bindNodeID].children[bindMetadata.boundChildIndex]
+            boundRange = graph.nodes[boundChildID].positionRange
+            shiftedBoundRange = boundRange.flatMap { range in
+                guard range.lowerBound > pickRange.upperBound else {
+                    return nil
+                }
+                let shift = pivotCandidate.count - scope.baseSequence.count
+                return (range.lowerBound + shift) ... (range.upperBound + shift)
+            }
         }
 
-        let mutation = ProjectedMutation.branchSelected(
-            pickNodeID: pivotScope.pickNodeID,
-            newSelectedID: pivotScope.targetBranchID
-        )
-        var seeds = [pivotCandidate]
-
-        let boundChildID = graph.nodes[pivotScope.bindNodeID].children[bindMetadata.boundChildIndex]
-        if let boundRange = graph.nodes[boundChildID].positionRange, boundRange.lowerBound > pickRange.upperBound {
-            let shift = pivotCandidate.count - scope.baseSequence.count
-            let shiftedBoundRange = (boundRange.lowerBound + shift) ... (boundRange.upperBound + shift)
-            for descendantID in MinimizationQuery.transplantDonors(boundChildID: boundChildID, boundRange: boundRange, graph: graph, maxTransplants: maxTransplants) {
-                guard let donorRange = graph.nodes[descendantID].positionRange else {
+        mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+            if emittedPivot == false {
+                emittedPivot = true
+                buffer = pivotCandidate
+                return LiftProposal(prefix: buffer, mutation: mutation)
+            }
+            guard let boundRange, let shiftedBoundRange else {
+                return nil
+            }
+            if donorIDs == nil {
+                donorIDs = MinimizationQuery.transplantDonors(
+                    boundChildID: boundChildID,
+                    boundRange: boundRange,
+                    graph: scope.graph,
+                    maxTransplants: scope.tuning.maxPivotTransplants
+                )
+            }
+            guard let donorIDs else {
+                return nil
+            }
+            while donorIndex < donorIDs.count {
+                let descendantID = donorIDs[donorIndex]
+                donorIndex += 1
+                guard let donorRange = scope.graph.nodes[descendantID].positionRange else {
                     continue
                 }
                 let expanded = ScopedPivotCandidates.expandDepthZeroLeaves(
                     Array(scope.baseSequence[donorRange.lowerBound ... donorRange.upperBound]),
                     donorNodeID: descendantID,
                     donorRangeStart: donorRange.lowerBound,
-                    graph: graph
+                    graph: scope.graph
                 )
-                var seed = pivotCandidate
-                seed.replaceSubrange(shiftedBoundRange, with: expanded)
-                seeds.append(seed)
+                buffer = pivotCandidate
+                buffer.replaceSubrange(shiftedBoundRange, with: expanded)
+                return LiftProposal(prefix: buffer, mutation: mutation)
             }
+            return nil
         }
-        return (seeds: seeds, mutation: mutation)
     }
 }
 
