@@ -22,7 +22,7 @@ enum ScopedBoundExchangeEncoder: ScopedEncoder {
         var buffer = scope.baseSequence
         var branches: [ScopedBranch] = []
         while let proposal = cursor.next(into: &buffer) {
-            branches.append(ScopedBranch(proposal: proposal, cost: branches.count))
+            branches.append(ScopedBranch(proposal: proposal, cost: UInt(branches.count)))
         }
         let configuration = ScopedChoiceConfiguration(
             probesPerSearchTurn: nil,

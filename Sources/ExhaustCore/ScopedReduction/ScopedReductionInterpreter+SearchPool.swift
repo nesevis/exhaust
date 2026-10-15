@@ -61,7 +61,7 @@ extension ScopedReductionInterpreter {
                         guard context.isExpired == false else {
                             return .deadline
                         }
-                        // The branch continues with the search's outcome, in the same member, so its turn carries on.
+                        // The branch keeps its grade and remaining turn across sequential searches. Exhausting a search emits no candidate.
                         switch buildBranch(slot.continuation(.outcome(slot.outcome)), depth: pool.depth, context: &context) {
                             case let .built(next):
                                 member.source = next
@@ -100,6 +100,8 @@ extension ScopedReductionInterpreter {
                     }
                 case .vacant:
                     preconditionFailure("A search pool member must hold a search or a level")
+                case .unbuilt:
+                    preconditionFailure("A selected branch must be built before requesting a candidate")
             }
 
             member.probesRemainingInTurn -= 1
@@ -109,7 +111,10 @@ extension ScopedReductionInterpreter {
                 finishAll(&pool, context: &context)
                 return .emitted(evaluation)
             }
-            if member.probesRemainingInTurn == 0 {
+            if pool.scheduling == .diagonal {
+                member.emitted += 1
+                pool.diagonalQueue.insert(member)
+            } else if member.probesRemainingInTurn == 0 {
                 pool.suspended.append(member)
             } else {
                 pool.active = member
@@ -146,8 +151,24 @@ extension ScopedReductionInterpreter {
 
     // MARK: - Branches
 
-    /// Builds the next branch's member, or resumes the oldest suspended member once branches are exhausted or over budget.
+    /// Selects the next member under the pool's policy. Diagonal scheduling compares unopened branches with suspended members before spending a build; failed builds return to selection rather than immediately building a more expensive branch.
     private static func nextMember(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
+        if pool.scheduling == .diagonal {
+            while let member = pool.diagonalQueue.popFirst() {
+                guard case .unbuilt = member.source else {
+                    return .built(member)
+                }
+                switch buildMember(branchIndex: member.branchIndex, pool: &pool, context: &context) {
+                    case let .built(built):
+                        return .built(built)
+                    case .deadline:
+                        return .deadline
+                    case .nothing:
+                        continue
+                }
+            }
+            return .nothing
+        }
         switch buildNextBranch(&pool, context: &context) {
             case let .built(member):
                 return .built(member)
@@ -176,38 +197,69 @@ extension ScopedReductionInterpreter {
     /// Branches that fail construction are built back to back without a candidate evaluated in between, so the deadline is checked before each build.
     private static func buildNextBranch(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
         while pool.branchesExhausted == false, pool.constructed < pool.searchBudget {
-            guard let continuation = pool.continuation, pool.nextBranch < pool.branches.count else {
+            guard pool.nextBranch < pool.branches.count else {
                 pool.branchesExhausted = true
                 return .nothing
             }
-            guard context.isExpired == false else {
-                return .deadline
-            }
-            let branch = pool.branches[pool.nextBranch]
+            let branchIndex = pool.nextBranch
             pool.nextBranch += 1
-            if let limits = pool.chainLimits {
-                guard pool.buildsThisStart < limits.maxBuildsPerStart, consumeBuildPool(capacity: limits.poolCapacity, context: &context) else {
-                    pool.branchesExhausted = true
-                    return .nothing
-                }
+            switch buildMember(branchIndex: branchIndex, pool: &pool, context: &context) {
+                case let .built(member):
+                    return .built(member)
+                case .deadline:
+                    return .deadline
+                case .nothing:
+                    continue
             }
-            pool.buildsThisStart += 1
-            let built = buildBranch(continuation(.proposal(branch.proposal)), depth: pool.depth, context: &context)
-            if case .deadline = built {
-                return .deadline
-            }
-            guard case let .built(source) = built else {
-                continue
-            }
-            pool.constructed += 1
-            if pool.depth == 0 {
-                context.report.constructedSearches += 1
-            } else {
-                context.report.nestedConstructedSearches += 1
-            }
-            return .built(ScopedSearchPool.Member(source: source, probesRemainingInTurn: pool.turn))
         }
         return .nothing
+    }
+
+    /// Builds one selected branch within the existing search and chain budgets. Empty searches count as constructed; failed builds consume only build limits.
+    private static func buildMember(
+        branchIndex: Int,
+        pool: inout ScopedSearchPool,
+        context: inout Context
+    ) -> BuildResult<ScopedSearchPool.Member> {
+        guard pool.branchesExhausted == false, pool.constructed < pool.searchBudget else {
+            return .nothing
+        }
+        guard let continuation = pool.continuation else {
+            preconditionFailure("Only the root pool has no continuation, and it starts with its branches exhausted")
+        }
+        guard context.isExpired == false else {
+            return .deadline
+        }
+        if let limits = pool.chainLimits {
+            guard pool.buildsThisStart < limits.maxBuildsPerStart, consumeBuildPool(capacity: limits.poolCapacity, context: &context) else {
+                pool.branchesExhausted = true
+                return .nothing
+            }
+        }
+        pool.buildsThisStart += 1
+        let branch = pool.branches[branchIndex]
+        let built = buildBranch(continuation(.proposal(branch.proposal)), depth: pool.depth, context: &context)
+        let source: ScopedSearchPool.Source
+        switch built {
+            case let .built(builtSource):
+                source = builtSource
+            case .nothing:
+                return .nothing
+            case .deadline:
+                return .deadline
+        }
+        pool.constructed += 1
+        if pool.depth == 0 {
+            context.report.constructedSearches += 1
+        } else {
+            context.report.nestedConstructedSearches += 1
+        }
+        return .built(ScopedSearchPool.Member(
+            source: source,
+            probesRemainingInTurn: pool.turn,
+            branchIndex: branchIndex,
+            cost: pool.scheduling == .diagonal ? branch.cost : 0
+        ))
     }
 
     /// Takes one build from the chain's shared build pool, creating it on first use.
@@ -303,6 +355,9 @@ extension ScopedReductionInterpreter {
         for index in suspended.indices {
             finishMember(&suspended[index], context: &context)
         }
+        while var member = pool.diagonalQueue.popFirst() {
+            finishMember(&member, context: &context)
+        }
     }
 
     private static func finishMember(_ member: inout ScopedSearchPool.Member, context: inout Context) {
@@ -313,7 +368,7 @@ extension ScopedReductionInterpreter {
                 finishSearch(slot, pending: slot.feedback, context: &context)
             case var .level(child):
                 finishAll(&child, context: &context)
-            case .vacant:
+            case .vacant, .unbuilt:
                 break
         }
     }
@@ -379,6 +434,8 @@ struct ScopedSearchPool {
 
     /// Where a member's candidates come from. A search's slot is a reference that is only ever held by its member; a nested level is boxed.
     enum Source {
+        /// A diagonal queue entry whose proposal is materialized only when its grade is selected.
+        case unbuilt
         case search(SearchSlot)
         indirect case level(ScopedSearchPool)
         /// Held only while the member's source is moved out to advance it.
@@ -388,6 +445,26 @@ struct ScopedSearchPool {
     struct Member {
         var source: Source
         var probesRemainingInTurn: Int
+        let branchIndex: Int
+        var cost: UInt = 0
+        /// Candidates this member has emitted under diagonal scheduling.
+        var emitted: UInt = 0
+
+        static func precedes(_ first: Self, _ second: Self) -> Bool {
+            let firstGrade = first.grade
+            let secondGrade = second.grade
+            if firstGrade != secondGrade {
+                return firstGrade < secondGrade
+            }
+            return first.branchIndex < second.branchIndex
+        }
+
+        /// Cost plus emitted candidates as a carry and a sum, so a `UInt.max` cost still advances.
+        private var grade: (carry: UInt, sum: UInt) {
+            let (sum, overflow) = cost.addingReportingOverflow(emitted)
+            let carry: UInt = overflow ? 1 : 0
+            return (carry, sum)
+        }
     }
 
     let branches: [ScopedBranch]
@@ -397,6 +474,7 @@ struct ScopedSearchPool {
     let depth: Int?
     /// Probes a member emits before it is suspended behind the others.
     let turn: Int
+    let scheduling: ScopedChoiceScheduling
     let searchBudget: Int
     let totalProbeCap: Int
     let chainLimits: ScopedChainLimits?
@@ -411,6 +489,8 @@ struct ScopedSearchPool {
     /// Members waiting for another turn, oldest first from ``suspendedHead``. Resumed entries are vacated, and the vacated prefix is dropped once it fills half the storage, so storage stays proportional to live members while resuming stays amortized constant time.
     var suspended: [Member] = []
     var suspendedHead = 0
+    /// One entry per unopened or suspended branch. Nested levels carry their parent's local grade, not their own next grade.
+    var diagonalQueue = ScopePriorityQueue<Member>(precedes: Member.precedes)
 
     init(
         branches: [ScopedBranch],
@@ -421,11 +501,17 @@ struct ScopedSearchPool {
         self.branches = branches
         self.continuation = continuation
         self.depth = depth
-        turn = configuration.probesPerSearchTurn ?? .max
+        scheduling = configuration.scheduling
+        turn = scheduling == .diagonal ? 1 : configuration.probesPerSearchTurn ?? .max
         searchBudget = configuration.searchBudget ?? .max
         totalProbeCap = configuration.totalProbeCap
         chainLimits = configuration.chainLimits
         deliversUniformFeedback = configuration.deliversUniformFeedback
+        if scheduling == .diagonal {
+            for (index, branch) in branches.enumerated() {
+                diagonalQueue.insert(Member(source: .unbuilt, probesRemainingInTurn: 1, branchIndex: index, cost: branch.cost))
+            }
+        }
     }
 
     /// A pool holding only the root branch, built from the encoder's reducer.
@@ -434,11 +520,12 @@ struct ScopedSearchPool {
         continuation = nil
         depth = nil
         turn = .max
+        scheduling = .turnBased
         searchBudget = 0
         totalProbeCap = 0
         chainLimits = nil
         deliversUniformFeedback = false
         branchesExhausted = true
-        active = Member(source: root, probesRemainingInTurn: .max)
+        active = Member(source: root, probesRemainingInTurn: .max, branchIndex: 0)
     }
 }

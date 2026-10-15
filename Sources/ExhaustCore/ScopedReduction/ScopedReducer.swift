@@ -3,97 +3,12 @@
 //  Exhaust
 //
 
-// MARK: - Results
+// MARK: - Academic Background
 
-/// The answer an interpreter gives a ``ScopedReducer`` request.
-///
-/// A closed vocabulary rather than `Any`: every value lives in the choice substrate, so the encoder's reducer is an ordinary value even while suspended, and can be copied at a `propose`. Authors never match these cases directly; the verbs on ``ScopedReducer`` match the case their request produces and trap on any other, which can only be an interpreter fault.
-enum ScopedReductionResult {
-    /// Answers `propose` with one branch's proposal.
-    case proposal(LiftProposal)
-    /// Answers `lift`. Nil when materialization produced no tree.
-    case lifted(LiftResult?)
-    /// Answers `search` once the search has finished.
-    case outcome(ScopedSearchOutcome)
-    /// The terminal value of the encoder's reducer.
-    case finished
-}
-
-// MARK: - Operations
-
-/// The requests the encoder's reducer can make.
-///
-/// `propose`, `fail`, and the per-branch cost follow Spivey's bunch operations (`⊕`, `zero`, `wrap`); `lift` and `search` are effects outside that algebra. The interpreter, not the encoder's reducer, decides the order in which `propose` branches are visited.
-enum ScopedReductionOperation {
-    /// Offers alternatives. The interpreter resumes the continuation once per branch it visits, so continuations must be re-entrant and capture only values.
-    case propose([ScopedBranch], configuration: ScopedChoiceConfiguration)
-    /// Materializes a prefix through the generator in guided mode, without running the property. `fallbackTree` resolves entries the prefix does not fix; a lift longer than `maximumSequenceCount` fails.
-    case lift(ChoiceSequence, fallbackTree: ChoiceTree, maximumSequenceCount: Int?)
-    /// Abandons the current branch. Never resumed.
-    case fail(DownstreamBuildFailure)
-    /// Runs a feedback-driven search until it finishes, then resumes with its outcome.
-    case search(any ScopedSearch, configuration: ScopedSearchConfiguration)
-}
-
-/// One alternative of a `propose`.
-///
-/// The cost orders a lawful traversal (one unit per position in the heuristic order gives diagonal order). The turn-based interpreter does not read it.
-struct ScopedBranch {
-    let proposal: LiftProposal
-    let cost: Int
-}
-
-/// Scheduling limits for one `propose` level.
-struct ScopedChoiceConfiguration {
-    /// Probes a search emits per turn; nil runs each search to exhaustion before the next branch.
-    let probesPerSearchTurn: Int?
-    /// Constructed searches, counting empty ones but not failed builds; nil is unlimited.
-    let searchBudget: Int?
-    /// Probes emitted by the level across all searches, including those of nested levels; zero is unlimited. Reaching it ends the pass.
-    let totalProbeCap: Int
-    /// Build limits for one level of a nested bind chain; nil outside chains.
-    var chainLimits: ScopedChainLimits?
-    /// Gives this level's searches one undifferentiated rejection for every outcome, including acceptances that do not end the search. Required when branches can emit the same candidate, because a cached rejection would then depend on visiting order.
-    var deliversUniformFeedback = false
-}
-
-/// Build limits for one level of a nested bind chain. The interpreter owns the shared pool: the outermost level with limits creates it, and every nested level draws from it.
-struct ScopedChainLimits {
-    /// Branches this level may build each time its parent's branch reaches it, counting builds that fail.
-    let maxBuildsPerStart: Int
-    /// Builds left to the whole chain. Read from the outermost level only.
-    let poolCapacity: Int
-}
-
-/// What the interpreter does with a search's candidates.
-struct ScopedSearchConfiguration {
-    let acceptance: ScopedAcceptance
-    /// Forces exact decoding, whatever decoder the candidate's mutation would otherwise select.
-    let requiresExactDecoder: Bool
-    /// Replaces every candidate's mutation when set. A composition reports its upstream mutation, because the downstream search's node IDs refer to the lifted graph.
-    let reportedMutation: EncoderProbe?
-
-    /// Keeps searching after an acceptance, decodes as the candidate's mutation allows, and reports each candidate's own mutation.
-    static let standard = ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
-}
-
-/// What a search does after one of its candidates is accepted.
-enum ScopedAcceptance {
-    /// Applies each acceptance to the graph in place and keeps searching. An acceptance whose mutation the graph cannot apply in place ends the pass with a rebuild.
-    case `continue`
-    /// Keeps searching after any acceptance without applying it to the graph, and rebuilds once the pass ends. For searches whose acceptances the graph cannot apply in place but whose later candidates need only the recovered sequence.
-    case rebuildAndContinue
-    /// The first acceptance ends every search. Compositions use it because an accepted lift makes every other branch's lifted graph stale.
-    case stop
-}
-
-/// Summarizes a finished search for the encoder's reducer that requested it.
-struct ScopedSearchOutcome {
-    let anyAccepted: Bool
-    let stopReason: ScopedStopReason
-    /// Probes this search alone spent.
-    let counts: ReductionProbeCounts
-}
+//
+// The split between offering alternatives and choosing their order follows Spivey, "Algebras for combinatorial search" (JFP 2009), which shows that depth-first, breadth-first, and depth-bounded search are interchangeable implementations of one set of search operators (`return`, bind, `zero`, `⊕`, and `wrap`). Encoders write programs with `propose` (`⊕`), `fail` (`zero`), and `bind` (▷), and the interpreter supplies the traversal, so turn-based and diagonal scheduling run the same encoder unchanged.
+//
+// `lift`, `search`, and the probe budgets are informed by Sepulveda-Jimenez, "Categories of Optimization Reductions" (2026), which formalizes reduce-solve-recover pipelines as composable encoder-decoder morphisms with effects and resource tracking. Here `lift` is the effectful encoding that discovers a downstream problem, `search` solves it, and resources are counted as they are spent rather than fixed in advance. Exhaust adapts the paper's certified reductions to speculative ones, where the property decides whether a recovered candidate is kept.
 
 // MARK: - Reducer
 
@@ -172,4 +87,108 @@ extension ScopedReducer {
                 .impure(operation) { continuation($0).bind(transform) }
         }
     }
+}
+
+// MARK: - Operations
+
+/// The requests the encoder's reducer can make.
+///
+/// `propose`, `fail`, and the per-branch cost follow Spivey's bunch operations (`⊕`, `zero`, `wrap`).
+/// `lift` comes from SJ's effectful reduction composition, and `search` runs the downstream solver; both are effects outside Spivey's bunch algebra.
+/// The interpreter, not the encoder's reducer, decides the order in which `propose` branches are visited.
+enum ScopedReductionOperation {
+    /// Offers alternatives. The interpreter resumes the continuation once per branch it visits, so continuations must be re-entrant and capture only values.
+    case propose([ScopedBranch], configuration: ScopedChoiceConfiguration)
+    /// Materializes a prefix through the generator in guided mode, without running the property. `fallbackTree` resolves entries the prefix does not fix; a lift longer than `maximumSequenceCount` fails.
+    case lift(ChoiceSequence, fallbackTree: ChoiceTree, maximumSequenceCount: Int?)
+    /// Abandons the current branch. Never resumed.
+    case fail(DownstreamBuildFailure)
+    /// Runs a feedback-driven search until it finishes, then resumes with its outcome.
+    case search(any ScopedSearch, configuration: ScopedSearchConfiguration)
+}
+
+/// One alternative of a `propose`.
+///
+/// The cost is the branch's starting grade under diagonal scheduling. Each emitted candidate increases its grade by one; ties keep the original branch order. Turn-based scheduling ignores the cost.
+struct ScopedBranch {
+    let proposal: LiftProposal
+    let cost: UInt
+}
+
+/// Chooses how one pool interleaves its branches, independently of any nested pool's priorities.
+enum ScopedChoiceScheduling {
+    /// Selects the smallest branch cost plus emitted candidate count, breaking ties by original branch order.
+    case diagonal
+    /// Builds new branches before resuming suspended searches in FIFO order, with a fresh turn on each resumption.
+    case turnBased
+}
+
+/// Scheduling limits for one `propose` level.
+struct ScopedChoiceConfiguration {
+    /// Probes a search emits per turn under ``ScopedChoiceScheduling/turnBased``; nil runs each search to exhaustion before the next branch. Diagonal scheduling selects again after every candidate.
+    let probesPerSearchTurn: Int?
+    /// Constructed searches, counting empty ones but not failed builds; nil is unlimited.
+    let searchBudget: Int?
+    /// Probes emitted by the level across all searches, including those of nested levels; zero is unlimited. Reaching it ends the pass.
+    let totalProbeCap: Int
+    /// Build limits for one level of a nested bind chain; nil outside chains.
+    var chainLimits: ScopedChainLimits?
+    /// Gives this level's searches one undifferentiated rejection for every outcome, including acceptances that do not end the search. Required when branches can emit the same candidate, because a cached rejection would then depend on visiting order.
+    var deliversUniformFeedback = false
+    /// Diagonal by default; the turn-based policy remains available for comparing exploration under the same budgets.
+    var scheduling: ScopedChoiceScheduling = .diagonal
+}
+
+/// Build limits for one level of a nested bind chain. The interpreter owns the shared pool: the outermost level with limits creates it, and every nested level draws from it.
+struct ScopedChainLimits {
+    /// Branches this level may build each time its parent's branch reaches it, counting builds that fail.
+    let maxBuildsPerStart: Int
+    /// Builds left to the whole chain. Read from the outermost level only.
+    let poolCapacity: Int
+}
+
+/// What the interpreter does with a search's candidates.
+struct ScopedSearchConfiguration {
+    let acceptance: ScopedAcceptance
+    /// Forces exact decoding, whatever decoder the candidate's mutation would otherwise select.
+    let requiresExactDecoder: Bool
+    /// Replaces every candidate's mutation when set. A composition reports its upstream mutation, because the downstream search's node IDs refer to the lifted graph.
+    let reportedMutation: EncoderProbe?
+
+    /// Keeps searching after an acceptance, decodes as the candidate's mutation allows, and reports each candidate's own mutation.
+    static let standard = ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+}
+
+/// What a search does after one of its candidates is accepted.
+enum ScopedAcceptance {
+    /// Applies each acceptance to the graph in place and keeps searching. An acceptance whose mutation the graph cannot apply in place ends the pass with a rebuild.
+    case `continue`
+    /// Keeps searching after any acceptance without applying it to the graph, and rebuilds once the pass ends. For searches whose acceptances the graph cannot apply in place but whose later candidates need only the recovered sequence.
+    case rebuildAndContinue
+    /// The first acceptance ends every search. Compositions use it because an accepted lift makes every other branch's lifted graph stale.
+    case stop
+}
+
+/// Summarizes a finished search for the encoder's reducer that requested it.
+struct ScopedSearchOutcome {
+    let anyAccepted: Bool
+    let stopReason: ScopedStopReason
+    /// Probes this search alone spent.
+    let counts: ReductionProbeCounts
+}
+
+// MARK: - Results
+
+/// The answer an interpreter gives a ``ScopedReducer`` request.
+///
+/// A closed vocabulary rather than `Any`: every value lives in the choice substrate, so the encoder's reducer is an ordinary value even while suspended, and can be copied at a `propose`. Authors never match these cases directly; the verbs on ``ScopedReducer`` match the case their request produces and trap on any other, which can only be an interpreter fault.
+enum ScopedReductionResult {
+    /// Answers `propose` with one branch's proposal.
+    case proposal(LiftProposal)
+    /// Answers `lift`. Nil when materialization produced no tree.
+    case lifted(LiftResult?)
+    /// Answers `search` once the search has finished.
+    case outcome(ScopedSearchOutcome)
+    /// The terminal value of the encoder's reducer.
+    case finished
 }

@@ -42,7 +42,7 @@ struct ScopedReductionInterpreterTests {
         let fixture = try InterpreterFixture()
         var branchesBuilt = 0
         let branches = (0 ..< 4).map { index in
-            ScopedBranch(proposal: LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), cost: index)
+            ScopedBranch(proposal: LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), cost: UInt(index))
         }
         let reducer: ScopedReducer = .propose(
             branches,

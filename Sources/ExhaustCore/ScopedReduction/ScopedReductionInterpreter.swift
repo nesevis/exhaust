@@ -35,7 +35,7 @@ struct ScopedPassReport {
 ///
 /// Holds no decoding logic: it asks searches for candidates, checks each against the rejection cache, has the decoder decode it, checks the result's ordering against the incumbent, and feeds the outcome back.
 ///
-/// Inside a `propose` it schedules searches in turns: a new branch is built before any suspended search resumes, and suspended searches resume in FIFO order with a fresh turn. An acceptance that ends its search, under ``ScopedAcceptance/stop`` or through a rebuild, ends every search in the pass. A branch whose pipeline reaches another `propose` becomes a nested level, which its parent schedules like any other search; a nested level's turn counts the parent's probes.
+/// Inside a `propose` it selects the branch with the smallest cost plus emitted candidate count, breaking ties by original branch order. Branches are built only when selected. The optional turn-based policy builds new branches before resuming suspended searches in FIFO order. An acceptance that ends its search, under ``ScopedAcceptance/stop`` or through a rebuild, ends every search in the pass. A branch whose pipeline reaches another `propose` becomes a nested level, scheduled like any other search: each candidate it emits advances its parent's grade, while its own priorities stay local to the child pool.
 enum ScopedReductionInterpreter {
     /// What an execution hands back to the runner.
     struct Result {

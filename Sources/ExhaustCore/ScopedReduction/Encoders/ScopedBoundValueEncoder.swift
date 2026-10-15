@@ -88,7 +88,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         ) {
             var buffer = scope.baseSequence
             while let proposal = proposals.next(into: &buffer) {
-                branches.append(ScopedBranch(proposal: proposal, cost: branches.count))
+                branches.append(ScopedBranch(proposal: proposal, cost: UInt(branches.count)))
             }
         }
         let chainLimits: ScopedChainLimits? = switch stage {
@@ -100,11 +100,14 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
                     poolCapacity: chain.buildPoolCapacity
                 )
         }
+        // The probe cap is sized for turns: two-probe turns give the controller candidate at index k its second probe after 2(k + 1) probes, where diagonal grades by index need (k + 2)(k + 3) / 2 - 1.
+        let scheduling: ScopedChoiceScheduling = totalProbeCap > 0 ? .turnBased : .diagonal
         let configuration = ScopedChoiceConfiguration(
             probesPerSearchTurn: chainLimits == nil ? nil : scope.tuning.probesPerControllerCandidateTurn,
             searchBudget: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
-            chainLimits: chainLimits
+            chainLimits: chainLimits,
+            scheduling: scheduling
         )
         return .propose(branches, configuration: configuration) { proposal in
             let reportedMutation = rootMutation ?? ScopedComposition.reshaping(proposal.mutation)

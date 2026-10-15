@@ -15,7 +15,7 @@ package struct ScopedReductionTuning: Sendable {
     /// Maximum probes a bound value scope may emit on a bind fingerprint's first dispatch of the run. Zero means uncapped.
     public var composedFirstDispatchProbeCap: Int
 
-    /// Probes each controller candidate's downstream search emits per turn in a nested bind chain before the next candidate gets a turn.
+    /// Probes each controller candidate's downstream search emits per turn in a nested bind chain before the next candidate gets a turn. Applies only under ``ScopedChoiceScheduling/turnBased``; diagonal scheduling selects again after every candidate.
     public var probesPerControllerCandidateTurn: Int
 
     /// Downstream builds one dispatch of a nested bind chain of three or fewer searches may spend across all its searches, counting failed builds and builds whose search emits nothing. Each build materializes the generator, and nesting multiplies them, so the chain root owns one pool for the whole chain.

@@ -20,7 +20,7 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
             return .pure(.finished)
         }
         let branches = pivot.seeds.enumerated().map { index, seed in
-            ScopedBranch(proposal: LiftProposal(prefix: seed, mutation: pivot.mutation), cost: index)
+            ScopedBranch(proposal: LiftProposal(prefix: seed, mutation: pivot.mutation), cost: UInt(index))
         }
         let configuration = ScopedChoiceConfiguration(
             probesPerSearchTurn: nil,
