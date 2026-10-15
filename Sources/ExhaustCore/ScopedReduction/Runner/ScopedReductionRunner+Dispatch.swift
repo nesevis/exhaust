@@ -271,7 +271,7 @@ extension ScopedReductionRunner {
         swap(&executionGraph, &graph)
         var executionRejectCache: Set<UInt64> = []
         swap(&executionRejectCache, &rejectCache)
-        let result = ScopedReductionInterpreter.run(
+        let result = ScopedReductionInterpreter.reduce(
             scopedReducer,
             context: ScopedReductionInterpreter.Context(
                 incumbent: incumbent,

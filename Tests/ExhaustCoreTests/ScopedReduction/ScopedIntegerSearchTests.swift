@@ -110,7 +110,7 @@ struct ScopedIntegerSearchTests {
 
 // MARK: - Fixture
 
-/// Value search over a single leaf whose property fails on `fails`, with a deadline that expires once the property fails on a value satisfying `expires`, before the search is pulled again to learn of the acceptance.
+/// Value search over a single leaf whose property fails on `fails`, with a deadline that expires once the property fails on a value satisfying `expires`, before the search is asked for another candidate and learns of the acceptance.
 private struct IntegerSearchRun {
     let acceptedBitPattern: UInt64
     let recordedBound: UInt64?
@@ -128,7 +128,7 @@ private struct IntegerSearchRun {
         let leafIndex = try #require(graph.nodes[leafNodeID].positionRange).lowerBound
         var isExpired = false
 
-        let result = ScopedReductionInterpreter.run(
+        let result = ScopedReductionInterpreter.reduce(
             ScopedValueSearchEncoder.reducer(
                 ValueMinimizationScope(leaves: [LeafEntry(nodeID: leafNodeID)], batchZeroEligible: false),
                 input: ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: ScopedReductionTuning())

@@ -14,7 +14,7 @@ struct ScopedPassReport {
     var acceptedLeafNodeIDs: Set<Int> = []
     /// From searches the root branch reaches. Searches inside a `propose` are finished and their reports discarded, since their node IDs belong to a lifted graph.
     var searchReport = ScopedSearchReport()
-    /// Each root search's share of ``counts``, in the order the searches ran, for every one that was pulled. Searches inside a `propose` are counted only in ``counts``.
+    /// Each root search's share of ``counts``, in the order the searches ran, for every one that was asked for a candidate. Searches inside a `propose` are counted only in ``counts``.
     var searchCounts: [ScopedSearchCounts] = []
     /// Lift requests, including those whose materialization failed.
     var liftAttempts = 0
@@ -30,7 +30,7 @@ struct ScopedPassReport {
 
 /// Executes the encoder's reducer for one scope against a context the runner seeds.
 ///
-/// Holds no decoding logic: it pulls candidates from searches, checks the rejection cache, asks the decoder to decode it, checks the result's ordering against the incumbent, and feeds the outcome back. Inside a `propose` it schedules searches in turns: a new branch is built before any suspended search resumes, suspended searches resume in FIFO order with a fresh turn, and the first acceptance ends every search. A branch whose pipeline reaches another `propose` becomes a nested level, which its parent schedules like any other search; a nested level's turn counts the parent's probes.
+/// Holds no decoding logic: it asks searches for candidates, checks the rejection cache, asks the decoder to decode it, checks the result's ordering against the incumbent, and feeds the outcome back. Inside a `propose` it schedules searches in turns: a new branch is built before any suspended search resumes, suspended searches resume in FIFO order with a fresh turn, and the first acceptance ends every search. A branch whose pipeline reaches another `propose` becomes a nested level, which its parent schedules like any other search; a nested level's turn counts the parent's probes.
 enum ScopedReductionInterpreter {
     /// What an execution hands back to the runner.
     struct Result {
@@ -42,9 +42,26 @@ enum ScopedReductionInterpreter {
         let probeTiming: ProbeTiming?
     }
 
-    /// Runs `reducer` until it finishes or the pass ends, and returns the restorable state with everything the execution observed.
-    static func run(_ reducer: ScopedReducer, context: consuming Context) -> Result {
-        drive(reducer, context: &context)
+    /// Builds the encoder's reducer as the root branch and evaluates its candidates until the reducer finishes, the deadline passes, or an acceptance ends the pass, and returns the restorable state with everything the execution observed.
+    ///
+    /// The root is built without recording a build outcome. A search it reaches keeps its report and records its own counts; a `propose` it reaches becomes the outermost level.
+    static func reduce(_ reducer: ScopedReducer, context: consuming Context) -> Result {
+        if case let .built(root) = buildBranch(reducer, depth: nil, context: &context) {
+            var pool = ScopedSearchPool(root: root)
+            evaluating: while true {
+                switch next(&pool, checksDeadline: true, context: &context) {
+                    case .exhausted:
+                        break evaluating
+                    case .deadline, .budgetExhausted:
+                        finishAll(&pool, context: &context)
+                        break evaluating
+                    case let .emitted(evaluation):
+                        if evaluation.stop != nil {
+                            break evaluating
+                        }
+                }
+            }
+        }
         return Result(
             incumbent: context.incumbent,
             graph: context.graph,

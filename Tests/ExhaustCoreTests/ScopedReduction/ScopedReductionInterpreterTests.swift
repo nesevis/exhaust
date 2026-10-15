@@ -81,7 +81,7 @@ private struct InterpreterFixture {
     }
 
     func run(_ reducer: ScopedReducer, deadline: ScopedDeadline = .none) -> ScopedPassReport {
-        ScopedReductionInterpreter.run(
+        ScopedReductionInterpreter.reduce(
             reducer,
             context: ScopedReductionInterpreter.Context(
                 incumbent: ScopedCounterexample(

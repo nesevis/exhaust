@@ -13,45 +13,22 @@ extension ScopedReductionInterpreter {
         case deadline
     }
 
-    /// What one pull from a search pool produced.
-    enum PullResult {
+    /// What one call to ``next(_:checksDeadline:context:)`` on a search pool produced.
+    enum NextResult {
         case emitted(Evaluation)
         case exhausted
         case budgetExhausted
         case deadline
     }
 
-    // MARK: - Drive
+    // MARK: - Next Candidate
 
-    /// Builds the encoder's reducer as the root branch and pulls candidates from it until the reducer finishes, the deadline passes, or an acceptance ends the pass.
-    ///
-    /// The root is built without recording a build outcome. A search it reaches keeps its report and records its own counts; a `propose` it reaches becomes the outermost level.
-    static func drive(_ reducer: ScopedReducer, context: inout Context) {
-        guard case let .built(root) = buildBranch(reducer, depth: nil, context: &context) else {
-            return
-        }
-        var pool = ScopedSearchPool(root: root)
-        while true {
-            switch pull(&pool, checksDeadline: true, context: &context) {
-                case .exhausted:
-                    return
-                case .deadline, .budgetExhausted:
-                    finishAll(&pool, context: &context)
-                    return
-                case let .emitted(evaluation):
-                    if evaluation.stop != nil {
-                        return
-                    }
-            }
-        }
-    }
-
-    /// Emits and evaluates exactly one candidate from `pool`, recursing into nested levels. Only the outermost pull checks the deadline per candidate, so a nested level never checks it a second time for the same candidate. Building a branch checks it too, before each build and each lift, at every level.
-    static func pull(
+    /// Emits and evaluates exactly one candidate from `pool`, recursing into nested levels. Only the outermost call checks the deadline per candidate, so a nested level never checks it a second time for the same candidate. Building a branch checks it too, before each build and each lift, at every level.
+    static func next(
         _ pool: inout ScopedSearchPool,
         checksDeadline: Bool,
         context: inout Context
-    ) -> PullResult {
+    ) -> NextResult {
         if checksDeadline, context.isExpired {
             return .deadline
         }
@@ -77,7 +54,7 @@ extension ScopedReductionInterpreter {
             let evaluation: Evaluation
             switch member.source {
                 case let .search(slot):
-                    slot.wasPulled = true
+                    slot.wasAskedForCandidate = true
                     guard let candidate = slot.search.next(slot.feedback, into: &context.candidateBuffer) else {
                         finishSearch(slot, pending: .initial, context: &context)
                         // The continuation's next search would otherwise draw its first candidate under the deadline check that preceded this exhaustion.
@@ -108,7 +85,7 @@ extension ScopedReductionInterpreter {
                     guard case var .level(child) = consume source else {
                         preconditionFailure("A level member must hold a level")
                     }
-                    switch pull(&child, checksDeadline: false, context: &context) {
+                    switch next(&child, checksDeadline: false, context: &context) {
                         case .exhausted, .budgetExhausted:
                             // A nested level that returns nothing has no candidates left, so it is dropped.
                             finishAll(&child, context: &context)
@@ -189,7 +166,7 @@ extension ScopedReductionInterpreter {
 
     /// Advances branches until one constructs a search or a nested level. The search budget counts empty searches but not failed builds; chain limits count every attempted branch.
     ///
-    /// Branches that fail construction are built back to back without a pull in between, so the deadline is checked before each build.
+    /// Branches that fail construction are built back to back without a candidate evaluated in between, so the deadline is checked before each build.
     private static func buildNextBranch(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
         while pool.branchesExhausted == false, pool.constructed < pool.searchBudget {
             guard let continuation = pool.continuation, pool.nextBranch < pool.branches.count else {
@@ -244,7 +221,7 @@ extension ScopedReductionInterpreter {
     /// The deadline is checked before each lift, because a branch can lift more than once before it reaches a search.
     ///
     /// - Parameter depth: How many `propose` levels enclose the branch's level, or nil for the root, whose builds are not recorded.
-    private static func buildBranch(
+    static func buildBranch(
         _ reducer: ScopedReducer,
         depth: Int?,
         context: inout Context
@@ -333,7 +310,7 @@ extension ScopedReductionInterpreter {
         }
     }
 
-    /// Finishes the search. A root search keeps its report and, once pulled, records its own counts; a search inside a `propose` discards its report, since its node IDs belong to a lifted graph.
+    /// Finishes the search. A root search keeps its report and, once asked for a candidate, records its own counts; a search inside a `propose` discards its report, since its node IDs belong to a lifted graph.
     private static func finishSearch(_ slot: ScopedSearchPool.SearchSlot, pending: ScopedSearchFeedback, context: inout Context) {
         let searchReport = slot.search.finish(pending: pending)
         guard slot.isRoot else {
@@ -343,7 +320,7 @@ extension ScopedReductionInterpreter {
         if searchReport.hadUnresolvedReplacement {
             context.report.searchReport.hadUnresolvedReplacement = true
         }
-        if slot.wasPulled {
+        if slot.wasAskedForCandidate {
             context.report.searchCounts.append(ScopedSearchCounts(stagedJointArity: slot.stagedJointArity, counts: slot.counts))
         }
     }
@@ -351,11 +328,11 @@ extension ScopedReductionInterpreter {
 
 // MARK: - Search Pool State
 
-/// The members one `propose` level, or the root branch, is pulling from.
+/// The members of one `propose` level, or of the root branch, that the interpreter asks for candidates.
 struct ScopedSearchPool {
-    /// A search with the outcome of its last candidate, delivered when it is next pulled, including after a suspension.
+    /// A search with the outcome of its last candidate, delivered when it is next asked for a candidate, including after a suspension.
     ///
-    /// A class, so a pull advances the search in place: a search's state runs to hundreds of bytes, and a value slot would be copied in and out of its member on every candidate.
+    /// A class, so asking for a candidate advances the search in place: a search's state runs to hundreds of bytes, and a value slot would be copied in and out of its member on every candidate.
     final class SearchSlot {
         var search: any ScopedSearch
         let configuration: ScopedSearchConfiguration
@@ -369,7 +346,7 @@ struct ScopedSearchPool {
         /// Whether any of the search's candidates was accepted, for its outcome.
         var anyAccepted = false
         /// Whether the search was asked for a candidate. A root search stopped before then, by the deadline, records no counts.
-        var wasPulled = false
+        var wasAskedForCandidate = false
         /// Probes this search alone spent, for its outcome.
         var counts = ReductionProbeCounts()
 
@@ -392,7 +369,7 @@ struct ScopedSearchPool {
         }
     }
 
-    /// What a member pulls from. A search's slot is a reference that is only ever held by its member; a nested level is boxed.
+    /// Where a member's candidates come from. A search's slot is a reference that is only ever held by its member; a nested level is boxed.
     enum Source {
         case search(SearchSlot)
         indirect case level(ScopedSearchPool)

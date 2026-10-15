@@ -63,7 +63,7 @@ private struct StagedJointFixture {
     func run(deadlineAfterChecks: Int? = nil) -> Run {
         let checks = CheckCounter()
         let input = ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: Self.tuning)
-        let result = ScopedReductionInterpreter.run(
+        let result = ScopedReductionInterpreter.reduce(
             ScopedStagedJointEncoder.reducer(scope, input: input),
             context: ScopedReductionInterpreter.Context(
                 incumbent: ScopedCounterexample(

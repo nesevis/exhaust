@@ -20,11 +20,17 @@ extension ScopedReductionRunner {
 
     /// Work that may follow a cycle. Termination is not an action: it depends on state these actions change, since a relax round can improve the sequence, confirmation can clear stale floors, and a relation acceptance re-enters the loop.
     enum PostCycleAction: Equatable {
+        /// Probes each converged leaf just below its floor and clears any floor the probe proves stale.
         case confirmConvergence
+        /// Reduces pairs of stalled leaves along the rational relation inferred from their current values: holds the ratio fixed and lowers the shared scale, so (6, 9) tries (2, 3) first, for multiplicative couplings that per-leaf, lockstep, and redistribution moves cannot preserve.
         case relationPass
+        /// Probes branch pivots at non-minimal content and accepts the first that still fails, without a checkpoint.
         case improvingPivots
+        /// Searches the pending staged joint checkpoint, moving pairs of stalled leaves together, then wider groups.
         case stagedJointPass
+        /// Perturbs the counterexample with a structural replacement that may worsen it, exploits it, and keeps the result only if it strictly precedes the checkpoint.
         case relaxRound
+        /// Lifts bind-inner deferral, so the next cycle's sources include bind-inner scopes.
         case releaseDeferral
     }
 
