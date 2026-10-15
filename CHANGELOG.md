@@ -6,6 +6,14 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-16
+
+### Changed
+
+- Reduction now runs on a rebuilt reducer. Reduced counterexamples, and the number of property calls reduction makes, can differ from earlier releases.
+- Reduction collects its detailed statistics only when a test sets `.onReport`, so runs without a report do less work.
+- `ExhaustReport` keys and attributions have changed for reductions composed through binds.
+
 ## [1.6.0] - 2026-10-10
 
 ### Changed
@@ -270,7 +278,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/nesevis/exhaust/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/nesevis/exhaust/compare/v1.5.8...v1.6.0
 [1.5.8]: https://github.com/nesevis/exhaust/compare/v1.5.7...v1.5.8
 [1.5.7]: https://github.com/nesevis/exhaust/compare/v1.5.6...v1.5.7

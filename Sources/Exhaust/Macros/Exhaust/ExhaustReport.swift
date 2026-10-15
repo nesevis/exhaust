@@ -130,7 +130,7 @@ public struct ExhaustReport: Sendable {
 
     /// ``totalMaterializations`` split by where each materialization ran.
     ///
-    /// Each key names a place in the reducer that materializes the generator (for example `"decoder"` for decoding a reduction probe, or `"boundValueLift"` for lifting candidate values through a bind), and the value is the number of materializations that ran there. Key names follow the reducer's internal site names. Sites that never ran are absent.
+    /// Each key names a place in the reducer that materializes the generator (for example `"decoder"` for decoding a reduction probe, or `"lift"` for lifting candidate values through a bind), and the value is the number of materializations that ran there. Key names follow the reducer's internal site names. Sites that never ran are absent.
     public var materializationsBySite: [String: Int] = [:]
 
     /// Downstream builds made while lifting candidate values through binds, split by chain stage and outcome.

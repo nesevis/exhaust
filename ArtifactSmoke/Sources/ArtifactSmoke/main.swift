@@ -78,7 +78,7 @@ let reflected = #exhaust(
 
 check(reflected != nil, "reflecting run did not fail")
 
-/// Nested binds: bound value composition fills the report's bind diagnostics, which stay empty for bind-free generators.
+/// Nested binds: bound value composition lifts candidate values through the generator, which the report counts under the `lift` materialization site.
 let coupledPairs = #gen(.int(in: 0 ... 10000)).bound(
     forward: { first in
         #gen(.int(in: 0 ... 10000)).bound(
@@ -122,7 +122,7 @@ for report in copies {
 check(totalInvocations > 0, "reports carried no invocations")
 check(reports[0].reductionInvocations > 0, "integer array run did not reduce")
 check(reports[1].reductionInvocations > 0, "string run did not reduce")
-check(reports[4].boundValueBuildOutcomes.isEmpty == false, "nested bind run recorded no bound value builds")
+check(reports[4].materializationsBySite["lift", default: 0] > 0, "nested bind run recorded no lifts")
 
 /// Examine: a run that generates values fills the report's representative tree, which the same copy path must survive.
 let examineReports = [
