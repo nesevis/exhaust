@@ -20,7 +20,7 @@ struct ReductionMaterializationCountTests {
         #expect(report.totalMaterializations == report.materializationsBySite.values.reduce(0, +))
         #expect((report.materializationsBySite["decoder"] ?? 0) > 0)
         #expect((report.materializationsBySite["setup"] ?? 0) > 0)
-        #expect((report.materializationsBySite["boundValueLift"] ?? 0) > 0)
+        #expect((report.materializationsBySite["lift"] ?? 0) > 0)
     }
 }
 
