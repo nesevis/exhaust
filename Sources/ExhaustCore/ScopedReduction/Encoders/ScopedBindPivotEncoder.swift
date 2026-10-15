@@ -8,17 +8,16 @@
 /// Bind pivot: the encoder's reducer proposes a pivot seed, lifts it, relocates the bind, and searches the lifted seed followed by covering over its bound subtree.
 ///
 /// The lifted seed is a ``ScopedSingleCandidateSearch``, and the branch continues with a ``ScopedCoveringSearch`` over the seed's bound range once the seed is evaluated. Both run in the branch's member, so the pool schedules them as one. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
-struct ScopedBindPivotEncoder: ScopedEncoder {
+enum ScopedBindPivotEncoder: ScopedEncoder {
     static let name: EncoderName = .bindPivot
     static let isValueDependent = true
     static let requiresGenerator = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
-    let tuning: ScopedReductionTuning
 
-    func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {
-        guard let pivot = Self.pivotSeeds(pivotScope: pivotScope, scope: scope, maxTransplants: tuning.maxPivotTransplants) else {
+    static func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {
+        guard let pivot = pivotSeeds(pivotScope: pivotScope, scope: scope, maxTransplants: scope.tuning.maxPivotTransplants) else {
             return .pure(.finished)
         }
         let branches = pivot.seeds.enumerated().map { index, seed in
@@ -35,7 +34,7 @@ struct ScopedBindPivotEncoder: ScopedEncoder {
                 guard let lifted else {
                     return .fail(.materializationFailed)
                 }
-                return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, pivotScope: pivotScope, tuning: tuning)
+                return Self.downstream(proposal: proposal, lifted: lifted, parent: scope, pivotScope: pivotScope)
             }
         }
     }
@@ -45,8 +44,7 @@ struct ScopedBindPivotEncoder: ScopedEncoder {
         proposal: LiftProposal,
         lifted: LiftResult,
         parent: ScopedEncoderInput,
-        pivotScope: BindPivotScope,
-        tuning: ScopedReductionTuning
+        pivotScope: BindPivotScope
     ) -> ScopedReducer {
         guard lifted.sequence.count <= parent.baseSequence.count else {
             return .fail(.liftedTooLong)
@@ -69,7 +67,7 @@ struct ScopedBindPivotEncoder: ScopedEncoder {
             configuration: configuration
         ) { _ in
             .search(
-                .covering(ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: tuning)),
+                .covering(ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: parent.tuning)),
                 configuration: configuration
             )
         }

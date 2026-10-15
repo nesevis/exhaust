@@ -62,9 +62,9 @@ private struct StagedJointFixture {
     /// - Parameter deadlineAfterChecks: Expires the deadline once this many checks have passed; nil never expires.
     func run(deadlineAfterChecks: Int? = nil) -> Run {
         let checks = CheckCounter()
-        let input = ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:])
+        let input = ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: Self.tuning)
         let result = ScopedReductionInterpreter.run(
-            ScopedStagedJointEncoder(tuning: Self.tuning).reducer(scope, input: input),
+            ScopedStagedJointEncoder.reducer(scope, input: input),
             context: ScopedReductionInterpreter.Context(
                 incumbent: ScopedCounterexample(
                     sequence: sequence,

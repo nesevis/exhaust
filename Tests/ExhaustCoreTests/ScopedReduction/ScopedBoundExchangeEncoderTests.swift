@@ -55,9 +55,9 @@ private struct BoundExchangeFixture {
     }
 
     func run(property: @escaping (Any) -> Bool) -> ScopedPassReport {
-        let input = ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:])
+        let input = ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: ScopedReductionTuning())
         let result = ScopedReductionInterpreter.run(
-            ScopedBoundExchangeEncoder(tuning: ScopedReductionTuning()).reducer(exchange, input: input),
+            ScopedBoundExchangeEncoder.reducer(exchange, input: input),
             context: ScopedReductionInterpreter.Context(
                 incumbent: ScopedCounterexample(
                     sequence: sequence,

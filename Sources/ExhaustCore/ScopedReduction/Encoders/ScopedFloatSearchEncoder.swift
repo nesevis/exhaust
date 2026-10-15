@@ -8,7 +8,7 @@
 /// Drives float leaves toward their semantic simplest values, one ``ScopedFloatSearch`` per scope.
 ///
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate. An acceptance that reshapes a bound subtree still ends the pass.
-struct ScopedFloatSearchEncoder: ScopedEncoder {
+enum ScopedFloatSearchEncoder: ScopedEncoder {
     static let name: EncoderName = .floatSearch
     static let isValueDependent = true
     static let requiresGenerator = false
@@ -16,10 +16,7 @@ struct ScopedFloatSearchEncoder: ScopedEncoder {
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
 
-    /// Float search reads no budgets.
-    init(tuning _: ScopedReductionTuning) {}
-
-    func reducer(_ scope: FloatMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
+    static func reducer(_ scope: FloatMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
             .floatSearch(ScopedFloatSearch(
                 scope: scope,

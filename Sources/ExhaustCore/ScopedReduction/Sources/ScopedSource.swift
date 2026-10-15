@@ -133,11 +133,12 @@ struct ScopedStagedJointSource {
         guard discovery.exhausted != Checkpoint(base: discovery.sequence, scope: scope) else {
             return nil
         }
-        let firstStageBudget = ScopedStagedJointEncoder(tuning: tuning).stageBudget(
+        let firstStageBudget = ScopedStagedJointEncoder.stageBudget(
             arity: 2,
             candidatePool: candidatePool,
             remaining: tuning.stagedJointProbeBudget,
-            calculationsRemaining: tuning.numericJointGroupCalculationLimit
+            calculationsRemaining: tuning.numericJointGroupCalculationLimit,
+            tuning: tuning
         )
         return PricedEncoderScope(
             encoderScope: .stagedJoint(scope),

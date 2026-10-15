@@ -90,13 +90,4 @@ extension ScopedReductionRunner {
             graph.convergenceStore[nodeID] = oldRecord.origin
         }
     }
-
-    /// Whether a bind inner is stalled: value search converged it at its current value, or its bind's bound value search came back fruitless, having tried lowering it under every downstream assignment in its covering.
-    static func isStalledBindInner(bindInnerLeafNodeID: Int, graph: ChoiceGraph, gate: BoundValueGate) -> Bool {
-        ScopedStagedJointQuery.isStalledBindInner(
-            bindInnerLeafNodeID: bindInnerLeafNodeID,
-            graph: graph,
-            isFruitlessBind: gate.isFruitless
-        )
-    }
 }

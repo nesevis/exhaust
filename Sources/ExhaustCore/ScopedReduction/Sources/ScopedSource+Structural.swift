@@ -23,8 +23,7 @@ extension ScopedSource {
     /// - Parameter previousGraph: The graph the previous replacement family was prepared from. Self-similar families whose member sizes are unchanged since then are skipped.
     static func prepareStructuralSources(
         from graph: ChoiceGraph,
-        previousGraph: ChoiceGraph? = nil,
-        tuning _: ScopedReductionTuning
+        previousGraph: ChoiceGraph? = nil
     ) -> [ScopedSource] {
         var sources: [ScopedSource] = []
 

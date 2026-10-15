@@ -8,7 +8,7 @@
 /// Switches a pick to another branch, with every leaf of the new branch at its reduction target.
 ///
 /// The scope fully determines the probe. A candidate that does not precede the base sequence is not probed and is reported as an unresolved replacement, which a relax round can try without the ordering.
-struct ScopedBranchPivotEncoder: ScopedEncoder {
+enum ScopedBranchPivotEncoder: ScopedEncoder {
     struct Scope {
         let pickNodeID: Int
         let targetBranchID: UInt64
@@ -20,9 +20,8 @@ struct ScopedBranchPivotEncoder: ScopedEncoder {
     static let isPathChanging = true
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
-    let tuning: ScopedReductionTuning
 
-    func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
+    static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
         let built = ScopedPivotCandidates.branchPivotCandidate(
             pickNodeID: scope.pickNodeID,
             targetBranchID: scope.targetBranchID,

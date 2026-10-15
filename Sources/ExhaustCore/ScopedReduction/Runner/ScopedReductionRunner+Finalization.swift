@@ -7,9 +7,7 @@
 
 extension ScopedReductionRunner {
     /// Reorders sibling groups numerically for presentation, with an empty rejection cache that is restored afterwards. Runs to completion even past the deadline, so the returned counterexample is always presented the same way.
-    ///
-    /// - Returns: Whether a reordering was accepted.
-    mutating func runReorderPass() -> Bool {
+    mutating func runReorderPass() {
         let previousOwner = beginTimingOwnership(.reorder)
         defer {
             endTimingOwnership(restoring: previousOwner)
@@ -18,7 +16,7 @@ extension ScopedReductionRunner {
               var source = ScopedSource.prepareReorderSource(from: graph),
               let priced = source.nextScope()
         else {
-            return false
+            return
         }
         let savedRejectCache = rejectCache
         rejectCache = []
@@ -28,26 +26,18 @@ extension ScopedReductionRunner {
         if isInstrumented, pass.report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
         }
-        return pass.report.anyAccepted
-    }
-
-    /// Records the stall diagnostics once the reorder pass has applied.
-    mutating func completeReorderPass(accepted _: Bool) {
-        recordStallDiagnostic()
     }
 
     /// Ends a run whose deadline passed: any in-flight pass has already applied its report, so only the final reorder and the stall diagnostics remain.
     mutating func finishAtDeadline() {
         stats.reductionWasCapped = true
         sources = []
-        let accepted = isEncoderEnabled(.numericReorder) ? runReorderPass() : false
-        completeReorderPass(accepted: accepted)
+        runReorderPass()
+        recordStallDiagnostic()
     }
 
-    // MARK: - Helpers
-
     /// Counts leaves that ended short of their target with a convergence floor at their current value: the encoder proved they cannot move alone. Normal at the end of a successful run, so the warning sign is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Depth, lane, and bind-inner leaves are machinery rather than user values, and are excluded.
-    private mutating func recordStallDiagnostic() {
+    mutating func recordStallDiagnostic() {
         var stalledCount = 0
         var residualDistance: Double = 0
         for nodeID in graph.liveNodeIDs {

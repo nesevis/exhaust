@@ -8,16 +8,15 @@
 /// Bound exchange: the encoder's reducer proposes a sum-preserving proposal, lifts it, validates the lifted sink, and searches the compound candidate.
 ///
 /// Proposals come from ``BoundExchangeProposalCursor``. Each kept lift is one ``ScopedSingleCandidateSearch`` over the lifted sequence, decoded exactly.
-struct ScopedBoundExchangeEncoder: ScopedEncoder {
+enum ScopedBoundExchangeEncoder: ScopedEncoder {
     static let name: EncoderName = .boundExchange
     static let isValueDependent = true
     static let requiresGenerator = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
-    let tuning: ScopedReductionTuning
 
-    func reducer(_ exchange: BoundExchangeScope, input scope: ScopedEncoderInput) -> ScopedReducer {
+    static func reducer(_ exchange: BoundExchangeScope, input scope: ScopedEncoderInput) -> ScopedReducer {
         guard var cursor = BoundExchangeProposalCursor(graph: scope.graph, baseSequence: scope.baseSequence, exchange: exchange) else {
             return .pure(.finished)
         }
@@ -28,7 +27,7 @@ struct ScopedBoundExchangeEncoder: ScopedEncoder {
         }
         let configuration = ScopedChoiceConfiguration(
             probesPerSearchTurn: nil,
-            searchBudget: tuning.keptExchangeLiftBudget,
+            searchBudget: scope.tuning.keptExchangeLiftBudget,
             totalProbeCap: 0
         )
         return .propose(branches, configuration: configuration) { proposal in

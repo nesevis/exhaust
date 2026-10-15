@@ -8,7 +8,7 @@
 /// Replaces a recursive subtree with a smaller one of the same pick family: a smaller self-similar subtree, or a descendant promoted over its ancestor.
 ///
 /// The scope fully determines the probe. A candidate that does not precede the base sequence is not probed and is reported as an unresolved replacement, which a relax round can try without the ordering.
-struct ScopedSubstitutionEncoder: ScopedEncoder {
+enum ScopedSubstitutionEncoder: ScopedEncoder {
     /// A replacement within one pick family.
     enum Scope {
         case selfSimilar(targetNodeID: Int, donorNodeID: Int)
@@ -21,9 +21,8 @@ struct ScopedSubstitutionEncoder: ScopedEncoder {
     static let isPathChanging = true
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
-    let tuning: ScopedReductionTuning
 
-    func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
+    static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
         let sequence = input.baseSequence
         let built: ChoiceSequence?
         let mutation: EncoderProbe

@@ -215,7 +215,7 @@ extension ScopedReductionRunner {
                 return .readyToDispatch(boundValueFingerprint: fingerprint)
             case let .stalledBindInner(leafNodeID):
                 guard anyAccepted == false,
-                      Self.isStalledBindInner(bindInnerLeafNodeID: leafNodeID, graph: graph, gate: gate)
+                      ScopedStagedJointQuery.isStalledBindInner(bindInnerLeafNodeID: leafNodeID, graph: graph, isFruitlessBind: gate.isFruitless)
                 else {
                     return .skip
                 }
@@ -249,7 +249,8 @@ extension ScopedReductionRunner {
             baseSequence: incumbent.sequence,
             tree: incumbent.tree,
             graph: graph,
-            warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:]
+            warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:],
+            tuning: tuning
         )
         if case .bindClassification = typed.gate {
             let fingerprint = boundValueFingerprint ?? 0
@@ -258,7 +259,7 @@ extension ScopedReductionRunner {
                 totalProbeCap: gate.isFirstDispatch(fingerprint: fingerprint) ? tuning.composedFirstDispatchProbeCap : 0
             )
         }
-        let scopedReducer = typed.reducer(tuning: tuning, input: input)
+        let scopedReducer = typed.reducer(input: input)
         if let boundValueFingerprint {
             gate.markDispatched(boundValueFingerprint)
         }
@@ -455,7 +456,7 @@ extension ScopedReductionRunner {
 
     /// Every family over the current graph, with no bind-inner deferral.
     func prepareExploitationSources() -> [ScopedSource] {
-        ScopedSource.prepareStructuralSources(from: graph, tuning: tuning)
+        ScopedSource.prepareStructuralSources(from: graph)
             + ScopedSource.prepareValueSources(from: graph, deferBindInner: false, tuning: tuning)
     }
 

@@ -249,8 +249,8 @@ package struct ScopedReductionRunner {
                 break
             }
         }
-        let accepted = runReorderPass()
-        completeReorderPass(accepted: accepted)
+        runReorderPass()
+        recordStallDiagnostic()
     }
 
     /// Whether a phase ran to its end, or the deadline cut it short and the run must finish.
@@ -282,7 +282,7 @@ package struct ScopedReductionRunner {
 
     /// Structural families followed by value families, honoring bind-inner deferral.
     func prepareAllSources(previousGraph: ChoiceGraph?) -> [ScopedSource] {
-        ScopedSource.prepareStructuralSources(from: graph, previousGraph: previousGraph, tuning: tuning)
+        ScopedSource.prepareStructuralSources(from: graph, previousGraph: previousGraph)
             + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
     }
 

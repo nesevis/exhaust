@@ -85,9 +85,6 @@ extension ScopedReductionRunner {
     /// - Returns: Whether any stale floor was cleared.
     @discardableResult
     mutating func confirmConvergence() -> Bool {
-        guard isEncoderEnabled(.convergenceConfirmation) else {
-            return false
-        }
         var anyStale = false
         var counts = ReductionProbeCounts()
         defer {
@@ -202,7 +199,7 @@ extension ScopedReductionRunner {
 
     /// Runs relation search once value search has written its stall evidence.
     private mutating func runRelationPass() {
-        guard isEncoderEnabled(.relationSearch), let scope = RelationQuery.build(graph: graph) else {
+        guard let scope = RelationQuery.build(graph: graph) else {
             return
         }
         guard deadline.isExpired == false else {
@@ -229,7 +226,7 @@ extension ScopedReductionRunner {
 
     /// Searches the pending checkpoint, marking it searched before the encoder's reducer starts so a deadline interruption does not repeat it. An acceptance invalidates every floor, cached rejection, and bind search history, because the property couples the moved values.
     private mutating func runStagedJointPass() {
-        guard isEncoderEnabled(.stagedJointSearch), deadline.isExpired == false else {
+        guard deadline.isExpired == false else {
             return
         }
         var source = stagedJointSource()
@@ -270,9 +267,6 @@ extension ScopedReductionRunner {
     ///
     /// - Returns: Whether a pivot was accepted.
     mutating func runImprovingPivotPass() -> Bool {
-        guard isEncoderEnabled(.branchPivot) else {
-            return false
-        }
         let budget = tuning.relaxImprovingProbeBudget
         guard budget > 0 else {
             return false

@@ -28,7 +28,7 @@ extension ScopedReductionRunner {
     ///
     /// - Returns: Whether the relax round committed an improvement.
     mutating func runRelaxRound() -> Bool {
-        guard isPostCycleActionEnabled(.relaxRound), tuning.relaxMaterializationBudget > 0 else {
+        guard tuning.relaxMaterializationBudget > 0 else {
             return false
         }
         let checkpoint = RelaxRoundCheckpoint(
@@ -89,7 +89,6 @@ extension ScopedReductionRunner {
                 incumbent = checkpoint.incumbent
             }
             recordRelaxRound(tally, committed: improved)
-            completeRelaxRound(tally)
             return improved
         }
 
@@ -113,7 +112,6 @@ extension ScopedReductionRunner {
             ScopedReductionLog.reducer("relax_round_committed", isInstrumented: isInstrumented, metadata: [
                 "old_seq_len": "\(checkpoint.incumbent.sequence.count)", "new_seq_len": "\(incumbent.sequence.count)",
             ])
-            completeRelaxRound(tally)
             return true
         }
         incumbent = checkpoint.incumbent
@@ -126,7 +124,6 @@ extension ScopedReductionRunner {
         ScopedReductionLog.reducer("relax_round_rolled_back", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(incumbent.sequence.count)",
         ])
-        completeRelaxRound(tally)
         return false
     }
 
@@ -136,19 +133,14 @@ extension ScopedReductionRunner {
     private mutating func completeWithoutPerturbation(_ tally: RelaxRoundTally) -> Bool {
         recordRelaxRound(tally, committed: false)
         ScopedReductionLog.reducer("relax_round_no_perturbation", isInstrumented: isInstrumented, metadata: [:])
-        completeRelaxRound(tally)
         return false
     }
 
-    /// Records perturbation work once, whether or not the provisional result is kept.
-    private mutating func completeRelaxRound(_ tally: RelaxRoundTally) {
+    /// Records perturbation work once, whether or not the provisional result is kept, and appends the round to the relax log, which is research diagnostics only.
+    private mutating func recordRelaxRound(_ tally: RelaxRoundTally, committed: Bool) {
         if collectStats {
             stats.recordStructuralRelax(tally.probeCounts)
         }
-    }
-
-    /// Appends the round to the relax log. Research diagnostics only.
-    private mutating func recordRelaxRound(_ tally: RelaxRoundTally, committed: Bool) {
         guard collectDiagnostics else {
             return
         }

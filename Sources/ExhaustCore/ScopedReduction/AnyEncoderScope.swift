@@ -80,7 +80,7 @@ protocol AnyTypedEncoderScope {
     func isValid(in graph: ChoiceGraph) -> Bool
     var rejectionKey: ScopedRejectionKey? { get }
     func convergenceInvalidatedByAcceptance(in graph: ChoiceGraph) -> ClosedRange<Int>?
-    func reducer(tuning: ScopedReductionTuning, input: ScopedEncoderInput) -> ScopedReducer
+    func reducer(input: ScopedEncoderInput) -> ScopedReducer
 }
 
 /// A scope paired with its encoder's type, so each question is written once, generically.
@@ -107,7 +107,7 @@ struct TypedEncoderScope<Encoder: ScopedEncoder>: AnyTypedEncoderScope {
         Encoder.convergenceInvalidatedByAcceptance(scope, in: graph)
     }
 
-    func reducer(tuning: ScopedReductionTuning, input: ScopedEncoderInput) -> ScopedReducer {
-        Encoder(tuning: tuning).reducer(scope, input: input)
+    func reducer(input: ScopedEncoderInput) -> ScopedReducer {
+        Encoder.reducer(scope, input: input)
     }
 }

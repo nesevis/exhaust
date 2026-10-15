@@ -129,9 +129,9 @@ private struct IntegerSearchRun {
         var isExpired = false
 
         let result = ScopedReductionInterpreter.run(
-            ScopedValueSearchEncoder(tuning: ScopedReductionTuning()).reducer(
+            ScopedValueSearchEncoder.reducer(
                 ValueMinimizationScope(leaves: [LeafEntry(nodeID: leafNodeID)], batchZeroEligible: false),
-                input: ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:])
+                input: ScopedEncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: ScopedReductionTuning())
             ),
             context: ScopedReductionInterpreter.Context(
                 incumbent: ScopedCounterexample(

@@ -28,9 +28,6 @@ protocol ScopedEncoder {
     /// What the runner checks before dispatching `scope`, beyond its validity and the scope rejection cache. Relax round exploitation applies no gate.
     static func gate(_ scope: Scope) -> ScopedDispatchGate
 
-    /// The runner constructs an encoder only to build its reducer, with the run's ``ScopedReductionTuning``, which is the only place budgets are set.
-    init(tuning: ScopedReductionTuning)
-
     // MARK: What It Does
 
     /// Whether the encoder changes the generator's active execution path. On a graph stripped of unselected branches it needs them restored first.
@@ -46,7 +43,7 @@ protocol ScopedEncoder {
     static func convergenceInvalidatedByAcceptance(_ scope: Scope, in graph: ChoiceGraph) -> ClosedRange<Int>?
 
     /// Binds the search to `scope` over the snapshot in `input`. Called only for a scope the runner has selected.
-    func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer
+    static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer
 
     // MARK: What It Supports
 
@@ -100,6 +97,8 @@ struct ScopedEncoderInput {
     let graph: ChoiceGraph
     /// Convergence records keyed by graph node ID, so a value search starts each leaf from its last known floor.
     let warmStartRecords: [Int: ConvergedOrigin]
+    /// The run's budgets, the only place they are set.
+    let tuning: ScopedReductionTuning
     /// The budgets a ``ScopedDispatchGate/bindClassification(bindNodeID:upstreamLeafNodeID:)`` gate resolved for this dispatch; nil for every other gate.
     var dispatchBudget: ScopedDispatchBudget?
 }

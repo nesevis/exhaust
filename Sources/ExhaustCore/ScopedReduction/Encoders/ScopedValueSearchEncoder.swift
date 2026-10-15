@@ -8,23 +8,22 @@
 /// Drives integer leaves toward their semantic simplest values, one ``ScopedIntegerSearch`` per scope.
 ///
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate. An acceptance that reshapes a bound subtree still ends the pass.
-struct ScopedValueSearchEncoder: ScopedEncoder {
+enum ScopedValueSearchEncoder: ScopedEncoder {
     static let name: EncoderName = .valueSearch
     static let isValueDependent = true
     static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
-    let tuning: ScopedReductionTuning
 
-    func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
+    static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
             .integerSearch(ScopedIntegerSearch(
                 scope: scope,
                 sequence: input.baseSequence,
                 graph: input.graph,
                 warmStarts: input.warmStartRecords,
-                tuning: tuning
+                tuning: input.tuning
             )),
             configuration: .standard
         )

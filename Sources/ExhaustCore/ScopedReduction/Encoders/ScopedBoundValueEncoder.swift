@@ -8,17 +8,16 @@
 /// Bound value search: the encoder's reducer proposes a controller value, lifts it, relocates the bind, and either descends into the next nested bind or searches the bound leaves.
 ///
 /// A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
-struct ScopedBoundValueEncoder: ScopedEncoder {
+enum ScopedBoundValueEncoder: ScopedEncoder {
     static let name: EncoderName = .boundValueSearch
     static let isValueDependent = true
     static let requiresGenerator = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = true
-    let tuning: ScopedReductionTuning
 
     /// Reads its upstream budget and probe cap from the ``ScopedDispatchBudget`` its bind classification gate resolves.
-    func reducer(_ bindScope: BoundValueScope, input: ScopedEncoderInput) -> ScopedReducer {
+    static func reducer(_ bindScope: BoundValueScope, input: ScopedEncoderInput) -> ScopedReducer {
         guard let budget = input.dispatchBudget else {
             preconditionFailure("A bound value dispatch carries the budget its bind classification gate resolves")
         }
@@ -44,8 +43,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
                 rootSequenceCount: input.baseSequence.count,
                 seenBindFingerprints: seenBindFingerprints,
                 depth: 0,
-                buildPoolCapacity: tuning.nestedChainBuildPool(chainLength: chainLength),
-                tuning: tuning
+                buildPoolCapacity: input.tuning.nestedChainBuildPool(chainLength: chainLength)
             ),
             totalProbeCap: budget.totalProbeCap,
             rootMutation: nil
@@ -59,7 +57,6 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
         let seenBindFingerprints: Set<UInt64>
         let depth: Int
         let buildPoolCapacity: Int
-        let tuning: ScopedReductionTuning
 
         func descending(into fingerprint: UInt64) -> Chain {
             var fingerprints = seenBindFingerprints
@@ -69,8 +66,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
                 rootSequenceCount: rootSequenceCount,
                 seenBindFingerprints: fingerprints,
                 depth: depth + 1,
-                buildPoolCapacity: buildPoolCapacity,
-                tuning: tuning
+                buildPoolCapacity: buildPoolCapacity
             )
         }
     }
@@ -101,12 +97,12 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
                 nil
             case .chainRoot, .chainInterior, .chainTail:
                 ScopedChainLimits(
-                    maxBuildsPerStart: chain.tuning.nestedChainBuildsPerStart(depth: chain.depth),
+                    maxBuildsPerStart: scope.tuning.nestedChainBuildsPerStart(depth: chain.depth),
                     poolCapacity: chain.buildPoolCapacity
                 )
         }
         let configuration = ScopedChoiceConfiguration(
-            probesPerSearchTurn: chainLimits == nil ? nil : chain.tuning.probesPerControllerCandidateTurn,
+            probesPerSearchTurn: chainLimits == nil ? nil : scope.tuning.probesPerControllerCandidateTurn,
             searchBudget: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
             chainLimits: chainLimits
@@ -176,7 +172,8 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
                 baseSequence: liftedBind.sequence,
                 tree: liftedBind.tree,
                 graph: liftedBind.graph,
-                warmStartRecords: [:]
+                warmStartRecords: [:],
+                tuning: scope.tuning
             )
             let nestedHasDescendant = liftedBind.graph.composableNestedBind(
                 under: nestedBind.nodeID,
@@ -198,8 +195,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
             upstreamProposedBitPattern: upstreamProposedBitPattern,
             parent: scope,
             rootSequenceCount: chain.rootSequenceCount,
-            reportedMutation: reportedMutation,
-            tuning: chain.tuning
+            reportedMutation: reportedMutation
         )
     }
 
@@ -209,8 +205,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
         upstreamProposedBitPattern: UInt64?,
         parent: ScopedEncoderInput,
         rootSequenceCount: Int,
-        reportedMutation: EncoderProbe,
-        tuning: ScopedReductionTuning
+        reportedMutation: EncoderProbe
     ) -> ScopedReducer {
         let liftedGraph = lifted.terminalGraph()
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
@@ -240,7 +235,7 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
         }
         let search: ScopedSearchKind = downstreamLeaves.count == 1
             ? .binarySearch(ScopedBinarySearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence))
-            : .covering(ScopedCoveringSearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence, tuning: tuning))
+            : .covering(ScopedCoveringSearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence, tuning: parent.tuning))
 
         ScopedReductionLog.reducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
