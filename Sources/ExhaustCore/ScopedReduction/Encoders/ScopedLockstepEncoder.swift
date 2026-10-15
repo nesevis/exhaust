@@ -13,6 +13,8 @@ struct ScopedLockstepEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let requiresGenerator = false
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: TandemScope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -29,5 +31,26 @@ struct ScopedLockstepEncoder: ScopedEncoder {
                 reportedMutation: nil
             )
         )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedLockstepEncoder {
+    static func gate(_ _: TandemScope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: TandemScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: TandemScope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: TandemScope) -> ScopedRejectionKey? {
+        nil
     }
 }

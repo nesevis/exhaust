@@ -85,8 +85,8 @@ package struct ScopedReductionRunner {
     var deferralReleasedThisCycle = false
     /// True once any pass in the run accepted. Never reset: a run that ends with this false could not improve its input even once.
     var anyAcceptanceEverOccurred = false
-    /// Consecutive migration passes that rejected every probe, across the run. Reset by any migration acceptance.
-    var migrationConsecutiveRejects = 0
+    /// Consecutive passes that rejected every probe, across the run, for encoders behind a ``ScopedDispatchGate/demotedAfterRejects`` gate. Reset by the encoder's next acceptance.
+    var consecutiveRejectsByEncoder: [EncoderName: Int] = [:]
     var sequenceBeforeCycle: ChoiceSequence = []
     /// The staged joint checkpoint last searched, so an unchanged one is not searched again.
     var exhaustedStagedJoint: ScopedStagedJointSource.Checkpoint?

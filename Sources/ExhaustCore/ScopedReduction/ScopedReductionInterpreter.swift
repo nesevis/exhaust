@@ -85,7 +85,8 @@ extension ScopedReductionInterpreter {
     /// Owns one execution's collaborators and mutable state. ``run(_:context:)`` consumes it, so an execution's buffers and accounting cannot leak into the next.
     struct Context: ~Copyable {
         let decoder: ScopedDecoder
-        let encoderName: EncoderName
+        /// The encoder whose reducer runs, for its admission order and its name in logs.
+        let encoder: any ScopedEncoder.Type
         let isInstrumented: Bool
         let observer: ((ProbeObservation) -> Void)?
         /// Checked before each encode and before each decode.
@@ -108,7 +109,7 @@ extension ScopedReductionInterpreter {
             graph: ChoiceGraph,
             rejectCache: Set<UInt64>,
             decoder: ScopedDecoder,
-            encoderName: EncoderName,
+            encoder: any ScopedEncoder.Type,
             isInstrumented: Bool = false,
             deadlineCheck: (() -> Bool)? = nil,
             observer: ((ProbeObservation) -> Void)? = nil,
@@ -118,7 +119,7 @@ extension ScopedReductionInterpreter {
             self.graph = graph
             self.rejectCache = rejectCache
             self.decoder = decoder
-            self.encoderName = encoderName
+            self.encoder = encoder
             self.isInstrumented = isInstrumented
             self.deadlineCheck = deadlineCheck
             self.observer = observer

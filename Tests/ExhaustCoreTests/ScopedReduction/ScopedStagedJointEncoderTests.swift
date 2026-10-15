@@ -79,7 +79,7 @@ private struct StagedJointFixture {
                     probeWrapper: nil,
                     hasBind: false
                 ),
-                encoderName: ScopedStagedJointEncoder.name,
+                encoder: ScopedStagedJointEncoder.self,
                 deadlineCheck: {
                     checks.count += 1
                     guard let deadlineAfterChecks else {

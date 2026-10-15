@@ -156,7 +156,7 @@ private struct IntegerSearchRun {
                     probeWrapper: nil,
                     hasBind: false
                 ),
-                encoderName: .valueSearch,
+                encoder: ScopedValueSearchEncoder.self,
                 deadlineCheck: { isExpired }
             )
         )

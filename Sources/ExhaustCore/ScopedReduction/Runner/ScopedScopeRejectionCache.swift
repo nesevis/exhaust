@@ -17,15 +17,14 @@ struct ScopedScopeRejectionCache {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) {
-        if Self.usesCoarseKey(encoderScope) {
-            if let hash = coarseScopeHash(encoderScope) {
-                coarseRejectedHashes.insert(hash)
-            }
+        guard let key = encoderScope.typed.rejectionKey else {
             return
         }
-        if let hash = scopeHash(encoderScope, sequence: sequence, graph: graph) {
-            rejectedHashes.insert(hash)
+        if key.isCoarse {
+            coarseRejectedHashes.insert(Self.coarseScopeHash(key))
+            return
         }
+        rejectedHashes.insert(Self.scopeHash(key, sequence: sequence, graph: graph))
     }
 
     func isRejected(
@@ -33,16 +32,13 @@ struct ScopedScopeRejectionCache {
         sequence: ChoiceSequence,
         graph: ChoiceGraph
     ) -> Bool {
-        if Self.usesCoarseKey(encoderScope) {
-            guard let hash = coarseScopeHash(encoderScope) else {
-                return false
-            }
-            return coarseRejectedHashes.contains(hash)
-        }
-        guard let hash = scopeHash(encoderScope, sequence: sequence, graph: graph) else {
+        guard let key = encoderScope.typed.rejectionKey else {
             return false
         }
-        return rejectedHashes.contains(hash)
+        if key.isCoarse {
+            return coarseRejectedHashes.contains(Self.coarseScopeHash(key))
+        }
+        return rejectedHashes.contains(Self.scopeHash(key, sequence: sequence, graph: graph))
     }
 
     mutating func clear() {
@@ -57,30 +53,18 @@ struct ScopedScopeRejectionCache {
 
     // MARK: - Helpers
 
-    private static func usesCoarseKey(_ encoderScope: AnyEncoderScope) -> Bool {
-        switch encoderScope {
-            case .substitution, .branchPivot, .removal, .migration:
-                true
-            case .boundValue, .boundExchange, .bindPivot, .depthCollapse, .laneCollapse, .valueSearch, .floatSearch, .redistribution,
-                 .lockstep, .relation, .stagedJoint, .swap, .reorder:
-                false
-        }
-    }
-
-    /// Mixes the Zobrist contributions at the targeted positions into the operation's discriminator. Nil for searches, whose outcomes the scope does not determine.
-    private func scopeHash(
-        _ encoderScope: AnyEncoderScope,
+    /// Mixes the Zobrist contributions at the affected positions into the key's discriminator.
+    private static func scopeHash(
+        _ key: ScopedRejectionKey,
         sequence: ChoiceSequence,
         graph: ChoiceGraph
-    ) -> UInt64? {
-        var hash = Self.operationDiscriminator(encoderScope)
-        hash ^= encoderScope.scopeSubDiscriminator
-
-        guard encoderScope.forEachAffectedNodeID({ nodeID in
+    ) -> UInt64 {
+        var hash = key.discriminator
+        for nodeID in key.affectedNodeIDs {
             guard nodeID < graph.nodes.count,
                   let range = graph.nodes[nodeID].positionRange
             else {
-                return
+                continue
             }
             for position in range {
                 guard position < sequence.count else {
@@ -88,46 +72,20 @@ struct ScopedScopeRejectionCache {
                 }
                 hash ^= ZobristHash.contribution(at: position, sequence[position])
             }
-        }) else {
-            return nil
         }
-
         return hash
     }
 
-    /// Mixes the targeted node IDs into the operation's discriminator, so the same scope hashes alike whatever its leaf values.
-    private func coarseScopeHash(_ encoderScope: AnyEncoderScope) -> UInt64? {
-        var hash: UInt64 = Self.operationDiscriminator(encoderScope) ^ 0xC0A8_5E00_DEAD_BEEF
-        hash ^= encoderScope.scopeSubDiscriminator
-
-        guard encoderScope.forEachAffectedNodeID({ nodeID in
+    /// Mixes the affected node IDs into the key's discriminator, so the same scope hashes alike whatever its leaf values.
+    private static func coarseScopeHash(_ key: ScopedRejectionKey) -> UInt64 {
+        var hash: UInt64 = key.discriminator ^ 0xC0A8_5E00_DEAD_BEEF
+        for nodeID in key.affectedNodeIDs {
             var bits = UInt64(nodeID) &* 0x9E37_79B9_7F4A_7C15
             bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
             bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
             bits ^= bits >> 31
             hash ^= bits
-        }) else {
-            return nil
         }
-
         return hash
-    }
-
-    private static func operationDiscriminator(_ encoderScope: AnyEncoderScope) -> UInt64 {
-        switch encoderScope {
-            case .removal:
-                0xA1B2_C3D4_E5F6_0718
-            case .substitution, .branchPivot:
-                0x1827_3645_5463_7281
-            case .swap:
-                0x9182_7364_5546_3728
-            case .migration:
-                0x6372_8190_A0B0_C0D0
-            case .bindPivot:
-                0x4B1D_9140_7A5E_0002
-            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .floatSearch, .redistribution, .lockstep,
-                 .relation, .stagedJoint, .reorder:
-                0
-        }
     }
 }

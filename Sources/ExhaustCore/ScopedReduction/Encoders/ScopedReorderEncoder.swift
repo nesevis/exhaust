@@ -13,6 +13,8 @@ struct ScopedReorderEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let requiresGenerator = false
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .unordered
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: ReorderingScope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -20,5 +22,26 @@ struct ScopedReorderEncoder: ScopedEncoder {
             .reorder(ScopedReorderSearch(scope: scope, baseSequence: input.baseSequence)),
             configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
         )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedReorderEncoder {
+    static func gate(_ _: ReorderingScope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: ReorderingScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: ReorderingScope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: ReorderingScope) -> ScopedRejectionKey? {
+        nil
     }
 }

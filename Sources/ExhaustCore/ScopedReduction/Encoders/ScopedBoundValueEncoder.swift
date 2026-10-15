@@ -9,23 +9,19 @@
 ///
 /// A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
 struct ScopedBoundValueEncoder: ScopedEncoder {
-    /// A bound value scope with the budgets the runner resolves from the bind's gate when it dispatches the scope.
-    struct Scope {
-        let bindScope: BoundValueScope
-        /// Upstream proposals the outermost level may build. The gate's decayed budget for the bind's fingerprint.
-        let upstreamBudget: Int
-        /// Probes the whole chain may emit; zero is uncapped. ``ScopedReductionTuning/composedFirstDispatchProbeCap`` on a fingerprint's first dispatch of the run, zero afterwards.
-        let totalProbeCap: Int
-    }
-
     static let name: EncoderName = .boundValueSearch
     static let isValueDependent = true
     static let requiresGenerator = true
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = true
     let tuning: ScopedReductionTuning
 
-    func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
-        let bindScope = scope.bindScope
+    /// Reads its upstream budget and probe cap from the ``ScopedDispatchBudget`` its bind classification gate resolves.
+    func reducer(_ bindScope: BoundValueScope, input: ScopedEncoderInput) -> ScopedReducer {
+        guard let budget = input.dispatchBudget else {
+            preconditionFailure("A bound value dispatch carries the budget its bind classification gate resolves")
+        }
         let graph = input.graph
         var seenBindFingerprints: Set<UInt64> = []
         if bindScope.bindNodeID < graph.nodes.count,
@@ -44,14 +40,14 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
             controllerLeafNodeID: bindScope.upstreamLeafNodeID,
             stage: chainLength > 1 ? .chainRoot : .single,
             chain: Chain(
-                upstreamBudget: scope.upstreamBudget,
+                upstreamBudget: budget.upstreamBudget,
                 rootSequenceCount: input.baseSequence.count,
                 seenBindFingerprints: seenBindFingerprints,
                 depth: 0,
                 buildPoolCapacity: tuning.nestedChainBuildPool(chainLength: chainLength),
                 tuning: tuning
             ),
-            totalProbeCap: scope.totalProbeCap,
+            totalProbeCap: budget.totalProbeCap,
             rootMutation: nil
         )
     }
@@ -373,5 +369,34 @@ struct ScopedBoundValueEncoder: ScopedEncoder {
             length += 1
         }
         return length
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedBoundValueEncoder {
+    static func gate(_ scope: BoundValueScope) -> ScopedDispatchGate {
+        .bindClassification(bindNodeID: scope.bindNodeID, upstreamLeafNodeID: scope.upstreamLeafNodeID)
+    }
+
+    /// The bound subtree's positions, whose convergence the pass's lifts invalidated.
+    static func convergenceInvalidatedByAcceptance(_ scope: BoundValueScope, in graph: ChoiceGraph) -> ClosedRange<Int>? {
+        guard scope.bindNodeID < graph.nodes.count,
+              case let .bind(bindMetadata) = graph.nodes[scope.bindNodeID].kind,
+              graph.nodes[scope.bindNodeID].children.count > bindMetadata.boundChildIndex
+        else {
+            return nil
+        }
+        let boundChildID = graph.nodes[scope.bindNodeID].children[bindMetadata.boundChildIndex]
+        return graph.nodes[boundChildID].positionRange
+    }
+
+    static func isValid(_: BoundValueScope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: BoundValueScope) -> ScopedRejectionKey? {
+        nil
     }
 }

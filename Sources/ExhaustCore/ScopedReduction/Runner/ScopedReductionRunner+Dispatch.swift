@@ -8,7 +8,7 @@
 extension ScopedReductionRunner {
     /// How a dispatch loop selects and follows up its passes.
     enum DispatchPolicy {
-        /// Ordinary cycles: the bound value gate, scope rejections, migration demotion, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
+        /// Ordinary cycles: dispatch gates, scope rejections, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
         case main
         /// Relax round exploitation: none of the main policy's dispatch decisions, no operations that need the generator, and every rebuild prepares all sources again.
         case exploitation
@@ -17,7 +17,7 @@ extension ScopedReductionRunner {
     /// What dispatch does with one encoder scope.
     enum DispatchDecision: Equatable {
         case skip
-        case classifyBind(bindNodeID: Int, fingerprint: UInt64)
+        case classifyBind(bindNodeID: Int, upstreamLeafNodeID: Int, fingerprint: UInt64)
         case rematerialize
         case readyToDispatch(boundValueFingerprint: UInt64?)
     }
@@ -105,7 +105,8 @@ extension ScopedReductionRunner {
 
         switch policy {
             case .exploitation:
-                guard encoderScope.isValid(in: graph), encoderScope.encoder.requiresGenerator == false else {
+                let typed = encoderScope.typed
+                guard typed.isValid(in: graph), typed.encoder.requiresGenerator == false else {
                     return .skip
                 }
                 return .dispatch(encoderScope, boundValueFingerprint: nil)
@@ -129,25 +130,23 @@ extension ScopedReductionRunner {
     }
 
     private mutating func resolveDispatch(_ encoderScope: AnyEncoderScope) -> Resolution {
-        if encoderScope.encoder.name == .migration,
+        let typed = encoderScope.typed
+        if case .demotedAfterRejects = typed.gate,
            tuning.migrationDemotionThreshold > 0,
-           migrationConsecutiveRejects >= tuning.migrationDemotionThreshold
+           consecutiveRejectsByEncoder[typed.encoder.name, default: 0] >= tuning.migrationDemotionThreshold
         {
             return .skip
         }
 
         var decision = evaluateDispatch(encoderScope)
 
-        if case let .classifyBind(bindNodeID, fingerprint) = decision {
-            guard case let .boundValue(bindScope) = encoderScope else {
-                return .skip
-            }
+        if case let .classifyBind(bindNodeID, upstreamLeafNodeID, fingerprint) = decision {
             let classificationMaterializations = graph.classifyBind(
                 at: bindNodeID,
                 gen: generator,
                 baseSequence: incumbent.sequence,
                 fallbackTree: incumbent.tree,
-                upstreamLeafNodeID: bindScope.upstreamLeafNodeID
+                upstreamLeafNodeID: upstreamLeafNodeID
             )
             if collectStats {
                 stats.recordMaterializations(classificationMaterializations, at: .classification)
@@ -181,7 +180,8 @@ extension ScopedReductionRunner {
 
     /// Decides whether to dispatch, skip, classify a bind first, or rematerialize a stripped graph.
     func evaluateDispatch(_ encoderScope: AnyEncoderScope) -> DispatchDecision {
-        guard encoderScope.isValid(in: graph) else {
+        let typed = encoderScope.typed
+        guard typed.isValid(in: graph) else {
             return .skip
         }
 
@@ -189,40 +189,41 @@ extension ScopedReductionRunner {
             return .skip
         }
 
-        if case let .boundValue(bindScope) = encoderScope {
-            guard bindScope.bindNodeID < graph.nodes.count,
-                  case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind
-            else {
-                return .skip
-            }
-            let fingerprint = bindMetadata.fingerprint
-
-            switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
-                case .skip:
+        switch typed.gate {
+            case let .bindClassification(bindNodeID, upstreamLeafNodeID):
+                guard bindNodeID < graph.nodes.count,
+                      case let .bind(bindMetadata) = graph.nodes[bindNodeID].kind
+                else {
                     return .skip
-                case .classifyFirst:
-                    guard let cached = graph.bindClassifications[fingerprint] else {
-                        return .classifyBind(bindNodeID: bindScope.bindNodeID, fingerprint: fingerprint)
-                    }
-                    if cached.topology != .identical || cached.liftability != .both {
+                }
+                let fingerprint = bindMetadata.fingerprint
+
+                switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
+                    case .skip:
                         return .skip
-                    }
-                case .dispatch:
-                    break
-            }
+                    case .classifyFirst:
+                        guard let cached = graph.bindClassifications[fingerprint] else {
+                            return .classifyBind(bindNodeID: bindNodeID, upstreamLeafNodeID: upstreamLeafNodeID, fingerprint: fingerprint)
+                        }
+                        if cached.topology != .identical || cached.liftability != .both {
+                            return .skip
+                        }
+                    case .dispatch:
+                        break
+                }
 
-            return .readyToDispatch(boundValueFingerprint: fingerprint)
+                return .readyToDispatch(boundValueFingerprint: fingerprint)
+            case let .stalledBindInner(leafNodeID):
+                guard anyAccepted == false,
+                      Self.isStalledBindInner(bindInnerLeafNodeID: leafNodeID, graph: graph, gate: gate)
+                else {
+                    return .skip
+                }
+            case .open, .demotedAfterRejects:
+                break
         }
 
-        if case let .boundExchange(exchange) = encoderScope {
-            guard anyAccepted == false,
-                  Self.isStalledBindInner(bindInnerLeafNodeID: exchange.sourceLeafNodeID, graph: graph, gate: gate)
-            else {
-                return .skip
-            }
-        }
-
-        if graphIsStripped, encoderScope.encoder.isPathChanging {
+        if graphIsStripped, typed.encoder.isPathChanging {
             return .rematerialize
         }
 
@@ -234,7 +235,7 @@ extension ScopedReductionRunner {
     /// Runs the encoder's reducer for one scope in its own interpreter execution, seeded from the runner's state, and adopts the incumbent, graph, and cache it returns.
     ///
     /// - Parameters:
-    ///   - boundValueFingerprint: The bind's fingerprint for a bound value scope; its gate supplies the decayed budget and first-dispatch probe cap.
+    ///   - boundValueFingerprint: The bind's fingerprint for a scope behind a bind classification gate, which supplies the decayed budget and first-dispatch probe cap.
     ///   - usesWarmStarts: Whether value searches start from the graph's convergence records. Post-cycle passes start fresh.
     ///   - checksDeadline: False for the final reorder pass, which always runs to completion.
     mutating func runPass(
@@ -243,13 +244,21 @@ extension ScopedReductionRunner {
         usesWarmStarts: Bool = true,
         checksDeadline: Bool = true
     ) -> PassRecord {
-        let input = ScopedEncoderInput(
+        let typed = encoderScope.typed
+        var input = ScopedEncoderInput(
             baseSequence: incumbent.sequence,
             tree: incumbent.tree,
             graph: graph,
             warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:]
         )
-        let scopedReducer = reducer(for: encoderScope, input: input, boundValueFingerprint: boundValueFingerprint)
+        if case .bindClassification = typed.gate {
+            let fingerprint = boundValueFingerprint ?? 0
+            input.dispatchBudget = ScopedDispatchBudget(
+                upstreamBudget: gate.decayedBudget(fingerprint: fingerprint),
+                totalProbeCap: gate.isFirstDispatch(fingerprint: fingerprint) ? tuning.composedFirstDispatchProbeCap : 0
+            )
+        }
+        let scopedReducer = typed.reducer(tuning: tuning, input: input)
         if let boundValueFingerprint {
             gate.markDispatched(boundValueFingerprint)
         }
@@ -268,7 +277,7 @@ extension ScopedReductionRunner {
                 graph: executionGraph,
                 rejectCache: executionRejectCache,
                 decoder: decoder,
-                encoderName: encoderScope.encoder.name,
+                encoder: typed.encoder,
                 isInstrumented: isInstrumented,
                 deadlineCheck: checksDeadline ? makeDeadlineCheck() : nil,
                 timingMark: collectStats ? timingMark : nil
@@ -298,58 +307,6 @@ extension ScopedReductionRunner {
         topologicalOrder: [],
         dependencyAdjacency: []
     )
-
-    /// Builds the encoder's reducer for the scope. A bound value scope takes its upstream budget and probe cap from the gate.
-    private func reducer(
-        for encoderScope: AnyEncoderScope,
-        input: ScopedEncoderInput,
-        boundValueFingerprint: UInt64?
-    ) -> ScopedReducer {
-        switch encoderScope {
-            case let .boundValue(bindScope):
-                let fingerprint = boundValueFingerprint ?? 0
-                return ScopedBoundValueEncoder(tuning: tuning).reducer(
-                    ScopedBoundValueEncoder.Scope(
-                        bindScope: bindScope,
-                        upstreamBudget: gate.decayedBudget(fingerprint: fingerprint),
-                        totalProbeCap: gate.isFirstDispatch(fingerprint: fingerprint) ? tuning.composedFirstDispatchProbeCap : 0
-                    ),
-                    input: input
-                )
-            case let .boundExchange(scope):
-                return ScopedBoundExchangeEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .bindPivot(scope):
-                return ScopedBindPivotEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .depthCollapse(scope):
-                return ScopedDepthCollapseEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .laneCollapse(scope):
-                return ScopedLaneCollapseEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .valueSearch(scope):
-                return ScopedValueSearchEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .floatSearch(scope):
-                return ScopedFloatSearchEncoder().reducer(scope, input: input)
-            case let .redistribution(scope):
-                return ScopedRedistributionEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .lockstep(scope):
-                return ScopedLockstepEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .relation(scope):
-                return ScopedRelationEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .stagedJoint(scope):
-                return ScopedStagedJointEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .removal(scope):
-                return ScopedRemovalEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .substitution(scope):
-                return ScopedSubstitutionEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .branchPivot(scope):
-                return ScopedBranchPivotEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .migration(scope):
-                return ScopedMigrationEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .swap(scope):
-                return ScopedSwapEncoder(tuning: tuning).reducer(scope, input: input)
-            case let .reorder(scope):
-                return ScopedReorderEncoder(tuning: tuning).reducer(scope, input: input)
-        }
-    }
 
     // MARK: - Pass Policy
 
@@ -394,8 +351,10 @@ extension ScopedReductionRunner {
             gate.recordOutcome(fingerprint: fingerprint, accepted: report.anyAccepted)
         }
 
-        if pass.encoderScope.encoder.name == .migration {
-            migrationConsecutiveRejects = report.anyAccepted ? 0 : migrationConsecutiveRejects + 1
+        let typed = pass.encoderScope.typed
+        if case .demotedAfterRejects = typed.gate {
+            let name = typed.encoder.name
+            consecutiveRejectsByEncoder[name] = report.anyAccepted ? 0 : consecutiveRejectsByEncoder[name, default: 0] + 1
         }
 
         if hadUnresolvedReplacement == false, report.searchReport.hadUnresolvedReplacement {
@@ -420,13 +379,7 @@ extension ScopedReductionRunner {
             "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(incumbent.sequence.count)",
         ])
 
-        let isBoundValue = switch pass.encoderScope {
-            case .boundValue:
-                true
-            default:
-                false
-        }
-        let action: PostAcceptanceAction = report.anyAccepted && (report.anyRequiresRebuild || isBoundValue)
+        let action: PostAcceptanceAction = report.anyAccepted && (report.anyRequiresRebuild || typed.encoder.rebuildsAfterAcceptance)
             ? .rebuildAndResume
             : .continueDispatching
 
@@ -448,25 +401,17 @@ extension ScopedReductionRunner {
 
     // MARK: - Rebuilds
 
-    /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families, rebuilds permutation and value families, and clears the scope cache; anything else rebuilds every family and clears the scope cache. A bound value pass also clears convergence in the bind's bound range, which its lifts invalidated.
+    /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families, rebuilds permutation and value families, and clears the scope cache; anything else rebuilds every family and clears the scope cache. Convergence the encoder reports its acceptance invalidated is cleared as well.
     mutating func rebuildAfterPass(_ pass: PassRecord) {
-        var boundPositionRange: ClosedRange<Int>?
-        if case let .boundValue(bindScope) = pass.encoderScope,
-           bindScope.bindNodeID < graph.nodes.count,
-           case let .bind(bindMetadata) = graph.nodes[bindScope.bindNodeID].kind,
-           graph.nodes[bindScope.bindNodeID].children.count > bindMetadata.boundChildIndex
-        {
-            let boundChildID = graph.nodes[bindScope.bindNodeID].children[bindMetadata.boundChildIndex]
-            boundPositionRange = graph.nodes[boundChildID].positionRange
-        }
+        let invalidatedRange = pass.encoderScope.typed.convergenceInvalidatedByAcceptance(in: graph)
 
         let graphBefore = graph
         let graphStart = MonotonicClock.nanoseconds()
         let diff = rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
         graphIsStripped = pass.report.latestTreeIsStripped
 
-        if let boundRange = boundPositionRange {
-            graph.clearConvergence(inPositionRange: boundRange)
+        if let invalidatedRange {
+            graph.clearConvergence(inPositionRange: invalidatedRange)
         }
         let graphEnd = MonotonicClock.nanoseconds()
 
@@ -539,15 +484,9 @@ extension ScopedReductionRunner {
             }
             stats.numericSearchCountsByArity[arity, default: ReductionProbeCounts()].merge(searchCounts.counts)
         }
-        switch pass.encoderScope {
-            case .boundValue:
-                stats.recordMaterializations(report.liftAttempts, at: .boundValueLift)
-            case .bindPivot:
-                stats.recordMaterializations(report.liftAttempts, at: .bindPivotLift)
-            case .boundExchange:
-                stats.recordMaterializations(report.liftAttempts, at: .boundExchangeLift)
-            default:
-                break
+        if report.liftAttempts > 0 {
+            stats.recordMaterializations(report.liftAttempts, at: .lift)
+            stats.liftAttemptsByEncoder[pass.encoderScope.encoder.name, default: 0] += report.liftAttempts
         }
     }
 

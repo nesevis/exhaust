@@ -13,6 +13,8 @@ struct ScopedBoundExchangeEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let requiresGenerator = true
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ exchange: BoundExchangeScope, input scope: ScopedEncoderInput) -> ScopedReducer {
@@ -72,5 +74,26 @@ struct ScopedBoundExchangeEncoder: ScopedEncoder {
                 reportedMutation: ScopedComposition.reshaping(proposal.mutation)
             )
         )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedBoundExchangeEncoder {
+    static func gate(_ scope: BoundExchangeScope) -> ScopedDispatchGate {
+        .stalledBindInner(leafNodeID: scope.sourceLeafNodeID)
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: BoundExchangeScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: BoundExchangeScope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: BoundExchangeScope) -> ScopedRejectionKey? {
+        nil
     }
 }

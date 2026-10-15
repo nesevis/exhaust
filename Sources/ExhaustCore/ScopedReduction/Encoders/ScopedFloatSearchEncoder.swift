@@ -13,6 +13,11 @@ struct ScopedFloatSearchEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let requiresGenerator = false
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
+
+    /// Float search reads no budgets.
+    init(tuning _: ScopedReductionTuning) {}
 
     func reducer(_ scope: FloatMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -27,5 +32,26 @@ struct ScopedFloatSearchEncoder: ScopedEncoder {
                 reportedMutation: nil
             )
         )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedFloatSearchEncoder {
+    static func gate(_ _: FloatMinimizationScope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: FloatMinimizationScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: FloatMinimizationScope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: FloatMinimizationScope) -> ScopedRejectionKey? {
+        nil
     }
 }

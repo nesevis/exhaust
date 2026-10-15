@@ -13,6 +13,8 @@ struct ScopedDepthCollapseEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let requiresGenerator = false
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -29,5 +31,26 @@ struct ScopedDepthCollapseEncoder: ScopedEncoder {
                 reportedMutation: nil
             )
         )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedDepthCollapseEncoder {
+    static func gate(_ _: ValueMinimizationScope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: ValueMinimizationScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: ValueMinimizationScope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: ValueMinimizationScope) -> ScopedRejectionKey? {
+        nil
     }
 }

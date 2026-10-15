@@ -21,6 +21,8 @@ struct ScopedStagedJointEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let requiresGenerator = false
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -119,5 +121,26 @@ struct ScopedStagedJointEncoder: ScopedEncoder {
             candidatePool: candidatePool,
             workLimit: tuning.jointWorkLimit(arity: arity + 1)
         )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedStagedJointEncoder {
+    static func gate(_ _: Scope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: Scope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: Scope, in _: ChoiceGraph) -> Bool {
+        true
+    }
+
+    /// A search, whose outcome the scope does not determine.
+    static func rejectionKey(_: Scope) -> ScopedRejectionKey? {
+        nil
     }
 }

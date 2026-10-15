@@ -18,6 +18,8 @@ struct ScopedBranchPivotEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let requiresGenerator = false
     static let isPathChanging = true
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -31,6 +33,32 @@ struct ScopedBranchPivotEncoder: ScopedEncoder {
         return .search(
             .singleCandidate(ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: input.baseSequence)),
             configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+        )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedBranchPivotEncoder {
+    static func gate(_ _: Scope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: Scope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_ scope: Scope, in graph: ChoiceGraph) -> Bool {
+        scope.pickNodeID < graph.nodes.count
+            && graph.nodes[scope.pickNodeID].positionRange != nil
+    }
+
+    /// Shares substitution's discriminator, and adds the target branch so that rejecting one branch at a pick does not block another.
+    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey? {
+        ScopedRejectionKey(
+            discriminator: 0x1827_3645_5463_7281 ^ scope.targetBranchID,
+            isCoarse: true,
+            affectedNodeIDs: [scope.pickNodeID]
         )
     }
 }

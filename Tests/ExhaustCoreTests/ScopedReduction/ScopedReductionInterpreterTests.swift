@@ -97,7 +97,7 @@ private struct InterpreterFixture {
                     probeWrapper: nil,
                     hasBind: false
                 ),
-                encoderName: .valueSearch,
+                encoder: ScopedValueSearchEncoder.self,
                 deadlineCheck: deadlineCheck
             )
         ).report

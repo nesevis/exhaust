@@ -90,8 +90,7 @@ extension ScopedReductionInterpreter {
             context.observer?(.decoded(probeID: observationID, sequence: result.sequence))
         }
 
-        let order: ReductionOrder = context.encoderName == .numericReorder ? .unordered : .notLarger
-        if let recovered = decoding.recovered, context.incumbent.admits(recovered, under: order) {
+        if let recovered = decoding.recovered, context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
             let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, observationID: observationID, context: &context)
             context.probeTiming?.chargeDecode()
             return evaluation
@@ -113,7 +112,7 @@ extension ScopedReductionInterpreter {
         if context.isInstrumented {
             ScopedReductionLog.replacementProbeRejection(
                 mutation: mutation,
-                encoder: context.encoderName,
+                encoder: context.encoder.name,
                 graph: context.graph,
                 baseSequenceCount: context.incumbent.sequence.count,
                 probeSequenceCount: context.candidateBuffer.count,

@@ -19,6 +19,8 @@ struct ScopedSubstitutionEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let requiresGenerator = false
     static let isPathChanging = true
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -46,6 +48,48 @@ struct ScopedSubstitutionEncoder: ScopedEncoder {
         return .search(
             .singleCandidate(ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: sequence)),
             configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+        )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedSubstitutionEncoder {
+    static func gate(_ _: Scope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: Scope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_ scope: Scope, in graph: ChoiceGraph) -> Bool {
+        switch scope {
+            case let .selfSimilar(targetNodeID, donorNodeID):
+                targetNodeID < graph.nodes.count
+                    && graph.nodes[targetNodeID].positionRange != nil
+                    && donorNodeID < graph.nodes.count
+                    && graph.nodes[donorNodeID].positionRange != nil
+            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID):
+                ancestorPickNodeID < graph.nodes.count
+                    && graph.nodes[ancestorPickNodeID].positionRange != nil
+                    && descendantPickNodeID < graph.nodes.count
+                    && graph.nodes[descendantPickNodeID].positionRange != nil
+        }
+    }
+
+    /// Shares its discriminator with branch pivot.
+    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey? {
+        let affectedNodeIDs = switch scope {
+            case let .selfSimilar(targetNodeID, donorNodeID):
+                [targetNodeID, donorNodeID]
+            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID):
+                [ancestorPickNodeID, descendantPickNodeID]
+        }
+        return ScopedRejectionKey(
+            discriminator: 0x1827_3645_5463_7281,
+            isCoarse: true,
+            affectedNodeIDs: affectedNodeIDs
         )
     }
 }

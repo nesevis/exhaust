@@ -72,7 +72,7 @@ private struct BoundExchangeFixture {
                     probeWrapper: nil,
                     hasBind: true
                 ),
-                encoderName: ScopedBoundExchangeEncoder.name
+                encoder: ScopedBoundExchangeEncoder.self
             )
         )
         return result.report

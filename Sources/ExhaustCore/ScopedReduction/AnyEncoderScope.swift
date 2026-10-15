@@ -5,7 +5,7 @@
 
 /// One discovered scope of any encoder, tagged with the encoder that runs it. Family sources yield these in dispatch order.
 ///
-/// Each encoder's ``ScopedEncoder/Scope`` is its own type, so sources, priority ordering, the scope rejection cache, and the runner hold scopes of different encoders through this closed enum rather than through existentials.
+/// Each encoder's ``ScopedEncoder/Scope`` is its own type, so sources, priority ordering, and the runner hold scopes of different encoders through this closed enum rather than through existentials. Dispatch opens a scope through ``typed`` only when it asks a question of its encoder.
 enum AnyEncoderScope {
     case boundValue(BoundValueScope)
     case boundExchange(BoundExchangeScope)
@@ -25,172 +25,89 @@ enum AnyEncoderScope {
     case swap(PermutationScope)
     case reorder(ReorderingScope)
 
-    /// The encoder this scope belongs to, whose static requirements answer every question dispatch asks before the encoder's reducer is built.
+    /// The scope with its encoder's type recovered, through which dispatch asks every question of the encoder. This is the one switch a new encoder adds an arm to.
+    var typed: any AnyTypedEncoderScope {
+        switch self {
+            case let .boundValue(scope):
+                TypedEncoderScope<ScopedBoundValueEncoder>(scope: scope)
+            case let .boundExchange(scope):
+                TypedEncoderScope<ScopedBoundExchangeEncoder>(scope: scope)
+            case let .bindPivot(scope):
+                TypedEncoderScope<ScopedBindPivotEncoder>(scope: scope)
+            case let .depthCollapse(scope):
+                TypedEncoderScope<ScopedDepthCollapseEncoder>(scope: scope)
+            case let .laneCollapse(scope):
+                TypedEncoderScope<ScopedLaneCollapseEncoder>(scope: scope)
+            case let .valueSearch(scope):
+                TypedEncoderScope<ScopedValueSearchEncoder>(scope: scope)
+            case let .floatSearch(scope):
+                TypedEncoderScope<ScopedFloatSearchEncoder>(scope: scope)
+            case let .redistribution(scope):
+                TypedEncoderScope<ScopedRedistributionEncoder>(scope: scope)
+            case let .lockstep(scope):
+                TypedEncoderScope<ScopedLockstepEncoder>(scope: scope)
+            case let .relation(scope):
+                TypedEncoderScope<ScopedRelationEncoder>(scope: scope)
+            case let .stagedJoint(scope):
+                TypedEncoderScope<ScopedStagedJointEncoder>(scope: scope)
+            case let .removal(scope):
+                TypedEncoderScope<ScopedRemovalEncoder>(scope: scope)
+            case let .substitution(scope):
+                TypedEncoderScope<ScopedSubstitutionEncoder>(scope: scope)
+            case let .branchPivot(scope):
+                TypedEncoderScope<ScopedBranchPivotEncoder>(scope: scope)
+            case let .migration(scope):
+                TypedEncoderScope<ScopedMigrationEncoder>(scope: scope)
+            case let .swap(scope):
+                TypedEncoderScope<ScopedSwapEncoder>(scope: scope)
+            case let .reorder(scope):
+                TypedEncoderScope<ScopedReorderEncoder>(scope: scope)
+        }
+    }
+
+    /// The encoder this scope belongs to, whose static requirements answer every question dispatch asks of the encoder alone.
     var encoder: any ScopedEncoder.Type {
-        switch self {
-            case .boundValue:
-                ScopedBoundValueEncoder.self
-            case .boundExchange:
-                ScopedBoundExchangeEncoder.self
-            case .bindPivot:
-                ScopedBindPivotEncoder.self
-            case .depthCollapse:
-                ScopedDepthCollapseEncoder.self
-            case .laneCollapse:
-                ScopedLaneCollapseEncoder.self
-            case .valueSearch:
-                ScopedValueSearchEncoder.self
-            case .floatSearch:
-                ScopedFloatSearchEncoder.self
-            case .redistribution:
-                ScopedRedistributionEncoder.self
-            case .lockstep:
-                ScopedLockstepEncoder.self
-            case .relation:
-                ScopedRelationEncoder.self
-            case .stagedJoint:
-                ScopedStagedJointEncoder.self
-            case .removal:
-                ScopedRemovalEncoder.self
-            case .substitution:
-                ScopedSubstitutionEncoder.self
-            case .branchPivot:
-                ScopedBranchPivotEncoder.self
-            case .migration:
-                ScopedMigrationEncoder.self
-            case .swap:
-                ScopedSwapEncoder.self
-            case .reorder:
-                ScopedReorderEncoder.self
-        }
+        typed.encoder
+    }
+}
+
+// MARK: - Typed Scope
+
+/// The questions dispatch asks of one scope, answered by its encoder.
+protocol AnyTypedEncoderScope {
+    var encoder: any ScopedEncoder.Type { get }
+    var gate: ScopedDispatchGate { get }
+    func isValid(in graph: ChoiceGraph) -> Bool
+    var rejectionKey: ScopedRejectionKey? { get }
+    func convergenceInvalidatedByAcceptance(in graph: ChoiceGraph) -> ClosedRange<Int>?
+    func reducer(tuning: ScopedReductionTuning, input: ScopedEncoderInput) -> ScopedReducer
+}
+
+/// A scope paired with its encoder's type, so each question is written once, generically.
+struct TypedEncoderScope<Encoder: ScopedEncoder>: AnyTypedEncoderScope {
+    let scope: Encoder.Scope
+
+    var encoder: any ScopedEncoder.Type {
+        Encoder.self
     }
 
-    // MARK: - Validity
+    var gate: ScopedDispatchGate {
+        Encoder.gate(scope)
+    }
 
-    /// Whether the operation's target nodes still exist and satisfy its preconditions in `graph`.
     func isValid(in graph: ChoiceGraph) -> Bool {
-        switch self {
-            case let .removal(.elements(scope)):
-                return scope.targets.allSatisfy { target in
-                    Self.sequenceCanShrink(target.sequenceNodeID, in: graph)
-                }
-            case let .removal(.coveringAligned(scope)):
-                return scope.siblings.allSatisfy { sibling in
-                    Self.sequenceCanShrink(sibling.sequenceNodeID, in: graph)
-                }
-            case let .removal(.window(scope)):
-                return Self.sequenceCanShrink(scope.sequenceNodeID, in: graph)
-            case let .substitution(.selfSimilar(targetNodeID, donorNodeID)):
-                return targetNodeID < graph.nodes.count
-                    && graph.nodes[targetNodeID].positionRange != nil
-                    && donorNodeID < graph.nodes.count
-                    && graph.nodes[donorNodeID].positionRange != nil
-            case let .branchPivot(scope):
-                return scope.pickNodeID < graph.nodes.count
-                    && graph.nodes[scope.pickNodeID].positionRange != nil
-            case let .substitution(.descendantPromotion(ancestorPickNodeID, descendantPickNodeID)):
-                return ancestorPickNodeID < graph.nodes.count
-                    && graph.nodes[ancestorPickNodeID].positionRange != nil
-                    && descendantPickNodeID < graph.nodes.count
-                    && graph.nodes[descendantPickNodeID].positionRange != nil
-            case let .swap(scope):
-                return scope.parentNodeID < graph.nodes.count
-                    && graph.nodes[scope.parentNodeID].positionRange != nil
-            case let .migration(scope):
-                let donorSequenceNodeID = scope.sourceParentSequenceNodeID ?? scope.sourceSequenceNodeID
-                guard Self.sequenceCanShrink(donorSequenceNodeID, in: graph) else {
-                    return false
-                }
-                return scope.receiverSequenceNodeID < graph.nodes.count
-                    && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
-            case let .bindPivot(scope):
-                return scope.bindNodeID < graph.nodes.count
-                    && graph.nodes[scope.bindNodeID].positionRange != nil
-                    && scope.pickNodeID < graph.nodes.count
-                    && graph.nodes[scope.pickNodeID].positionRange != nil
-            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .floatSearch, .redistribution, .lockstep,
-                 .relation, .stagedJoint, .reorder:
-                return true
-        }
+        Encoder.isValid(scope, in: graph)
     }
 
-    // MARK: - Rejection Keys
-
-    /// Per-scope discriminator for the scope rejection cache. Branch pivot uses the target branch so that rejecting one branch at a pick does not block another. Bind pivot mixes the pick's node ID in as well, because its affected set is the bind alone and one bind inner can hold several picks with the same branch identifiers. Centered and symmetric windows have separate discriminators so rejecting a full-window removal does not block their smaller probes or one another. Zero otherwise.
-    var scopeSubDiscriminator: UInt64 {
-        if case let .removal(.window(scope)) = self {
-            switch scope.growth {
-                case .rightward:
-                    return 0
-                case .outward:
-                    return 0xC37E_2ED0_0000_0001
-                case .symmetric:
-                    return 0xC37E_2ED0_0000_0002
-            }
-        }
-        if case let .branchPivot(scope) = self {
-            return scope.targetBranchID
-        }
-        if case let .bindPivot(scope) = self {
-            return scope.targetBranchID ^ (UInt64(scope.pickNodeID) &* 0x9E37_79B9_7F4A_7C15)
-        }
-        return 0
+    var rejectionKey: ScopedRejectionKey? {
+        Encoder.rejectionKey(scope)
     }
 
-    /// Invokes `body` for each node whose position range the operation affects, for the scope rejection cache's position-scoped hashes.
-    ///
-    /// Returns `false` for searches, whose affected set is not fixed by the scope, and for aligned removal, whose rows vary. Bind pivot is the exception among minimization scopes: its candidate is a function of the bind's current entries, and the bind's range covers the pick, so the bind alone is its affected set. Reporting the pick as well would cancel its positions out of the hash.
-    func forEachAffectedNodeID(_ body: (Int) -> Void) -> Bool {
-        switch self {
-            case let .bindPivot(scope):
-                body(scope.bindNodeID)
-            case let .removal(.elements(elementScope)):
-                for target in elementScope.targets {
-                    for nodeID in target.elementNodeIDs {
-                        body(nodeID)
-                    }
-                }
-            case .removal(.coveringAligned):
-                return false
-            case let .removal(.window(windowScope)):
-                for nodeID in windowScope.elementNodeIDs {
-                    body(nodeID)
-                }
-            case let .substitution(.selfSimilar(targetNodeID, donorNodeID)):
-                body(targetNodeID)
-                body(donorNodeID)
-            case let .branchPivot(scope):
-                body(scope.pickNodeID)
-            case let .substitution(.descendantPromotion(ancestorPickNodeID, descendantPickNodeID)):
-                body(ancestorPickNodeID)
-                body(descendantPickNodeID)
-            case let .swap(scope):
-                for group in scope.swappableGroups {
-                    for nodeID in group {
-                        body(nodeID)
-                    }
-                }
-            case let .migration(scope):
-                for nodeID in scope.elementNodeIDs {
-                    body(nodeID)
-                }
-                body(scope.receiverSequenceNodeID)
-            case .boundValue, .boundExchange, .depthCollapse, .laneCollapse, .valueSearch, .floatSearch, .redistribution, .lockstep,
-                 .relation, .stagedJoint, .reorder:
-                return false
-        }
-        return true
+    func convergenceInvalidatedByAcceptance(in graph: ChoiceGraph) -> ClosedRange<Int>? {
+        Encoder.convergenceInvalidatedByAcceptance(scope, in: graph)
     }
 
-    // MARK: - Helpers
-
-    /// Whether the node is a sequence that still holds more elements than its minimum length.
-    private static func sequenceCanShrink(_ sequenceNodeID: Int, in graph: ChoiceGraph) -> Bool {
-        guard sequenceNodeID < graph.nodes.count,
-              case let .sequence(metadata) = graph.nodes[sequenceNodeID].kind
-        else {
-            return false
-        }
-        return UInt64(metadata.elementCount) > (metadata.lengthConstraint?.lowerBound ?? 0)
+    func reducer(tuning: ScopedReductionTuning, input: ScopedEncoderInput) -> ScopedReducer {
+        Encoder(tuning: tuning).reducer(scope, input: input)
     }
 }

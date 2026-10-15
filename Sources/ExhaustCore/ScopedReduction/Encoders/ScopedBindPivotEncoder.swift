@@ -13,6 +13,8 @@ struct ScopedBindPivotEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let requiresGenerator = true
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {
@@ -120,5 +122,33 @@ struct ScopedBindPivotEncoder: ScopedEncoder {
             }
         }
         return (seeds: seeds, mutation: mutation)
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedBindPivotEncoder {
+    static func gate(_ _: BindPivotScope) -> ScopedDispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: BindPivotScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_ scope: BindPivotScope, in graph: ChoiceGraph) -> Bool {
+        scope.bindNodeID < graph.nodes.count
+            && graph.nodes[scope.bindNodeID].positionRange != nil
+            && scope.pickNodeID < graph.nodes.count
+            && graph.nodes[scope.pickNodeID].positionRange != nil
+    }
+
+    /// The candidate is a function of the bind's current entries, and the bind's range covers the pick, so the bind alone is the affected set; reporting the pick as well would cancel its positions out of the hash. The pick's node ID joins the target branch in the discriminator, because one bind inner can hold several picks with the same branch identifiers.
+    static func rejectionKey(_ scope: BindPivotScope) -> ScopedRejectionKey? {
+        ScopedRejectionKey(
+            discriminator: 0x4B1D_9140_7A5E_0002 ^ (scope.targetBranchID ^ (UInt64(scope.pickNodeID) &* 0x9E37_79B9_7F4A_7C15)),
+            isCoarse: false,
+            affectedNodeIDs: [scope.bindNodeID]
+        )
     }
 }

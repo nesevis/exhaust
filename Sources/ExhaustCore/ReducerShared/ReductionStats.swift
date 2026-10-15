@@ -10,12 +10,14 @@ package enum MaterializationSite: String, Sendable, CaseIterable {
     case classification
     /// Restoring the unselected branches of a stripped tree.
     case rematerialization
-    /// Lifting a controller candidate in a bound value composition, at every nesting level.
+    /// Lifting a controller candidate in a bound value composition, at every nesting level. Legacy reducer only.
     case boundValueLift
-    /// Lifting a bind pivot seed.
+    /// Lifting a bind pivot seed. Legacy reducer only.
     case bindPivotLift
-    /// Lifting a joint source-sink proposal, including lifts that do not preserve the sink.
+    /// Lifting a joint source-sink proposal, including lifts that do not preserve the sink. Legacy reducer only.
     case boundExchangeLift
+    /// Lifting a prefix in the scoped reducer, by any encoder. ``ReductionStats/liftAttemptsByEncoder`` breaks it down.
+    case lift
 }
 
 /// Statistics collected from a single reduction run.
@@ -33,6 +35,9 @@ package struct ReductionStats: Sendable {
 
     /// Scoped composition build outcomes by encoder. The scoped reducer records these instead of ``boundValueBuildOutcomes``.
     package var compositionBuildOutcomes: [EncoderName: [CompositionBuildRecord: Int]] = [:]
+
+    /// Scoped reducer lift attempts by encoder. Their total is the ``MaterializationSite/lift`` count.
+    package var liftAttemptsByEncoder: [EncoderName: Int] = [:]
 
     /// Reduction proposals opened across encoder passes and structural relax rounds.
     package var reductionProbes: Int {
@@ -219,6 +224,7 @@ package struct ReductionStats: Sendable {
         for (encoderName, records) in other.compositionBuildOutcomes {
             compositionBuildOutcomes[encoderName, default: [:]].merge(records, uniquingKeysWith: +)
         }
+        liftAttemptsByEncoder.merge(other.liftAttemptsByEncoder, uniquingKeysWith: +)
         cycles += other.cycles
         structuralFloorMotionEvents += other.structuralFloorMotionEvents
         valueFloorMotionEvents += other.valueFloorMotionEvents

@@ -13,6 +13,8 @@ struct ScopedMigrationEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let requiresGenerator = false
     static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
+    static let rebuildsAfterAcceptance = false
     let tuning: ScopedReductionTuning
 
     func reducer(_ scope: MigrationScope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -33,6 +35,35 @@ struct ScopedMigrationEncoder: ScopedEncoder {
         return .search(
             .singleCandidate(search),
             configuration: ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+        )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension ScopedMigrationEncoder {
+    static func gate(_ _: MigrationScope) -> ScopedDispatchGate {
+        .demotedAfterRejects
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: MigrationScope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_ scope: MigrationScope, in graph: ChoiceGraph) -> Bool {
+        let donorSequenceNodeID = scope.sourceParentSequenceNodeID ?? scope.sourceSequenceNodeID
+        guard graph.sequenceCanShrink(donorSequenceNodeID) else {
+            return false
+        }
+        return scope.receiverSequenceNodeID < graph.nodes.count
+            && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
+    }
+
+    static func rejectionKey(_ scope: MigrationScope) -> ScopedRejectionKey? {
+        ScopedRejectionKey(
+            discriminator: 0x6372_8190_A0B0_C0D0,
+            isCoarse: true,
+            affectedNodeIDs: scope.elementNodeIDs + [scope.receiverSequenceNodeID]
         )
     }
 }
