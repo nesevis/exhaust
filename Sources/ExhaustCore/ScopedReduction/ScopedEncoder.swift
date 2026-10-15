@@ -22,9 +22,6 @@ protocol ScopedEncoder {
     /// Whether the encoder's scopes depend on leaf values rather than only on graph topology. A source holding such scopes is prepared again after any value change.
     static var isValueDependent: Bool { get }
 
-    /// Whether the encoder lifts its probes through a materialization, and so needs the generator in hand. Relax round exploitation has none to give and skips these.
-    static var requiresGenerator: Bool { get }
-
     /// What the runner checks before dispatching `scope`, beyond its validity and the scope rejection cache. Relax round exploitation applies no gate.
     static func gate(_ scope: Scope) -> ScopedDispatchGate
 

@@ -19,7 +19,6 @@ enum ScopedStagedJointEncoder: ScopedEncoder {
 
     static let name: EncoderName = .stagedJointSearch
     static let isValueDependent = true
-    static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false

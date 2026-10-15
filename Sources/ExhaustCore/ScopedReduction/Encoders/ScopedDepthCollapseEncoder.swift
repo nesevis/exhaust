@@ -11,7 +11,6 @@
 enum ScopedDepthCollapseEncoder: ScopedEncoder {
     static let name: EncoderName = .depthCollapse
     static let isValueDependent = true
-    static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false

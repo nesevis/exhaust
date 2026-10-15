@@ -11,7 +11,6 @@
 enum ScopedReorderEncoder: ScopedEncoder {
     static let name: EncoderName = .numericReorder
     static let isValueDependent = false
-    static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .unordered
     static let rebuildsAfterAcceptance = false

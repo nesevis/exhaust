@@ -11,7 +11,6 @@
 enum ScopedLaneCollapseEncoder: ScopedEncoder {
     static let name: EncoderName = .laneCollapse
     static let isValueDependent = true
-    static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false

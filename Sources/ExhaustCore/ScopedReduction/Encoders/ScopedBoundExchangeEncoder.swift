@@ -11,7 +11,6 @@
 enum ScopedBoundExchangeEncoder: ScopedEncoder {
     static let name: EncoderName = .boundExchange
     static let isValueDependent = true
-    static let requiresGenerator = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false

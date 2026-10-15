@@ -10,7 +10,7 @@ extension ScopedReductionRunner {
     enum DispatchPolicy {
         /// Ordinary cycles: dispatch gates, scope rejections, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
         case main
-        /// Relax round exploitation: none of the main policy's dispatch decisions, no operations that need the generator, and every rebuild prepares all sources again.
+        /// Relax round exploitation: none of the main policy's dispatch decisions, and every rebuild prepares all sources again.
         case exploitation
     }
 
@@ -105,7 +105,7 @@ extension ScopedReductionRunner {
         switch policy {
             case .exploitation:
                 let typed = encoderScope.typed
-                guard typed.isValid(in: graph), typed.encoder.requiresGenerator == false else {
+                guard typed.isValid(in: graph) else {
                     return .skip
                 }
                 return .dispatch(encoderScope, boundValueFingerprint: nil)

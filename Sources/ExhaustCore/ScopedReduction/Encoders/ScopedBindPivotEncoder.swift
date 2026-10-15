@@ -11,7 +11,6 @@
 enum ScopedBindPivotEncoder: ScopedEncoder {
     static let name: EncoderName = .bindPivot
     static let isValueDependent = true
-    static let requiresGenerator = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false

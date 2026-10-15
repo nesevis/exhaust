@@ -11,7 +11,6 @@
 enum ScopedBoundValueEncoder: ScopedEncoder {
     static let name: EncoderName = .boundValueSearch
     static let isValueDependent = true
-    static let requiresGenerator = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = true

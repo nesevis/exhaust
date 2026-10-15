@@ -11,7 +11,6 @@
 enum ScopedMigrationEncoder: ScopedEncoder {
     static let name: EncoderName = .migration
     static let isValueDependent = false
-    static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false

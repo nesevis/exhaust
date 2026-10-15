@@ -21,7 +21,6 @@ enum ScopedRemovalEncoder: ScopedEncoder {
 
     static let name: EncoderName = .deletion
     static let isValueDependent = false
-    static let requiresGenerator = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
     static let rebuildsAfterAcceptance = false
