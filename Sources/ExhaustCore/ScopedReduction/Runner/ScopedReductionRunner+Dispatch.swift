@@ -91,8 +91,7 @@ extension ScopedReductionRunner {
             return .end(.completed)
         }
         guard let priced = sources[sourceIndex].nextScope() else {
-            sources.swapAt(sourceIndex, sources.count - 1)
-            sources.removeLast()
+            sources.remove(at: sourceIndex)
             return .skip
         }
         guard deadline.isExpired == false else {
@@ -114,6 +113,12 @@ extension ScopedReductionRunner {
                 switch resolveDispatch(encoderScope) {
                     case .skip:
                         return .skip
+                    case .demoted:
+                        // Only the migration source yields scopes behind a demotion gate, and the encoder stays demoted until it accepts, which it cannot do without dispatching.
+                        if case .migration = sources[sourceIndex] {
+                            sources.remove(at: sourceIndex)
+                        }
+                        return .skip
                     case .deadline:
                         return .end(.deadline)
                     case let .dispatch(fingerprint):
@@ -125,6 +130,8 @@ extension ScopedReductionRunner {
     /// The main policy's resolution of one encoder scope, including the classification and rematerialization effects it can trigger.
     private enum Resolution {
         case skip
+        /// The encoder is demoted, so the rest of its source can be dropped.
+        case demoted
         case deadline
         case dispatch(boundValueFingerprint: UInt64?)
     }
@@ -135,7 +142,7 @@ extension ScopedReductionRunner {
            tuning.migrationDemotionThreshold > 0,
            consecutiveRejectsByEncoder[typed.encoder.name, default: 0] >= tuning.migrationDemotionThreshold
         {
-            return .skip
+            return .demoted
         }
 
         var decision = evaluateDispatch(encoderScope)
@@ -275,6 +282,7 @@ extension ScopedReductionRunner {
             scopedReducer,
             context: ScopedReductionInterpreter.Context(
                 incumbent: incumbent,
+                incumbentHash: incumbentHash,
                 graph: executionGraph,
                 rejectCache: executionRejectCache,
                 decoder: decoder,
@@ -285,7 +293,10 @@ extension ScopedReductionRunner {
             )
         )
         chargeProbing(result.probeTiming)
-        incumbent = result.incumbent
+        // The execution replaces the incumbent only on acceptance, so an unchanged one keeps its cached hash.
+        if result.report.anyAccepted {
+            incumbent = result.incumbent
+        }
         graph = result.graph
         rejectCache = result.rejectCache
 

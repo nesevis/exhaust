@@ -19,7 +19,11 @@ enum ScopedSwapEncoder: ScopedEncoder {
     static func reducer(_ scope: PermutationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
             ScopedSwapSearch(scope: scope, sequence: input.baseSequence, graph: input.graph),
-            configuration: ScopedSearchConfiguration(acceptance: .rebuildAndContinue, requiresExactDecoder: false, reportedMutation: nil)
+            configuration: ScopedSearchConfiguration(
+                acceptance: .rebuildAndContinue,
+                requiresExactDecoder: false,
+                reportedMutation: nil
+            )
         )
     }
 }

@@ -71,6 +71,7 @@ private struct StagedJointFixture {
                     tree: tree,
                     output: values
                 ),
+                incumbentHash: ZobristHash.hash(of: sequence),
                 graph: graph,
                 rejectCache: [],
                 decoder: ScopedDecoder(

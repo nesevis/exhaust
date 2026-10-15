@@ -139,6 +139,7 @@ private struct IntegerSearchRun {
                     tree: tree,
                     output: start
                 ),
+                incumbentHash: ZobristHash.hash(of: sequence),
                 graph: graph,
                 rejectCache: [],
                 decoder: ScopedDecoder(

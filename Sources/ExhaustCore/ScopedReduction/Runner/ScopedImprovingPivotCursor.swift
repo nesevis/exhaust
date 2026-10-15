@@ -11,7 +11,7 @@
 ///
 /// - Complexity: O(P log P) descriptor sorting and O(P) descriptors, in addition to the shared graph and baseline and one transient candidate. Measuring spans visits their flattened content. Enumeration can still inspect every fill when candidates fail ordering or are cached, but never retains their full-sequence cross product.
 struct ScopedImprovingPivotCursor {
-    /// A candidate with the hash already checked against the cache snapshot.
+    /// A candidate with the hash already checked against the cache snapshot and every earlier probe.
     struct Probe {
         let sequence: ChoiceSequence
         let probeHash: UInt64
@@ -31,8 +31,10 @@ struct ScopedImprovingPivotCursor {
     private var pivotIndex = 0
     private var fillIndex = 0
     private var isRecordedFillImproving = false
+    /// Hashes of the probes already returned. Two fills can build the same sequence, and the cache snapshot does not learn of the first one's rejection.
+    private var emittedHashes: Set<UInt64> = []
 
-    /// Captures the cache at entry, so duplicate fills generated within the pass stay independently eligible.
+    /// Captures the cache at entry; probes returned since are skipped through ``emittedHashes``.
     init(sequence: ChoiceSequence, graph: ChoiceGraph, rejectCache: Set<UInt64>, deadline: ScopedDeadline) {
         self.sequence = sequence
         self.graph = graph
@@ -101,7 +103,7 @@ struct ScopedImprovingPivotCursor {
                 continue
             }
             let probeHash = ZobristHash.hash(of: candidate)
-            guard rejectCache.contains(probeHash) == false else {
+            guard rejectCache.contains(probeHash) == false, emittedHashes.insert(probeHash).inserted else {
                 continue
             }
             return Probe(sequence: candidate, probeHash: probeHash)

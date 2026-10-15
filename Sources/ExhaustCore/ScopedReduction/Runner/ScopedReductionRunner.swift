@@ -46,7 +46,17 @@ package struct ScopedReductionRunner {
     // MARK: - Core State
 
     let initialSequence: ChoiceSequence
-    var incumbent: ScopedCounterexample
+    /// Every assignment refreshes ``incumbentHash`` and ``hasBind``, which each pass and decoder read.
+    var incumbent: ScopedCounterexample {
+        didSet {
+            incumbentHash = ZobristHash.hash(of: incumbent.sequence)
+            hasBind = Self.containsBind(incumbent.sequence)
+        }
+    }
+
+    private(set) var incumbentHash: UInt64
+    /// Whether the incumbent holds a bind, which decides between guided and exact decoding.
+    private(set) var hasBind: Bool
     var graph: ChoiceGraph
     var stats = ReductionStats()
     var rejectCache: Set<UInt64> = []
@@ -190,6 +200,8 @@ package struct ScopedReductionRunner {
 
         initialSequence = sequence
         incumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
+        incumbentHash = ZobristHash.hash(of: sequence)
+        hasBind = Self.containsBind(sequence)
         self.graph = graph
         self.generator = erasedGenerator
         self.property = wrappedProperty
@@ -368,15 +380,6 @@ package struct ScopedReductionRunner {
         enabledEncoders?.contains(name) != false
     }
 
-    var hasBind: Bool {
-        incumbent.sequence.contains { entry in
-            guard case .bind = entry else {
-                return false
-            }
-            return true
-        }
-    }
-
     /// A decoder for the current sequence. Whether it holds a bind decides between guided and exact decoding.
     var decoder: ScopedDecoder {
         ScopedDecoder(generator: generator, property: property, probeWrapper: probeWrapper, hasBind: hasBind)
@@ -460,5 +463,16 @@ package struct ScopedReductionRunner {
         rebuildAndUpdateGraph()
         graphIsStripped = false
         return graphBefore
+    }
+
+    // MARK: - Helpers
+
+    private static func containsBind(_ sequence: ChoiceSequence) -> Bool {
+        sequence.contains { entry in
+            guard case .bind = entry else {
+                return false
+            }
+            return true
+        }
     }
 }

@@ -551,7 +551,7 @@ extension ScopedFloatSearch {
         }
     }
 
-    /// Moves to the next stage for the current target, or advances to the next leaf target when all four stages are exhausted, returning false when no targets remain.
+    /// Moves to the next stage for the current target, or advances to the next leaf target when all four stages are exhausted, returning false when no targets remain. The stage is prepared by the next call to ``nextProbe(state:lastAccepted:)``, which sees `needsFirstProbe`.
     @discardableResult
     mutating func advanceStageOrTarget(state: inout State) -> Bool {
         let nextStage: Stage? = switch state.stage {
@@ -571,11 +571,7 @@ extension ScopedFloatSearch {
             state.batchCandidates = []
             state.stepper = FindIntegerStepper()
             state.needsFirstProbe = true
-            guard state.currentTargetIndex < state.targets.count else {
-                return false
-            }
-            prepareStage(state: &state)
-            return true
+            return state.currentTargetIndex < state.targets.count
         }
 
         // All stages exhausted for this target — move to next.
@@ -585,9 +581,6 @@ extension ScopedFloatSearch {
         state.batchCandidates = []
         state.stepper = FindIntegerStepper()
         state.needsFirstProbe = true
-        if state.currentTargetIndex < state.targets.count {
-            prepareStage(state: &state)
-        }
         return state.currentTargetIndex < state.targets.count
     }
 

@@ -7,12 +7,12 @@
 
 /// Ranks structural perturbations by length while deferring complete candidate construction until probing.
 ///
-/// Length ties keep replacement discovery order. Preparation visits every scope because even a late scope can enter the shortest prefix, but retains only the materialization budget's worth of splices. Donor expansion and exact no-op classification are cached per node rather than repeated per pair. The temporary content cache can hold the sum of participating subtree sizes; after preparation, only the selected replacement spans and the baseline remain.
+/// Length ties keep replacement discovery order. Preparation visits every scope because even a late scope can enter the shortest prefix, but retains only the materialization budget's worth of splices. A splice that writes the same content over the same range as an earlier one is dropped before ranking, so duplicates cannot spend the budget. Donor expansion and exact no-op classification are cached per node rather than repeated per pair. The temporary content cache can hold the sum of participating subtree sizes; after preparation, only the selected replacement spans and the baseline remain.
 struct ScopedRelaxCandidateCursor {
     private let sequence: ChoiceSequence
     private var splices: BufferedScopeCursor<ChoiceSequenceSplice>
 
-    /// Counts every valid perturbation, including those outside the budget, for relax diagnostics.
+    /// Counts every distinct valid perturbation, including those outside the budget, for relax diagnostics.
     let candidateCount: Int
 
     /// Rejects disabled operations before splice preparation and ranking, so they cannot displace enabled candidates from the retained prefix.
@@ -26,12 +26,14 @@ struct ScopedRelaxCandidateCursor {
         var cache = ContentCache()
         var selected = BoundedSortedBuffer<ChoiceSequenceSplice>(limit: limit)
         var count = 0
+        var seen: Set<SpliceKey> = []
         var source = isEncoderEnabled(.substitution)
             ? ScopedReplacementSource(graph: graph, order: .discovery)
             : ScopedReplacementSource(pivotGraph: graph)
         while let priced = source.nextScope() {
             guard isEncoderEnabled(priced.encoderScope.encoder.name),
-                  let splice = cache.splice(for: priced.encoderScope, sequence: sequence, graph: graph)
+                  case let (splice, contentIdentity)? = cache.splice(for: priced.encoderScope, sequence: sequence, graph: graph),
+                  seen.insert(SpliceKey(range: splice.range, contentIdentity: contentIdentity)).inserted
             else {
                 continue
             }
@@ -50,6 +52,12 @@ struct ScopedRelaxCandidateCursor {
     }
 
     // MARK: - Helpers
+
+    /// Two splices with equal keys build the same candidate.
+    private struct SpliceKey: Hashable {
+        let range: ClosedRange<Int>
+        let contentIdentity: Int
+    }
 
     /// Uses the operative hash only for bucketing; equality checks complete entries, including structural metadata.
     private struct Content: Hashable {
@@ -77,17 +85,20 @@ struct ScopedRelaxCandidateCursor {
         var rawIdentityByNodeID: [Int: Int] = [:]
         var expandedIdentityByNodeID: [Int: Int] = [:]
 
-        /// Shares donor storage across the bounded set and rejects unchanged substitutions without copying the baseline.
-        mutating func splice(for encoderScope: AnyEncoderScope, sequence: ChoiceSequence, graph: ChoiceGraph) -> ChoiceSequenceSplice? {
+        /// Shares donor storage across the bounded set and rejects unchanged substitutions without copying the baseline. Returns the replacement's interned identity alongside the splice.
+        mutating func splice(for encoderScope: AnyEncoderScope, sequence: ChoiceSequence, graph: ChoiceGraph) -> (ChoiceSequenceSplice, Int)? {
             let targetNodeID: Int
             let donorNodeID: Int
             switch encoderScope {
                 case let .branchPivot(scope):
-                    return ScopedPivotCandidates.branchPivotSplice(
+                    guard let splice = ScopedPivotCandidates.branchPivotSplice(
                         pickNodeID: scope.pickNodeID,
                         targetBranchID: scope.targetBranchID,
                         graph: graph
-                    )
+                    ) else {
+                        return nil
+                    }
+                    return (splice, intern(splice.replacement))
                 case let .substitution(.selfSimilar(target, donor)):
                     targetNodeID = target
                     donorNodeID = donor
@@ -108,7 +119,7 @@ struct ScopedRelaxCandidateCursor {
             {
                 return nil
             }
-            return ChoiceSequenceSplice(range: targetRange, replacement: contents[donorIdentity])
+            return (ChoiceSequenceSplice(range: targetRange, replacement: contents[donorIdentity]), donorIdentity)
         }
 
         /// Expands each donor once even if it is proposed for many targets.

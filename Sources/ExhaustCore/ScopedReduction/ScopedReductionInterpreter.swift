@@ -97,8 +97,10 @@ extension ScopedReductionInterpreter {
         var buildPoolRemaining: Int?
         var probeTiming: ProbeTiming?
 
+        /// - Parameter incumbentHash: The Zobrist hash of `incumbent`'s sequence, which the runner keeps rather than rehashing per pass.
         init(
             incumbent: ScopedCounterexample,
+            incumbentHash: UInt64,
             graph: ChoiceGraph,
             rejectCache: Set<UInt64>,
             decoder: ScopedDecoder,
@@ -116,7 +118,7 @@ extension ScopedReductionInterpreter {
             self.isInstrumented = isInstrumented
             self.deadline = deadline
             self.observer = observer
-            baseHash = ZobristHash.hash(of: incumbent.sequence)
+            baseHash = incumbentHash
             candidateBuffer = incumbent.sequence
             probeTiming = timingMark.map { ProbeTiming(mark: $0) }
         }

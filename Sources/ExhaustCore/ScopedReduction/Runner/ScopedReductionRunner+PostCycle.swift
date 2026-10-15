@@ -287,7 +287,7 @@ extension ScopedReductionRunner {
             let candidate = probe.sequence
             probesUsed += 1
             probeCounts.recordEmission()
-            let outcome = decoder.decode(candidate, using: .exact(materializePicks: true), against: incumbent)
+            let outcome = decoder.decode(candidate, using: .exact(materializePicks: true), against: incumbent, precomputedHash: probe.probeHash)
             probeCounts.recordOutcome(outcome)
 
             guard let result = outcome.reduction, result.sequence.shortLexPrecedes(incumbent.sequence) else {

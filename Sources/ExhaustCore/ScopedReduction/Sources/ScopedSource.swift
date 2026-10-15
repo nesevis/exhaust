@@ -385,28 +385,36 @@ extension ScopedSource {
         ))
     }
 
-    /// The index of the source advertising the highest priority, the earliest one on ties, or nil when every source is exhausted. A source that asks for its initial dispatch wins at once. Peeking may discover a lazy family's scopes, so the sources are inout.
+    /// The index of the source advertising the highest priority, the earliest one on ties, or nil when every source is exhausted. The earliest source that asks for its initial dispatch wins outright. Peeking may discover a lazy family's scopes, so the sources are inout.
+    ///
+    /// Removes exhausted sources, keeping the others in order. A source's priority changes only when it hands out a scope, and an exhausted source is never asked for one, so it stays exhausted.
     static func highestPrioritySourceIndex(_ sources: inout [ScopedSource]) -> Int? {
+        var keptCount = 0
+        var initialIndex: Int?
         var bestIndex: Int?
         var bestPriority: DispatchPriority?
         for index in sources.indices {
             guard let priority = sources[index].dispatchPriority else {
                 continue
             }
-            if sources[index].prefersInitialDispatch {
-                return index
+            // Every source between the kept ones and this one is exhausted, so the swap keeps the live sources in order.
+            sources.swapAt(keptCount, index)
+            if initialIndex == nil, sources[keptCount].prefersInitialDispatch {
+                initialIndex = keptCount
             }
             if let currentBest = bestPriority {
                 if priority > currentBest {
-                    bestIndex = index
+                    bestIndex = keptCount
                     bestPriority = priority
                 }
             } else {
-                bestIndex = index
+                bestIndex = keptCount
                 bestPriority = priority
             }
+            keptCount += 1
         }
-        return bestIndex
+        sources.removeSubrange(keptCount...)
+        return initialIndex ?? bestIndex
     }
 
     /// The one lane collapse encoder scope, covering every nonzero lane marker. It advertises a unit structural benefit, so it runs before any value work.
