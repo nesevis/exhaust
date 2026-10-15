@@ -37,8 +37,13 @@ package struct DecodingReport: Sendable {
     }
 
     /// Total number of coordinates resolved across all tiers.
-    var totalCount: Int {
+    package var totalCount: Int {
         exactCarryForwardCount + fallbackTreeCount + prngCount + reseededCount
+    }
+
+    /// Coordinates drawn afresh inside a reseeded span. A reseed that was asked for and left this at zero carried its span forward instead.
+    package var reseededResolutionCount: Int {
+        reseededCount
     }
 
     /// Coordinates resolved from the fallback tree. The filter retry gate reads the delta to detect row-identity consumption, which must stay single-shot.
@@ -49,7 +54,7 @@ package struct DecodingReport: Sendable {
     /// Weighted fidelity score in `[0, 1]`.
     ///
     /// Exact carry-forward scores 1.0, fallback tree scores 0.5, PRNG scores 0.0. Returns 0.0 when no coordinates have been recorded (empty lift).
-    var fidelity: Double {
+    package var fidelity: Double {
         let total = totalCount
         guard total > 0 else { return 0.0 }
         let score = Double(exactCarryForwardCount) + 0.5 * Double(fallbackTreeCount)

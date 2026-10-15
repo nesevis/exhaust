@@ -63,6 +63,24 @@ public struct FlatEmissionParityViolation: Error, CustomStringConvertible {
     }
 }
 
+/// Guided materialization of a generated value's own sequence resolved a choice from outside the sequence, or produced a different value.
+public struct GuidedCarryForwardViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// A value reseed was asked for and the span was carried forward instead of drawn afresh.
+public struct ReseedViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
 /// The same recipe and seed produced different value streams on two runs.
 public struct DeterminismViolation: Error, CustomStringConvertible {
     public let description: String
@@ -181,6 +199,7 @@ public extension MetaFuzz {
         try checkDeterminism(fuzzCase)
         try checkFunctorIdentity(fuzzCase)
         try checkGuidedFallbackFidelity(gen, fuzzCase)
+        try checkPrefixReplays(gen, fuzzCase)
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: fuzzCase.valueSeed, maxRuns: valuesPerCase)
         var reductionChecked = false
@@ -473,6 +492,106 @@ extension MetaFuzz {
                             "guided materialization rejected the complete tree of a generated value under seed \(guidedSeed) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
                         )
                 }
+            }
+        }
+    }
+
+    /// Prefix replays that read structure from the cursor position: exact replay of a generated value's own sequence with and without pick alternatives, generated both ways, guided replay of an untouched sequence carrying every choice forward, and a reseed of each of the first few values being drawn afresh.
+    ///
+    /// The cursor advances only on content reads, so a subtree that ends without one leaves slack that every position-based decision must look past. A decision that does not rejects the sequence in exact mode, which the reducer's setup then hides by keeping a tree without alternatives; resolves values from outside the prefix in guided mode; or carries a reseeded value forward, all silently. Generates at size 100, the materializer's size, from seeds derived from the case, so adding this oracle leaves every frozen record's mutation sequence unchanged.
+    package static func checkPrefixReplays(_ gen: AnyGenerator, _ fuzzCase: MetaFuzzCase) throws {
+        for generatedWithPicks in [false, true] {
+            var iterator = ValueAndChoiceTreeInterpreter(
+                gen,
+                materializePicks: generatedWithPicks,
+                seed: fuzzCase.valueSeed &+ 1,
+                maxRuns: 2,
+                sizeOverride: 100
+            )
+            while true {
+                let element: (value: Any, tree: ChoiceTree)?
+                do {
+                    element = try iterator.next()
+                } catch {
+                    break
+                }
+                guard let (value, tree) = element else {
+                    break
+                }
+                let sequence = ChoiceSequence.flatten(tree)
+                let provenance = "for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), generated with alternatives: \(generatedWithPicks)"
+                for replayWithPicks in [false, true] {
+                    switch Materializer.materialize(gen, context: .init(
+                        prefix: sequence,
+                        mode: .exact,
+                        fallbackTree: tree,
+                        materializePicks: replayWithPicks
+                    )) {
+                        case let .success(materialized, freshTree, _):
+                            guard anyEquals(materialized, value), ChoiceSequence.flatten(freshTree) == sequence else {
+                                throw ExactRoundTripViolation("exact replay with alternatives: \(replayWithPicks) diverged from the generated value \(provenance)")
+                            }
+                        case .rejected, .failed:
+                            throw ExactRoundTripViolation("exact replay with alternatives: \(replayWithPicks) rejected the generated sequence \(provenance)")
+                    }
+                }
+                try checkGuidedCarryForward(gen, sequence: sequence, value: value, provenance: provenance, fuzzCase)
+                try checkReseedsTaken(gen, sequence: sequence, tree: tree, provenance: provenance, fuzzCase)
+            }
+        }
+    }
+
+    /// Guided replay of an untouched sequence must carry every choice forward and reproduce the value.
+    private static func checkGuidedCarryForward(
+        _ gen: AnyGenerator,
+        sequence: ChoiceSequence,
+        value: Any,
+        provenance: String,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        switch Materializer.materialize(gen, context: .init(
+            prefix: sequence,
+            mode: .guided(seed: fuzzCase.perturbationSeed &+ 3, fallbackTree: nil)
+        )) {
+            case let .success(materialized, _, report):
+                guard anyEquals(materialized, value) else {
+                    throw GuidedCarryForwardViolation("guided replay of the untouched sequence produced \(materialized), not \(value), \(provenance)")
+                }
+                if let report, report.totalCount > 0, report.fidelity < 1.0 {
+                    throw GuidedCarryForwardViolation("guided replay of the untouched sequence resolved choices from outside it, fidelity \(report.fidelity), \(provenance)")
+                }
+            case .rejected, .failed:
+                throw GuidedCarryForwardViolation("guided replay rejected the untouched sequence \(provenance)")
+        }
+    }
+
+    /// Values checked per sequence by the reseed oracle, which costs one materialization each.
+    private static let reseededValuesPerSequence = 4
+
+    /// A reseed of one value must draw that value afresh. A redraw that a filter, uniqueness budget, or backtrack arm then rejects is inside the guided contract, and moves the replay off the original sequence, so only a replay that drew nothing and reproduced the original sequence counts as a reseed carried forward.
+    private static func checkReseedsTaken(
+        _ gen: AnyGenerator,
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        provenance: String,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        let valueIndices = sequence.indices.filter { index in
+            if case .value = sequence[index] {
+                return true
+            }
+            return false
+        }
+        for index in valueIndices.prefix(reseededValuesPerSequence) {
+            guard case let .success(_, reseededTree, report) = Materializer.materialize(gen, context: .init(
+                prefix: sequence,
+                mode: .guided(seed: fuzzCase.perturbationSeed &+ 4, fallbackTree: tree),
+                reseedRanges: [index ... index]
+            )), let report else {
+                continue
+            }
+            guard report.reseededResolutionCount > 0 || ChoiceSequence.flatten(reseededTree) != sequence else {
+                throw ReseedViolation("a reseed of the value at \(index) was carried forward \(provenance)")
             }
         }
     }

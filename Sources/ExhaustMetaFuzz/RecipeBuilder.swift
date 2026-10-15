@@ -204,6 +204,39 @@ private func buildCombinator(
                 continuation: { .pure($0) }
             )
 
+        case let .dependentPair(controller: controller, bound: bound):
+            // The bound runs under a marker-free contramap, so its own markers follow the controller's directly: the shapes that once left the exact cursor short of a zip open. The controller's value is prepended to the bound's elements, so the backward recovers it from the front.
+            let controllerGenerator = buildNestedGenerator(from: controller)
+            let boundGenerator = buildNestedGenerator(from: bound)
+            return AnyGenerator.impure(
+                operation: .transform(
+                    kind: .bind(
+                        fingerprint: recipeFingerprint(
+                            structure: "dependentPair(\(controller), \(bound))",
+                            fileID: fileID,
+                            line: line,
+                            column: column
+                        ),
+                        forward: { controllerValue in
+                            AnyGenerator.impure(
+                                operation: .contramap(
+                                    transform: dropControllerValue,
+                                    next: boundGenerator
+                                ),
+                                continuation: { boundValue in .pure([controllerValue] + (boundValue as! [Any])) }
+                            )
+                        },
+                        backward: { output in
+                            try controllerValue(of: output)
+                        },
+                        inputType: Any.self,
+                        outputType: [Any].self
+                    ),
+                    inner: controllerGenerator
+                ),
+                continuation: { .pure($0) }
+            )
+
         case let .recursive(base: base, maxDepth: maxDepth):
             let baseGen = buildNestedGenerator(from: base)
             // The UInt64 depthRange selects the base-as-generator overload. An Int range would
@@ -301,6 +334,20 @@ private func buildCombinator(
             }
             return Gen.backtrack(always: built, fileID: fileID, line: line, column: column)
     }
+}
+
+/// The controller's value at the front of a dependent pair's output. Reflection can hand the backward a value this recipe did not produce, such as an array a transform emptied, so anything without a front element is rejected rather than indexed.
+private func controllerValue(of output: Any) throws -> Any {
+    guard let elements = output as? [Any], let first = elements.first else {
+        throw ReflectionError.couldNotReflectOnZipElement("dependentPair expects [controller, bound elements...], got \(output)")
+    }
+    return first
+}
+
+/// The bound's elements of a dependent pair's output, for reflecting the bound recipe.
+private func dropControllerValue(_ output: Any) throws -> Any {
+    _ = try controllerValue(of: output)
+    return Array((output as! [Any]).dropFirst())
 }
 
 /// Unwraps one optional layer of a reflected value, throwing `reflectedNil` for nil so `reflectPickOperation` treats the value as belonging to another branch. A plain forward-only `.map` in this position makes any nil-bearing nested optional unreflectable.

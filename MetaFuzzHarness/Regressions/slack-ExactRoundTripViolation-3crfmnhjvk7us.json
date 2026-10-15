@@ -1,0 +1,88 @@
+{
+  "kind": "pipelineCase",
+  "note": "Cursor slack before a resized zip: skipGroupOpen did nothing unless the cursor stood exactly on the resize group's open, so after a just-arm bind inner the nested zip met the group open instead of its own and exact replay rejected the sequence; a value reseed there was silently carried forward. Fixed 2026-10-15 by skipping slack before the open; see MaterializerCursorLagTests.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "dependentPair": {
+          "bound": {
+            "combinator": {
+              "_0": {
+                "resized": {
+                  "_0": {
+                    "combinator": {
+                      "_0": {
+                        "zipped": {
+                          "_0": {
+                            "leaf": {
+                              "_0": {
+                                "int": {
+                                  "_0": [
+                                    0,
+                                    10
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "_1": {
+                            "leaf": {
+                              "_0": {
+                                "int": {
+                                  "_0": [
+                                    0,
+                                    10
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "size": 5
+                }
+              }
+            }
+          },
+          "controller": {
+            "combinator": {
+              "_0": {
+                "oneOf": {
+                  "_0": [
+                    {
+                      "leaf": {
+                        "_0": {
+                          "justInt": {
+                            "_0": 0
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "leaf": {
+                        "_0": {
+                          "int": {
+                            "_0": [
+                              1,
+                              10
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

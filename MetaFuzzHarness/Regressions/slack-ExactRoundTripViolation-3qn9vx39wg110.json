@@ -1,0 +1,79 @@
+{
+  "kind": "pipelineCase",
+  "note": "Cursor slack before a zip: a bind inner that picked a just arm leaves its .just and group close unread, so the bound zip's span parse met the close instead of the zip open and the fallback scoped the first child from the lagging position. Exact replay rejected the generator's own sequence; the reducer's setup rematerialization then kept a tree without alternatives and offered no branch pivots. Fixed 2026-10-15 by reading past slack (a .just or any close marker) in every position-based cursor query; see MaterializerCursorLagTests.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "dependentPair": {
+          "bound": {
+            "combinator": {
+              "_0": {
+                "zipped": {
+                  "_0": {
+                    "leaf": {
+                      "_0": {
+                        "int": {
+                          "_0": [
+                            0,
+                            10
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "_1": {
+                    "leaf": {
+                      "_0": {
+                        "int": {
+                          "_0": [
+                            0,
+                            10
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "controller": {
+            "combinator": {
+              "_0": {
+                "oneOf": {
+                  "_0": [
+                    {
+                      "leaf": {
+                        "_0": {
+                          "justInt": {
+                            "_0": 0
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "leaf": {
+                        "_0": {
+                          "int": {
+                            "_0": [
+                              1,
+                              10
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}
