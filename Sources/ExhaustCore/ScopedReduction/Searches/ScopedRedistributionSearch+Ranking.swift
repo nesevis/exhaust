@@ -5,7 +5,6 @@ extension ScopedRedistributionSearch {
         let sourceIndex: Int
         let sinkIndex: Int
         let sourceTag: TypeTag
-        let sinkTag: TypeTag
         let maxDelta: UInt64
         let mixedContext: MixedRedistributionContext?
     }
@@ -119,7 +118,6 @@ extension ScopedRedistributionSearch {
             sourceIndex: sourceRange.lowerBound,
             sinkIndex: sinkRange.lowerBound,
             sourceTag: sourceMetadata.typeTag,
-            sinkTag: sinkMetadata.typeTag,
             maxDelta: maxDelta,
             mixedContext: context
         )

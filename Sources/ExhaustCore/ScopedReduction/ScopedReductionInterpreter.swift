@@ -9,8 +9,11 @@
 struct ScopedPassReport {
     var counts = ReductionProbeCounts()
     var anyAccepted = false
+    /// Whether an acceptance left the graph needing a full rebuild, because its acceptance policy or its mutation ruled out an in-place update.
     var anyRequiresRebuild = false
+    /// Whether the latest accepted decoding skipped materializing unselected branches, so the incumbent's tree lacks them and pick nodes cannot offer pivots.
     var latestTreeIsStripped = false
+    /// Leaves an accepted `.leafValues` mutation changed. Their old-graph values are stale, so their convergence records transfer across the rebuild without the value guard.
     var acceptedLeafNodeIDs: Set<Int> = []
     /// From searches the root branch reaches. Searches inside a `propose` are finished and their reports discarded, since their node IDs belong to a lifted graph.
     var searchReport = ScopedSearchReport()
@@ -30,7 +33,9 @@ struct ScopedPassReport {
 
 /// Executes the encoder's reducer for one scope against a context the runner seeds.
 ///
-/// Holds no decoding logic: it asks searches for candidates, checks the rejection cache, asks the decoder to decode it, checks the result's ordering against the incumbent, and feeds the outcome back. Inside a `propose` it schedules searches in turns: a new branch is built before any suspended search resumes, suspended searches resume in FIFO order with a fresh turn, and the first acceptance ends every search. A branch whose pipeline reaches another `propose` becomes a nested level, which its parent schedules like any other search; a nested level's turn counts the parent's probes.
+/// Holds no decoding logic: it asks searches for candidates, checks each against the rejection cache, has the decoder decode it, checks the result's ordering against the incumbent, and feeds the outcome back.
+///
+/// Inside a `propose` it schedules searches in turns: a new branch is built before any suspended search resumes, and suspended searches resume in FIFO order with a fresh turn. An acceptance that ends its search, under ``ScopedAcceptance/stop`` or through a rebuild, ends every search in the pass. A branch whose pipeline reaches another `propose` becomes a nested level, which its parent schedules like any other search; a nested level's turn counts the parent's probes.
 enum ScopedReductionInterpreter {
     /// What an execution hands back to the runner.
     struct Result {
@@ -75,7 +80,7 @@ enum ScopedReductionInterpreter {
 // MARK: - Context
 
 extension ScopedReductionInterpreter {
-    /// Owns one execution's collaborators and mutable state. ``run(_:context:)`` consumes it, so an execution's buffers and accounting cannot leak into the next.
+    /// Owns one execution's collaborators and mutable state. ``reduce(_:context:)`` consumes it, so an execution's buffers and accounting cannot leak into the next.
     struct Context: ~Copyable {
         let decoder: ScopedDecoder
         /// The encoder whose reducer runs, for its admission order and its name in logs.

@@ -57,7 +57,7 @@ struct ScopedCoveringSearch: ScopedSearch {
     }
 }
 
-// MARK: - Covering Search
+// MARK: - Covering Rows
 
 /// Enumerates value assignments over a set of sequence positions.
 ///
@@ -75,11 +75,11 @@ struct ScopedCoveringRows {
     private var baseSequence: ChoiceSequence = .init([])
     private var valuePositions: [ValuePosition] = []
 
-    /// Pre-built probes for the exhaustive regime. Empty when using pull-based.
+    /// Prebuilt rows for the exhaustive and range-end regimes. Empty in the pairwise regime.
     private var exhaustiveProbes: [CoveringArrayRow] = []
     private var exhaustiveProbeIndex = 0
 
-    /// Pull-based generator for the pairwise regime. Nil when using exhaustive.
+    /// Pull-based generator for the pairwise regime. Nil in the exhaustive and range-end regimes.
     private var generator: BalancedCoveringArrayGenerator?
     private var pullProbeCount = 0
     /// Each leaf's representative offsets in the pairwise regime, which the generator's row values index into.

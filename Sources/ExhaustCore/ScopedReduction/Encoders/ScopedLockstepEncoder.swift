@@ -5,7 +5,7 @@
 
 // MARK: - Lockstep Encoder
 
-/// Moves groups of same-typed sibling values by the same delta at once, so properties that relate siblings keep holding while they shrink together.
+/// Moves groups of same-typed sibling values by the same delta at once, so properties that relate siblings keep holding while they decrease together.
 ///
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate.
 enum ScopedLockstepEncoder: ScopedEncoder {

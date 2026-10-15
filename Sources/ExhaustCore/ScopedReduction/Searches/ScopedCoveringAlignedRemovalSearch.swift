@@ -9,7 +9,7 @@
 ///
 /// Each row is an array of `UInt64` values, one per sibling parameter. A value equal to the sibling's skip value (its element count) means "do not delete from this sibling." Any other value is an element index within that sibling's `elementNodeIDs`. Rows where fewer than two siblings participate are skipped, because deletion within one sequence belongs to batch removal.
 ///
-/// The generator is a reference shared with the scope, so a later search over the same scope resumes where this one stopped. Every accepted deletion requires a rebuild, which ends the pass, so the search never sees an acceptance.
+/// The covering array generator is a reference shared with the scope, so a later search over the same scope resumes where this one stopped. Every accepted deletion requires a rebuild, which ends the pass, so the search never sees an acceptance.
 ///
 /// One search pulls at most ``CoveringAlignedRemovalScope/rowBudget`` rows, counting rows skipped without a candidate, since they cost no trial and so never reach the deadline check. Without the budget, a sibling pair too large for the generator to track yields rows forever.
 struct ScopedCoveringAlignedRemovalSearch: ScopedSearch {
@@ -40,7 +40,6 @@ struct ScopedCoveringAlignedRemovalSearch: ScopedSearch {
                 guard siblingIndex < scope.siblings.count else {
                     continue
                 }
-                // Skip value = don't delete from this sibling.
                 if value == scope.skipValues[siblingIndex] {
                     continue
                 }
@@ -60,7 +59,6 @@ struct ScopedCoveringAlignedRemovalSearch: ScopedSearch {
                 ))
             }
 
-            // Require at least two siblings participating.
             guard targets.count >= 2 else {
                 continue
             }

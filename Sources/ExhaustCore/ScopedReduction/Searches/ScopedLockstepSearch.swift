@@ -7,10 +7,9 @@
 
 /// Reduces same-typed sibling values in lockstep, moving all values in a group by the same delta simultaneously.
 ///
-/// Each suffix window of a tandem group is searched independently to skip near-target leaders that would otherwise block the whole set. Preserves relative relationships between coupled leaves — the property may constrain siblings to be equal or related.
-/// Matching characters in the same domain also try their target and case/decomposition simplifications across every occurrence together, before character suffix windows.
+/// Moving every value by the same delta preserves relationships the property may impose between siblings, such as equality. Each suffix window of a tandem group is searched independently, so a near-target leader cannot block the rest of the group. Matching characters in the same domain also try their target and case or decomposition simplifications across every occurrence together, before character suffix windows.
 ///
-/// The delta magnitude is above the opacity boundary and requires predicate feedback to find.
+/// The graph cannot predict which delta keeps the property failing (the delta lies above the opacity boundary), so only property feedback can find it.
 ///
 /// Candidate construction lives in `ScopedLockstepSearch+Probing.swift`.
 struct ScopedLockstepSearch: ScopedSearch {
@@ -53,6 +52,7 @@ struct ScopedLockstepSearch: ScopedSearch {
         var characterCandidateIndex: Int
         var probePhase: LockstepProbePhase
         var stepper: BinarySearchStepper
+        /// Whether the last probe was the plan's full-distance direct shot. An accepted direct shot cannot be improved, so the plan ends.
         var lastWasDirectShot: Bool
     }
 

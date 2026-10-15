@@ -59,7 +59,7 @@ struct ScopedChoiceConfiguration {
 
 /// Build limits for one level of a nested bind chain. The interpreter owns the shared pool: the outermost level with limits creates it, and every nested level draws from it.
 struct ScopedChainLimits {
-    /// Branches this level may build per start, counting builds that fail.
+    /// Branches this level may build each time its parent's branch reaches it, counting builds that fail.
     let maxBuildsPerStart: Int
     /// Builds left to the whole chain. Read from the outermost level only.
     let poolCapacity: Int
@@ -68,6 +68,7 @@ struct ScopedChainLimits {
 /// What the interpreter does with a search's candidates.
 struct ScopedSearchConfiguration {
     let acceptance: ScopedAcceptance
+    /// Forces exact decoding, whatever decoder the candidate's mutation would otherwise select.
     let requiresExactDecoder: Bool
     /// Replaces every candidate's mutation when set. A composition reports its upstream mutation, because the downstream search's node IDs refer to the lifted graph.
     let reportedMutation: EncoderProbe?
@@ -78,9 +79,9 @@ struct ScopedSearchConfiguration {
 
 /// What a search does after one of its candidates is accepted.
 enum ScopedAcceptance {
-    /// Keeps searching. An acceptance whose mutation requires a full rebuild still ends the pass; the interpreter enforces that boundary.
+    /// Applies each acceptance to the graph in place and keeps searching. An acceptance whose mutation the graph cannot apply in place ends the pass with a rebuild.
     case `continue`
-    /// Keeps searching after any acceptance, working from the recovered sequence.
+    /// Keeps searching after any acceptance without applying it to the graph, and rebuilds once the pass ends. For searches whose acceptances the graph cannot apply in place but whose later candidates need only the recovered sequence.
     case rebuildAndContinue
     /// The first acceptance ends every search. Compositions use it because an accepted lift makes every other branch's lifted graph stale.
     case stop

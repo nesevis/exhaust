@@ -60,7 +60,7 @@ protocol ScopedEncoder {
 enum ScopedDispatchGate {
     /// Dispatches whenever the scope is valid and not rejected.
     case open
-    /// Dispatches only as often as the bind's ``BoundValueGate`` allows, and only once the bind is classified as identical in topology and liftable both ways, classifying it first if needed. The gate also supplies the dispatch's ``ScopedDispatchBudget``.
+    /// Dispatches only as often as the bind's ``BoundValueGate`` allows, and only once the bind's classification shows it lifts at both ends of its controller's range with the same bound shape at each, classifying it first if needed. The gate also supplies the dispatch's ``ScopedDispatchBudget``.
     case bindClassification(bindNodeID: Int, upstreamLeafNodeID: Int)
     /// Dispatches only in a cycle with no acceptance yet, and only once the bind inner leaf has stalled.
     case stalledBindInner(leafNodeID: Int)

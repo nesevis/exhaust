@@ -322,11 +322,11 @@ extension ScopedReductionRunner {
 
     // MARK: - Pass Policy
 
-    /// Applies a completed pass to the runner's memory: convergence, coupling, the gate, migration demotion, unresolved replacements, statistics, acceptance flags, and scope rejections.
+    /// Applies a completed pass to the runner's state: convergence, coupling, the gate, migration demotion, unresolved replacements, statistics, acceptance flags, and scope rejections.
     ///
     /// Shared by dispatched and post-cycle passes. The returned action lets each caller choose its own rebuild.
     ///
-    /// - Parameter appliedPasses: Passes this record stands for. The staged joint encoder's reducer runs one search per arity, and each counts as a pass, as each stage did in its own session.
+    /// - Parameter appliedPasses: Passes this record stands for. The staged joint encoder's reducer runs one search per arity, and each search counts as a pass.
     @discardableResult
     mutating func applyPassPolicy(_ pass: PassRecord, appliedPasses: Int = 1) -> PostAcceptanceAction {
         let report = pass.report

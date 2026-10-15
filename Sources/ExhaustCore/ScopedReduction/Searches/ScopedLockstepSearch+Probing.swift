@@ -8,7 +8,7 @@
 extension ScopedLockstepSearch {
     /// Builds numeric windows, complete equal-character proposals, then character windows.
     ///
-    /// For each group of same-tag leaves, generates plans that drop progressively more leading entries — this prevents a near-target leader from blocking the whole set.
+    /// For each group of same-tag leaves, plans windows that drop progressively more leading entries, so a near-target leader cannot block the whole set.
     mutating func startLockstep(scope: TandemScope, graph: ChoiceGraph, maxSuffixWindows: Int) {
         var plans: [LockstepPlan] = []
         var characterWindows: [LockstepPlan] = []
@@ -26,7 +26,7 @@ extension ScopedLockstepSearch {
                 continue
             }
 
-            // Build suffix windows: drop leading entries one at a time, capped to avoid O(n) plan construction on large groups.
+            // Each window copies its suffix, so the cap keeps a large group from building a quadratic number of entries.
             let maxWindows = min(indices.count - 1, maxSuffixWindows)
             var offset = 0
             while offset < maxWindows {
@@ -42,8 +42,7 @@ extension ScopedLockstepSearch {
             }
         }
 
-        // Numeric searches precede character proposals. Try complete equal-character
-        // groups before the suffix windows, which can change only some occurrences.
+        // Numeric searches precede character proposals. Complete equal-character groups go before the character suffix windows, which can change only some occurrences.
         plans.append(contentsOf: characterPlans(graph: graph))
         plans.append(contentsOf: characterWindows)
 
@@ -68,6 +67,7 @@ extension ScopedLockstepSearch {
         let value: UInt64
     }
 
+    /// Groups character leaves holding the same character in the same domain and range, and proposes moving every occurrence together to the reduction target or a simpler form, simplest first.
     private func characterPlans(graph: ChoiceGraph) -> [LockstepPlan] {
         var groups: [CharacterGroupKey: [Int]] = [:]
         for nodeID in graph.characterLeafNodes {
@@ -109,7 +109,7 @@ extension ScopedLockstepSearch {
 
     /// Constructs a window plan from indices, computing direction and distance from the leader.
     ///
-    /// Returns `nil` when any window index has become stale relative to the current sequence — a defensive guard against structural refreshes that happened between scope construction and plan building.
+    /// Returns `nil` when a window index no longer addresses a value of the leader's tag, or when the leader is not finite or is less than one step from its target.
     func makeLockstepWindowPlan(windowIndices: [Int]) -> LockstepWindowPlan? {
         guard let firstIndex = windowIndices.first,
               firstIndex < valueState.sequence.count,
@@ -221,7 +221,7 @@ extension ScopedLockstepSearch {
                         state.probePhase = .binarySearchStart
                         return candidate
                     }
-                    // No valid direct shot — fall through to binary search.
+                    // No valid direct shot, so go straight to binary search.
                     state.probePhase = .binarySearchStart
                     continue
 
@@ -245,12 +245,12 @@ extension ScopedLockstepSearch {
                     if let candidate = makeLockstepCandidate(plan: plan, delta: firstDelta) {
                         return candidate
                     }
-                    // First probe didn't yield a candidate — advance stepper.
+                    // The first delta built no candidate, so advance the stepper.
                     continue
 
                 case .binarySearch:
                     guard let nextDelta = state.stepper.advance(lastAccepted: lastAccepted) else {
-                        // Converged — move to next plan.
+                        // Converged: move to the next plan.
                         state.planIndex += 1
                         state.probePhase = .directShot
                         continue
@@ -282,8 +282,7 @@ extension ScopedLockstepSearch {
             return nil
         }
         if plan.tag == .character {
-            // Window deltas remain anchored to their original entries. A preceding
-            // uniform simplification may already have improved the accepted baseline.
+            // Window deltas stay anchored to their original entries, but an earlier uniform simplification may already have improved the baseline, so compare against the baseline itself.
             for index in plan.windowIndices {
                 let order = candidate[index].shortLexCompare(valueState.sequence[index])
                 if order != .eq {

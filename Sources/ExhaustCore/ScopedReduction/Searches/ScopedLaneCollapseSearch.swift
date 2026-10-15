@@ -56,7 +56,7 @@ struct ScopedLaneCollapseSearch: ScopedSearch {
                 isRangeExplicit: entry.isRangeExplicit
             ))
 
-            buffer = Self.stablePartitionByPrefix(buffer, elements: elements, laneControlPositions: Self.collectLaneControlPositions(in: buffer, elements: elements))
+            buffer = Self.stablePartitionByPrefix(buffer, elements: elements, laneControlValues: Self.collectLaneControlValues(in: buffer, elements: elements))
 
             return .written(mutation: .sequenceReordered, admission: .standard)
         }
@@ -84,8 +84,8 @@ struct ScopedLaneCollapseSearch: ScopedSearch {
 
     // MARK: - Lane Control Detection
 
-    /// Returns the laneControl value for each element by scanning for the `.laneControl`-tagged entry within each element's range.
-    private static func collectLaneControlPositions(
+    /// Returns the lane marker value of each element, read from the `.laneControl`-tagged entry in its range, or `UInt64.max` when the element has none, which places it among the concurrent elements.
+    private static func collectLaneControlValues(
         in sequence: ChoiceSequence,
         elements: [SequenceElement]
     ) -> [UInt64] {
@@ -110,7 +110,7 @@ struct ScopedLaneCollapseSearch: ScopedSearch {
     private static func stablePartitionByPrefix(
         _ sequence: ChoiceSequence,
         elements: [SequenceElement],
-        laneControlPositions: [UInt64]
+        laneControlValues: [UInt64]
     ) -> ChoiceSequence {
         guard elements.isEmpty == false else {
             return sequence
@@ -125,7 +125,7 @@ struct ScopedLaneCollapseSearch: ScopedSearch {
 
         for (index, element) in elements.enumerated() {
             let slice = sequence[element.range]
-            if laneControlPositions[index] == 0 {
+            if laneControlValues[index] == 0 {
                 prefixSlices.append(slice)
             } else {
                 concurrentSlices.append(slice)

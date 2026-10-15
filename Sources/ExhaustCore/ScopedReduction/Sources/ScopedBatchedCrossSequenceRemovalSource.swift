@@ -55,10 +55,10 @@ struct ScopedBatchedCrossSequenceRemovalSource {
             lastEmittedRange = nil
             let count = emitted.end - emitted.start
             if count >= 2 {
-                let mid = emitted.start + count / 2
+                let midpoint = emitted.start + count / 2
                 // The first half contains the highest-yield sequences and is popped first.
-                pendingRanges.append((start: mid, end: emitted.end))
-                pendingRanges.append((start: emitted.start, end: mid))
+                pendingRanges.append((start: midpoint, end: emitted.end))
+                pendingRanges.append((start: emitted.start, end: midpoint))
             }
         }
 
@@ -140,9 +140,9 @@ struct ScopedBatchedCrossSequenceRemovalSource {
                 cachedPriority = nil
                 return
             }
-            let mid = emitted.start + count / 2
+            let midpoint = emitted.start + count / 2
             var firstHalfYield = 0
-            for index in emitted.start ..< mid {
+            for index in emitted.start ..< midpoint {
                 firstHalfYield += plans[index].yield
             }
             cachedPriority = DispatchPriority(

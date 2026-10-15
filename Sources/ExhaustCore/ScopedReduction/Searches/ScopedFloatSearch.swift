@@ -5,7 +5,7 @@
 
 // MARK: - Float Search
 
-/// Drives float leaves toward their semantic simplest without changing graph structure, through a four-stage IEEE 754 pipeline: special values, truncation, integral binary search, and ratio binary search.
+/// Drives float leaves toward their semantic simplest values without changing graph structure, through four stages: special values, truncation, integral binary search, and ratio binary search.
 ///
 /// All leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions, and an acceptance advances the baseline to the accepted candidate.
 ///
@@ -18,7 +18,7 @@ struct ScopedFloatSearch: ScopedSearch {
 
     // MARK: - Float State
 
-    /// Tracks the reduction state for a single float leaf node, including its current value, bit pattern, type tag, and valid range constraints. Mutable fields update as probes are accepted so subsequent stages operate on the reduced value.
+    /// One float leaf under search. The mutable fields follow accepted probes, so later stages start from the reduced value.
     struct Target: ScopedLeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
@@ -30,7 +30,7 @@ struct ScopedFloatSearch: ScopedSearch {
         let mayReshape: Bool
     }
 
-    /// Represents the four stages of float reduction in ascending complexity: special values (zero, subnormal, normal), mantissa truncation, integral binary search, and ratio binary search. Ordered so that cheap constant-time probes run before iterative searches.
+    /// The four stages of float reduction, cheapest first: special values (the reduction target, then the type's greatest finite magnitude, infinity, and NaN), mantissa truncation, integral binary search, and ratio binary search. Constant-count probes run before the iterative searches.
     enum Stage: Int, Comparable {
         case specialValues = 0
         case truncation = 1
@@ -42,13 +42,14 @@ struct ScopedFloatSearch: ScopedSearch {
         }
     }
 
-    /// Tracks the overall state of float leaf reduction across all targets and stages, including the working sequence, the list of ``Target`` nodes, the current stage and target index, and binary search context shared between the integral and ratio stages.
+    /// The search's position across every target and stage. The binary search context is shared between the integral and ratio stages.
     struct State {
         var sequence: ChoiceSequence
         var targets: [Target]
         var currentTargetIndex: Int
         var stage: Stage
         var batchCandidates: [UInt64]
+        /// The next batch candidate in the special-values and truncation stages. In the binary search stages, zero until the stepper has started.
         var batchIndex: Int
         var stepper: FindIntegerStepper
         var needsFirstProbe: Bool

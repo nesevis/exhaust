@@ -38,7 +38,7 @@ struct ScopedRelaxCandidateCursor {
                 continue
             }
             count += 1
-            // The shared baseline contributes the same length to every candidate. Length ties keep discovery order: a shortlex tiebreak can prefer a perturbation that triggers a full exploitation loop where the prior ordering ended cheaply at perturbation.
+            // The shared baseline contributes the same length to every candidate. Length ties keep discovery order: a shortlex tiebreak can select a perturbation that triggers a full exploitation loop, where the discovery-order choice ends cheaply at perturbation.
             selected.insert(splice) { first, second in
                 first.replacement.count - first.range.count < second.replacement.count - second.range.count
             }

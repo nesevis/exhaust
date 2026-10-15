@@ -31,6 +31,7 @@ enum ScopedRejection {
     case cached
     case materializationRejected
     case propertyPassed
+    /// The property still failed, but decoding returned no counterexample or one the encoder's ``ReductionOrder`` does not admit.
     case failedNotAdmitted
     /// The outcome withheld, for searches whose composition cannot guarantee that branches emit disjoint candidates.
     case undifferentiated
@@ -56,7 +57,9 @@ struct ScopedSearchCounts: Equatable {
 
 /// Search knowledge a search hands back when it finishes.
 struct ScopedSearchReport {
+    /// Convergence records keyed by graph node ID, which the runner writes into the graph so later value searches warm-start from them.
     var convergenceRecords: [Int: ConvergedOrigin] = [:]
+    /// Whether a replacement candidate was dropped for not preceding the base sequence. The runner uses it to schedule a relax round, which can try the replacement without the ordering.
     var hadUnresolvedReplacement = false
 }
 
@@ -74,7 +77,7 @@ enum ScopedCandidate {
 
 /// A feedback-driven candidate stream for one scope.
 ///
-/// Searches keep their own efficient search state and write into a buffer the interpreter owns, so a pull allocates no sequence.
+/// Searches keep their own state and write into a buffer the interpreter owns, so a pull allocates no sequence.
 protocol ScopedSearch {
     /// Produces the next candidate, given the outcome of the previous one.
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate?

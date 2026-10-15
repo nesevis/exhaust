@@ -52,7 +52,7 @@ extension ScopedReductionRunner {
 
         if outcome.anyAccepted == false, outcome.allConverged {
             actions.append(.confirmConvergence)
-            // Relation search runs after confirmation: value search writes convergence records mid-cycle, so on a run that stalls in its first cycle nothing would rebuild a source that could see them. This is where the stall signature, everything converged and nothing accepted, is both observable and actionable.
+            // Relation search runs after confirmation: value search writes convergence records mid-cycle, so on a run that stalls in its first cycle nothing would rebuild a source that could see them. Here, with everything converged and nothing accepted, the stall is visible and the relation pass can act on it.
             actions.append(.relationPass)
         }
 

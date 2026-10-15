@@ -5,7 +5,9 @@
 
 // MARK: - Integer Search
 
-/// Drives integer leaves toward their semantic simplest without changing graph structure: a batch zeroing attempt followed by per-leaf interpolation search via ``InterpolationSearchStepper`` (falling back to binary search below a threshold), with a cross-zero phase for signed integers.
+/// Drives integer leaves toward their semantic simplest values without changing graph structure.
+///
+/// Runs four phases, cheapest first: batch zero, per-leaf zero, batch bisection, and per-leaf search. Per-leaf search probes the target directly, then runs ``InterpolationSearchStepper`` (binary search below ``ScopedReductionTuning/interpolationBinaryThreshold``). After it converges, a small non-monotone gap is scanned linearly, a character leaf tries its simpler forms, and a signed leaf tries values across zero that bit-pattern search cannot reach.
 ///
 /// All leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions, and an acceptance advances the baseline to the accepted candidate.
 ///
@@ -38,7 +40,7 @@ struct ScopedIntegerSearch: ScopedSearch {
 
     // MARK: - Phase State
 
-    /// Tracks the state of integer leaf reduction across its sub-phases, from batch zeroing through per-leaf interpolation search. Holds the working sequence, leaf metadata, the active stepper, and auxiliary state for cross-zero and linear scan recovery.
+    /// The search's position across its phases. At most one of ``crossZero``, ``candidateList``, and ``stepper`` is active for the current leaf.
     struct State {
         var sequence: ChoiceSequence
         var leafPositions: [LeafPosition]
@@ -108,11 +110,11 @@ struct ScopedIntegerSearch: ScopedSearch {
 
     /// State for the cross-zero phase of per-leaf minimization.
     ///
-    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key decodes via ``ChoiceValue/fromShortlexKey(_:tag:)`` to a signed value on the opposite side of zero from the current convergence, closing the gap that bp-space binary search cannot bridge (for example, reducing value `1` to value `0` or `-1`).
+    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key decodes via ``ChoiceValue/fromShortlexKey(_:tag:)`` to a signed value on the opposite side of zero from the current convergence, closing the gap that bit-pattern binary search cannot bridge (for example, reducing value `1` to value `0` or `-1`).
     ///
-    /// The first accepted probe is the simplest possible value for this leaf — walking upward from key 0 guarantees that any later acceptance would be strictly less simple, so the phase exits on first acceptance.
+    /// The walk climbs from key 0, so the first accepted probe is the simplest value this phase can reach and any later acceptance would be less simple. The phase therefore exits on its first acceptance.
     struct CrossZeroState {
-        let seqIdx: Int
+        let sequenceIndex: Int
         let tag: TypeTag
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
@@ -140,15 +142,15 @@ struct ScopedIntegerSearch: ScopedSearch {
 
     /// State for the batch bisection phase.
     ///
-    /// Performs joint interpolation search across groups of leaves. Each group probe moves all leaves in the group one interpolation step toward their targets simultaneously. On acceptance, the group's values update and the next step is tried. On rejection, the group is bisected into two halves that are searched independently. When a group is reduced to a single leaf, it is deferred to the per-leaf phase.
+    /// Searches groups of leaves jointly. Each probe moves every unconverged leaf in the group to `1 / divisor` of its remaining distance from its target. An acceptance updates the group's values and resets the divisor. A rejection halves the divisor, and once the divisor reaches ``ScopedReductionTuning/valueBisectionBinaryThreshold`` the group splits into two halves searched independently. Single-leaf groups are left to the per-leaf phase.
     struct BisectionState {
         /// Stack of leaf groups to search. Each group is a half-open interval into ``State/leafPositions``.
         var pendingGroups: [(start: Int, end: Int)]
-        /// The group currently being searched. `nil` when no group is active (need to pop next from pending).
+        /// The group currently being searched. Nil when no group is active, so the next pending group is popped.
         var activeGroup: (start: Int, end: Int)?
         /// Current interpolation divisor for the active group. Halves on rejection, resets to ``ScopedReductionTuning/valueBisectionInitialDivisor`` on acceptance.
         var divisor: UInt64
-        /// Whether we have emitted a probe for the active group and are awaiting feedback.
+        /// Whether a probe for the active group is awaiting feedback.
         var awaitingFeedback: Bool
         /// Leaf indices that were accepted during bisection and should be skipped in per-leaf phase.
         var convergedIndices: Set<Int>

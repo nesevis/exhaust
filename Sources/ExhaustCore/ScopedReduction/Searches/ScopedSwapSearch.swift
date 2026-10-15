@@ -243,17 +243,17 @@ struct ScopedSwapSearch: ScopedSearch {
             return nil
         }
 
-        let mid = lowBound + (highBound - lowBound) / 2
+        let midpoint = lowBound + (highBound - lowBound) / 2
         let built = state.runningSequence.swappingSpans(
             state.slots[state.contentSlotIndex].range,
-            state.slots[mid].range
+            state.slots[midpoint].range
         )
         guard built.shortLexPrecedes(state.runningSequence) else {
-            state.bisectHi = mid
+            state.bisectHi = midpoint
             return bisectExtension(into: &candidate, state: &state)
         }
 
-        return emit(built, target: mid, into: &candidate, state: &state)
+        return emit(built, target: midpoint, into: &candidate, state: &state)
     }
 
     /// Records `built` as the outstanding probe without advancing the base.

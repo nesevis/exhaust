@@ -33,8 +33,6 @@ struct ScopedCounterexample {
                 sequence.shortLexPrecedes(decoded.sequence) == false
             case .unordered:
                 true
-            case .strictlySmaller:
-                decoded.sequence.shortLexPrecedes(sequence)
         }
     }
 }
@@ -43,10 +41,8 @@ struct ScopedCounterexample {
 enum ReductionOrder {
     /// Ordinary probes. Equal sequences are lateral moves and stay admissible.
     case notLarger
-    /// `numericReorder` and relax round perturbation.
+    /// The numeric reorder pass, whose reorderings need not precede the incumbent.
     case unordered
-    /// Improving pivots and relax round settlement.
-    case strictlySmaller
 }
 
 // MARK: - Decoding Requirement
@@ -148,7 +144,7 @@ struct ScopedDecoder {
 
     /// The decoding mode chosen for one candidate.
     ///
-    /// Pure function of the mutation type, the encoder's decoder requirement and admission, and whether the sequence contains binds. A non-standard admission forces exact decoding, because only the exact decoder can apply it. `materializePicks` is true when the probe changes the active branch path and the decoder must reconstruct all branch alternatives.
+    /// `materializePicks` is true when the probe may change the active branch path, so the decoder must reconstruct every branch alternative.
     enum Selection {
         case exact(materializePicks: Bool, admission: DecoderAdmission)
         case guided(materializePicks: Bool)
@@ -179,7 +175,9 @@ struct ScopedDecoder {
         }
     }
 
-    /// Chooses exact decoding when the search requires it, when the admission inspects decoded history, or when the candidate can reshape bound content, and guided decoding otherwise. A non-standard admission forces exact decoding because only the exact decoder can apply it. `materializePicks` is true when the candidate changes the active branch path.
+    /// Chooses guided decoding when the candidate can reshape bound content, unless the search requires exact decoding or the admission inspects decoded history. Every other candidate decodes exactly.
+    ///
+    /// A reshaping candidate needs the incumbent's tree as a fallback for the bound content it regenerates, which only guided decoding has. An admission that inspects decoded history overrides that, because only the exact decoder produces the history it reads. A leaf-value candidate can reshape only through a change marked `mayReshape`; any other mutation can reshape whenever the sequence holds a bind.
     private static func selectDecoder(
         for mutation: ProjectedMutation,
         requiresExactDecoder: Bool,

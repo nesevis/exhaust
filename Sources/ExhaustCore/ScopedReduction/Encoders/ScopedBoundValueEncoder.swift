@@ -5,9 +5,9 @@
 
 // MARK: - Bound Value Encoder
 
-/// Bound value search: the encoder's reducer proposes a controller value, lifts it, relocates the bind, and either descends into the next nested bind or searches the bound leaves.
+/// Lowers a bind's controller value and searches the bound content each lower value generates.
 ///
-/// A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
+/// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the branch either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
 enum ScopedBoundValueEncoder: ScopedEncoder {
     static let name: EncoderName = .boundValueSearch
     static let isValueDependent = true
@@ -286,7 +286,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         )
     }
 
-    /// Reads logging metadata only when the controller position fits the proposed prefix.
+    /// The controller's proposed bit pattern, for logging. Nil when the controller position falls outside the proposed prefix.
     private static func controllerBitPattern(in sequence: ChoiceSequence, at index: Int?) -> UInt64? {
         index.flatMap { sequenceIndex in
             sequenceIndex < sequence.count ? sequence[sequenceIndex].value?.choice.bitPattern64 : nil

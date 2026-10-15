@@ -459,6 +459,7 @@ extension ScopedSource {
     ) -> [PricedEncoderScope] {
         var results: [PricedEncoderScope] = []
 
+        // TODO: Document or derive the per-leaf and per-downstream probe estimates (16, 15, 64, 8).
         for scope in MinimizationQuery.build(graph: graph, deferBindInner: deferBindInner) {
             let encoderScope: AnyEncoderScope
             let valueYield: Int
@@ -509,6 +510,7 @@ extension ScopedSource {
     private static func exchangeEncoderScopes(graph: ChoiceGraph, tuning: ScopedReductionTuning) -> [PricedEncoderScope] {
         var results: [PricedEncoderScope] = []
 
+        // TODO: Document or derive the probe estimates (24 pairs, 8 per group or pair).
         for scope in ExchangeQuery.build(graph: graph) {
             let encoderScope: AnyEncoderScope
             let estimatedCost: Int

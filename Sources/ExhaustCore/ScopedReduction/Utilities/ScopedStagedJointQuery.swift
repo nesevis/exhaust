@@ -7,7 +7,9 @@
 
 /// Discovers the pairs and higher-order groups of one staged joint checkpoint.
 ///
-/// Pairs select stalled numeric sources without requiring their compensating partners to have converged. Higher-order groups are discovered only after the preceding stage stalls. Scope ranking is heuristic: generator relationships and observed floor motion do not prove property coupling. Preparation is bounded separately from property probes. Bind metadata admits supported stable paths; materialization still has to preserve the complete proposed choice sequence.
+/// A pair needs only a stalled source; its compensating partner may still be moving. Higher-order groups are discovered only after the preceding stage stalls.
+///
+/// Ranking is a heuristic: generator relationships and observed floor motion suggest property coupling but do not prove it. Discovery has its own limit, ``ScopedReductionTuning/numericJointGroupCalculationLimit``, separate from the probe budget. A leaf under a bind is eligible only when the bind's classification shows it lifts at both ends of its controller's range with the same bound shape at each. That checks only the two ends, so the candidate's ``DecoderAdmission`` still rejects any decoding that changes a proposed choice.
 enum ScopedStagedJointQuery {
     /// One leaf of the candidate pool. Captures stalled membership as well as values and domains so new convergence evidence can reopen an exhausted checkpoint.
     struct Entry: Equatable {
@@ -64,7 +66,7 @@ enum ScopedStagedJointQuery {
         return pairs
     }
 
-    /// Shares numeric and bind admission between pair search and higher-order group discovery.
+    /// The numeric leaves pair and group discovery may use: at most ``ScopedReductionTuning/numericPairMaximumLeaves``, in position order, each under binds that lift at both ends of their controllers' ranges with the same bound shape at each.
     static func eligibleLeaves(graph: ChoiceGraph, tuning: ScopedReductionTuning) -> [ReductionLeaf] {
         // Filter before capping, so non-numeric leaves (a long string's characters, say) cannot use up the cap ahead of numeric ones.
         graph.leafNodes.lazy.compactMap { nodeID -> ReductionLeaf? in
@@ -88,7 +90,7 @@ enum ScopedStagedJointQuery {
         }.prefix(tuning.numericPairMaximumLeaves).sorted { $0.position < $1.position }
     }
 
-    /// Requires a current convergence floor above target, or a fruitless bound search for a bind inner.
+    /// Whether the leaf is off its target and stalled: its convergence floor sits at its current value, or it is a bind inner whose bound value search came back fruitless.
     static func isStalled(_ leaf: ReductionLeaf, graph: ChoiceGraph, isFruitlessBind: (UInt64) -> Bool) -> Bool {
         guard leaf.choice.bitPattern64 != leaf.choice.reductionTarget(in: leaf.range) else {
             return false
@@ -122,7 +124,7 @@ enum ScopedStagedJointQuery {
 
     // MARK: - Candidate Pool
 
-    /// Collects the bounded pool of leaves that three-way and four-way groups are drawn from: stalled leaves first, then those nearest their target. Samples only the pool, retaining at-target leaves as compensating partners. These exact palettes supply both the work estimate and the eventual cursor, so the escalation gate measures the grid it will search. Higher-order proposals support integers and finite floating-point values, including mixed groups.
+    /// Collects the bounded pool of leaves that three-way and four-way groups are drawn from: stalled leaves first, then those nearest their target. Samples only the pool, keeping at-target leaves as compensating partners. The same samples feed both the work estimate and the eventual cursor, so the escalation gate measures the grid it will search. Higher-order proposals support integers and finite floating-point values, including mixed groups.
     ///
     /// Empty when escalation is disabled, so no preparation is spent.
     static func candidatePool(
@@ -275,7 +277,7 @@ enum ScopedStagedJointQuery {
 
     // MARK: - Helpers
 
-    /// Unknown or divergent bind shapes are deferred; the classifier's cached classification avoids speculative endpoint work here.
+    /// Whether every non-constant bind above the leaf is classified as lifting at both ends of its controller's range with the same bound shape at each. An unclassified bind counts as unsupported: this reads cached classifications rather than classifying, which would cost materializations.
     private static func supportsBinds(above nodeID: Int, graph: ChoiceGraph) -> Bool {
         var ancestor = graph.nodes[nodeID].parent
         while let ancestorID = ancestor {

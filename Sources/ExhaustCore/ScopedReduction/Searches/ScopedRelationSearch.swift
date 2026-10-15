@@ -9,9 +9,9 @@
 ///
 /// For a pair whose current semantic magnitudes are `(numerator·scale, denominator·scale)`, candidates hold the reduced ratio fixed and vary the scale factor: `(numerator·k, denominator·k)` for `k` below the current scale, written back as bit patterns offset from each leaf's semantic-zero pattern. The search runs in delta space (`k = scale − delta`) so the direct shot at full distance probes the line's minimum `k = 1` first, and the binary search finds the largest accepted delta, mirroring the lockstep idiom.
 ///
-/// The relation is a guess read off the current values, certified only by the oracle. A wrong inference costs one direct-shot probe plus a short binary search, all rejected. ``RelationQuery``'s stall gate ensures the search only runs where every other value move has already been certified futile.
+/// The relation is a guess read off the current values, and only the property can confirm it. A wrong inference costs one direct-shot probe plus a short binary search, all rejected. ``RelationQuery``'s stall gate runs the search only where every other value move has already stalled.
 ///
-/// The surviving scale factor is above the opacity boundary and requires predicate feedback to find.
+/// The graph cannot predict which scale factor keeps the property failing (it lies above the opacity boundary), so only property feedback can find it.
 struct ScopedRelationSearch: ScopedSearch {
     // MARK: - State
 

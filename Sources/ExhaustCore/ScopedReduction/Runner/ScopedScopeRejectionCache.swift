@@ -79,6 +79,7 @@ struct ScopedScopeRejectionCache {
     /// Mixes the affected node IDs into the key's discriminator, so the same scope hashes alike whatever its leaf values.
     private static func coarseScopeHash(_ key: ScopedRejectionKey) -> UInt64 {
         var hash: UInt64 = key.discriminator ^ 0xC0A8_5E00_DEAD_BEEF
+        // SplitMix64 finalizer per node ID, so nearby IDs do not cancel under XOR.
         for nodeID in key.affectedNodeIDs {
             var bits = UInt64(nodeID) &* 0x9E37_79B9_7F4A_7C15
             bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9

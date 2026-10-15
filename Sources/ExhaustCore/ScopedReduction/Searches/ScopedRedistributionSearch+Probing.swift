@@ -55,6 +55,7 @@ extension ScopedRedistributionSearch {
         ))
     }
 
+    /// Searches each pair in turn: a full-delta probe that moves the source to its target, then binary search on the transfer delta. Once every pair is done, replays the pairs that accepted, up to ``maxPasses`` passes.
     func nextRedistributionProbe(
         state: inout RedistributionState,
         lastAccepted: Bool
@@ -71,12 +72,10 @@ extension ScopedRedistributionSearch {
             let pair = state.pairs[state.pairIndex]
 
             if state.stepper == nil {
-                // Recompute maxDelta from the CURRENT sequence — prior pair acceptances may have changed the source's value.
+                // Read the maximum delta from the current sequence, because earlier pairs' acceptances may have moved the source.
                 let (currentMax, freshContext) = currentMaxDelta(
                     sourceIndex: pair.sourceIndex,
                     sinkIndex: pair.sinkIndex,
-                    sourceTag: pair.sourceTag,
-                    sinkTag: pair.sinkTag,
                     usesMixed: pair.mixedContext != nil
                 )
                 guard currentMax > 0 else {
@@ -91,17 +90,15 @@ extension ScopedRedistributionSearch {
                         sourceIndex: pair.sourceIndex,
                         sinkIndex: pair.sinkIndex,
                         sourceTag: pair.sourceTag,
-                        sinkTag: pair.sinkTag,
                         delta: currentMax,
                         mixedContext: freshContext
                     ) {
                         state.didEmitCandidate = true
                         return candidate
                     }
-                    // Full delta rejected — fall through to binary search.
                 }
 
-                // Fall back to binary search on delta magnitude.
+                // Binary search on the delta.
                 state.stepper = BinarySearchStepper(
                     lo: 0,
                     hi: currentMax,
@@ -119,21 +116,19 @@ extension ScopedRedistributionSearch {
                     sourceIndex: pair.sourceIndex,
                     sinkIndex: pair.sinkIndex,
                     sourceTag: pair.sourceTag,
-                    sinkTag: pair.sinkTag,
                     delta: firstDelta,
                     mixedContext: freshContext
                 ) {
                     state.didEmitCandidate = true
                     return candidate
                 }
-                // First stepper probe not viable — advance stepper.
+                // The first delta built no candidate, so advance the stepper.
             }
 
             let feedback = state.didEmitCandidate ? lastAccepted : false
             state.didEmitCandidate = false
 
-            // If full-delta was just accepted, the source is zeroed.
-            // Skip binary search, move to next pair immediately.
+            // An accepted full delta put the source at its target, so the pair needs no binary search.
             if feedback, state.stepper == nil {
                 state.pairIndex += 1
                 state.triedFullDelta = false
@@ -141,19 +136,16 @@ extension ScopedRedistributionSearch {
             }
 
             if let nextDelta = state.stepper?.advance(lastAccepted: feedback) {
-                // Re-fetch fresh context for each probe in case prior acceptances changed values.
+                // Rebuild the context for each probe, because acceptances move the values it scales.
                 let (_, freshContext) = currentMaxDelta(
                     sourceIndex: pair.sourceIndex,
                     sinkIndex: pair.sinkIndex,
-                    sourceTag: pair.sourceTag,
-                    sinkTag: pair.sinkTag,
                     usesMixed: pair.mixedContext != nil
                 )
                 if let candidate = buildRedistributionCandidate(
                     sourceIndex: pair.sourceIndex,
                     sinkIndex: pair.sinkIndex,
                     sourceTag: pair.sourceTag,
-                    sinkTag: pair.sinkTag,
                     delta: nextDelta,
                     mixedContext: freshContext
                 ) {
@@ -163,13 +155,13 @@ extension ScopedRedistributionSearch {
                 continue
             }
 
-            // Stepper converged for this pair — move to next.
+            // Stepper converged: move to the next pair.
             state.stepper = nil
             state.pairIndex += 1
             state.triedFullDelta = false
         }
 
-        // All pairs exhausted. If any were accepted this pass and we haven't hit the pass cap, reset for another pass — but only re-evaluate the pairs that made progress. This avoids wasting O(pairs × log(maxDelta)) probes on pairs that can't redistribute.
+        // All pairs done. Another pass replays only the pairs that accepted, so pairs that cannot move do not spend O(pairs × log(maxDelta)) probes again.
         state.passCount += 1
         if state.acceptedPairIndices.isEmpty == false, state.passCount < maxPasses {
             state.activePairIndices = state.acceptedPairIndices
@@ -187,8 +179,6 @@ extension ScopedRedistributionSearch {
     func currentMaxDelta(
         sourceIndex: Int,
         sinkIndex: Int,
-        sourceTag _: TypeTag,
-        sinkTag _: TypeTag,
         usesMixed: Bool
     ) -> (maxDelta: UInt64, mixedContext: MixedRedistributionContext?) {
         guard let sourceValue = valueState.sequence[sourceIndex].value else {
@@ -219,12 +209,11 @@ extension ScopedRedistributionSearch {
 
     /// Builds a redistribution candidate by transferring `delta` units from source to sink.
     ///
-    /// For pairs with a ``MixedRedistributionContext`` (cross-type or floating-point), uses rational arithmetic with a common denominator. For same-tag integer pairs, operates in UInt64 bit-pattern space — modular wraparound when the sink's declared domain equals its natural type width, validation-with-rejection when the sink has an explicit narrow range.
+    /// A pair with a ``MixedRedistributionContext`` (cross-type or floating-point) uses rational arithmetic over a common denominator. A same-tag integer pair works in `UInt64` bit-pattern space: modular arithmetic when the sink's domain is its full type width, and checked arithmetic that rejects out-of-range results when the sink has a narrower explicit range.
     func buildRedistributionCandidate(
         sourceIndex: Int,
         sinkIndex: Int,
         sourceTag: TypeTag,
-        sinkTag _: TypeTag,
         delta: UInt64,
         mixedContext: MixedRedistributionContext?
     ) -> ChoiceSequence? {
@@ -299,12 +288,11 @@ extension ScopedRedistributionSearch {
 
         // Same-tag integer path.
         //
-        // The gate is on the sink, not the source. The source moves toward its own reduction target, so its new bit pattern stays inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` and never leaves the source's own valid range regardless of whether that range is narrow or full-width. The sink is the side that can escape its valid range as it absorbs the opposing delta, so the sink is the side that determines which sub-path we take.
+        // The sink decides the arithmetic. The source moves toward its own target, so it stays between its current value and that target and never leaves its range. The sink absorbs the opposite delta and can leave its range.
         //
-        // When the sink's declared domain equals the natural type width, we use bit-pattern modular arithmetic with a width-aware mask. This matches the wrapping arithmetic (`&+`/`&-`) the property under test likely uses for the same type and lets redistribution reach boundary counterexamples like `(Int16.min, -1)` that semantic-space arithmetic would reject as overflow.
+        // A sink whose domain is its full type width uses modular arithmetic masked to that width. This matches the wrapping arithmetic (`&+`, `&-`) the property likely uses, and reaches boundary counterexamples such as `(Int16.min, -1)` that semantic arithmetic would reject as overflow.
         //
-        // When the sink carries an explicit narrow range, we still operate in UInt64 bit-pattern space (signed types are biased via the
-        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so additive arithmetic in biased space matches semantic arithmetic), but we use overflow-checked operations and reject — rather than wrap — any candidate that lands outside the sink's `validRange` or the type's natural bounds.
+        // A sink with a narrower explicit range uses checked arithmetic in the same bit-pattern space, and rejects any candidate outside the sink's range or its type's bounds. Signed bit patterns are biased by the sign-bit XOR in `BitPatternConvertible`, so addition on bit patterns matches addition on values.
         let sourceBitPattern = sourceValue.choice.bitPattern64
         let sinkBitPattern = sinkValue.choice.bitPattern64
         let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)

@@ -199,13 +199,13 @@ enum ScopedPivotCandidates {
         donorRangeStart: Int,
         graph: ChoiceGraph
     ) -> [ChoiceSequenceValue] {
-        guard case let .pick(donorMeta) = graph.nodes[donorNodeID].kind else {
+        guard case let .pick(donorMetadata) = graph.nodes[donorNodeID].kind else {
             return entries
         }
 
         let leafExpansions = depthZeroLeafExpansions(
             donorNodeID: donorNodeID,
-            fingerprint: donorMeta.fingerprint,
+            fingerprint: donorMetadata.fingerprint,
             graph: graph
         )
 
@@ -251,13 +251,13 @@ enum ScopedPivotCandidates {
         var branchSlotFamilies: [UInt64: [Int: UInt64]] = [:]
         let allGroupPicks = graph.selfSimilarityGroups[fingerprint] ?? []
         for pickID in allGroupPicks {
-            guard case let .pick(pickMeta) = graph.nodes[pickID].kind else {
+            guard case let .pick(pickMetadata) = graph.nodes[pickID].kind else {
                 continue
             }
             let node = graph.nodes[pickID]
             for (childIndex, childID) in node.children.enumerated() {
-                guard childIndex < pickMeta.branchElements.count,
-                      case let .branch(branch) = pickMeta.branchElements[childIndex],
+                guard childIndex < pickMetadata.branchElements.count,
+                      case let .branch(branch) = pickMetadata.branchElements[childIndex],
                       branchSlotFamilies[branch.id] == nil,
                       let zipID = zip(below: childID, fingerprint: fingerprint, graph: graph, activeOnly: false)
                 else {
@@ -277,7 +277,7 @@ enum ScopedPivotCandidates {
         var familyWrappings: [UInt64: LeafWrapping?] = [:]
         var expansions: [Int: LeafWrapping] = [:]
         for pickID in allPicks {
-            guard case let .pick(pickMeta) = graph.nodes[pickID].kind else {
+            guard case let .pick(pickMetadata) = graph.nodes[pickID].kind else {
                 continue
             }
             guard let slotFamilies = zipSlotFamilies(pickID: pickID, fingerprint: fingerprint, graph: graph) else {
@@ -286,10 +286,10 @@ enum ScopedPivotCandidates {
             guard slotFamilies.values.contains(fingerprint) == false else {
                 continue
             }
-            let mask = branchSlotFamilies[pickMeta.selectedID]
+            let mask = branchSlotFamilies[pickMetadata.selectedID]
 
             // The donor family's wrapping is decided at the innermost pick itself: its parent tells whether the family recurses through `._bound`, in which case the depth selector already handles depth-crossing and no expansion is needed.
-            familyWrappings[fingerprint] = wrappingForInnermostPick(pickID: pickID, fingerprint: fingerprint, pickMetadata: pickMeta, graph: graph)
+            familyWrappings[fingerprint] = wrappingForInnermostPick(pickID: pickID, fingerprint: fingerprint, pickMetadata: pickMetadata, graph: graph)
 
             collectBaseCasesFromInnermostPick(
                 pickID: pickID,
@@ -303,7 +303,7 @@ enum ScopedPivotCandidates {
         return expansions
     }
 
-    /// Collects all active same-fingerprint pick node IDs in the subtree rooted at ``rootID``.
+    /// Collects all active same-fingerprint pick node IDs in the subtree rooted at `rootID`.
     private static func collectSelfSimilarPicks(
         rootID: Int,
         fingerprint: UInt64,
@@ -337,9 +337,9 @@ enum ScopedPivotCandidates {
             }
             if case let .pick(metadata) = node.kind, metadata.fingerprint == fingerprint {
                 continue
-            } else if case let .bind(bindMeta) = node.kind {
-                if bindMeta.boundChildIndex < node.children.count {
-                    stack.append(node.children[bindMeta.boundChildIndex])
+            } else if case let .bind(bindMetadata) = node.kind {
+                if bindMetadata.boundChildIndex < node.children.count {
+                    stack.append(node.children[bindMetadata.boundChildIndex])
                 }
             } else if case .zip = node.kind {
                 return nodeID
@@ -362,8 +362,8 @@ enum ScopedPivotCandidates {
     private static func slotFamilies(ofZip zipID: Int, graph: ChoiceGraph) -> [Int: UInt64] {
         var families: [Int: UInt64] = [:]
         for (index, childID) in graph.nodes[zipID].children.enumerated() {
-            if case let .pick(childMeta) = graph.nodes[childID].kind {
-                families[index] = childMeta.fingerprint
+            if case let .pick(childMetadata) = graph.nodes[childID].kind {
+                families[index] = childMetadata.fingerprint
             }
         }
         return families
@@ -383,7 +383,7 @@ enum ScopedPivotCandidates {
 
     /// Determines the wrapping kind for an innermost pick's base cases, or nil if no expansion is needed.
     ///
-    /// Returns nil when the pick is wrapped in a `._bound` bind (`Gen.recursive` pattern) — the `._bound`'s depth selector already handles depth-crossing, and adding expansion markers would double-wrap. Returns pick wrapping for direct recursion (like BinaryHeap) where the base case needs explicit pick-site markers.
+    /// Returns nil when the pick is wrapped in a `._bound` bind (the `Gen.recursive` pattern): the bind's depth selector already handles depth-crossing, and expansion markers would wrap the base case twice. Returns pick wrapping for direct recursion (like BinaryHeap), where the base case needs explicit pick-site markers, using the first leaf branch or branch zero when there is none.
     private static func wrappingForInnermostPick(
         pickID: Int,
         fingerprint: UInt64,
@@ -392,12 +392,12 @@ enum ScopedPivotCandidates {
     ) -> LeafWrapping? {
         // Check if the pick's parent is a ._bound bind (bind → pick with same fingerprint).
         if let parentID = graph.nodes[pickID].parent,
-           case let .bind(bindMeta) = graph.nodes[parentID].kind,
-           bindMeta.boundChildIndex < graph.nodes[parentID].children.count
+           case let .bind(bindMetadata) = graph.nodes[parentID].kind,
+           bindMetadata.boundChildIndex < graph.nodes[parentID].children.count
         {
-            let boundChildID = graph.nodes[parentID].children[bindMeta.boundChildIndex]
-            if case let .pick(boundMeta) = graph.nodes[boundChildID].kind,
-               boundMeta.fingerprint == fingerprint
+            let boundChildID = graph.nodes[parentID].children[bindMetadata.boundChildIndex]
+            if case let .pick(boundMetadata) = graph.nodes[boundChildID].kind,
+               boundMetadata.fingerprint == fingerprint
             {
                 // ._bound pattern: no expansion needed.
                 return nil
@@ -430,7 +430,7 @@ enum ScopedPivotCandidates {
         return wrapping
     }
 
-    /// Records base case positions and wrapping kinds from an innermost pick using a precomputed slot layout. A slot the layout assigns to a family is wrapped with that family's leaf branch when the innermost pick holds a bare leaf there; a slot already holding a pick needs nothing. When ``mask`` is nil (no non-innermost picks available to derive the layout), every non-pick zip child is wrapped with the donor family's leaf branch.
+    /// Records base case positions and wrapping kinds from an innermost pick using a precomputed slot layout. A slot the layout assigns to a family is wrapped with that family's leaf branch when the innermost pick holds a bare leaf there; a slot already holding a pick needs nothing. When `mask` is nil (no non-innermost picks available to derive the layout), every non-pick zip child is wrapped with the donor family's leaf branch.
     private static func collectBaseCasesFromInnermostPick(
         pickID: Int,
         donorFingerprint: UInt64,
@@ -471,8 +471,8 @@ enum ScopedPivotCandidates {
             guard index < Int(metadata.branchCount) else {
                 break
             }
-            if case let .branch(b) = element {
-                switch b.choice {
+            if case let .branch(branch) = element {
+                switch branch.choice {
                     case .just, .choice:
                         return UInt64(index)
                     default:

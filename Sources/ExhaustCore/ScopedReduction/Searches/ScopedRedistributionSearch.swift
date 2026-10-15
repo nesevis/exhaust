@@ -9,7 +9,7 @@
 ///
 /// For each source-receiver pair, binary-searches on delta magnitude via ``BinarySearchStepper`` to find the largest accepted transfer. The graph determines which pairs; the search determines how much. Up to ``ScopedReductionTuning/redistributionMaxPasses`` replay passes re-evaluate accepted pairs for further convergence.
 ///
-/// The delta magnitude is above the opacity boundary and requires predicate feedback to find.
+/// The graph cannot predict which delta keeps the property failing (the delta lies above the opacity boundary), so only property feedback can find it.
 ///
 /// Candidate construction, compact pair ranking, and rational-arithmetic helpers live in `ScopedRedistributionSearch+Probing.swift`, `ScopedRedistributionSearch+Ranking.swift`, and `ScopedRedistributionSearch+RationalMath.swift`.
 struct ScopedRedistributionSearch: ScopedSearch {
@@ -23,7 +23,9 @@ struct ScopedRedistributionSearch: ScopedSearch {
         case active(RedistributionState)
     }
 
-    /// Holds the rational-arithmetic context for a single redistribution pair, including the LCM denominator and scaled numerators needed to redistribute value between heterogeneous-type nodes.
+    /// Scaled numerators over a common denominator, for a pair that mixes types or involves a float and so cannot move a bit-pattern delta directly.
+    ///
+    /// When either side is an integer, ``intStepSize`` equals the denominator, so the integer side moves in whole units. ``distanceInSteps`` is the source's distance to its target in those units.
     struct MixedRedistributionContext {
         let sourceNumerator: Int64
         let sinkNumerator: Int64
@@ -33,15 +35,19 @@ struct ScopedRedistributionSearch: ScopedSearch {
         let distanceInSteps: UInt64
     }
 
-    /// Tracks the binary search state for redistribution magnitude and the current pair iteration across probes.
+    /// The pair being searched, its delta binary search, and the replay passes over accepted pairs.
     struct RedistributionState {
         let pairs: [PreparedPair]
         var pairIndex: Int
         var stepper: BinarySearchStepper?
+        /// Whether the last returned candidate came from the current pair, so the incoming feedback belongs to it.
         var didEmitCandidate: Bool
+        /// Whether the current pair's full-delta probe, which moves the source all the way to its target, has been tried.
         var triedFullDelta: Bool
+        /// Pairs that accepted during the current pass, replayed by the next one.
         var acceptedPairIndices: Set<Int>
         var passCount: Int
+        /// The pairs a replay pass visits. Nil on the first pass, which visits every pair.
         var activePairIndices: Set<Int>?
     }
 

@@ -7,7 +7,7 @@
 
 /// Searches one stage of a staged joint checkpoint: pairs, or the groups of one higher arity.
 ///
-/// Stops after the first acceptance, because every group's addresses and domain samples belong to the original checkpoint. Candidates are sparse, so the interpreter checks their hash against the rejection cache before writing them.
+/// Stops after the first acceptance, because every group's addresses and domain samples belong to the checkpoint the acceptance replaced. Candidates are sparse, so the interpreter checks their hash against the rejection cache before writing them.
 struct ScopedStagedJointSearch: ScopedSearch {
     /// Leaves each candidate moves.
     let arity: Int

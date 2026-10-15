@@ -35,7 +35,7 @@ enum ScopedStagedJointEncoder: ScopedEncoder {
         )
     }
 
-    /// Probes a stage of `arity` N may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it.
+    /// Probes a stage of `arity` may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it.
     static func stageBudget(
         arity: Int,
         candidatePool: [ScopedStagedJointQuery.Entry],

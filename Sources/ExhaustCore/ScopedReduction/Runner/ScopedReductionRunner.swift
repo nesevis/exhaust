@@ -7,7 +7,7 @@
 
 /// Owns a complete scoped reduction: setup, cycles of dispatch over the family sources, post-cycle actions, relax rounds, and the final reorder pass.
 ///
-/// The runner is written in direct style. The encoder's reducer for each scope runs to completion in its own interpreter execution, which the runner seeds from its memory and reconciles afterwards; cycles, post-cycle actions, and relax rounds are ordinary nested calls. The schedule reproduces the current reducer's exactly, so any change to it is a measured behavior change.
+/// The runner is written in direct style. The encoder's reducer for each scope runs to completion in its own interpreter execution, which the runner seeds from its own state and reconciles afterwards. Cycles, post-cycle actions, and relax rounds are ordinary nested calls.
 ///
 /// ## Cycle
 ///
@@ -105,7 +105,7 @@ package struct ScopedReductionRunner {
     var valueChangeLog: [(passIndex: Int, nodeIDs: Set<Int>)] = []
     /// The pass at which each node's convergence was last recorded. Kept only with diagnostics.
     var lastConvergencePass: [Int: Int] = [:]
-    /// Bounded coupling hints for joint-group ranking, kept without research diagnostics.
+    /// Bounded coupling hints for joint-group ranking, kept whether or not research diagnostics are on.
     var couplingTracker = CouplingTracker()
     /// Monotonic count of applied passes.
     var passCounter = 0

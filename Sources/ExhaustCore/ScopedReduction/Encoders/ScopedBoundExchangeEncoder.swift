@@ -5,9 +5,9 @@
 
 // MARK: - Bound Exchange Encoder
 
-/// Bound exchange: the encoder's reducer proposes a sum-preserving proposal, lifts it, validates the lifted sink, and searches the compound candidate.
+/// Moves magnitude from a bind inner into a leaf its bind determines, preserving their sum, and keeps a proposal only when the lifted sink still holds its share.
 ///
-/// Proposals come from ``BoundExchangeProposalCursor``. Each kept lift is one ``ScopedSingleCandidateSearch`` over the lifted sequence, decoded exactly.
+/// Lowering the source can regenerate the bound subtree and shift or clamp the sink, so each proposal from ``BoundExchangeProposalCursor`` is lifted through the generator before anything is probed. A lift whose sink no longer holds the proposed value fails its branch. Each kept lift is one ``ScopedSingleCandidateSearch`` over the lifted sequence, decoded exactly. The first acceptance stops the pass, because it makes every other branch's lifted graph stale.
 enum ScopedBoundExchangeEncoder: ScopedEncoder {
     static let name: EncoderName = .boundExchange
     static let isValueDependent = true
@@ -40,7 +40,7 @@ enum ScopedBoundExchangeEncoder: ScopedEncoder {
         }
     }
 
-    /// Reads the expected sink from the joint proposal, before locating its possibly shifted position in the lifted graph. A kept lift constructs exactly one nonempty search.
+    /// Reads the expected sink value from the joint proposal, before locating the sink's possibly shifted position in the lifted graph. A kept lift constructs exactly one nonempty search.
     private static func downstream(
         proposal: LiftProposal,
         lifted: LiftResult,

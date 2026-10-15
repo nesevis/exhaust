@@ -13,9 +13,9 @@
 ///
 /// Domains with at most ``defaultEagerRowLimit`` candidate rows skip the heap: direct loops enumerate every scope in discovery order, and priority order stable-sorts that list by benefit. Both paths emit identical streams; the heap only pays for itself when the row count makes buffering every scope expensive.
 ///
-/// - Complexity: O(P + B + V + E) retained state, where P is the number of family members, B is the prepared branch metadata, and V + E is the topology snapshot. Preparation sorts family members in O(P log P) time and performs the existing branch eligibility scans. Containment is indexed in O(V) time and queried in O(1). Heap advancement costs O(log R), where R is the number of pending rows, plus rejected entries and dependency cache misses encountered before the next valid scope. Each cache miss costs O(V + E); cached membership is expected O(1). The dependency cache retains a bounded working set of restricted results, plus O(V) negative-source identities, within the overall storage bound.
+/// - Complexity: O(P + B + V + E) retained state, where P is the number of family members, B is the prepared branch metadata, and V + E is the topology snapshot. Preparation sorts family members in O(P log P) time and scans each pick's branches for eligibility. Containment is indexed in O(V) time and queried in O(1). Heap advancement costs O(log R), where R is the number of pending rows, plus rejected entries and dependency cache misses encountered before the next valid scope. Each cache miss costs O(V + E); cached membership is expected O(1). The dependency cache retains a bounded working set of restricted results, plus O(V) negative-source identities, within the overall storage bound.
 struct ScopedReplacementSource {
-    /// Keeps scheduling order separate from discovery order used by structural relaxation.
+    /// Keeps scheduling order separate from the discovery order the relax round uses.
     enum EnumerationOrder {
         case priority
         case discovery
@@ -98,7 +98,7 @@ struct ScopedReplacementSource {
         self.init(graph: graph, families: Self.prepareFamilies(graph: graph, previousGraph: previousGraph), order: order, eagerRowLimit: eagerRowLimit)
     }
 
-    /// Avoids family and reachability preparation when relaxation needs only branch pivots.
+    /// Avoids family and reachability preparation when the relax round or improving pivots need only branch pivots.
     init(pivotGraph graph: ChoiceGraph, eagerRowLimit: Int = defaultEagerRowLimit) {
         self.init(graph: graph, families: [], order: .discovery, eagerRowLimit: eagerRowLimit)
     }

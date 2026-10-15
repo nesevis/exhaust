@@ -20,7 +20,7 @@ enum ScopedReductionLog {
         ExhaustLog.debug(category: .reducer, event: event, metadata: metadata())
     }
 
-    /// Logs a `graph_probe_rejected` debug event for replacement probes rejected by the decoder.
+    /// Logs a `graph_probe_rejected` debug event for a rejected replacement probe: a branch pivot, self-similar replacement, or descendant promotion. Other mutations log nothing.
     static func replacementProbeRejection(
         mutation: ProjectedMutation,
         encoder: EncoderName,

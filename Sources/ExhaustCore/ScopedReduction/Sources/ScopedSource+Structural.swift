@@ -286,7 +286,7 @@ extension ScopedSource {
         }
     }
 
-    /// One covering-array scope per zip with two or more deletable sibling sequences, largest single-element yield first. The cost is the rows one dispatch can pull: the generator's remaining rows, up to ``CoveringAlignedRemovalScope/rowBudget``.
+    /// One covering-array scope per zip with two or more deletable sibling sequences, largest single-element yield first. The cost is the rows one dispatch can pull: the covering array generator's remaining rows, up to ``CoveringAlignedRemovalScope/rowBudget``.
     private static func alignedRemovalEncoderScopes(graph: ChoiceGraph) -> [PricedEncoderScope] {
         let scopes = RemovalQuery.coveringAlignedRemovalScopes(graph: graph)
             .sorted { $0.maxElementYield > $1.maxElementYield }

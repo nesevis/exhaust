@@ -7,7 +7,7 @@
 
 /// Yields branch pivots whose candidate precedes the baseline, shortest first, without retaining a complete sequence for every fill.
 ///
-/// Preparation measures each recorded replacement span and keeps only IDs and resulting lengths. Fills keep discovery order within equal lengths: recorded, farthest from target when the recorded fill improves, then transplanted. Complete sequences and their hashes are built only while searching for the next uncached improving candidate. The graph snapshot and baseline must stay unchanged until this cursor is discarded after an acceptance.
+/// Preparation measures each recorded replacement span and keeps only IDs and resulting lengths. Pivots of equal length keep discovery order. Each pivot tries its fills in turn: recorded, then farthest from target when the recorded fill improves, then transplanted. Complete sequences and their hashes are built only while searching for the next uncached improving candidate. The graph snapshot and baseline must stay unchanged until this cursor is discarded after an acceptance.
 ///
 /// - Complexity: O(P log P) descriptor sorting and O(P) descriptors, in addition to the shared graph and baseline and one transient candidate. Measuring spans visits their flattened content. Enumeration can still inspect every fill when candidates fail ordering or are cached, but never retains their full-sequence cross product.
 struct ScopedImprovingPivotCursor {
@@ -77,6 +77,7 @@ struct ScopedImprovingPivotCursor {
 
     mutating func next() -> Probe? {
         while pivotIndex < pivots.count {
+            // Three fills per pivot: recorded, farthest from target, transplanted.
             if fillIndex == 3 {
                 pivotIndex += 1
                 fillIndex = 0

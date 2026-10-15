@@ -23,7 +23,7 @@ extension ScopedReductionInterpreter {
 
     // MARK: - Next Candidate
 
-    /// Emits and evaluates exactly one candidate from `pool`, recursing into nested levels. Only the outermost call checks the deadline per candidate, so a nested level never checks it a second time for the same candidate. Building a branch checks it too, before each build and each lift, at every level.
+    /// Emits and evaluates at most one candidate from `pool`, recursing into nested levels. Returns without a candidate when the pool is exhausted, its probe cap is reached, or the deadline passes. Only the outermost call checks the deadline per candidate, so a nested level never checks it a second time for the same candidate. Building a branch checks it too, before each build and each lift, at every level.
     static func next(
         _ pool: inout ScopedSearchPool,
         checksDeadline: Bool,
@@ -395,6 +395,7 @@ struct ScopedSearchPool {
     let continuation: ((ScopedReductionResult) -> ScopedReducer)?
     /// How many `propose` levels enclose this level, or nil for the root pool, which holds the root branch alone.
     let depth: Int?
+    /// Probes a member emits before it is suspended behind the others.
     let turn: Int
     let searchBudget: Int
     let totalProbeCap: Int
@@ -403,6 +404,7 @@ struct ScopedSearchPool {
     var nextBranch = 0
     var branchesExhausted = false
     var constructed = 0
+    /// Branches this level has built, counted against ``ScopedChainLimits/maxBuildsPerStart``. A level is created afresh each time its parent's branch reaches it, so the count starts at zero for each one.
     var buildsThisStart = 0
     var emitted = 0
     var active: Member?
