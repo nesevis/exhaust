@@ -163,8 +163,8 @@ extension ScopedReductionInterpreter {
         // Vacating the resumed entry leaves a nested level's storage uniquely referenced while it advances.
         pool.suspended[pool.suspendedHead].source = .vacant
         pool.suspendedHead += 1
-        if pool.suspendedHead == pool.suspended.count {
-            pool.suspended.removeAll(keepingCapacity: true)
+        if pool.suspendedHead * 2 >= pool.suspended.count {
+            pool.suspended.removeFirst(pool.suspendedHead)
             pool.suspendedHead = 0
         }
         resumed.probesRemainingInTurn = pool.turn
@@ -408,7 +408,7 @@ struct ScopedSearchPool {
     var buildsThisStart = 0
     var emitted = 0
     var active: Member?
-    /// Members waiting for another turn, oldest first from ``suspendedHead``. Resumed entries are vacated rather than removed, so resuming never shifts the rest.
+    /// Members waiting for another turn, oldest first from ``suspendedHead``. Resumed entries are vacated, and the vacated prefix is dropped once it fills half the storage, so storage stays proportional to live members while resuming stays amortized constant time.
     var suspended: [Member] = []
     var suspendedHead = 0
 
