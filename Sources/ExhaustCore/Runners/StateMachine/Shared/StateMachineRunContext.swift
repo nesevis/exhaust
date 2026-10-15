@@ -14,6 +14,11 @@ package struct StateMachineRunContext<Spec: StateMachineSpecBase> {
 
     package let state: StateMachineRunState<Spec>
 
+    /// Whether reduction collects the statistics only a delivered report reads. ``ResolvedConcurrentConfig/onRunRecord`` is set only when the test has `.onReport`.
+    var collectsReductionStats: Bool {
+        config.onRunRecord != nil
+    }
+
     /// Wall-clock ceiling for reducing one counterexample, capped by the time remaining in the run's `.deadline`.
     var reductionDeadlineNanoseconds: UInt64 {
         // Sampling budget says how many sequences to try. Reduction difficulty is a function of the counterexample's size and the cost of one probe, and the two are unrelated, so the budget-derived term may only raise the floor: a run configured `.custom(screening: 400, sampling: 20)` because screening finds the bug would otherwise get 100 milliseconds, which reads as a bad reducer rather than a starved one. The floor is the constant `#explore(Spec.self, time:)` already uses for identical probes, which sits above the value path's because a spec probe replays a whole command sequence against a fresh system under test.

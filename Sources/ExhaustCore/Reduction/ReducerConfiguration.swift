@@ -1,10 +1,5 @@
 // MARK: - Reducer Configuration
 
-/// Wraps one reduction probe's property invocation, receiving the candidate sequence that probe is testing.
-///
-/// The reducer drives the property at candidates its host never produced, so a host that wants to observe each invocation (mark it in flight, time it, log it) cannot identify the probe from outside; the sequence is how the wrapper knows which one it is around.
-package typealias ProbeWrapper = @Sendable (ChoiceSequence, () -> Bool) -> Bool
-
 package extension Interpreters {
     /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
     struct ReducerConfiguration: Sendable {
@@ -83,9 +78,6 @@ package struct SchedulerTuning: Sendable {
 
     /// Consecutive fully-rejected migration passes after which migration transformations are skipped for the rest of the run. Zero means never demote. On workloads where migration is productive it accepts on every dispatch, all in the first cycle, so the trigger is unreachable there; on workloads where it never accepts, each fruitless dispatch costs one materialization per pass until demotion fires. An acceptance resets the consecutive count. The default of 3 lost no acceptances anywhere on the benchmark suite: counterexamples and all non-migration counters were byte-identical, with migration spend down roughly 60% on the workloads where it never accepts.
     public var migrationDemotionThreshold: Int
-
-    /// Maximum index distance between source and sink in pairwise operations (type-compatibility edges, lockstep suffix windows). Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large groups.
-    public static let maxPairLookahead: Int = 50
 
     package init(
         boundValueBaseBudget: Int = 15,

@@ -57,6 +57,12 @@ package struct ChoiceGraph: Sendable {
 
     var graphStats = ChoiceGraphStats()
 
+    /// Whether ``ChoiceGraphBuilder/buildControllerTopology(from:)`` built the graph. That build omits scalar sequence elements, so it numbers nodes differently from a full build of the same tree.
+    var isControllerTopology = false
+
+    /// Whether some pick in the tree holds only its selected branch while choosing among several, as a tree materialized without picks does. A full build gives unselected branches node IDs, so such a graph numbers the nodes after that pick differently from one built from a fully materialized tree.
+    var lacksUnselectedBranches = false
+
     /// Cached classification verdicts keyed by `BindMetadata.fingerprint`. Survives full graph rebuilds via ``build(from:inheriting:observations:)`` because the fingerprint is derived from the originating `.bind` source location, which is stable for the program's lifetime — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds. Read by the scheduler before dispatching expensive dependent-node encoders so a previously-classified bind site does not re-pay the two materializations that ``classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` would otherwise run.
     var bindClassifications: [UInt64: BindClassification] = [:]
 

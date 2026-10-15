@@ -4,6 +4,9 @@
 ///
 /// - Complexity: O(C + A · W) retained descriptors, where C is the heterogeneous sequences' direct leaf count, A is the number of zip-child links, and W is the lookahead. Exhaustive zip enumeration remains quadratic in child-group count.
 struct TypeCompatibilityCursor: Sendable {
+    /// Maximum index distance between source and sink in a pairwise operation. Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large groups.
+    static let maxPairLookahead = 50
+
     private struct Leaf: Sendable {
         let nodeID: Int
         let tag: TypeTag
@@ -113,7 +116,7 @@ struct TypeCompatibilityCursor: Sendable {
                             default:
                                 nil
                         }
-                        return ZipChild(leaves: leafOrder.prefix(under: childID, limit: SchedulerTuning.maxPairLookahead + 1), homogeneousTag: tag)
+                        return ZipChild(leaves: leafOrder.prefix(under: childID, limit: Self.maxPairLookahead + 1), homogeneousTag: tag)
                     })
                 default:
                     continue
@@ -130,7 +133,7 @@ struct TypeCompatibilityCursor: Sendable {
 
     /// Accumulates earlier first-side leaves by homogeneous tag, subtracting the group products that enumeration skips.
     private static func countEdges(sequences: [[Leaf]], zips: [[ZipChild]]) -> Int {
-        let lookahead = SchedulerTuning.maxPairLookahead
+        let lookahead = Self.maxPairLookahead
         var count = 0
         for leaves in sequences {
             for index in leaves.indices {
@@ -162,7 +165,7 @@ struct TypeCompatibilityCursor: Sendable {
                 sequenceSecond = 1
                 continue
             }
-            let limit = min(leaves.count, sequenceFirst + 1 + SchedulerTuning.maxPairLookahead)
+            let limit = min(leaves.count, sequenceFirst + 1 + Self.maxPairLookahead)
             guard sequenceSecond < limit else {
                 sequenceFirst += 1
                 sequenceSecond = sequenceFirst + 1
@@ -207,7 +210,7 @@ struct TypeCompatibilityCursor: Sendable {
                 secondLeaf = 0
                 continue
             }
-            let secondLimit = min(second.leaves.count, SchedulerTuning.maxPairLookahead)
+            let secondLimit = min(second.leaves.count, Self.maxPairLookahead)
             guard secondLeaf < secondLimit else {
                 firstLeaf += 1
                 secondLeaf = 0

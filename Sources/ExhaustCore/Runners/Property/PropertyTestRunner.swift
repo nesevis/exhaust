@@ -29,6 +29,8 @@ package enum PropertyTestRunner {
         package let representation: (Output) -> String
         /// The absolute monotonic deadline resolved from `.deadline`, or nil for the usual iteration budget.
         package let deadlineNanoseconds: UInt64?
+        /// Whether reduction collects the statistics only a delivered report reads.
+        package let collectsReductionStats: Bool
 
         package init(
             gen: Generator<Output>,
@@ -41,7 +43,8 @@ package enum PropertyTestRunner {
             skipCounter: SkipCounter?,
             laneScope: (any SamplingLaneScope)?,
             representation: @escaping (Output) -> String,
-            deadlineNanoseconds: UInt64?
+            deadlineNanoseconds: UInt64?,
+            collectsReductionStats: Bool
         ) {
             self.gen = gen
             self.property = property
@@ -54,6 +57,7 @@ package enum PropertyTestRunner {
             self.laneScope = laneScope
             self.representation = representation
             self.deadlineNanoseconds = deadlineNanoseconds
+            self.collectsReductionStats = collectsReductionStats
         }
 
         package var hasExceededDeadline: Bool {
@@ -367,6 +371,7 @@ package enum PropertyTestRunner {
             value: value,
             configuration: context.reductionConfig,
             runDeadlineNanoseconds: context.deadlineNanoseconds,
+            collectStats: context.collectsReductionStats,
             property: context.property
         )
         if reduction.started {

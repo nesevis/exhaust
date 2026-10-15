@@ -6,7 +6,7 @@ import Testing
 struct LaneCollapseEncoderTests {
     @Test("Zeroes lane markers and moves elements to prefix region")
     func zerosAndReorders() throws {
-        let gen = laneTaggedArrayGen(concurrencyLevel: 2)
+        let gen = LaneCollapseGenerators.laneTaggedArray(concurrencyLevel: 2)
         // 3 concurrent (lanes 1, 2) and 2 prefix (lane 0), interleaved
         let value: [(UInt8, UInt64)] = [
             (1, 10),
@@ -57,7 +57,7 @@ struct LaneCollapseEncoderTests {
 
     @Test("Returns nil when all elements are already prefix")
     func allPrefixIsNoOp() throws {
-        let gen = laneTaggedArrayGen(concurrencyLevel: 2)
+        let gen = LaneCollapseGenerators.laneTaggedArray(concurrencyLevel: 2)
         let value: [(UInt8, UInt64)] = [(0, 10), (0, 20), (0, 30)]
         let tree = try #require(try Interpreters.reflect(gen, with: value))
 
@@ -74,7 +74,7 @@ struct LaneCollapseEncoderTests {
 
     @Test("Prefix elements are contiguous at the front after reduction with 3 lanes")
     func prefixContiguity() throws {
-        let gen = laneTaggedArrayGen(concurrencyLevel: 3)
+        let gen = LaneCollapseGenerators.laneTaggedArray(concurrencyLevel: 3)
         // All 6 elements on concurrent lanes, no initial prefix
         let value: [(UInt8, UInt64)] = [
             (2, 10),
@@ -124,7 +124,7 @@ struct LaneCollapseEncoderTests {
 
     @Test("Encoder finds all leaves after partition moves elements")
     func leavesRebuildAfterReorder() throws {
-        let gen = laneTaggedArrayGen(concurrencyLevel: 3)
+        let gen = LaneCollapseGenerators.laneTaggedArray(concurrencyLevel: 3)
         // Interleaved: concurrent, concurrent, prefix, concurrent.
         // When the first concurrent is zeroed, the partition moves the existing
         // prefix element forward, displacing stale leaf positions.
@@ -176,7 +176,7 @@ struct LaneCollapseEncoderTests {
 
     @Test("Graph tags laneControl leaves correctly")
     func graphTagsLaneControlLeaves() throws {
-        let gen = laneTaggedArrayGen(concurrencyLevel: 2)
+        let gen = LaneCollapseGenerators.laneTaggedArray(concurrencyLevel: 2)
         let value: [(UInt8, UInt64)] = [(1, 10), (2, 20)]
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let graph = ChoiceGraph.build(from: tree)
@@ -198,24 +198,26 @@ struct LaneCollapseEncoderTests {
 
 // MARK: - Helpers
 
-/// Builds a generator that produces arrays of `(laneMarker: UInt8, value: UInt64)` tuples where the lane marker uses `.laneControl` tag.
-private func laneTaggedArrayGen(concurrencyLevel: UInt8) -> Generator<[(UInt8, UInt64)]> {
-    let laneGen: Generator<UInt8> = {
-        let operation = ReflectiveOperation.chooseBits(
-            min: 0,
-            max: UInt64(concurrencyLevel),
-            tag: .laneControl,
-            isRangeExplicit: true
-        )
-        return .impure(operation: operation) { result in
-            guard let convertible = result as? any BitPatternConvertible else {
-                fatalError("unexpected result type")
+enum LaneCollapseGenerators {
+    /// Builds a generator that produces arrays of `(laneMarker: UInt8, value: UInt64)` tuples where the lane marker uses `.laneControl` tag.
+    static func laneTaggedArray(concurrencyLevel: UInt8) -> Generator<[(UInt8, UInt64)]> {
+        let laneGen: Generator<UInt8> = {
+            let operation = ReflectiveOperation.chooseBits(
+                min: 0,
+                max: UInt64(concurrencyLevel),
+                tag: .laneControl,
+                isRangeExplicit: true
+            )
+            return .impure(operation: operation) { result in
+                guard let convertible = result as? any BitPatternConvertible else {
+                    fatalError("unexpected result type")
+                }
+                return .pure(UInt8(convertible.bitPattern64))
             }
-            return .pure(UInt8(convertible.bitPattern64))
-        }
-    }()
+        }()
 
-    let valueGen = Gen.choose(in: UInt64(0) ... 100)
-    let pairGen = Gen.zip(laneGen, valueGen)
-    return Gen.arrayOf(pairGen, within: 1 ... 10)
+        let valueGen = Gen.choose(in: UInt64(0) ... 100)
+        let pairGen = Gen.zip(laneGen, valueGen)
+        return Gen.arrayOf(pairGen, within: 1 ... 10)
+    }
 }

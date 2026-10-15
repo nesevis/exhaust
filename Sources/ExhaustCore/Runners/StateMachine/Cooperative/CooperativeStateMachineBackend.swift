@@ -67,6 +67,7 @@ package struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: Stat
             output: taggedCommands,
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
             runDeadlineNanoseconds: context.config.deadlineNanoseconds,
+            collectStats: context.collectsReductionStats,
             property: oracleProperty
         )
         return StateMachineReduction(finalInput: result.value, stats: result.stats, timedOut: result.aborted)
@@ -146,12 +147,12 @@ package struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: Stat
 
 // MARK: - Helpers
 
-extension CooperativeScheduler {
+private extension CooperativeScheduler {
     /// Groups observed responses by the lane marker the report prints, so each lane command can be annotated with what it answered.
     ///
     /// Returns nil when no lane recorded anything, which keeps the annotation out of reports that have nothing to annotate. A lane's array is a prefix of its commands — the drain stops at the first failure and a failed command has no response — so positional indexing never shifts an annotation onto the wrong command.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    fileprivate static func laneResponseValues(
+    static func laneResponseValues(
         _ laneResponses: [[ObservedResponse<some Any>]]
     ) -> [UInt8: [String?]]? {
         let recorded = laneResponses.joined()

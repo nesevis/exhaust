@@ -47,6 +47,7 @@ enum ExploreReduction {
             tree: tree,
             value: value,
             configuration: .init(maxStalls: 2),
+            collectStats: false,
             property: { reductionPredicate($0) == false }
         )
         if run.improved {

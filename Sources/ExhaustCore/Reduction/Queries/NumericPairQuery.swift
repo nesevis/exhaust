@@ -5,12 +5,6 @@ enum NumericPairQuery {
     static let maximumLeaves = 256
     static let maximumPairs = 30
 
-    /// A stalled source that the search moves toward its target, and the partner whose value may move in either direction to keep the property failing.
-    struct Pair: Equatable {
-        let source: ReductionLeaf
-        let sink: ReductionLeaf
-    }
-
     /// Collects the bounded search scope, interleaving each source's nearest and farthest partners before any intermediate distance.
     static func build(graph: ChoiceGraph, gate: BoundValueGate) -> [Pair] {
         var pairs: [Pair] = []
@@ -74,58 +68,6 @@ enum NumericPairQuery {
         return graph.convergenceStore[leaf.nodeID]?.bound == leaf.choice.bitPattern64
             || (graph.nodes[leaf.nodeID].scopeAnnotation.isBindInner
                 && ChoiceGraphScheduler.isStalledBindInner(bindInnerLeafNodeID: leaf.nodeID, graph: graph, gate: gate))
-    }
-
-    /// Boolean generators use UInt8 in 0...1; exclude that domain, including numeric generators with the same representation.
-    static func isNumeric(_ metadata: ChooseBitsMetadata) -> Bool {
-        guard metadata.typeTag != .uint8 || metadata.validRange != 0 ... 1 else {
-            return false
-        }
-        switch metadata.typeTag {
-            case .int, .int8, .int16, .int32, .int64, .uint, .uint8, .uint16, .uint32, .uint64:
-                return true
-            case .float, .float16, .double:
-                return metadata.value.decodedDoubleValue.isFinite
-            case .date, .bits, .character, .depthControl, .laneControl:
-                return false
-        }
-    }
-
-    /// Checks bind-site continuity even when different dependent generators happen to emit identical flat markers.
-    static func preservesIdentity(of pair: Pair, in tree: ChoiceTree) -> Bool {
-        preservesIdentity(of: [pair.source, pair.sink], in: tree)
-    }
-
-    /// Checks all joint edits against fresh bind ancestry using one graph construction per surviving failure.
-    static func preservesIdentity(of leaves: [ReductionLeaf], in tree: ChoiceTree) -> Bool {
-        guard leaves.contains(where: { $0.bindFingerprints.isEmpty == false }) else {
-            return true
-        }
-        let graph = ChoiceGraph.build(from: tree)
-        for leaf in leaves {
-            guard let nodeID = graph.leafNodes.first(where: { graph.nodes[$0].positionRange?.lowerBound == leaf.position }),
-                  graph.nodes[nodeID].choicePath == leaf.path,
-                  bindFingerprints(above: nodeID, graph: graph) == leaf.bindFingerprints,
-                  case let .chooseBits(metadata) = graph.nodes[nodeID].kind,
-                  isNumeric(metadata)
-            else {
-                return false
-            }
-        }
-        return true
-    }
-
-    private static func bindFingerprints(above nodeID: Int, graph: ChoiceGraph) -> [UInt64] {
-        var fingerprints: [UInt64] = []
-        var ancestor = graph.nodes[nodeID].parent
-        while let ancestorID = ancestor {
-            let node = graph.nodes[ancestorID]
-            if case let .bind(metadata) = node.kind {
-                fingerprints.append(metadata.fingerprint)
-            }
-            ancestor = node.parent
-        }
-        return fingerprints
     }
 
     /// Unknown or divergent bind shapes are deferred; the existing classifier's cached verdict avoids speculative endpoint work here.

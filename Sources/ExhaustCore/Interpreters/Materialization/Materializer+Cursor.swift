@@ -155,9 +155,46 @@ extension Materializer {
             }
         }
 
+        /// The first position at or after `start` that is not slack.
+        ///
+        /// Slack is what a finished subtree leaves unread: a `.just`, which no read consumes, and the close markers behind it, which are skipped only on the next read. A decision taken from the position, rather than from a read, must look past it, or it sees the end of the previous subtree instead of the start of the next one.
+        private func slackEnd(from start: Int) -> Int {
+            var probe = start
+            while probe < effectiveEnd {
+                switch entries[probe] {
+                    case .just, .group(false), .zip(false), .bind(false):
+                        probe &+= 1
+                    default:
+                        return probe
+                }
+            }
+            return probe
+        }
+
+        /// Advances past slack, so an opener the next generator expects is at the position.
+        private mutating func skipSlack() {
+            position = slackEnd(from: position)
+        }
+
+        /// The position of the zip-open marker past any slack, or nil when the next non-slack entry is not a zip open.
+        var zipOpenIndex: Int? {
+            guard suspended == false, exhausted == false else {
+                return nil
+            }
+            let openPosition = slackEnd(from: position)
+            guard openPosition < effectiveEnd, case .zip(true) = entries[openPosition] else {
+                return nil
+            }
+            return openPosition
+        }
+
         /// Advances past one group-open or zip-open marker without consuming an inner generator's opening marker.
         mutating func skipGroupOpen() {
-            guard suspended == false, exhausted == false, position < effectiveEnd else {
+            guard suspended == false, exhausted == false else {
+                return
+            }
+            skipSlack()
+            guard position < effectiveEnd else {
                 return
             }
             switch entries[position] {
@@ -172,7 +209,11 @@ extension Materializer {
         ///
         /// The bind handler calls this before entering its inner generator so a nested zip computes child scopes from the zip's own group-open position.
         mutating func skipBindOpen() {
-            guard suspended == false, exhausted == false, position < effectiveEnd else {
+            guard suspended == false, exhausted == false else {
+                return
+            }
+            skipSlack()
+            guard position < effectiveEnd else {
                 return
             }
             if case .bind(true) = entries[position] {
@@ -201,15 +242,8 @@ extension Materializer {
         ///
         /// Zips are fixed-arity: no mutation or reduction changes a zip's child count, so a well-formed prefix carries exactly `count` subtrees between the zip's group markers and the candidate's own markers delimit each child. This makes the prefix the authoritative scope source. The fallback tree cannot serve that role: its untagged group shape is ambiguous for two-generator zips whose first child is itself a two-child group (a monadic bind, a two-branch pick), and scoping from the wrong reading rejected honest sequences in exact mode.
         func zipChildSubtreeEnds(count: Int) -> [Int]? {
-            guard suspended == false, exhausted == false, position < effectiveEnd else {
-                return nil
-            }
-            // A `.just` entry is emitted but never consumed by the cursor (`skipGroups` steps over it), so a zip that follows one, as the bound of a `.lazy` bind does, is parsed from the first entry past it.
-            var openPosition = position
-            while openPosition < effectiveEnd, case .just = entries[openPosition] {
-                openPosition += 1
-            }
-            guard openPosition < effectiveEnd, case .zip(true) = entries[openPosition] else {
+            // The cursor can still stand on slack from a finished subtree, as after the `.just` inner of a `.lazy` bind or a bind whose inner picked a `.just` arm, so the zip is parsed from its open past that slack.
+            guard let openPosition = zipOpenIndex else {
                 return nil
             }
             var ends: [Int] = []

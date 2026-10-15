@@ -8,7 +8,7 @@
 ///
 /// Three regimes based on the searched leaves' total domain size:
 /// - **Small domains** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
-/// - **Large domains, 2 or more parameters**: pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
+/// - **Large domains, 2 or more parameters**: pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator`` over each leaf's ``CoveringRepresentatives``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build. Within ``coveringBudget`` rows, every combination of two leaves' representatives can be tried.
 /// - **Large domain, one parameter**: the ends of the range, alternating lowest and highest and working inward, up to ``coveringBudget`` rows. Pairwise covering needs two parameters, and a range that a lift has just widened fails at its edges when it fails at all: the values the previous configuration could not express are the ones farthest from where it sat.
 package struct BoundValueCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .boundValueSearch
@@ -36,6 +36,8 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
     /// Pull-based generator for the pairwise regime. Nil when using exhaustive.
     private var generator: BalancedCoveringArrayGenerator?
     private var pullProbeCount = 0
+    /// Each leaf's representative offsets in the pairwise regime, which the generator's row values index into.
+    private var representativeOffsets: [[UInt64]] = []
 
     /// The total bound value space computed at `start()` time. Used by the driver for profiling (domain size vs exhaustive threshold).
     public private(set) var lastComputedDomainSize: UInt64 = 0
@@ -114,6 +116,7 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
         exhaustiveProbes = []
         generator = nil
         pullProbeCount = 0
+        representativeOffsets = []
 
         guard valuePositions.isEmpty == false else {
             lastComputedDomainSize = 0
@@ -128,12 +131,12 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
         } else if valuePositions.count == 1 {
             exhaustiveProbes = buildRangeEndRows(domainSize: totalSpace)
         } else {
-            // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
-            // Cap each domain to coveringBudget: we emit at most that many rows, so larger domains add no useful coverage and would produce enormous allocations (for example, Unicode scalar domains of ~1.1M values would create O(domain²) coverage matrices).
-            let cappedDomains = valuePositions.map {
-                min($0.domainSize, UInt64(Self.coveringBudget))
+            // Pull-based pairwise coverage over each leaf's representatives. Rows are generated lazily in nextProbe().
+            let perLeafCount = CoveringRepresentatives.perLeafCount(rowBudget: Self.coveringBudget)
+            representativeOffsets = valuePositions.map {
+                CoveringRepresentatives.offsets(domainSize: $0.domainSize, count: perLeafCount)
             }
-            generator = BalancedCoveringArrayGenerator(domainSizes: cappedDomains)
+            generator = BalancedCoveringArrayGenerator(domainSizes: representativeOffsets.map { UInt64($0.count) })
         }
     }
 
@@ -157,7 +160,9 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
         while offset < valuePositions.count {
             guard offset < row.values.count else { break }
             let position = valuePositions[offset]
-            let valueIndex = row.values[offset]
+            let valueIndex = representativeOffsets.isEmpty
+                ? row.values[offset]
+                : representativeOffsets[offset][Int(row.values[offset])]
             // A full-width leaf's highest index overflows a nonzero lower bound. Clamp to the domain's top.
             let (sum, overflowed) = position.domainLower.addingReportingOverflow(valueIndex)
             let bitPattern = overflowed ? UInt64.max : sum
@@ -265,7 +270,7 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
 ///
 /// The downstream slot of a bound value composition needs to *discover* failures in the lifted bound subtree, not minimize toward a known target. Per-coordinate value-search encoders (``GraphValueEncoder``) only move from the current value toward its semantic simplest, so they cannot find counterexamples that require moving *away* from the target — for example, the [1, 0] coupling that fails the property when the binary search starts from [0, 0].
 ///
-/// ``BoundValueCoveringEncoder`` enumerates the entire bound value space (exhaustively for ≤ 128 combinations, pairwise covering for larger spaces) and is the right tool for that job.
+/// ``BoundValueCoveringEncoder`` enumerates the entire bound value space (exhaustively for at most ``BoundValueCoveringEncoder/exhaustiveThreshold`` combinations, pairwise covering over each leaf's ``CoveringRepresentatives`` for larger spaces with two or more leaves, and the ends of the range for one leaf) and is the right tool for that job.
 ///
 /// The wrapper expects the scope's operation to be ``MinimizationScope/valueLeaves(_:)``: the inner encoder is started on the scope's `baseSequence` at exactly the leaves' positions. Entries between them, such as a nested bind's controller the scope leaves out, stay fixed.
 struct GraphBoundValueCoveringEncoder: GraphEncoder {

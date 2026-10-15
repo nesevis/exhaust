@@ -122,7 +122,7 @@ package extension GenRecipe {
                 return .notEnumerable
 
             // A reified bind and a size read both put a choice outside the model by construction.
-            case .reifiedBind, .boundRange, .getSized:
+            case .reifiedBind, .dependentPair, .boundRange, .getSized:
                 return .notEnumerable
 
             // Recursion, uniqueness budgets, and metamorphic copies each depend on details the grammar does not fix.

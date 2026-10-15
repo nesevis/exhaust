@@ -41,6 +41,7 @@ package struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateM
             tree: tree,
             generator: context.state.sequenceGen,
             config: config,
+            collectStats: context.collectsReductionStats,
             property: commandProperty
         )
         return StateMachineReduction(finalInput: reduced, stats: stats, timedOut: false)

@@ -21,6 +21,7 @@ extension __ExhaustRuntime {
             line: UInt,
             column: UInt,
             function: StaticString,
+            collectsReductionStats: Bool,
             property: @escaping @Sendable (Output) -> Bool
         ) -> (counterexample: Output, replaySeed: String, report: ExhaustReport)? {
             guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
@@ -56,6 +57,7 @@ extension __ExhaustRuntime {
                     line: line,
                     column: column,
                     testName: "\(function)",
+                    collectsReductionStats: collectsReductionStats,
                     property: property
                 ).0
                 if replayResult == nil {
@@ -101,6 +103,16 @@ extension __ExhaustRuntime {
             for closure in reportClosures {
                 closure(report)
             }
+        }
+    }
+
+    /// Whether `settings` deliver an ``ExhaustReport``. Reduction collects the statistics only a report reads when this is true. Callers pass the settings they received, because ``DeferredReportDelivery`` and the assertion wrappers move or add `.onReport` closures before the pipeline sees them.
+    static func deliversReport(_ settings: [PropertySettings]) -> Bool {
+        settings.contains { setting in
+            if case .onReport = setting {
+                return true
+            }
+            return false
         }
     }
 }

@@ -123,7 +123,7 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
             return branches.contains { recipeContains($0.recipe, where: predicate) }
         case let .backtrack(arms, _):
             return arms.contains { recipeContains($0.recipe, where: predicate) }
-        case let .zipped(first, second):
+        case let .zipped(first, second), let .dependentPair(controller: first, bound: second):
             return recipeContains(first, where: predicate) || recipeContains(second, where: predicate)
         case let .eachOf(recipes):
             return recipes.contains { recipeContains($0, where: predicate) }
@@ -209,6 +209,10 @@ let reflectableCombinatorFixtures: [CombinatorFixture] = [
     .init(name: "classified", recipe: .combinator(.classified(.leaf(.int(0 ... 10))))),
     .init(name: "boundArray", recipe: .combinator(.boundArray(element: .leaf(.int(0 ... 5)), maxLength: 3))),
     .init(name: "reifiedBind", recipe: .combinator(.reifiedBind(.leaf(.int(0 ... 10))))),
+    .init(name: "dependentPair", recipe: .combinator(.dependentPair(
+        controller: .combinator(.oneOf([.leaf(.justInt(0)), .leaf(.int(1 ... 10))])),
+        bound: .combinator(.zipped(.leaf(.int(0 ... 10)), .leaf(.int(0 ... 10))))
+    ))),
     .init(name: "getSized", recipe: .combinator(.getSized)),
     .init(name: "isomorphed", recipe: .combinator(.isomorphed(.leaf(.int(0 ... 10)), .increment))),
     .init(name: "backtrack.always", recipe: .combinator(.backtrack([

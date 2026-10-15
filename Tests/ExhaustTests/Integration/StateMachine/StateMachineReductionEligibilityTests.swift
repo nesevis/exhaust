@@ -18,6 +18,7 @@ struct StateMachineReductionEligibilityTests {
             tree: tree,
             output: output,
             deadlineNanoseconds: 0,
+            collectStats: true,
             property: { value in
                 let firstFloor: UInt64 = value.1 == 20 ? 8 : 10
                 return value.0 >= firstFloor && value.1 >= 20 ? .fail(()) : .pass
@@ -39,6 +40,7 @@ struct StateMachineReductionEligibilityTests {
             tree: tree,
             output: output,
             deadlineNanoseconds: 0,
+            collectStats: true,
             property: { value in value >= 10 ? .fail(()) : .pass }
         )
 

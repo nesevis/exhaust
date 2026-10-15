@@ -246,6 +246,7 @@ package extension __ExhaustRuntime {
                 output: value,
                 deadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds,
                 probeWrapper: probeWrapper,
+                collectStats: false,
                 property: probeProperty
             )
             return FuzzReductionResult(

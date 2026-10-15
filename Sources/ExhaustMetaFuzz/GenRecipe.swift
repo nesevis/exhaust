@@ -292,6 +292,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
         case boundArray(element: GenRecipe, maxLength: UInt64)
         case boundRange(GenRecipe)
         case reifiedBind(GenRecipe)
+        /// A bind over an element recipe whose bound is an array recipe, producing the controller's value followed by the bound's elements. Unlike the other bind recipes, both sides are arbitrary recipes and the bound's own markers follow the controller's directly, so a controller that ends on a constant arm can precede a zip, a resized zip, or a bind over a zip.
+        case dependentPair(controller: GenRecipe, bound: GenRecipe)
         case recursive(base: GenRecipe, maxDepth: UInt64)
         case scaledArray(GenRecipe, lengthRange: ClosedRange<UInt64>, scaling: RecipeScaling)
         case unique(GenRecipe)
@@ -334,6 +336,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     "\(inner).boundRange"
                 case let .reifiedBind(inner):
                     "\(inner).reifiedBind"
+                case let .dependentPair(controller: controller, bound: bound):
+                    "dependentPair(\(controller), \(bound))"
                 case let .recursive(base: base, maxDepth: maxDepth):
                     "recursive(\(base), maxDepth: \(maxDepth))"
                 case let .scaledArray(inner, lengthRange: range, scaling: scaling):
@@ -400,6 +404,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                         return 1 + inner.nodeCount
                     case let .reifiedBind(inner):
                         return 1 + inner.nodeCount
+                    case let .dependentPair(controller: controller, bound: bound):
+                        return 1 + controller.nodeCount + bound.nodeCount
                     case let .recursive(base: base, maxDepth: _):
                         return 1 + base.nodeCount
                     case let .scaledArray(inner, lengthRange: _, scaling: _):
@@ -469,6 +475,9 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                         return .int
                     case let .reifiedBind(inner):
                         return inner.outputType
+                    case let .dependentPair(controller: _, bound: bound):
+                        // The controller's value is prepended to the bound's array of the same element type.
+                        return bound.outputType
                     case let .recursive(base: base, maxDepth: _):
                         return base.outputType
                     case let .scaledArray(inner, lengthRange: _, scaling: _):

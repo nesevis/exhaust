@@ -86,6 +86,7 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column,
                     function: function,
+                    collectsReductionStats: deliversReport(settings),
                     property: property
                 ) {
                     reportDelivery.deliver(regression.report)
@@ -101,6 +102,7 @@ public extension __ExhaustRuntime {
                 line: line,
                 column: column,
                 testName: "\(function)",
+                collectsReductionStats: deliversReport(settings),
                 property: property
             ).0
         }
@@ -146,6 +148,7 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column,
                     function: function,
+                    collectsReductionStats: deliversReport(settings),
                     property: property
                 ) {
                     reportDelivery.deliver(regression.report)
@@ -162,6 +165,7 @@ public extension __ExhaustRuntime {
                 line: line,
                 column: column,
                 testName: "\(function)",
+                collectsReductionStats: deliversReport(settings),
                 property: property
             ).0
         }
@@ -253,6 +257,7 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt,
         testName: String,
+        collectsReductionStats: Bool,
         property: @escaping @Sendable (Output) -> Bool
     ) -> (Output?, String?) {
         let runStart = MonotonicClock.nanoseconds()
@@ -415,7 +420,8 @@ public extension __ExhaustRuntime {
                     customDump(value, to: &representation, maxDepth: 3)
                     return representation
                 },
-                deadlineNanoseconds: deadlineNanoseconds
+                deadlineNanoseconds: deadlineNanoseconds,
+                collectsReductionStats: collectsReductionStats
             )
 
             guard context.hasExceededDeadline == false else {
@@ -429,6 +435,7 @@ public extension __ExhaustRuntime {
                         value: reflecting,
                         reductionConfig: reductionConfig,
                         deadlineNanoseconds: deadlineNanoseconds,
+                        collectsReductionStats: collectsReductionStats,
                         visualize: visualize,
                         suppressIssueReporting: suppress.issueReporting,
                         includeDiff: includeDiff,
@@ -665,6 +672,7 @@ public extension __ExhaustRuntime {
                             line: line,
                             column: column,
                             function: function,
+                            collectsReductionStats: deliversReport(settings),
                             property: boolProperty
                         ) {
                             diagnostics.pipelineResult = regression.counterexample
@@ -690,6 +698,7 @@ public extension __ExhaustRuntime {
                         line: line,
                         column: column,
                         testName: "\(function)",
+                        collectsReductionStats: deliversReport(settings),
                         property: boolProperty
                     ).0
                 }
@@ -784,6 +793,7 @@ public extension __ExhaustRuntime {
                         line: line,
                         column: column,
                         function: function,
+                        collectsReductionStats: deliversReport(settings),
                         property: syncProperty
                     ) {
                         reportDelivery.deliver(regression.report)
@@ -800,6 +810,7 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column,
                     testName: "\(function)",
+                    collectsReductionStats: deliversReport(settings),
                     property: syncProperty
                 ).0
             }
@@ -933,6 +944,7 @@ public extension __ExhaustRuntime {
                                 line: line,
                                 column: column,
                                 function: function,
+                                collectsReductionStats: deliversReport(settings),
                                 property: syncDetection
                             ) {
                                 diagnostics.pipelineResult = regression.counterexample
@@ -955,6 +967,7 @@ public extension __ExhaustRuntime {
                                 line: line,
                                 column: column,
                                 testName: "\(function)",
+                                collectsReductionStats: deliversReport(settings),
                                 property: syncDetection
                             ).0
                         }
@@ -973,6 +986,7 @@ public extension __ExhaustRuntime {
                         line: line,
                         column: column,
                         testName: "\(function)",
+                        collectsReductionStats: deliversReport(settings),
                         property: syncDetection
                     ).0
                 #endif

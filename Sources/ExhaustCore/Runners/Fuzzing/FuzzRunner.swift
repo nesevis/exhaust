@@ -301,6 +301,7 @@ package final class FuzzRunner<Output> {
                 tree: tree,
                 value: value,
                 configuration: configuration,
+                collectStats: false,
                 property: boolProperty
             )
             return FuzzReductionResult(

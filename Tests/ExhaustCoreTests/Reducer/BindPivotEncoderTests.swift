@@ -145,6 +145,48 @@ struct BindPivotEncoderTests {
         #expect(probes.allSatisfy { $0.count < fixture.scope.baseSequence.count })
         #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
     }
+
+    @Test("The scoped cursor preserves the graph encoder's plain pivot and transplant prefixes", arguments: [0, 4])
+    func scopedProposalOrderMatchesGraphEncoder(maxTransplants: Int) throws {
+        let fixture = try nestedFixture()
+        guard case let .minimize(.bindPivot(pivotScope)) = fixture.scope.transformation.operation else {
+            Issue.record("The nested fixture must describe a bind pivot")
+            return
+        }
+        var expected: [ChoiceSequence] = []
+        var encoder = BindPivotSearch.makeEncoder(lift: { candidate, _ in
+            expected.append(candidate)
+            return nil
+        })
+        encoder.start(scope: fixture.scope)
+        var buffer = fixture.scope.baseSequence
+        #expect(encoder.nextProbe(into: &buffer, lastAccepted: false) == nil)
+        try #require(expected.count == 2)
+
+        var tuning = ScopedReductionTuning()
+        tuning.maxPivotTransplants = maxTransplants
+        let input = ScopedEncoderInput(
+            baseSequence: fixture.scope.baseSequence,
+            tree: fixture.scope.tree,
+            graph: fixture.scope.graph,
+            warmStartRecords: [:],
+            tuning: tuning
+        )
+        let reducer = ScopedBindPivotEncoder.reducer(pivotScope, input: input)
+        guard case let .impure(.propose(makeProposals, _), _) = reducer else {
+            Issue.record("A scoped bind pivot must offer deferred proposals")
+            return
+        }
+        var cursor = ScopedBranchCursor(makeProposals)
+        var actual: [ChoiceSequence] = []
+        while let index = cursor.nextIndex, let proposal = cursor.next() {
+            #expect(index == actual.count)
+            actual.append(proposal.prefix)
+        }
+
+        #expect(actual == Array(expected.prefix(maxTransplants == 0 ? 1 : 2)))
+        #expect(cursor.next() == nil)
+    }
 }
 
 // MARK: - Helpers

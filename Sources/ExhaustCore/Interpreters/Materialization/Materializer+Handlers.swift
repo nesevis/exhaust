@@ -860,7 +860,8 @@ extension Materializer {
         context.emitFlat(.zip(true))
 
         // Scope limits come from the prefix's parsed spans (`prefixChildEnds`, absolute end positions; see Cursor.zipChildSubtreeEnds(count:)). When the prefix does not parse at this site, the fallback tree's per-child entry counts stand in: cumulative flattenedEntryCount from basePosition + 1, which avoids the cursor-position drift skipGroups() used to cause.
-        var childScopeStart = context.cursor.position + 1 // past the zip group open
+        // Past the zip open. The cursor can stand on slack ahead of the open, which the open index looks past; when the open is behind the cursor, its position bounds the first child from below.
+        var childScopeStart = (context.cursor.zipOpenIndex ?? context.cursor.position) + 1
 
         // Advance the cursor past transparent markers so it is ready for the first child's consume calls (tryConsumeBranch / tryConsumeValue).
         if canScope { context.cursor.skipGroups() }

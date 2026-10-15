@@ -7,7 +7,7 @@
 
 /// Reduces a counterexample on behalf of a test runner, applying the run's deadline and reporting the reduced value together with its statistics.
 ///
-/// Callers read property invocation counts from ``Run/propertyInvocations`` and ``Run/propertyFailures`` rather than wrapping the property in a counter: every property call the reducer makes is recorded in ``ReductionStats``. A caller whose property returns early without consulting the user's property (for example, a direction gate) counts the user's property itself.
+/// Callers read property invocation counts from ``Run/propertyInvocations`` and ``Run/propertyFailures`` rather than wrapping the property in a counter: every property call the reducer makes is recorded in ``ReductionStats``, whether or not the caller collects the rest of the statistics. A caller whose property returns early without consulting the user's property (for example, a direction gate) counts the user's property itself.
 ///
 /// - SeeAlso: ``Interpreters/choiceGraphReduceCollectingStats(gen:tree:output:config:property:)``
 package enum ReductionRunner {
@@ -45,6 +45,7 @@ package enum ReductionRunner {
     ///   - value: The failing value.
     ///   - configuration: Reducer configuration. Its wall-clock budget is relative to the start of reduction.
     ///   - runDeadlineNanoseconds: Absolute monotonic deadline for the whole run, or nil for none.
+    ///   - collectStats: Whether to collect timings, graph statistics, and materialization counts. Callers pass true when a report will be delivered, because nothing else reads them. Probe counts are recorded either way.
     ///   - property: Returns `true` when a candidate passes. Reduction keeps candidates for which it returns `false`.
     package static func reduce<Output>(
         _ generator: Generator<Output>,
@@ -52,6 +53,7 @@ package enum ReductionRunner {
         value: Output,
         configuration: Interpreters.ReducerConfiguration,
         runDeadlineNanoseconds: UInt64? = nil,
+        collectStats: Bool,
         property: (Output) -> Bool
     ) -> Run<Output> {
         var configuration = configuration
@@ -72,13 +74,22 @@ package enum ReductionRunner {
             configuration.wallClockDeadlineNanoseconds = configured == 0 ? remaining : min(configured, remaining)
         }
 
-        let result = Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
+        let result = ScopedReductionRunner.reduce(
+            generator: generator,
             tree: tree,
             output: value,
-            config: configuration,
+            configuration: scopedConfiguration(configuration),
+            collectStats: collectStats,
             property: property
         )
+
+//        let result = Interpreters.choiceGraphReduceCollectingStats(
+//            gen: generator,
+//            tree: tree,
+//            output: value,
+//            config: configuration,
+//            property: property
+//        )
         switch result.outcome {
             case let .reduced(sequence, reducedTree, reducedValue):
                 return Run(
@@ -109,4 +120,26 @@ package enum ReductionRunner {
                 )
         }
     }
+}
+
+private func scopedConfiguration(_ config: Interpreters.ReducerConfiguration) -> ScopedReductionRunner.Configuration {
+    let tuning = config.tuning
+    return ScopedReductionRunner.Configuration(
+        maxStalls: config.maxStalls,
+        wallClockDeadlineNanoseconds: config.wallClockDeadlineNanoseconds,
+        enabledEncoders: config.enabledEncoders,
+        tuning: ScopedReductionTuning(
+            boundValueBaseBudget: tuning.boundValueBaseBudget,
+            composedFirstDispatchProbeCap: tuning.composedFirstDispatchProbeCap,
+            stagedJointProbeBudget: tuning.stagedJointProbeBudget,
+            threeWayNumericWorkLimit: tuning.threeWayNumericWorkLimit,
+            fourWayNumericWorkLimit: tuning.fourWayNumericWorkLimit,
+            numericJointGroupCalculationLimit: tuning.numericJointGroupCalculationLimit,
+            numericJointScopeLimit: tuning.numericJointScopeLimit,
+            relaxMaterializationBudget: tuning.relaxMaterializationBudget,
+            relaxImprovingProbeBudget: tuning.relaxImprovingProbeBudget,
+            migrationDemotionThreshold: tuning.migrationDemotionThreshold
+        ),
+        probeWrapper: config.probeWrapper
+    )
 }

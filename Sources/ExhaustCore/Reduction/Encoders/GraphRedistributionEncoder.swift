@@ -52,7 +52,7 @@ struct GraphRedistributionEncoder: GraphEncoder {
     static let maxPasses = 16
 
     /// Cap on the number of redistribution pairs probed per scope.
-    static let maxPairsPerScope = 30
+    static let maxPairsPerScope = QueryHelpers.maxPairsPerScope
 
     // MARK: - GraphEncoder
 
