@@ -12,9 +12,9 @@ struct ScopedPassReport {
     var anyRequiresRebuild = false
     var latestTreeIsStripped = false
     var acceptedLeafNodeIDs: Set<Int> = []
-    /// From searches run at the top level. Searches inside a `propose` are finished and their reports discarded, since their node IDs belong to a lifted graph.
+    /// From searches the root branch reaches. Searches inside a `propose` are finished and their reports discarded, since their node IDs belong to a lifted graph.
     var searchReport = ScopedSearchReport()
-    /// Each top-level search's share of ``counts``, in the order the searches ran. Searches inside a `propose` are counted only in ``counts``.
+    /// Each root search's share of ``counts``, in the order the searches ran, for every one that was pulled. Searches inside a `propose` are counted only in ``counts``.
     var searchCounts: [ScopedSearchCounts] = []
     /// Lift requests, including those whose materialization failed.
     var liftAttempts = 0
@@ -44,7 +44,7 @@ enum ScopedReductionInterpreter {
 
     /// Runs `reducer` until it finishes or the pass ends, and returns the restorable state with everything the execution observed.
     static func run(_ reducer: ScopedReducer, context: consuming Context) -> Result {
-        _ = interpret(reducer, context: &context)
+        drive(reducer, context: &context)
         return Result(
             incumbent: context.incumbent,
             graph: context.graph,
@@ -52,30 +52,6 @@ enum ScopedReductionInterpreter {
             report: context.report,
             probeTiming: context.probeTiming
         )
-    }
-
-    /// Answers the next request of the encoder's reducer and continues with the reducer its continuation returns.
-    ///
-    /// - Returns: Why the pass ended, or nil when the encoder's reducer finished without ending it. A deadline, or an acceptance that ends the search, stops the encoder's reducer at the request that observed it, and its continuation never runs.
-    static func interpret(_ reducer: ScopedReducer, context: inout Context) -> ScopedStopReason? {
-        switch reducer {
-            case .pure:
-                return nil
-            case let .impure(.lift(prefix, fallbackTree, maximumSequenceCount), continuation):
-                return handleLift(
-                    prefix,
-                    fallbackTree: fallbackTree,
-                    maximumSequenceCount: maximumSequenceCount,
-                    continuation: continuation,
-                    context: &context
-                )
-            case let .impure(.fail(reason), _):
-                return handleFail(reason, context: &context)
-            case let .impure(.search(box, configuration), continuation):
-                return handleSearch(box, configuration: configuration, continuation: continuation, context: &context)
-            case let .impure(.propose(branches, configuration), continuation):
-                return handlePropose(branches, configuration: configuration, continuation: continuation, context: &context)
-        }
     }
 }
 

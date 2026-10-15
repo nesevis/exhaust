@@ -45,10 +45,9 @@ enum ScopedStopReason {
     case deadline
     /// A probe cap stopped a search that still had candidates.
     case budgetExhausted
-    case invalidated
 }
 
-/// One top-level search's share of a pass's probe counts.
+/// One root search's share of a pass's probe counts.
 struct ScopedSearchCounts: Equatable {
     /// The number of leaves each candidate moves when the search is a staged joint stage, which the runner attributes counts to. Nil for every other search.
     let stagedJointArity: Int?
