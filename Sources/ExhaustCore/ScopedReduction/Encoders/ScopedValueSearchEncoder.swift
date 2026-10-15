@@ -18,13 +18,13 @@ enum ScopedValueSearchEncoder: ScopedEncoder {
 
     static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .integerSearch(ScopedIntegerSearch(
+            ScopedIntegerSearch(
                 scope: scope,
                 sequence: input.baseSequence,
                 graph: input.graph,
                 warmStarts: input.warmStartRecords,
                 tuning: input.tuning
-            )),
+            ),
             configuration: .standard
         )
     }

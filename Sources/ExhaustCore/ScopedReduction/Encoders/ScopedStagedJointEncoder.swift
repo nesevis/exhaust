@@ -76,7 +76,7 @@ enum ScopedStagedJointEncoder: ScopedEncoder {
             case let .groups(groups):
                 ScopedStagedJointSearch(groups: groups, base: input.baseSequence, probeBudget: budget)
         }
-        return .search(.stagedJoint(search), configuration: .standard) { outcome in
+        return .search(search, configuration: .standard) { outcome in
             let nextArity = arity + 1
             let remaining = remaining - outcome.counts.emitted
             guard outcome.anyAccepted == false,

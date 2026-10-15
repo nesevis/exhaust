@@ -9,10 +9,10 @@ struct ScopedReductionInterpreterTests {
         let candidate = try fixture.candidate(value: 3)
         let configuration = ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
         var continuationOutcome: ScopedSearchOutcome?
-        let sequenced: ScopedReducer = .search(.singleCandidate(ScopedSingleCandidateSearch()), configuration: configuration) { outcome in
+        let sequenced: ScopedReducer = .search(ScopedSingleCandidateSearch(), configuration: configuration) { outcome in
             continuationOutcome = outcome
             return .search(
-                .singleCandidate(ScopedSingleCandidateSearch(candidate: candidate, mutation: .leafValues([]))),
+                ScopedSingleCandidateSearch(candidate: candidate, mutation: .leafValues([])),
                 configuration: configuration
             )
         }

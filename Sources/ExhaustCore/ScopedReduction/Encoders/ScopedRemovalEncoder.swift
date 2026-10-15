@@ -32,23 +32,23 @@ enum ScopedRemovalEncoder: ScopedEncoder {
         switch scope {
             case let .elements(elementScope):
                 guard let candidate = ScopedStructuralCandidates.elementRemoval(elementScope, sequence: sequence, graph: graph) else {
-                    return Self.search(.singleCandidate(ScopedSingleCandidateSearch()))
+                    return Self.search(ScopedSingleCandidateSearch())
                 }
                 let mutation = EncoderProbe.sequenceElementsRemoved(
                     elementScope.targets.map { target in
                         (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
                     }
                 )
-                return Self.search(.singleCandidate(ScopedSingleCandidateSearch(candidate: candidate, mutation: mutation)))
+                return Self.search(ScopedSingleCandidateSearch(candidate: candidate, mutation: mutation))
             case let .coveringAligned(alignedScope):
-                return Self.search(.coveringAlignedRemoval(ScopedCoveringAlignedRemovalSearch(
+                return Self.search(ScopedCoveringAlignedRemovalSearch(
                     scope: alignedScope,
                     baseSequence: sequence,
                     graph: graph
-                )))
+                ))
             case let .window(windowScope):
                 return Self.search(
-                    .windowRemoval(ScopedWindowRemovalSearch(scope: windowScope, baseSequence: sequence, graph: graph)),
+                    ScopedWindowRemovalSearch(scope: windowScope, baseSequence: sequence, graph: graph),
                     acceptance: .rebuildAndContinue
                 )
         }
@@ -56,7 +56,7 @@ enum ScopedRemovalEncoder: ScopedEncoder {
 
     // MARK: - Helpers
 
-    private static func search(_ search: ScopedSearchKind, acceptance: ScopedAcceptance = .continue) -> ScopedReducer {
+    private static func search(_ search: any ScopedSearch, acceptance: ScopedAcceptance = .continue) -> ScopedReducer {
         .search(
             search,
             configuration: ScopedSearchConfiguration(

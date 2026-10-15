@@ -18,12 +18,12 @@ enum ScopedRedistributionEncoder: ScopedEncoder {
 
     static func reducer(_ scope: RedistributionScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .redistribution(ScopedRedistributionSearch(
+            ScopedRedistributionSearch(
                 scope: scope,
                 sequence: input.baseSequence,
                 graph: input.graph,
                 tuning: input.tuning
-            )),
+            ),
             configuration: .standard
         )
     }

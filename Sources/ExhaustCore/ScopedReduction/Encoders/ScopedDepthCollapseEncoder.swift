@@ -18,12 +18,12 @@ enum ScopedDepthCollapseEncoder: ScopedEncoder {
 
     static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .binarySearch(ScopedBinarySearch(
+            ScopedBinarySearch(
                 leaves: scope.leaves,
                 graph: input.graph,
                 baseSequence: input.baseSequence,
                 mayReshape: true
-            )),
+            ),
             configuration: .standard
         )
     }

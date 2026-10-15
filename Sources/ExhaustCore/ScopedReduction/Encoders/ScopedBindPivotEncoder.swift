@@ -63,11 +63,11 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
             reportedMutation: ScopedComposition.reshaping(proposal.mutation)
         )
         return .search(
-            .singleCandidate(ScopedSingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation)),
+            ScopedSingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation),
             configuration: configuration
         ) { _ in
             .search(
-                .covering(ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: parent.tuning)),
+                ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: parent.tuning),
                 configuration: configuration
             )
         }

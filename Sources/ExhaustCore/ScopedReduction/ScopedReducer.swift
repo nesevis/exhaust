@@ -32,18 +32,7 @@ enum ScopedReductionOperation {
     /// Abandons the current branch. Never resumed.
     case fail(DownstreamBuildFailure)
     /// Runs a feedback-driven search until it finishes, then resumes with its outcome.
-    case search(ScopedSearchBox, configuration: ScopedSearchConfiguration)
-}
-
-/// Holds a search inside the encoder's reducer.
-///
-/// A reference, so the operation, each `bind` that re-wraps it, and the interpreter's pattern match copy a pointer rather than the search's state, which runs to hundreds of bytes. Immutable, so the encoder's reducer stays a value: the interpreter copies the search out once before advancing it.
-final class ScopedSearchBox {
-    let search: ScopedSearchKind
-
-    init(_ search: ScopedSearchKind) {
-        self.search = search
-    }
+    case search(any ScopedSearch, configuration: ScopedSearchConfiguration)
 }
 
 /// One alternative of a `propose`.
@@ -149,11 +138,11 @@ extension ScopedReducer {
 
     /// Runs `search` until it finishes and continues with its outcome.
     static func search(
-        _ search: ScopedSearchKind,
+        _ search: any ScopedSearch,
         configuration: ScopedSearchConfiguration,
         then next: @escaping (ScopedSearchOutcome) -> ScopedReducer = { _ in .pure(.finished) }
     ) -> ScopedReducer {
-        request(.search(ScopedSearchBox(search), configuration: configuration)).bind { result in
+        request(.search(search, configuration: configuration)).bind { result in
             guard case let .outcome(outcome) = result else {
                 preconditionFailure("A search request must be answered with an outcome")
             }

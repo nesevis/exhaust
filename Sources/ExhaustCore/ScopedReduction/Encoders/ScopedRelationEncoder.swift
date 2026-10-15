@@ -18,11 +18,11 @@ enum ScopedRelationEncoder: ScopedEncoder {
 
     static func reducer(_ scope: RelationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .relation(ScopedRelationSearch(
+            ScopedRelationSearch(
                 scope: scope,
                 sequence: input.baseSequence,
                 graph: input.graph
-            )),
+            ),
             configuration: .standard
         )
     }

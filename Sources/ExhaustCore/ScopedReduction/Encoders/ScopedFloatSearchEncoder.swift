@@ -18,11 +18,11 @@ enum ScopedFloatSearchEncoder: ScopedEncoder {
 
     static func reducer(_ scope: FloatMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .floatSearch(ScopedFloatSearch(
+            ScopedFloatSearch(
                 scope: scope,
                 sequence: input.baseSequence,
                 graph: input.graph
-            )),
+            ),
             configuration: .standard
         )
     }

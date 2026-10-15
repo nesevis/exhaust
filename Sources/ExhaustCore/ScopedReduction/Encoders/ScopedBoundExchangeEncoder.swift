@@ -66,7 +66,7 @@ enum ScopedBoundExchangeEncoder: ScopedEncoder {
             return .fail(.sinkValueMismatch)
         }
         return .search(
-            .singleCandidate(ScopedSingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation)),
+            ScopedSingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation),
             configuration: ScopedSearchConfiguration(
                 acceptance: .stop,
                 requiresExactDecoder: true,

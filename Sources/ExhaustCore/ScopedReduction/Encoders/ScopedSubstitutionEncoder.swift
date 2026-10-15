@@ -45,7 +45,7 @@ enum ScopedSubstitutionEncoder: ScopedEncoder {
                 mutation = .descendantPromoted(ancestorPickNodeID: ancestorPickNodeID, descendantPickNodeID: descendantPickNodeID)
         }
         return .search(
-            .singleCandidate(ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: sequence)),
+            ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: sequence),
             configuration: .standard
         )
     }

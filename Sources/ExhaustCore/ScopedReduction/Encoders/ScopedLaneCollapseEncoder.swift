@@ -18,11 +18,11 @@ enum ScopedLaneCollapseEncoder: ScopedEncoder {
 
     static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .laneCollapse(ScopedLaneCollapseSearch(
+            ScopedLaneCollapseSearch(
                 leaves: scope.leaves,
                 graph: input.graph,
                 baseSequence: input.baseSequence
-            )),
+            ),
             configuration: .standard
         )
     }

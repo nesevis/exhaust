@@ -233,9 +233,9 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         let leafEntries = downstreamLeaves.map {
             LeafEntry(nodeID: $0, mayReshapeOnAcceptance: false)
         }
-        let search: ScopedSearchKind = downstreamLeaves.count == 1
-            ? .binarySearch(ScopedBinarySearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence))
-            : .covering(ScopedCoveringSearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence, tuning: parent.tuning))
+        let search: any ScopedSearch = downstreamLeaves.count == 1
+            ? ScopedBinarySearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence)
+            : ScopedCoveringSearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence, tuning: parent.tuning)
 
         ScopedReductionLog.reducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",

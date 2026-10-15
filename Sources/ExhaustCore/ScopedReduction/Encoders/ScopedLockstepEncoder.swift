@@ -18,12 +18,12 @@ enum ScopedLockstepEncoder: ScopedEncoder {
 
     static func reducer(_ scope: TandemScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .lockstep(ScopedLockstepSearch(
+            ScopedLockstepSearch(
                 scope: scope,
                 sequence: input.baseSequence,
                 graph: input.graph,
                 maxSuffixWindows: input.tuning.lockstepMaxSuffixWindows
-            )),
+            ),
             configuration: .standard
         )
     }

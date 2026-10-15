@@ -268,12 +268,12 @@ extension ScopedReductionInterpreter {
                     recordBuildOutcome(.failed(reason), depth: depth + 1, context: &context)
                 }
                 return .nothing
-            case let .impure(.search(box, configuration), continuation):
+            case let .impure(.search(search, configuration), continuation):
                 if let depth {
                     recordBuildOutcome(.terminalSearch, depth: depth + 1, context: &context)
                 }
                 return .built(.search(ScopedSearchPool.SearchSlot(
-                    search: box.search,
+                    search: search,
                     configuration: configuration,
                     continuation: continuation,
                     isRoot: depth == nil
@@ -357,7 +357,7 @@ struct ScopedSearchPool {
     ///
     /// A class, so a pull advances the search in place: a search's state runs to hundreds of bytes, and a value slot would be copied in and out of its member on every candidate.
     final class SearchSlot {
-        var search: ScopedSearchKind
+        var search: any ScopedSearch
         let configuration: ScopedSearchConfiguration
         var feedback: ScopedSearchFeedback = .initial
         /// What the branch does after the search exhausts.
@@ -374,7 +374,7 @@ struct ScopedSearchPool {
         var counts = ReductionProbeCounts()
 
         init(
-            search: ScopedSearchKind,
+            search: any ScopedSearch,
             configuration: ScopedSearchConfiguration,
             continuation: @escaping (ScopedReductionResult) -> ScopedReducer,
             isRoot: Bool
@@ -383,12 +383,7 @@ struct ScopedSearchPool {
             self.configuration = configuration
             self.continuation = continuation
             self.isRoot = isRoot
-            stagedJointArity = switch search {
-                case let .stagedJoint(stagedJoint):
-                    stagedJoint.arity
-                default:
-                    nil
-            }
+            stagedJointArity = (search as? ScopedStagedJointSearch)?.arity
         }
 
         /// The outcome of a search that ran out of candidates.

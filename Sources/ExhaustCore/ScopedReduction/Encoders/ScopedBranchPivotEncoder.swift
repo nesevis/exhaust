@@ -30,7 +30,7 @@ enum ScopedBranchPivotEncoder: ScopedEncoder {
         )
         let mutation = EncoderProbe.branchSelected(pickNodeID: scope.pickNodeID, newSelectedID: scope.targetBranchID)
         return .search(
-            .singleCandidate(ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: input.baseSequence)),
+            ScopedSingleCandidateSearch.replacement(built, mutation: mutation, base: input.baseSequence),
             configuration: .standard
         )
     }

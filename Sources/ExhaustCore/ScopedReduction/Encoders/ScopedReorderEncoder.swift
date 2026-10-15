@@ -18,7 +18,7 @@ enum ScopedReorderEncoder: ScopedEncoder {
 
     static func reducer(_ scope: ReorderingScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
-            .reorder(ScopedReorderSearch(scope: scope, baseSequence: input.baseSequence)),
+            ScopedReorderSearch(scope: scope, baseSequence: input.baseSequence),
             configuration: .standard
         )
     }

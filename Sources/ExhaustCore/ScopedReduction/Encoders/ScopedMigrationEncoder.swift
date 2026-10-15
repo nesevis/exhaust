@@ -32,7 +32,7 @@ enum ScopedMigrationEncoder: ScopedEncoder {
                 ScopedSingleCandidateSearch()
         }
         return .search(
-            .singleCandidate(search),
+            search,
             configuration: .standard
         )
     }
