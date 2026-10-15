@@ -102,6 +102,7 @@ package extension __ExhaustRuntime {
         tree: ChoiceTree,
         generator: Generator<Value>,
         config: Interpreters.ReducerConfiguration,
+        collectStats: Bool,
         property: @escaping @Sendable (Value) -> Bool
     ) -> (value: Value, stats: ReductionStats, reduced: Bool) {
         let run = ReductionRunner.reduce(
@@ -109,6 +110,7 @@ package extension __ExhaustRuntime {
             tree: tree,
             value: value,
             configuration: config,
+            collectStats: collectStats,
             property: property
         )
         return (run.improved ? run.value : value, run.stats, run.improved)
@@ -126,6 +128,7 @@ package extension __ExhaustRuntime {
         deadlineNanoseconds: UInt64,
         runDeadlineNanoseconds: UInt64? = nil,
         probeWrapper: ProbeWrapper? = nil,
+        collectStats: Bool,
         property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
     ) -> ConcurrentTwoPassResult<Value, Evidence> {
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
@@ -167,6 +170,7 @@ package extension __ExhaustRuntime {
                 probeWrapper: probeWrapper
             ),
             runDeadlineNanoseconds: runDeadlineNanoseconds,
+            collectStats: collectStats,
             property: boolProperty
         )
         if structuralRun.started {
@@ -200,6 +204,7 @@ package extension __ExhaustRuntime {
                     probeWrapper: probeWrapper
                 ),
                 runDeadlineNanoseconds: runDeadlineNanoseconds,
+                collectStats: collectStats,
                 property: boolProperty
             )
             if valueRun.started {

@@ -65,6 +65,7 @@ package struct ScopedReductionRunner {
     let probeWrapper: ProbeWrapper?
     let tuning: ScopedReductionTuning
     let enabledEncoders: Set<EncoderName>?
+    /// Gates timings, graph statistics, and materialization counts. Probe counts are recorded either way, because callers report property invocations from them.
     let collectStats: Bool
     let isInstrumented: Bool
 
@@ -119,7 +120,7 @@ package struct ScopedReductionRunner {
 
     // MARK: - Research Diagnostics
 
-    /// Enables floor-motion counters, coupling attribution, and the per-dispatch log. A maintainer-set literal rather than configuration, because these per-pass costs must not ride `collectStats`, which is always on.
+    /// Enables floor-motion counters, coupling attribution, and the per-dispatch log. A maintainer-set literal rather than configuration, because these per-pass costs must not ride `collectStats`, which is on whenever a report is delivered.
     var collectDiagnostics = false
     /// Sequence length when the pass in flight started, for its dispatch record.
     var dispatchBaselineLength = 0

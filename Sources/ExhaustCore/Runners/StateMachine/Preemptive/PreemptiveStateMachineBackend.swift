@@ -75,6 +75,7 @@ package struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMac
             output: taggedCommands,
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
             runDeadlineNanoseconds: context.config.deadlineNanoseconds,
+            collectStats: context.collectsReductionStats,
             property: linearizableProperty
         )
 

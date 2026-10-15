@@ -88,9 +88,7 @@ extension ScopedReductionRunner {
         var anyStale = false
         var counts = ReductionProbeCounts()
         defer {
-            if collectStats {
-                stats.record(counts, for: .convergenceConfirmation)
-            }
+            stats.record(counts, for: .convergenceConfirmation)
         }
 
         let sequenceDecoder: SequenceDecoder = hasBind
@@ -274,8 +272,8 @@ extension ScopedReductionRunner {
         var probesUsed = 0
         var probeCounts = ReductionProbeCounts()
         defer {
+            stats.recordStructuralRelax(probeCounts)
             if collectStats {
-                stats.recordStructuralRelax(probeCounts)
                 stats.relaxImprovingProbes += probesUsed
             }
         }

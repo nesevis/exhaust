@@ -20,6 +20,7 @@ package extension __ExhaustRuntime {
         value: Output,
         reductionConfig: Interpreters.ReducerConfiguration,
         deadlineNanoseconds: UInt64? = nil,
+        collectsReductionStats: Bool,
         visualize: Bool,
         suppressIssueReporting: Bool,
         includeDiff: Bool,
@@ -75,6 +76,7 @@ package extension __ExhaustRuntime {
             value: value,
             configuration: reducerConfig,
             runDeadlineNanoseconds: deadlineNanoseconds,
+            collectStats: collectsReductionStats,
             property: property
         )
         if run.started {

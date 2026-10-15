@@ -292,6 +292,7 @@ package struct SpecMachine<Backend: StateMachineBackend> {
             tree: setupTree,
             value: currentStep,
             configuration: config,
+            collectStats: context.collectsReductionStats,
             property: property
         )
         setupReductionStats = run.stats
@@ -428,9 +429,9 @@ extension SpecMachine {
 
 // MARK: - Transition
 
-extension SpecMachine {
+package extension SpecMachine {
     /// Describes what happened during a single ``next()`` step, returned to the caller for logging or diagnostics.
-    package enum Transition: Equatable {
+    enum Transition: Equatable {
         case sourceExhausted
         case sourceError(String)
         case candidateFound(discoveryMethod: StateMachineDiscoveryMethod, commandCount: Int)

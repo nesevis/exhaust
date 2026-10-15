@@ -377,6 +377,8 @@ extension ScopedReductionRunner {
             stats.compositionBuildOutcomes[pass.encoderScope.encoder.name, default: [:]].merge(report.buildOutcomes, uniquingKeysWith: +)
         }
 
+        // Probe counts feed the user-facing invocation count, so they are recorded whether or not statistics are collected.
+        stats.record(report.counts, for: pass.encoderScope.encoder.name)
         if collectStats {
             recordPassStatistics(pass)
         }
@@ -489,7 +491,6 @@ extension ScopedReductionRunner {
 
     private mutating func recordPassStatistics(_ pass: PassRecord) {
         let report = pass.report
-        stats.record(report.counts, for: pass.encoderScope.encoder.name)
         for searchCounts in report.searchCounts {
             guard let arity = searchCounts.stagedJointArity else {
                 continue
