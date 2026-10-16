@@ -271,8 +271,9 @@ private func dependentPairGenerator(producing type: RecipeType, maxDepth: Int) -
     }
     let controller = recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
     let bound = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
+    // The build appends the bound's value to the controller's as an array, so an optional that reaches the bound's root would trap the cast.
     return Gen.zip(controller, bound).map { controller, bound in
-        GenRecipe.combinator(.dependentPair(controller: controller, bound: bound))
+        GenRecipe.combinator(.dependentPair(controller: controller, bound: bound.strippingRootOptionals))
     }
 }
 
@@ -421,6 +422,60 @@ private func isomorphedGenerator(producing type: RecipeType) -> Generator<GenRec
     return Gen.choose(from: transforms).bind { transform in
         narrowingSafeInnerGenerator(for: transform, producing: type, maxDepth: 1).map { inner in
             .combinator(.isomorphed(inner, transform))
+        }
+    }
+}
+
+// MARK: - Root Optional Stripping
+
+private extension GenRecipe {
+    /// The recipe with every optional that can reach its root output removed: `.optional(inner)` becomes `inner`, and a failable backtrack becomes an `always:` backtrack with an unconditional last arm.
+    ///
+    /// Combinators that wrap their children into an array stop the descent, because optionals inside the array's elements never reach the root.
+    var strippingRootOptionals: GenRecipe {
+        guard case let .combinator(kind) = self else {
+            return self
+        }
+        switch kind {
+            case let .optional(inner):
+                return inner.strippingRootOptionals
+            case let .backtrack(arms, failable):
+                var strippedArms = arms.map { arm in
+                    BacktrackArm(weight: arm.weight, recipe: arm.recipe.strippingRootOptionals, predicate: arm.predicate)
+                }
+                if failable, let last = strippedArms.last {
+                    strippedArms[strippedArms.count - 1] = BacktrackArm(weight: last.weight, recipe: last.recipe, predicate: .always)
+                }
+                return .combinator(.backtrack(strippedArms, failable: false))
+            case let .contramapped(inner, transform):
+                return .combinator(.contramapped(inner.strippingRootOptionals, transform))
+            case let .mapped(inner, transform):
+                return .combinator(.mapped(inner.strippingRootOptionals, transform))
+            case let .pruned(inner):
+                return .combinator(.pruned(inner.strippingRootOptionals))
+            case let .oneOf(recipes):
+                return .combinator(.oneOf(recipes.map(\.strippingRootOptionals)))
+            case let .weightedOneOf(branches):
+                let strippedBranches = branches.map { branch in
+                    WeightedBranch(weight: branch.weight, recipe: branch.recipe.strippingRootOptionals)
+                }
+                return .combinator(.weightedOneOf(strippedBranches))
+            case let .filtered(inner, predicate):
+                return .combinator(.filtered(inner.strippingRootOptionals, predicate))
+            case let .resized(inner, size: size):
+                return .combinator(.resized(inner.strippingRootOptionals, size: size))
+            case let .reifiedBind(inner):
+                return .combinator(.reifiedBind(inner.strippingRootOptionals))
+            case let .recursive(base: base, maxDepth: maxDepth):
+                return .combinator(.recursive(base: base.strippingRootOptionals, maxDepth: maxDepth))
+            case let .unique(inner):
+                return .combinator(.unique(inner.strippingRootOptionals))
+            case let .classified(inner):
+                return .combinator(.classified(inner.strippingRootOptionals))
+            case let .isomorphed(inner, transform):
+                return .combinator(.isomorphed(inner.strippingRootOptionals, transform))
+            case .array, .zipped, .eachOf, .boundArray, .boundRange, .dependentPair, .scaledArray, .metamorphed, .unfolded, .getSized:
+                return self
         }
     }
 }
