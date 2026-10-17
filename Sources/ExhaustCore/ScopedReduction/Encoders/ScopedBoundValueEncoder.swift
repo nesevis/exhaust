@@ -146,7 +146,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             parent: scope,
             bindNodeID: bindNodeID,
             stage: stage,
-            rootSequenceCount: chain.rootSequence.count,
+            rootSequence: chain.rootSequence,
             controllerTopologyOnly: stage.canRecurseIntoNestedBind
         ) {
             case let .lifted(located):
@@ -202,10 +202,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         rootSequence: ChoiceSequence,
         reportedMutation: EncoderProbe
     ) -> ScopedReducer {
-        // Keep terminal rejections in the probe budget when nested controllers remain fixed; pruning them can spend more lifts before the dispatch cap is reached.
-        if lifted.graph.canComposeAllNestedBinds(under: lifted.bindNodeID),
-           BoundValueTerminalOrder.canImprove(lifted.sequence, fixedBefore: lifted.boundRange.lowerBound, incumbent: rootSequence) == false
-        {
+        if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: rootSequence) {
             return .fail(.nonImprovingPrefix)
         }
         let liftedGraph = lifted.terminalGraph()
@@ -219,7 +216,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             return lifted.boundRange.contains(range.lowerBound)
         }
 
-        guard admitsTerminalSearch(liftedSequenceCount: lifted.sequence.count, rootSequenceCount: rootSequence.count) else {
+        guard admitsTerminalSearch(liftedSequence: lifted.sequence, rootSequence: rootSequence) else {
             return .fail(.liftedTooLong)
         }
         // Nested bind inners stay fixed when the bound subtree is not a single chain. Changing one without recursively rebuilding its descendants produces an exact candidate with stale structure.
@@ -300,14 +297,14 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         parent: ScopedEncoderInput,
         bindNodeID: Int,
         stage: BoundValueStage,
-        rootSequenceCount: Int,
+        rootSequence: ChoiceSequence,
         controllerTopologyOnly: Bool
     ) -> BoundValueLift {
         let freshTree = liftResult.tree
         let liftedSequence = liftResult.sequence
         // A stage that cannot recurse always ends in a terminal search, so a lift the terminal search would reject is dropped before the graph build.
         if stage.canRecurseIntoNestedBind == false,
-           admitsTerminalSearch(liftedSequenceCount: liftedSequence.count, rootSequenceCount: rootSequenceCount) == false
+           admitsTerminalSearch(liftedSequence: liftedSequence, rootSequence: rootSequence) == false
         {
             return .failed(.liftedTooLong)
         }
@@ -341,8 +338,8 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
     }
 
     /// Whether a terminal search may run on a lift of this length. Only terminal searches are gated, so an intermediate lift can grow while a deeper controller compensates.
-    private static func admitsTerminalSearch(liftedSequenceCount: Int, rootSequenceCount: Int) -> Bool {
-        liftedSequenceCount <= rootSequenceCount
+    private static func admitsTerminalSearch(liftedSequence: ChoiceSequence, rootSequence: ChoiceSequence) -> Bool {
+        liftedSequence.count <= rootSequence.count
     }
 
     /// Counts the stages a composition rooted at `bindNodeID` can build in `graph`: the root plus each nested bind ``ChoiceGraph/composableNestedBind(under:seenBindFingerprints:)`` descends into. The walk stops where composition stops, at a branching dependency or a repeated fingerprint.

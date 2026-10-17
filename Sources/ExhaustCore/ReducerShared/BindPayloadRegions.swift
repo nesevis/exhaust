@@ -25,7 +25,16 @@ struct BindPayloadRegions {
 
     /// Truly independent leaves stay together; separate bound regions get separate scopes.
     func group(_ leaves: [LeafEntry]) -> [[LeafEntry]] {
-        let groups = Dictionary(grouping: leaves) { regionByNode[$0.nodeID] ?? -1 }
-        return groups.sorted { $0.key < $1.key }.map(\.value)
+        let groups = Dictionary(grouping: leaves) { regionByNode[$0.nodeID] }
+        return groups.sorted { left, right in
+            switch (left.key, right.key) {
+                case (nil, .some):
+                    true
+                case (.some, nil), (nil, nil):
+                    false
+                case let (.some(leftRegion), .some(rightRegion)):
+                    leftRegion < rightRegion
+            }
+        }.map(\.value)
     }
 }

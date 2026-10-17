@@ -328,10 +328,7 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         chain: BoundValueChain
     ) -> DownstreamBuild {
-        // Keep terminal rejections in the probe budget when nested controllers remain fixed; pruning them can spend more lifts before the dispatch cap is reached.
-        if lifted.graph.canComposeAllNestedBinds(under: lifted.bindNodeID),
-           BoundValueTerminalOrder.canImprove(lifted.sequence, fixedBefore: lifted.boundRange.lowerBound, incumbent: chain.rootSequence) == false
-        {
+        if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: chain.rootSequence) {
             return .failed(.nonImprovingPrefix)
         }
         let liftedGraph = lifted.terminalGraph()

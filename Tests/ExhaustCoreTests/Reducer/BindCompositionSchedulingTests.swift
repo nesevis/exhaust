@@ -75,4 +75,34 @@ struct BindCompositionSchedulingTests {
             #expect(decision == .classifyBind(bindNodeID: root, fingerprint: 1))
         }
     }
+
+    @Test("Terminal pruning rejects losing prefixes only for complete compositions", arguments: Shape.allCases)
+    func terminalPruning(shape: Shape) throws {
+        let fixture = GraphFixture(shape.tree)
+        let bindNodeID = try #require(fixture.graph.liveNodeIDs.first { nodeID in
+            if case .bind = fixture.graph.nodes[nodeID].kind {
+                return true
+            }
+            return false
+        })
+        guard case let .bind(metadata) = fixture.graph.nodes[bindNodeID].kind else {
+            Issue.record("Expected a bind at the root")
+            return
+        }
+        let boundChildID = fixture.graph.nodes[bindNodeID].children[metadata.boundChildIndex]
+        let boundRange = try #require(fixture.graph.nodes[boundChildID].positionRange)
+        let lifted = LiftedBind(
+            sequence: fixture.sequence,
+            tree: shape.tree,
+            graph: fixture.graph,
+            bindNodeID: bindNodeID,
+            boundRange: boundRange,
+            isControllerTopology: false
+        )
+        #expect(BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: fixture.sequence) == false)
+        let controllerIndex = try #require(fixture.sequence.indices.first { fixture.sequence[$0].value != nil })
+        var incumbent = fixture.sequence
+        incumbent[controllerIndex] = .value(.init(choice: ChoiceValue(UInt64(0), tag: .uint64), validRange: 0 ... 10))
+        #expect(BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: incumbent) == shape.isFullyComposable)
+    }
 }

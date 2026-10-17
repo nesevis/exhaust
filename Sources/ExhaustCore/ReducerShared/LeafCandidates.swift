@@ -50,14 +50,19 @@ enum LeafCandidates {
             var offset: UInt64 = 1
             while values.count < targetCount {
                 let (higher, higherOverflowed) = current.addingReportingOverflow(offset)
-                if target < current, offset <= current - domain.lowerBound {
-                    values.append(current - offset)
+                let below = offset <= current - domain.lowerBound ? current - offset : nil
+                let above = higherOverflowed == false && domain.contains(higher) ? higher : nil
+                let (first, second) = switch target < current {
+                    case true:
+                        (below, above)
+                    case false:
+                        (above, below)
                 }
-                if higherOverflowed == false, domain.contains(higher) {
-                    values.append(higher)
+                if let first {
+                    values.append(first)
                 }
-                if target >= current, offset <= current - domain.lowerBound {
-                    values.append(current - offset)
+                if let second {
+                    values.append(second)
                 }
                 offset += 1
             }
