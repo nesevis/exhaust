@@ -299,18 +299,18 @@ enum SequenceDecoder {
         }
     }
 
-    /// Emits a `graph_decoder_rejected` debug event so the upstream probe-loop's `graph_probe_rejected` entry can be correlated with the decoder-side rejection reason via `probe_hash`.
+    /// Emits a `graph_decoder_rejected` debug event so the upstream probe-loop's `graph_probe_rejected` entry can be correlated with the decoder-side rejection reason via `probe_hash`. Builds `extra` only when the event is emitted, because callers describe whole outputs there.
     private func logDecoderRejection(
         reason: String,
         probeHash: UInt64?,
-        extra: [String: String] = [:]
+        extra: @autoclosure () -> [String: String] = [:]
     ) {
         guard ExhaustLog.isEnabled(.debug, for: .reducer) else { return }
         var metadata: [String: String] = ["reason": reason]
         if let probeHash {
             metadata["probe_hash"] = "\(probeHash)"
         }
-        for (key, value) in extra {
+        for (key, value) in extra() {
             metadata[key] = value
         }
         ExhaustLog.debug(
