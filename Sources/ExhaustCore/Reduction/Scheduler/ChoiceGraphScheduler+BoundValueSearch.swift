@@ -82,7 +82,7 @@ extension ChoiceGraphScheduler {
             chain: BoundValueChain(
                 gen: gen,
                 upstreamBudget: upstreamBudget,
-                rootSequenceCount: scope.baseSequence.count,
+                rootSequence: scope.baseSequence,
                 seenBindFingerprints: seenBindFingerprints,
                 buildTally: buildTally,
                 depth: 0,
@@ -143,7 +143,7 @@ extension ChoiceGraphScheduler {
                     generator: generator,
                     prefix: candidate,
                     fallbackTree: fallbackTree,
-                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
+                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequence.count
                 ) else {
                     let proposed = controllerBitPattern(in: candidate, at: controllerSequenceIndex)
                     Self.logReducer("bound_value_lift_failed", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
@@ -328,6 +328,12 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         chain: BoundValueChain
     ) -> DownstreamBuild {
+        // Keep terminal rejections in the probe budget when nested controllers remain fixed; pruning them can spend more lifts before the dispatch cap is reached.
+        if lifted.graph.canComposeAllNestedBinds(under: lifted.bindNodeID),
+           BoundValueTerminalOrder.canImprove(lifted.sequence, fixedBefore: lifted.boundRange.lowerBound, incumbent: chain.rootSequence) == false
+        {
+            return .failed(.nonImprovingPrefix)
+        }
         let liftedGraph = lifted.terminalGraph()
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }

@@ -9,8 +9,8 @@
 struct BoundValueChain {
     let gen: AnyGenerator
     let upstreamBudget: Int
-    /// The live sequence's length at dispatch. Terminal searches reject lifts longer than this; intermediate lifts may exceed it while a deeper controller compensates.
-    let rootSequenceCount: Int
+    /// The dispatch incumbent bounds terminal length and fixed-prefix comparisons. Intermediate lifts may grow while a deeper controller compensates.
+    let rootSequence: ChoiceSequence
     /// Fingerprints of the binds already composed on the path from the root. A repeat marks recursive generator expansion.
     let seenBindFingerprints: Set<UInt64>
     /// Shared by every stage of every composition the machine builds in one run.
@@ -27,7 +27,7 @@ struct BoundValueChain {
         return BoundValueChain(
             gen: gen,
             upstreamBudget: upstreamBudget,
-            rootSequenceCount: rootSequenceCount,
+            rootSequence: rootSequence,
             seenBindFingerprints: fingerprints,
             buildTally: buildTally,
             depth: depth + 1,
@@ -37,7 +37,7 @@ struct BoundValueChain {
 
     /// Whether a terminal search may run on a lift of this length. Only terminal searches are gated, so an intermediate lift can grow while a deeper controller compensates.
     func admitsTerminalSearch(liftedSequenceCount: Int) -> Bool {
-        liftedSequenceCount <= rootSequenceCount
+        liftedSequenceCount <= rootSequence.count
     }
 }
 
@@ -68,6 +68,8 @@ final class BoundValueBuildTally {
                 .bindNotFound
             case .failed(.noDownstreamLeaves):
                 .noDownstreamLeaves
+            case .failed(.nonImprovingPrefix):
+                .nonImprovingPrefix
             case .failed(.sinkValueMismatch):
                 .sinkValueMismatch
         }

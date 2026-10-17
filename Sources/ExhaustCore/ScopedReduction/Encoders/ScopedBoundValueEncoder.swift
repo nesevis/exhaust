@@ -39,7 +39,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             stage: chainLength > 1 ? .chainRoot : .single,
             chain: Chain(
                 upstreamBudget: budget.upstreamBudget,
-                rootSequenceCount: input.baseSequence.count,
+                rootSequence: input.baseSequence,
                 seenBindFingerprints: seenBindFingerprints,
                 depth: 0,
                 buildPoolCapacity: input.tuning.nestedChainBuildPool(chainLength: chainLength)
@@ -52,7 +52,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
     /// Values every level of one chain shares. The generator, build tally, and build pool belong to the decoder and interpreter, so the encoder's reducer captures none of them.
     private struct Chain {
         let upstreamBudget: Int
-        let rootSequenceCount: Int
+        let rootSequence: ChoiceSequence
         let seenBindFingerprints: Set<UInt64>
         let depth: Int
         let buildPoolCapacity: Int
@@ -62,7 +62,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             fingerprints.insert(fingerprint)
             return Chain(
                 upstreamBudget: upstreamBudget,
-                rootSequenceCount: rootSequenceCount,
+                rootSequence: rootSequence,
                 seenBindFingerprints: fingerprints,
                 depth: depth + 1,
                 buildPoolCapacity: buildPoolCapacity
@@ -106,7 +106,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
                 return .lift(
                     proposal.prefix,
                     fallbackTree: scope.tree,
-                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
+                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequence.count
                 ) { lifted in
                     guard let lifted else {
                         return .fail(.materializationFailed)
@@ -146,7 +146,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             parent: scope,
             bindNodeID: bindNodeID,
             stage: stage,
-            rootSequenceCount: chain.rootSequenceCount,
+            rootSequenceCount: chain.rootSequence.count,
             controllerTopologyOnly: stage.canRecurseIntoNestedBind
         ) {
             case let .lifted(located):
@@ -189,7 +189,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             lifted: liftedBind,
             upstreamProposedBitPattern: upstreamProposedBitPattern,
             parent: scope,
-            rootSequenceCount: chain.rootSequenceCount,
+            rootSequence: chain.rootSequence,
             reportedMutation: reportedMutation
         )
     }
@@ -199,9 +199,15 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         lifted: LiftedBind,
         upstreamProposedBitPattern: UInt64?,
         parent: ScopedEncoderInput,
-        rootSequenceCount: Int,
+        rootSequence: ChoiceSequence,
         reportedMutation: EncoderProbe
     ) -> ScopedReducer {
+        // Keep terminal rejections in the probe budget when nested controllers remain fixed; pruning them can spend more lifts before the dispatch cap is reached.
+        if lifted.graph.canComposeAllNestedBinds(under: lifted.bindNodeID),
+           BoundValueTerminalOrder.canImprove(lifted.sequence, fixedBefore: lifted.boundRange.lowerBound, incumbent: rootSequence) == false
+        {
+            return .fail(.nonImprovingPrefix)
+        }
         let liftedGraph = lifted.terminalGraph()
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else {
@@ -213,7 +219,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             return lifted.boundRange.contains(range.lowerBound)
         }
 
-        guard admitsTerminalSearch(liftedSequenceCount: lifted.sequence.count, rootSequenceCount: rootSequenceCount) else {
+        guard admitsTerminalSearch(liftedSequenceCount: lifted.sequence.count, rootSequenceCount: rootSequence.count) else {
             return .fail(.liftedTooLong)
         }
         // Nested bind inners stay fixed when the bound subtree is not a single chain. Changing one without recursively rebuilding its descendants produces an exact candidate with stale structure.
