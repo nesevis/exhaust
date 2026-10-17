@@ -13,7 +13,7 @@ package enum BoundValueStage: String, Hashable, Sendable {
     case chainRoot
     /// A nested bind with a further composable nested bind beneath it. Its current value stays a candidate so deeper controllers can move while it holds.
     case chainInterior
-    /// The deepest composable nested bind. Every lift ends in a terminal search.
+    /// The deepest composable nested bind. Its current controller remains eligible while ancestors change; every lift ends in a terminal search.
     case chainTail
 
     /// Whether the controller is enumerated across its domain rather than binary searched toward its target.
@@ -28,9 +28,9 @@ package enum BoundValueStage: String, Hashable, Sendable {
 
     var includesCurrentController: Bool {
         switch self {
-            case .chainInterior:
+            case .chainInterior, .chainTail:
                 true
-            case .single, .chainRoot, .chainTail:
+            case .single, .chainRoot:
                 false
         }
     }
