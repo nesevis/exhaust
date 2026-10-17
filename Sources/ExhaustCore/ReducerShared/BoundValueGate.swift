@@ -9,11 +9,10 @@
 ///
 /// Keyed by ``BindMetadata/fingerprint`` (stable across graph rebuilds) so that fruitless verdicts and stall budgets survive structural rebuilds without re-probing bind sites that have already been determined unproductive.
 ///
-/// Three skip rules:
+/// Two skip rules:
 ///
 /// 1. **Per-cycle dedup**: after the first dispatch for a given bind within a cycle, subsequent dispatches are skipped.
-/// 2. **Acceptance deferral**: bound value dispatches are skipped when any encoder has already accepted a probe this cycle.
-/// 3. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds until ``clearFruitless()`` or ``invalidateSearchHistory()``.
+/// 2. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds until ``clearFruitless()`` or ``invalidateSearchHistory()``.
 struct BoundValueGate {
     enum Decision {
         /// Proceeds with bound-value search for this scope.
@@ -38,15 +37,9 @@ struct BoundValueGate {
         dispatchedThisCycle.removeAll(keepingCapacity: true)
     }
 
-    /// Evaluates the three skip rules (per-cycle dedup, acceptance deferral, fruitless tracking) and returns a dispatch decision for the given bind fingerprint.
-    func shouldDispatch(
-        fingerprint: UInt64,
-        anyAcceptedThisCycle: Bool
-    ) -> Decision {
+    /// Skips repeated dispatches and unchanged fruitless searches. The runner decides which compositions may follow earlier acceptances and invalidates stale search history after accepted value changes.
+    func shouldDispatch(fingerprint: UInt64) -> Decision {
         if dispatchedThisCycle.contains(fingerprint) {
-            return .skip
-        }
-        if anyAcceptedThisCycle {
             return .skip
         }
         if fruitless.contains(fingerprint) {

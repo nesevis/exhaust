@@ -150,10 +150,14 @@ enum ChoiceGraphScheduler {
             }
             let fingerprint = bindMetadata.fingerprint
 
-            switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
+            switch gate.shouldDispatch(fingerprint: fingerprint) {
                 case .skip:
                     return .skip
                 case .classifyFirst:
+                    // Incomplete compositions wait for ordinary reduction to stall.
+                    if anyAccepted, graph.canComposeAllNestedBinds(under: bindScope.bindNodeID) == false {
+                        return .skip
+                    }
                     if let cached = graph.bindClassifications[fingerprint] {
                         if cached.topology != .identical || cached.liftability != .both {
                             return .skip

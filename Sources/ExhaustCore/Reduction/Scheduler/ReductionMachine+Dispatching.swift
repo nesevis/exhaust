@@ -150,6 +150,10 @@ extension ReductionMachine {
 
         switch acceptanceAction {
             case .continueDispatching:
+                if report.anyAccepted {
+                    // Value changes can make an earlier joint search productive.
+                    convergence.gate.invalidateSearchHistory()
+                }
                 if report.anyAccepted == false {
                     scopeRejectionCache.recordRejection(
                         operation: report.transformation.operation,

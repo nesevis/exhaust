@@ -205,10 +205,14 @@ extension ScopedReductionRunner {
                 }
                 let fingerprint = bindMetadata.fingerprint
 
-                switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
+                switch gate.shouldDispatch(fingerprint: fingerprint) {
                     case .skip:
                         return .skip
                     case .classifyFirst:
+                        // Incomplete compositions wait for ordinary reduction to stall.
+                        if anyAccepted, graph.canComposeAllNestedBinds(under: bindNodeID) == false {
+                            return .skip
+                        }
                         guard let cached = graph.bindClassifications[fingerprint] else {
                             return .classifyBind(bindNodeID: bindNodeID, upstreamLeafNodeID: upstreamLeafNodeID, fingerprint: fingerprint)
                         }
@@ -404,6 +408,10 @@ extension ScopedReductionRunner {
 
         switch action {
             case .continueDispatching:
+                if report.anyAccepted {
+                    // Value changes can make an earlier joint search productive.
+                    gate.invalidateSearchHistory()
+                }
                 if report.anyAccepted == false {
                     scopeRejectionCache.recordRejection(pass.encoderScope, sequence: incumbent.sequence, graph: graph)
                 }

@@ -1,4 +1,34 @@
 extension ChoiceGraph {
+    /// Returns whether one composition can include every nested numeric controller. Branching dependencies and repeated sites leave controllers fixed in the terminal search.
+    func canComposeAllNestedBinds(under bindNodeID: Int) -> Bool {
+        guard nodes.indices.contains(bindNodeID),
+              case let .bind(metadata) = nodes[bindNodeID].kind
+        else {
+            return false
+        }
+        if metadata.isStructurallyConstant {
+            return true
+        }
+        var fingerprints: Set<UInt64> = [metadata.fingerprint]
+        var current = bindNodeID
+        while true {
+            let nested = directNestedBindNodeIDs(under: current)
+            if nested.isEmpty {
+                return true
+            }
+            guard nested.count == 1,
+                  case let .bind(child) = nodes[nested[0]].kind,
+                  fingerprints.insert(child.fingerprint).inserted
+            else {
+                return false
+            }
+            if child.isStructurallyConstant {
+                return true
+            }
+            current = nested[0]
+        }
+    }
+
     /// Finds an active bind by both site and path, preserving live-node traversal order when several expansions share a fingerprint.
     func bindNodeID(fingerprint: UInt64, path: ChoicePath) -> Int? {
         liveNodeIDs.first { nodeID in
