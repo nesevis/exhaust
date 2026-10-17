@@ -19,30 +19,34 @@ func rejectedLeafProposals(scope: EncoderInput) -> LiftProposalSource? {
     ).map(LiftProposalSource.leaf)
 }
 
-/// Keeps lifted-operation trace fixtures on the same domain proposal order.
-func domainLeafProposals(scope: EncoderInput) -> LiftProposalSource? {
+/// Pins trace fixtures to known proposals so admission, cache, and interruption checks stay independent of the controller candidate heuristic.
+func traceLeafProposals(scope: EncoderInput) -> LiftProposalSource? {
     guard let leafNodeID = scope.graph.leafNodes.first,
           case let .chooseBits(metadata) = scope.graph.nodes[leafNodeID].kind
     else {
         return nil
     }
+    let candidates: [UInt64]
+    switch metadata.value.bitPattern64 {
+        case 1:
+            candidates = [2, 0, 3]
+        case 2:
+            candidates = [3, 1, 0]
+        default:
+            return nil
+    }
     return LeafProposalCursor(
         scope: scope,
         leafNodeID: leafNodeID,
-        candidates: LeafCandidates.candidates(
-            in: metadata.validRange ?? metadata.typeTag.bitPatternRange,
-            current: metadata.value.bitPattern64,
-            target: metadata.value.reductionTarget(in: metadata.validRange),
-            includesCurrent: false
-        )
+        candidates: candidates
     ).map(LiftProposalSource.leaf)
 }
 
 /// Emits domain proposals through the live composition and one-shot stage, using matching lifted trees and sequences.
-func domainFixtureEncoder() -> GraphComposedEncoder {
+func traceFixtureEncoder() -> GraphComposedEncoder {
     GraphComposedEncoder(
         name: .composed,
-        makeProposals: domainLeafProposals,
+        makeProposals: traceLeafProposals,
         policy: CompositionPolicy(acceptanceHandling: .applyMutation),
         lift: liftLeafProposal,
         downstreamFactory: { proposal, lifted, parent in

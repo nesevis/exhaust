@@ -47,6 +47,29 @@ struct LeafCandidatesTests {
         }
     }
 
+    @Test("The first neighbour reduces signed magnitude in either direction", arguments: [Int64(-5), 5])
+    func signedNeighbourMovesTowardTarget(value: Int64) throws {
+        let bounds: ClosedRange<Int64> = switch value < 0 {
+            case true:
+                -9 ... -1
+            case false:
+                1 ... 9
+        }
+        let lowerBound = ChoiceValue(bounds.lowerBound, tag: .int64).bitPattern64
+        let upperBound = ChoiceValue(bounds.upperBound, tag: .int64).bitPattern64
+        let domain = lowerBound ... upperBound
+        let current = ChoiceValue(value, tag: .int64)
+        let candidates = LeafCandidates.candidates(
+            in: domain,
+            current: current.bitPattern64,
+            target: current.reductionTarget(in: domain),
+            includesCurrent: false
+        )
+        let first = try #require(candidates.first)
+        let proposed = ChoiceValue(TypeTag.int64.makeConvertible(bitPattern64: first), tag: .int64)
+        #expect(proposed.shortlexKey < current.shortlexKey)
+    }
+
     @Test("Large domains try the target and the current value's neighbours first")
     func largeDomainsLeadWithTargetAndNeighbours() throws {
         try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in

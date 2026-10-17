@@ -7,7 +7,7 @@
 
 /// Selects values on both sides of an integer controller so nested compositions can compensate between bind controllers.
 ///
-/// Small domains are exhaustive, ordered by increasing distance from the current value. Large domains cover the reduction target, the current value's neighbours, and alternating range ends, bounded by ``candidateBudget``. Unlike a rejected binary-search ladder, domain enumeration can increase a controller while a later nested controller decreases enough to make the complete candidate shortlex-smaller.
+/// Small domains are exhaustive, ordered by increasing distance from the current value, preferring the direction toward the reduction target when distances tie. Large domains cover the reduction target, the current value's neighbours, and alternating range ends, bounded by ``candidateBudget``. Unlike a rejected binary-search ladder, domain enumeration can increase a controller while a later nested controller decreases enough to make the complete candidate shortlex-smaller.
 enum LeafCandidates {
     static let exhaustiveThreshold: UInt64 = 32
     static let candidateBudget = 64
@@ -50,10 +50,13 @@ enum LeafCandidates {
             var offset: UInt64 = 1
             while values.count < targetCount {
                 let (higher, higherOverflowed) = current.addingReportingOverflow(offset)
+                if target < current, offset <= current - domain.lowerBound {
+                    values.append(current - offset)
+                }
                 if higherOverflowed == false, domain.contains(higher) {
                     values.append(higher)
                 }
-                if offset <= current - domain.lowerBound {
+                if target >= current, offset <= current - domain.lowerBound {
                     values.append(current - offset)
                 }
                 offset += 1
