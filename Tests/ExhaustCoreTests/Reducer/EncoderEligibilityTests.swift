@@ -77,7 +77,6 @@ struct EncoderEligibilityTests {
         markConverged(&machine.graph)
         machine.graphIsStripped = true
         machine.hadUnresolvedReplacement = true
-        machine.convergence.deferBindInner = false
         machine.convergence.stallBudget = 1
         machine.phase = .endCycle
         let rebuilds = machine.stats.graphStats.fullGraphRebuilds

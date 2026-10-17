@@ -431,7 +431,7 @@ extension ScopedReductionRunner {
 
         if diff.canReuseStructuralSources {
             sources = sources.filter { $0.isValueDependent == false }
-                + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
+                + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
@@ -439,7 +439,7 @@ extension ScopedReductionRunner {
             scopeRejectionCache.clear()
             sources = sources.filter(\.canReuseAfterLeafKindChange)
                 + ScopedSource.preparePermutationSources(from: graph)
-                + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
+                + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
@@ -467,10 +467,10 @@ extension ScopedReductionRunner {
         sources = deadline.isExpired ? [] : prepareExploitationSources()
     }
 
-    /// Every family over the current graph, with no bind-inner deferral.
+    /// Every family over the current graph.
     func prepareExploitationSources() -> [ScopedSource] {
         ScopedSource.prepareStructuralSources(from: graph)
-            + ScopedSource.prepareValueSources(from: graph, deferBindInner: false, tuning: tuning)
+            + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
     }
 
     /// At the deadline, an accepted pass that needs a rebuild rebuilds only the graph, for the final reorder and stall diagnostics.

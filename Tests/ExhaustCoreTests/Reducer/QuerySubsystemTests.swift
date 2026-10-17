@@ -43,28 +43,22 @@ struct MinimizationQueryTests {
         #expect(floatScopes.count == 1)
     }
 
-    @Test("deferBindInner excludes bind-inner leaves")
-    func deferBindInnerExclusion() {
+    @Test("Includes controller and payload leaves immediately")
+    func includesBindInnerLeaves() {
         let tree = ChoiceTree.bind(
             fingerprint: 0,
             inner: .uint64(10, in: 0 ... 100),
             bound: .uint64(20, in: 0 ... 100)
         )
         let graph = GraphFixture(tree).graph
-
-        let withDefer = MinimizationQuery.build(graph: graph, deferBindInner: true)
-        let withoutDefer = MinimizationQuery.build(graph: graph, deferBindInner: false)
-
-        let deferredLeafCount = withDefer.compactMap { scope -> Int? in
-            if case let .valueLeaves(innerScope) = scope { return innerScope.leaves.count }
-            return nil
-        }.reduce(0, +)
-        let fullLeafCount = withoutDefer.compactMap { scope -> Int? in
-            if case let .valueLeaves(innerScope) = scope { return innerScope.leaves.count }
-            return nil
-        }.reduce(0, +)
-
-        #expect(deferredLeafCount < fullLeafCount)
+        let leaves = MinimizationQuery.build(graph: graph).flatMap { scope -> [LeafEntry] in
+            guard case let .valueLeaves(values) = scope else {
+                return []
+            }
+            return values.leaves
+        }
+        #expect(leaves.count == 2)
+        #expect(leaves.filter(\.mayReshapeOnAcceptance).count == 1)
     }
 
     @Test("batchZeroEligible is true when multiple leaves exist")

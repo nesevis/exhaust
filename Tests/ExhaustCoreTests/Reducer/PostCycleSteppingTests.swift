@@ -35,13 +35,12 @@ struct PostCycleSteppingTests {
                 cycle: 0
             )
         }
-        machine.convergence.deferBindInner = false
         machine.rejectCache = [0xFEED]
         switch encoder {
             case .relationSearch:
-                machine.phase = .postCycle(remaining: [.relationPass, .releaseDeferral])
+                machine.phase = .postCycle(remaining: [.relationPass, .confirmConvergence])
             case .stagedJointSearch:
-                machine.phase = .postCycle(remaining: [.stagedJointPass, .releaseDeferral])
+                machine.phase = .postCycle(remaining: [.stagedJointPass, .confirmConvergence])
             default:
                 machine.phase = .reorderPass
         }
@@ -119,7 +118,7 @@ struct PostCycleSteppingTests {
         #expect(ownedTime == UInt64(steps) * 7)
         #expect(timings.relationPass + timings.stagedJointPass + timings.reorder == ownedTime)
         if encoder != .numericReorder {
-            guard case .postCycle(remaining: [.releaseDeferral]) = machine.phase else {
+            guard case .postCycle(remaining: [.confirmConvergence]) = machine.phase else {
                 Issue.record("The next action must wait until the session has finished")
                 return
             }

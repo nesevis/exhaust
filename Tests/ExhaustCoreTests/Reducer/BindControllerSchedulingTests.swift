@@ -7,7 +7,7 @@ struct BindControllerSchedulingTests {
     @Test("Controllers are eligible before the first payload sweep", arguments: [8, 2048])
     func controllersBeforePayload(count: Int) throws {
         let graph = GraphFixture(Self.boundTree(count: count)).graph
-        let candidates = CandidateSourceBuilder.buildMinimizationCandidates(graph: graph, deferBindInner: false)
+        let candidates = CandidateSourceBuilder.buildMinimizationCandidates(graph: graph)
         let first = try #require(candidates.first)
         guard case let .minimize(.valueLeaves(scope)) = first.operation else {
             Issue.record("Expected ordinary controller search first")

@@ -7,15 +7,15 @@
 
 /// Static scope builder for minimization operations.
 enum MinimizationQuery {
-    /// Groups payload work by its nearest controlling bind while preserving bind-inner deferral.
-    static func build(graph: ChoiceGraph, deferBindInner: Bool = false) -> [MinimizationScope] {
+    /// Computes value scopes per downstream bind region and controller scopes along reduction edges.
+    ///
+    /// Reads ``ScopeAnnotation`` for bind-inner classification and depth ordering. Controllers are eligible immediately; independent payloads remain grouped by their controlling bind.
+    static func build(graph: ChoiceGraph) -> [MinimizationScope] {
         let leaves = partitionLeaves(graph: graph)
         let regions = BindPayloadRegions(graph: graph)
         let integerGroups = regions.group(leaves.independentIntegers)
         let floatGroups = regions.group(leaves.independentFloats)
-        let deferred = deferBindInner
-            ? DeferredScopes()
-            : deferredScopes(from: leaves, graph: graph, stopAtFirst: false)
+        let dependent = bindDependentScopes(from: leaves, graph: graph)
 
         var scopes = integerGroups.map { entries in
             MinimizationScope.valueLeaves(ValueMinimizationScope(
@@ -23,16 +23,11 @@ enum MinimizationQuery {
                 batchZeroEligible: entries.count > 1
             ))
         }
-        scopes += deferred.integerScopes
+        scopes += dependent.integerScopes
         scopes += floatGroups.map { .floatLeaves(FloatMinimizationScope(leaves: $0)) }
-        scopes += deferred.floatScopes
-        scopes += deferred.bindScopes
+        scopes += dependent.floatScopes
+        scopes += dependent.bindScopes
         return scopes
-    }
-
-    /// The scopes that releasing the bind-inner deferral adds: bind-inner integer leaves grouped by controlling bind depth, bind-inner float leaves, and per bind an ungated bind pivot for every alternative branch of every active pick in its inner subtree plus, for a `chooseBits` inner, a bound value scope. With `stopAtFirst` the walk returns at the first scope found, which is how the machine asks whether the release deserves a cycle.
-    static func deferredScopes(graph: ChoiceGraph, stopAtFirst: Bool) -> [MinimizationScope] {
-        deferredScopes(from: partitionLeaves(graph: graph), graph: graph, stopAtFirst: stopAtFirst).all
     }
 
     // MARK: - Private Helpers
@@ -108,23 +103,19 @@ enum MinimizationQuery {
         return partition
     }
 
-    /// The deferred scopes by kind, so ``build(graph:deferBindInner:)`` can place each kind after the independent scope of the same kind.
-    private struct DeferredScopes {
+    /// Bind-dependent scopes by kind, placed after the independent scopes of the same kind.
+    private struct BindDependentScopes {
         var integerScopes: [MinimizationScope] = []
         var floatScopes: [MinimizationScope] = []
         var bindScopes: [MinimizationScope] = []
-
-        var all: [MinimizationScope] {
-            integerScopes + floatScopes + bindScopes
-        }
     }
 
-    private static func deferredScopes(
+    /// Keeps controller depths separate so accepting a reshape cannot leave later leaves addressing stale positions.
+    private static func bindDependentScopes(
         from leaves: LeafPartition,
-        graph: ChoiceGraph,
-        stopAtFirst: Bool
-    ) -> DeferredScopes {
-        var scopes = DeferredScopes()
+        graph: ChoiceGraph
+    ) -> BindDependentScopes {
+        var scopes = BindDependentScopes()
 
         if leaves.bindInnerIntegers.isEmpty == false {
             let grouped = Dictionary(grouping: leaves.bindInnerIntegers) { $0.bindDepth ?? 0 }
@@ -135,17 +126,11 @@ enum MinimizationQuery {
                     leaves: depthEntries,
                     batchZeroEligible: depthEntries.count > 1
                 )))
-                if stopAtFirst {
-                    return scopes
-                }
             }
         }
 
         if leaves.bindInnerFloats.isEmpty == false {
             scopes.floatScopes.append(.floatLeaves(FloatMinimizationScope(leaves: leaves.bindInnerFloats)))
-            if stopAtFirst {
-                return scopes
-            }
         }
 
         // Bound value and bind pivot: one scope per bind node with an active inner child, and one bind pivot per alternative branch of every pick in the inner subtree, ungated.
@@ -182,9 +167,6 @@ enum MinimizationQuery {
                             boundSubtreeSize: boundSubtreeSize,
                             estimatedProbes: estimatedProbes
                         )))
-                        if stopAtFirst {
-                            return scopes
-                        }
                     }
                 }
             }
@@ -203,9 +185,6 @@ enum MinimizationQuery {
                 downstreamNodeIDs: downstreamNodeIDs,
                 boundSubtreeSize: boundSubtreeSize
             )))
-            if stopAtFirst {
-                return scopes
-            }
         }
 
         return scopes

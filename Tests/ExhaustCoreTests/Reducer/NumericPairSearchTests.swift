@@ -162,7 +162,6 @@ struct NumericPairSearchTests {
             collectStats: true,
             property: { $0 != start }
         )
-        machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
         #expect(try machine.runStagedJointSearch() == false)
@@ -190,7 +189,6 @@ struct NumericPairSearchTests {
                 return true
             }
         )
-        machine.convergence.deferBindInner = false
         try Self.markConverged(#require(machine.graph.leafNodes.first), in: &machine.graph)
         let pairs = try #require(machine.pendingStagedNumericPairs())
         var cursor = StagedPairSearchCursor(pairs: pairs)
@@ -218,7 +216,6 @@ struct NumericPairSearchTests {
             collectStats: true,
             property: { $0.0 * 4 + $0.1 != 8 * scale }
         )
-        machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
         let accepted = machine.runStagedJointSearch()
@@ -242,7 +239,6 @@ struct NumericPairSearchTests {
             collectStats: true,
             property: { Int($0.0) * -3 + Int($0.1) != 9 }
         )
-        machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
         let accepted = machine.runStagedJointSearch()
@@ -267,7 +263,6 @@ struct NumericPairSearchTests {
             collectStats: true,
             property: { $0.0 * 2 + $0.1 != 10 }
         )
-        machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         let bindID = try #require(machine.graph.nodes[source].scopeAnnotation.controllingBindNodeID)
         guard case let .bind(metadata) = machine.graph.nodes[bindID].kind else {
@@ -317,7 +312,6 @@ struct NumericPairSearchTests {
                 return candidate != start
             }
         )
-        machine.convergence.deferBindInner = false
         let source = try #require(machine.graph.leafNodes.first)
         Self.markConverged(source, in: &machine.graph)
         #expect(try machine.runStagedJointSearch() == false)

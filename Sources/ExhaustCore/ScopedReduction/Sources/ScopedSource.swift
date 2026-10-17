@@ -50,7 +50,6 @@ struct ScopedStagedJointSource {
     private struct Discovery {
         let graph: ChoiceGraph
         let sequence: ChoiceSequence
-        let deferBindInner: Bool
         let isFruitlessBind: (UInt64) -> Bool
         let exhausted: Checkpoint?
         let tuning: ScopedReductionTuning
@@ -70,7 +69,6 @@ struct ScopedStagedJointSource {
     init(
         graph: ChoiceGraph,
         sequence: ChoiceSequence,
-        deferBindInner: Bool,
         isFruitlessBind: @escaping (UInt64) -> Bool,
         exhausted: Checkpoint?,
         tuning: ScopedReductionTuning
@@ -78,7 +76,6 @@ struct ScopedStagedJointSource {
         state = .pending(Discovery(
             graph: graph,
             sequence: sequence,
-            deferBindInner: deferBindInner,
             isFruitlessBind: isFruitlessBind,
             exhausted: exhausted,
             tuning: tuning
@@ -113,7 +110,7 @@ struct ScopedStagedJointSource {
     /// Offers the checkpoint when pairs exist and it differs from the exhausted one. Priced with no benefit and the first stage's budget as cost.
     private static func discover(_ discovery: Discovery) -> PricedEncoderScope? {
         let tuning = discovery.tuning
-        guard tuning.stagedJointProbeBudget > 0, discovery.deferBindInner == false else {
+        guard tuning.stagedJointProbeBudget > 0 else {
             return nil
         }
         let pairs = ScopedStagedJointQuery.pairs(
@@ -335,7 +332,6 @@ extension ScopedSource {
     /// Prepares the value-dependent families in the order lane collapse, depth collapse, minimization, exchange, omitting empty ones. The order matters only on priority ties, which go to the earlier source.
     static func prepareValueSources(
         from graph: ChoiceGraph,
-        deferBindInner: Bool,
         tuning: ScopedReductionTuning
     ) -> [ScopedSource] {
         var sources: [ScopedSource] = []
@@ -349,7 +345,7 @@ extension ScopedSource {
             sources.append(.depthCollapse(ScopedSortedSource(depthCollapse)))
         }
 
-        let minimization = minimizationEncoderScopes(graph: graph, deferBindInner: deferBindInner, tuning: tuning)
+        let minimization = minimizationEncoderScopes(graph: graph, tuning: tuning)
         if minimization.isEmpty == false {
             sources.append(.minimization(ScopedSortedSource(minimization)))
         }
@@ -370,7 +366,6 @@ extension ScopedSource {
     static func prepareStagedJointSource(
         from graph: ChoiceGraph,
         sequence: ChoiceSequence,
-        deferBindInner: Bool,
         isFruitlessBind: @escaping (UInt64) -> Bool,
         exhausted: ScopedStagedJointSource.Checkpoint?,
         tuning: ScopedReductionTuning
@@ -378,7 +373,6 @@ extension ScopedSource {
         .stagedJoint(ScopedStagedJointSource(
             graph: graph,
             sequence: sequence,
-            deferBindInner: deferBindInner,
             isFruitlessBind: isFruitlessBind,
             exhausted: exhausted,
             tuning: tuning
@@ -454,13 +448,12 @@ extension ScopedSource {
     /// Prices minimization scopes by the bound subtree they could unlock, with the expected probe count as cost. A value leaf unlocks the subtree of the bind it controls, if any. A bound value scope's cost scales with ``ScopedReductionTuning/boundValueBaseBudget``, its upstream budget.
     private static func minimizationEncoderScopes(
         graph: ChoiceGraph,
-        deferBindInner: Bool,
         tuning: ScopedReductionTuning
     ) -> [PricedEncoderScope] {
         var results: [PricedEncoderScope] = []
 
         // TODO: Document or derive the per-leaf and per-downstream probe estimates (16, 15, 64, 8).
-        for scope in MinimizationQuery.build(graph: graph, deferBindInner: deferBindInner) {
+        for scope in MinimizationQuery.build(graph: graph) {
             let encoderScope: AnyEncoderScope
             let valueYield: Int
             let estimatedCost: Int

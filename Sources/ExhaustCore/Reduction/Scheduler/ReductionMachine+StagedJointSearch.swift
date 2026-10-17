@@ -7,8 +7,7 @@ extension ReductionMachine {
     /// Reuses one frontier snapshot for cache validation and execution, and avoids frontier preparation when there are no stalled pair sources.
     private func pendingStagedNumericSearchScope() -> (pairs: [NumericPairQuery.Pair], frontier: [NumericJointQuery.Entry])? {
         guard tuning.stagedJointProbeBudget > 0,
-              isEncoderEnabled(.stagedJointSearch),
-              convergence.deferBindInner == false
+              isEncoderEnabled(.stagedJointSearch)
         else {
             return nil
         }

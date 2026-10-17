@@ -197,7 +197,7 @@ struct ConstantArmReencoderTests {
         var graph = ChoiceGraph.build(from: result.tree)
         graph.excludedPivots = result.excludedPivots
 
-        let bindPivots = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: false).compactMap { scope -> BindPivotScope? in
+        let bindPivots = MinimizationQuery.build(graph: graph).compactMap { scope -> BindPivotScope? in
             guard case let .bindPivot(pivotScope) = scope else {
                 return nil
             }

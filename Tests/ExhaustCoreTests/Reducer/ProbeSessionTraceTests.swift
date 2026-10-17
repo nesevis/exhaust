@@ -468,7 +468,7 @@ private func pivotFixture() throws -> PivotFixture {
         throw PivotFixtureError.materializationFailed
     }
     let graph = ChoiceGraph.build(from: tree)
-    let pivots = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: false)
+    let pivots = MinimizationQuery.build(graph: graph)
     let pivot = try #require(pivots.compactMap { operation -> BindPivotScope? in
         guard case let .bindPivot(pivot) = operation else {
             return nil

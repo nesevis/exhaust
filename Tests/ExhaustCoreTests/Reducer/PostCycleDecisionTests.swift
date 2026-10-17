@@ -119,45 +119,13 @@ struct PostCycleDecisionTests {
         #expect(result.newStallBudget == 2)
     }
 
-    // MARK: - Deferral Release
-
-    @Test("Deferral released when no structural improvement")
-    func deferralReleasedWhenNoStructuralImprovement() {
-        let result = Self.evaluate(
-            structurallyImproved: false,
-            deferBindInner: true
-        )
-        #expect(result.newDeferBindInner == false)
-        #expect(result.actions.contains(.releaseDeferral))
-    }
-
-    @Test("Deferral persists when structurally improved")
-    func deferralPersistsWhenStructurallyImproved() {
-        let result = Self.evaluate(
-            structurallyImproved: true,
-            deferBindInner: true
-        )
-        #expect(result.newDeferBindInner)
-        #expect(result.actions.contains(.releaseDeferral) == false)
-    }
-
-    @Test("No deferral action when deferral already false")
-    func noDeferralActionWhenAlreadyFalse() {
-        let result = Self.evaluate(
-            structurallyImproved: false,
-            deferBindInner: false
-        )
-        #expect(result.actions.contains(.releaseDeferral) == false)
-    }
-
     // MARK: - Combined Scenarios
 
     @Test("Full convergence stall: confirmation only, no excursion")
     func fullConvergenceStall() {
         let result = Self.evaluate(
             anyAccepted: false,
-            allConverged: true,
-            structurallyImproved: false
+            allConverged: true
         )
         #expect(result.actions.contains(.confirmConvergence))
         #expect(result.actions.contains(.excursion) == false)
@@ -168,8 +136,7 @@ struct PostCycleDecisionTests {
         let result = Self.evaluate(
             anyAccepted: false,
             hadUnresolvedReplacement: true,
-            allConverged: true,
-            structurallyImproved: false
+            allConverged: true
         )
         #expect(result.actions.contains(.confirmConvergence))
         #expect(result.actions.contains(.excursion))
@@ -179,8 +146,7 @@ struct PostCycleDecisionTests {
     func productiveCycle() {
         let result = Self.evaluate(
             anyAccepted: true,
-            improved: true,
-            structurallyImproved: true
+            improved: true
         )
         #expect(result.actions.isEmpty)
         #expect(result.newStallBudget == Self.maxStalls)
@@ -190,8 +156,7 @@ struct PostCycleDecisionTests {
     func noTerminationAction() {
         let result = Self.evaluate(
             anyAccepted: false,
-            allConverged: true,
-            structurallyImproved: false
+            allConverged: true
         )
         let actionDescriptions = result.actions.map { "\($0)" }
         for description in actionDescriptions {
@@ -208,12 +173,10 @@ struct PostCycleDecisionTests {
                 hasUnprobedImprovingPivot: false,
                 allConverged: true,
                 improved: false,
-                structurallyImproved: false,
                 shouldAttemptStagedJoint: true
             ),
             stallBudget: 4,
-            maxStalls: 4,
-            deferBindInner: false
+            maxStalls: 4
         )
         #expect(evaluation.actions == [.confirmConvergence, .relationPass, .stagedJointPass, .excursion])
         let numericOnly = ChoiceGraphScheduler.evaluatePostCycle(
@@ -223,12 +186,10 @@ struct PostCycleDecisionTests {
                 hasUnprobedImprovingPivot: false,
                 allConverged: false,
                 improved: false,
-                structurallyImproved: false,
                 shouldAttemptStagedJoint: true
             ),
             stallBudget: 4,
-            maxStalls: 4,
-            deferBindInner: false
+            maxStalls: 4
         )
         #expect(numericOnly.actions == [.stagedJointPass])
     }
@@ -243,9 +204,7 @@ struct PostCycleDecisionTests {
         hasUnprobedImprovingPivot: Bool = false,
         allConverged: Bool = false,
         improved: Bool = false,
-        structurallyImproved: Bool = false,
-        stallBudget: Int = 4,
-        deferBindInner: Bool = false
+        stallBudget: Int = 4
     ) -> ChoiceGraphScheduler.PostCycleEvaluation {
         ChoiceGraphScheduler.evaluatePostCycle(
             outcome: .init(
@@ -253,12 +212,10 @@ struct PostCycleDecisionTests {
                 hadUnresolvedReplacement: hadUnresolvedReplacement,
                 hasUnprobedImprovingPivot: hasUnprobedImprovingPivot,
                 allConverged: allConverged,
-                improved: improved,
-                structurallyImproved: structurallyImproved
+                improved: improved
             ),
             stallBudget: stallBudget,
-            maxStalls: maxStalls,
-            deferBindInner: deferBindInner
+            maxStalls: maxStalls
         )
     }
 }

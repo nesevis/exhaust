@@ -40,7 +40,7 @@ extension ReductionStats.StepTimings {
                 reorder += elapsed
             case .sourcesBuilt:
                 buildSources += elapsed
-            case .cycleStarted, .cycleEnded, .deferralReleased, .terminated:
+            case .cycleStarted, .cycleEnded, .terminated:
                 break
         }
     }

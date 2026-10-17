@@ -45,7 +45,6 @@ struct ProbeSessionOwnershipTests {
                 cycle: 0
             )
         }
-        machine.convergence.deferBindInner = false
         _ = machine.startStagedJointPass(remaining: [])
         guard case let .postCycleProbing(initialFrame) = machine.phase else {
             Issue.record("Staged search must retain its session in the post-cycle frame")

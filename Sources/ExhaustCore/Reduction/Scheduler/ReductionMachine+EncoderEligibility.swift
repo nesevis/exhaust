@@ -4,7 +4,7 @@ extension ReductionMachine {
         enabledEncoders?.contains(name) != false
     }
 
-    /// Filters probe-producing actions before scheduling them. Releasing bind-inner deferral changes scheduling state without emitting a probe, so it remains eligible in restricted runs.
+    /// Filters post-cycle actions by encoder eligibility.
     func isPostCycleActionEnabled(_ action: ChoiceGraphScheduler.PostCycleAction) -> Bool {
         switch action {
             case .confirmConvergence:
@@ -17,8 +17,6 @@ extension ReductionMachine {
                 isEncoderEnabled(.stagedJointSearch)
             case .excursion:
                 isEncoderEnabled(.branchPivot) || isEncoderEnabled(.substitution)
-            case .releaseDeferral:
-                true
         }
     }
 }

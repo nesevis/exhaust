@@ -39,13 +39,6 @@ extension ScopedReductionRunner {
                         recordPostCycleAcceptance()
                     }
                     endTimingOwnership(restoring: previousOwner)
-                case .releaseDeferral:
-                    // Worth a cycle only when lifting the deferral adds scopes: a bind whose inner holds neither a leaf nor a pick contributes none.
-                    deferralReleasedThisCycle = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: true).isEmpty == false
-                    ScopedReductionLog.reducer("bind_inner_deferral_released", isInstrumented: isInstrumented, metadata: [
-                        "cycle": "\(cycles)", "seq_len": "\(incumbent.sequence.count)",
-                    ])
-                    chargeElapsed(to: .untimed)
             }
         }
         return .completed
@@ -243,7 +236,6 @@ extension ScopedReductionRunner {
         ScopedSource.prepareStagedJointSource(
             from: graph,
             sequence: incumbent.sequence,
-            deferBindInner: deferBindInner,
             isFruitlessBind: gate.isFruitless,
             exhausted: exhaustedStagedJoint,
             tuning: tuning

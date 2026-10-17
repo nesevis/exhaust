@@ -142,7 +142,7 @@ struct DispatchLoop {
 
             case .rematerialize:
                 let graphBefore = state.rematerializeUnselectedBranches()
-                sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: state.convergence.deferBindInner, previousGraph: graphBefore)
+                sources = CandidateSourceBuilder.buildSources(from: state.graph, previousGraph: graphBefore)
                 return .dispatched(decision: .rematerialized)
 
             case let .readyToDispatch(boundValueFingerprint):
@@ -290,7 +290,7 @@ struct DispatchLoop {
         if diff.canReuseStructuralSources {
             let structuralSources = sources.filter { $0.isValueDependent == false }
             sources = structuralSources
-                + CandidateSourceBuilder.buildValueSources(from: state.graph, deferBindInner: state.convergence.deferBindInner)
+                + CandidateSourceBuilder.buildValueSources(from: state.graph)
 
             ChoiceGraphScheduler.logReducer("graph_value_only_rebuild", isInstrumented: state.isInstrumented, metadata: [
                 "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",
@@ -301,8 +301,7 @@ struct DispatchLoop {
             sources = reusableStructuralSources
                 + CandidateSourceBuilder.buildPermutationSources(from: state.graph)
                 + CandidateSourceBuilder.buildValueSources(
-                    from: state.graph,
-                    deferBindInner: state.convergence.deferBindInner
+                    from: state.graph
                 )
 
             ChoiceGraphScheduler.logReducer("graph_leaf_kind_rebuild", isInstrumented: state.isInstrumented, metadata: [
@@ -310,7 +309,7 @@ struct DispatchLoop {
             ])
         } else {
             state.scopeRejectionCache.clear()
-            sources = CandidateSourceBuilder.buildSources(from: state.graph, deferBindInner: state.convergence.deferBindInner, previousGraph: graphBefore)
+            sources = CandidateSourceBuilder.buildSources(from: state.graph, previousGraph: graphBefore)
 
             ChoiceGraphScheduler.logReducer("graph_structural_rebuild", isInstrumented: state.isInstrumented, metadata: [
                 "seq_len": "\(state.sequence.count)", "nodes": "\(state.graph.nodes.count)", "sources": "\(sources.count)",

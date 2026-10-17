@@ -16,7 +16,6 @@ struct StagedJointSearchTests {
             collectStats: true,
             property: { values in values.contains { $0 != values[0] } }
         )
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         #expect(machine.pendingStagedNumericPairs() == nil)
         let accepted = machine.runStagedJointSearch()
@@ -48,7 +47,6 @@ struct StagedJointSearchTests {
                 return values.0[0] != values.0[1] || numericPasses
             }
         )
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         let accepted = machine.runStagedJointSearch()
         #expect(accepted)
@@ -110,7 +108,6 @@ struct StagedJointSearchTests {
             collectStats: true,
             property: { values in values.contains { $0 != values[0] } }
         )
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         let accepted = machine.runStagedJointSearch()
         #expect(accepted)
@@ -136,7 +133,6 @@ struct StagedJointSearchTests {
             collectStats: true,
             property: { values in values.indices.contains { values[$0] * initial[0] != values[0] * initial[$0] } }
         )
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         let accepted = machine.runStagedJointSearch()
         #expect(accepted)
@@ -184,7 +180,6 @@ struct StagedJointSearchTests {
             collectStats: true,
             property: { values in values.0 != Double(values.1) || values.0 != Double(values.2) }
         )
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         let frontier = NumericJointQuery.frontier(graph: machine.graph, gate: machine.convergence.gate)
         let scope = NumericJointQuery.build(frontier: frontier, graph: machine.graph, arity: 3, workLimit: 4096, calculationLimit: 512, scopeLimit: 30)
@@ -522,7 +517,6 @@ struct StagedJointSearchTests {
                 return first * first + second * second != third * third
             }
         )
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         let accepted = machine.runStagedJointSearch()
         #expect(accepted)
@@ -561,7 +555,6 @@ struct StagedJointSearchTests {
         let generator = Gen.eachOf(Array(repeating: Gen.choose(in: 1 ... 1_000_000), count: values.count))
         let tree = try #require(try Interpreters.reflect(generator, with: values))
         var machine = ReductionMachine(gen: generator, initialTree: tree, initialOutput: values, config: .init(maxStalls: 2, enabledEncoders: enabledEncoders, tuning: tuning), collectStats: true, property: property)
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         return machine
     }

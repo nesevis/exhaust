@@ -185,7 +185,6 @@ struct NumericCommonDivisorTests {
         var machine = ReductionMachine(gen: generator, initialTree: tree, initialOutput: initial, config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch], tuning: tuning), collectStats: true) { values in
             values[0] < primitive[0] * minimumScale || values.indices.contains { values[$0] * primitive[0] != values[0] * primitive[$0] }
         }
-        machine.convergence.deferBindInner = false
         markConverged(&machine.graph)
         #expect(try machine.runStagedJointSearch())
         #expect(machine.output as? [Int] == primitive.map { $0 * minimumScale })
