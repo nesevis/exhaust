@@ -150,10 +150,14 @@ enum ChoiceGraphScheduler {
             }
             let fingerprint = bindMetadata.fingerprint
 
-            switch gate.shouldDispatch(fingerprint: fingerprint, anyAcceptedThisCycle: anyAccepted) {
+            switch gate.shouldDispatch(fingerprint: fingerprint) {
                 case .skip:
                     return .skip
                 case .classifyFirst:
+                    // Incomplete compositions wait for ordinary reduction to stall.
+                    if anyAccepted, graph.canComposeAllNestedBinds(under: bindScope.bindNodeID) == false {
+                        return .skip
+                    }
                     if let cached = graph.bindClassifications[fingerprint] {
                         if cached.topology != .identical || cached.liftability != .both {
                             return .skip
@@ -249,7 +253,6 @@ enum ChoiceGraphScheduler {
         let hasUnprobedImprovingPivot: Bool
         let allConverged: Bool
         let improved: Bool
-        let structurallyImproved: Bool
         var shouldAttemptStagedJoint: Bool = false
     }
 
@@ -260,22 +263,19 @@ enum ChoiceGraphScheduler {
         case improvingPivots
         case stagedJointPass
         case excursion
-        case releaseDeferral
     }
 
     /// Result of evaluating a cycle's outcome, containing the ordered list of actions to attempt and updated loop control values.
     struct PostCycleEvaluation: Equatable, Sendable {
         let actions: [PostCycleAction]
         let newStallBudget: Int
-        let newDeferBindInner: Bool
     }
 
-    /// Determines what should happen after a reduction cycle completes. Pure function of the cycle outcome, current stall budget, deferral state, and max stalls.
+    /// Determines what should happen after a reduction cycle completes. Pure function of the cycle outcome, current stall budget and max stalls.
     static func evaluatePostCycle(
         outcome: CycleOutcome,
         stallBudget: Int,
-        maxStalls: Int,
-        deferBindInner: Bool
+        maxStalls: Int
     ) -> PostCycleEvaluation {
         var actions: [PostCycleAction] = []
 
@@ -303,16 +303,9 @@ enum ChoiceGraphScheduler {
             actions.append(.excursion)
         }
 
-        var newDeferBindInner = deferBindInner
-        if deferBindInner, outcome.structurallyImproved == false {
-            newDeferBindInner = false
-            actions.append(.releaseDeferral)
-        }
-
         return PostCycleEvaluation(
             actions: actions,
-            newStallBudget: newStallBudget,
-            newDeferBindInner: newDeferBindInner
+            newStallBudget: newStallBudget
         )
     }
 }

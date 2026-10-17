@@ -23,5 +23,7 @@ package enum DownstreamBuildFailure: String, Hashable, Sendable, CaseIterable {
     case liftedTooLong
     case bindNotFound
     case noDownstreamLeaves
+    /// The fixed value prefix already prevents an improving terminal assignment.
+    case nonImprovingPrefix
     case sinkValueMismatch
 }

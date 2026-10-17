@@ -209,8 +209,8 @@ struct DispatchDecisionTests {
         #expect(decision == .skip)
     }
 
-    @Test("Bound value with acceptance deferral returns skip")
-    func boundValueAcceptanceDeferralSkipped() throws {
+    @Test("A prior acceptance does not postpone bound classification")
+    func boundValueClassifiesAfterAcceptance() throws {
         let bindTree = ChoiceTree.bind(
             fingerprint: 0xABCD,
             inner: .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
@@ -254,7 +254,7 @@ struct DispatchDecisionTests {
             graphIsStripped: false,
             anyAccepted: true
         )
-        #expect(decision == .skip)
+        #expect(decision == .classifyBind(bindNodeID: bindID, fingerprint: metadata.fingerprint))
     }
 
     @Test("Bound value needing classification returns classifyBind")

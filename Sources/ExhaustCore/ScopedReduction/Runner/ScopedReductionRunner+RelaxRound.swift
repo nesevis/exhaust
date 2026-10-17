@@ -24,7 +24,7 @@ extension ScopedReductionRunner {
 
     /// Perturbs the counterexample with a structural replacement that may worsen it, exploits the perturbation with ordinary dispatch, and keeps the result only when it strictly precedes the checkpoint.
     ///
-    /// The first perturbation that decodes to a failure is adopted; each one that does not spends one unit of ``ScopedReductionTuning/relaxMaterializationBudget``. Exploitation rebuilds the graph and every source without bind-inner deferral, seeds an empty rejection cache, and dispatches under the exploitation policy until its sources are exhausted or the deadline passes. Settlement restores the saved cache, then commits a strict improvement or restores the checkpoint, rebuilding its graph, clearing coupling evidence, and transferring the checkpoint's convergence.
+    /// The first perturbation that decodes to a failure is adopted; each one that does not spends one unit of ``ScopedReductionTuning/relaxMaterializationBudget``. Exploitation rebuilds the graph and every source, seeds an empty rejection cache, and dispatches under the exploitation policy until its sources are exhausted or the deadline passes. Settlement restores the saved cache, then commits a strict improvement or restores the checkpoint, rebuilding its graph, clearing coupling evidence, and transferring the checkpoint's convergence.
     ///
     /// - Returns: Whether the relax round committed an improvement.
     mutating func runRelaxRound() -> Bool {

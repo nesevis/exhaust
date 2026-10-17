@@ -9,11 +9,10 @@
 ///
 /// Keyed by ``BindMetadata/fingerprint`` (stable across graph rebuilds) so that fruitless verdicts and stall budgets survive structural rebuilds without re-probing bind sites that have already been determined unproductive.
 ///
-/// Three skip rules:
+/// Two skip rules:
 ///
 /// 1. **Per-cycle dedup**: after the first dispatch for a given bind within a cycle, subsequent dispatches are skipped.
-/// 2. **Acceptance deferral**: bound value dispatches are skipped when any encoder has already accepted a probe this cycle.
-/// 3. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds until ``clearFruitless()`` or ``invalidateSearchHistory()``.
+/// 2. **Fruitless tracking**: binds whose classification or last dispatch was unproductive are skipped. Persists across rebuilds until ``clearFruitless()`` or ``invalidateSearchHistory()``.
 struct BoundValueGate {
     enum Decision {
         /// Proceeds with bound-value search for this scope.
@@ -38,15 +37,9 @@ struct BoundValueGate {
         dispatchedThisCycle.removeAll(keepingCapacity: true)
     }
 
-    /// Evaluates the three skip rules (per-cycle dedup, acceptance deferral, fruitless tracking) and returns a dispatch decision for the given bind fingerprint.
-    func shouldDispatch(
-        fingerprint: UInt64,
-        anyAcceptedThisCycle: Bool
-    ) -> Decision {
+    /// Skips repeated dispatches and unchanged fruitless searches. The runner decides which compositions may follow earlier acceptances and clears stale fruitless verdicts after accepted value changes while preserving budget decay.
+    func shouldDispatch(fingerprint: UInt64) -> Decision {
         if dispatchedThisCycle.contains(fingerprint) {
-            return .skip
-        }
-        if anyAcceptedThisCycle {
             return .skip
         }
         if fruitless.contains(fingerprint) {
@@ -68,12 +61,12 @@ struct BoundValueGate {
         fruitless.insert(fingerprint)
     }
 
-    /// Clears fruitless verdicts after an accepted restructuring, which can make a lift productive: lowering a nested bind's inner can open a failure to the outer bind. Stall counts, and so budget decay, are kept.
+    /// Clears fruitless verdicts after an ordinary value or structural acceptance, which can make a lift productive. Stall counts, and so budget decay, are kept. An accepting bind's own budget is restored separately by ``recordOutcome(fingerprint:accepted:)``.
     mutating func clearFruitless() {
         fruitless.removeAll(keepingCapacity: true)
     }
 
-    /// Restores every bind's full search budget and clears fruitless verdicts, for acceptances that can change any bind's productivity. Recorded binds stay recorded, so they remain non-first dispatches, and per-cycle dispatch tracking is kept.
+    /// Restores every bind's full search budget and clears fruitless verdicts, after coupled post-cycle acceptances invalidate convergence across the run. Recorded binds stay recorded, so they remain non-first dispatches, and per-cycle dispatch tracking is kept.
     mutating func invalidateSearchHistory() {
         fruitless.removeAll(keepingCapacity: true)
         for fingerprint in stallCount.keys {

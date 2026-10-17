@@ -103,6 +103,8 @@ package enum BoundValueBuildOutcome: String, Sendable, CaseIterable {
     case noDownstreamLeaves
     /// The lift built a terminal value search.
     case terminalSearch
+    /// At equal length, the fixed value prefix already exceeds the dispatch incumbent, so no terminal assignment can improve it.
+    case nonImprovingPrefix
     /// An exchange lift changed the sink value; bound-value factories never produce this outcome. Retained to keep the shared-failure diagnostic mapping total.
     case sinkValueMismatch
 }

@@ -11,7 +11,7 @@
 ///
 /// ## Cycle
 ///
-/// A cycle builds the family sources, dispatches their scopes in priority order until every source is exhausted, then evaluates the cycle: post-cycle actions run on a stall, and the stall budget, convergence, and bind-inner deferral decide whether another cycle follows. The final pass reorders sibling groups numerically for presentation.
+/// A cycle builds the family sources, dispatches their scopes in priority order until every source is exhausted, then evaluates the cycle: post-cycle actions run on a stall, and the stall budget and convergence decide whether another cycle follows. The final pass reorders sibling groups numerically for presentation.
 ///
 /// ## Deadline
 ///
@@ -75,8 +75,6 @@ package struct ScopedReductionRunner {
     /// Cycles without progress left before the run ends. Restored to ``maxStalls`` by any improvement.
     var stallBudget: Int
     let maxStalls: Int
-    /// While true, scopes on bind-inner leaves are deferred so structural work runs first. Released once, when structural reduction stalls.
-    var deferBindInner: Bool
     /// Per-bind dispatch control for bound value search: per-cycle deduplication, fruitless verdicts, and budget decay.
     var gate: BoundValueGate
     /// Whether the latest tree lacks unselected branches, so pick nodes cannot offer pivots until rematerialized.
@@ -90,8 +88,6 @@ package struct ScopedReductionRunner {
     var scopeRejectionCache = ScopedScopeRejectionCache()
     var anyAccepted = false
     var hadUnresolvedReplacement = false
-    /// True from the post-cycle action that releases bind-inner deferral until the next cycle begins, when the release adds at least one scope. The termination check then grants one more cycle without consulting the stall budget or convergence: the deferred scopes were never built into a source, so the stall that released them says nothing about whether they would accept. Deferral is released once per run, so the bypass is bounded to one cycle.
-    var deferralReleasedThisCycle = false
     /// True once any pass in the run accepted. Never reset: a run that ends with this false could not improve its input even once.
     var anyAcceptanceEverOccurred = false
     /// Consecutive passes that rejected every probe, across the run, for encoders behind a ``ScopedDispatchGate/demotedAfterRejects`` gate. Reset by the encoder's next acceptance.
@@ -213,7 +209,6 @@ package struct ScopedReductionRunner {
         isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         stallBudget = configuration.maxStalls
         maxStalls = configuration.maxStalls
-        deferBindInner = graph.reductionEdges.isEmpty == false
         gate = BoundValueGate(baseBudget: configuration.tuning.boundValueBaseBudget)
         let budget = configuration.wallClockDeadlineNanoseconds
         deadline = ScopedDeadline(start: budget > 0 ? currentNanoseconds() : 0, budget: budget, clock: currentNanoseconds)
@@ -281,7 +276,6 @@ package struct ScopedReductionRunner {
         // Latched across stalled cycles: the scope rejection cache can skip a replacement scope on the very stall that schedules the relax round.
         hadUnresolvedReplacement = hadUnresolvedReplacement && incumbent.sequence == sequenceBeforeCycle
         anyAccepted = false
-        deferralReleasedThisCycle = false
         sequenceBeforeCycle = incumbent.sequence
     }
 
@@ -293,10 +287,10 @@ package struct ScopedReductionRunner {
         ])
     }
 
-    /// Structural families followed by value families, honoring bind-inner deferral.
+    /// Structural families followed by value families.
     func prepareAllSources(previousGraph: ChoiceGraph?) -> [ScopedSource] {
         ScopedSource.prepareStructuralSources(from: graph, previousGraph: previousGraph)
-            + ScopedSource.prepareValueSources(from: graph, deferBindInner: deferBindInner, tuning: tuning)
+            + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
     }
 
     /// Rematerializes a stripped graph when pivots could follow, then evaluates the cycle and returns the enabled post-cycle actions.
@@ -313,15 +307,12 @@ package struct ScopedReductionRunner {
                 hasUnprobedImprovingPivot: anyAccepted == false && hasUnprobedImprovingPivot,
                 allConverged: allValuesConverged(),
                 improved: incumbent.sequence != sequenceBeforeCycle,
-                structurallyImproved: incumbent.sequence.count < sequenceBeforeCycle.count,
                 shouldAttemptStagedJoint: anyAccepted == false && hasPendingStagedJointCheckpoint()
             ),
             stallBudget: stallBudget,
-            maxStalls: maxStalls,
-            deferBindInner: deferBindInner
+            maxStalls: maxStalls
         )
         stallBudget = evaluation.newStallBudget
-        deferBindInner = evaluation.newDeferBindInner
         return evaluation.actions.filter(isPostCycleActionEnabled)
     }
 
@@ -329,12 +320,10 @@ package struct ScopedReductionRunner {
     private mutating func continuesAfterCycle() -> Bool {
         let continues = shouldRunAnotherCycle()
         if continues {
-            if deferralReleasedThisCycle == false {
-                ScopedReductionLog.reducer("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
-                    "cycle": "\(cycles)", "improved": "\(incumbent.sequence != sequenceBeforeCycle)",
-                    "seq_len": "\(incumbent.sequence.count)", "total_mats": "\(stats.totalMaterializations)",
-                ])
-            }
+            ScopedReductionLog.reducer("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
+                "cycle": "\(cycles)", "improved": "\(incumbent.sequence != sequenceBeforeCycle)",
+                "seq_len": "\(incumbent.sequence.count)", "total_mats": "\(stats.totalMaterializations)",
+            ])
         } else if isInstrumented {
             ExhaustLog.notice(
                 category: .reducer,
@@ -349,11 +338,8 @@ package struct ScopedReductionRunner {
         return continues
     }
 
-    /// Releasing deferral earns one more cycle; a converged stall without structural improvement ends the run; otherwise the stall budget decides.
+    /// A converged stall without structural improvement ends the run; otherwise the stall budget decides.
     private func shouldRunAnotherCycle() -> Bool {
-        if deferralReleasedThisCycle {
-            return true
-        }
         if incumbent.sequence.count >= sequenceBeforeCycle.count, anyAccepted == false, allValuesConverged() {
             return false
         }

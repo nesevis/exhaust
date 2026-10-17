@@ -162,11 +162,10 @@ enum CandidateSourceBuilder {
     /// Assembles the full candidate source array by combining structural sources (removal, migration, replacement, permutation) with value sources (minimization, exchange). Structural sources are stable across structurally-identical rebuilds; value sources must be rebuilt after any leaf value change.
     static func buildSources(
         from graph: ChoiceGraph,
-        deferBindInner: Bool = false,
         previousGraph: ChoiceGraph? = nil
     ) -> [AnyCandidateSource] {
         buildStructuralSources(from: graph, previousGraph: previousGraph)
-            + buildValueSources(from: graph, deferBindInner: deferBindInner)
+            + buildValueSources(from: graph)
     }
 
     /// Sources whose scopes depend on graph topology (node parent-child relationships, element counts, self-similarity edges) but not on leaf values. Stable across structurally-identical rebuilds.
@@ -256,7 +255,7 @@ enum CandidateSourceBuilder {
     }
 
     /// Sources whose scopes depend on leaf values (current ChoiceValue, valid ranges, distance-to-target). Must be rebuilt after any value change, even structurally-identical ones.
-    static func buildValueSources(from graph: ChoiceGraph, deferBindInner: Bool = false) -> [AnyCandidateSource] {
+    static func buildValueSources(from graph: ChoiceGraph) -> [AnyCandidateSource] {
         var sources: [AnyCandidateSource] = []
 
         // Lane collapse.
@@ -272,7 +271,7 @@ enum CandidateSourceBuilder {
         }
 
         // Minimization.
-        let minimizationCandidates = buildMinimizationCandidates(graph: graph, deferBindInner: deferBindInner)
+        let minimizationCandidates = buildMinimizationCandidates(graph: graph)
         if minimizationCandidates.isEmpty == false {
             sources.append(.sorted(SortedCandidateSource(minimizationCandidates)))
         }

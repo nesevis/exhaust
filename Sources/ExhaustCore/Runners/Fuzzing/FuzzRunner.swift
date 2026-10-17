@@ -271,7 +271,7 @@ package final class FuzzRunner<Output> {
         failureLineage = FuzzFailureLineage(directory: FuzzTunables.failureLineageDirectory, seed: configuration.seed)
     }
 
-    /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails with the failure's own ``FailureSymptom``. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
+    /// The default reduce strategy: property-only reduction through ``ReductionRunner``, reducing while the property fails with the failure's own ``FailureSymptom``. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
     ///
     /// A candidate that fails with a different symptom counts as passing. Without that, reduction follows any smaller failure, so a fault whose minimal form is shortlex-larger than another fault's reduces into it and the two share one cluster. Faults that share a symptom (two `false` returns, or two cases of one error type) can still reduce into each other.
     ///

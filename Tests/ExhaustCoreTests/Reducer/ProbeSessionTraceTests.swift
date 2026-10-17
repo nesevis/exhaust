@@ -109,7 +109,7 @@ struct ProbeSessionTraceTests {
         let recorder = ProbeTraceRecorder()
         var encoder = EncoderDispatch(GraphComposedEncoder(
             name: .composed,
-            makeProposals: domainLeafProposals,
+            makeProposals: traceLeafProposals,
             policy: CompositionPolicy(
                 stageBudget: 2,
                 chainLimits: NestedChainLimits(
@@ -120,7 +120,7 @@ struct ProbeSessionTraceTests {
             ),
             lift: { _, fallbackTree in fallbackTree },
             downstreamFactory: { _, _, _ in
-                .stage(encoder: .init(domainFixtureEncoder()), scope: downstream.scope)
+                .stage(encoder: .init(traceFixtureEncoder()), scope: downstream.scope)
             }
         ))
         encoder.start(scope: fixture.scope)
@@ -468,7 +468,7 @@ private func pivotFixture() throws -> PivotFixture {
         throw PivotFixtureError.materializationFailed
     }
     let graph = ChoiceGraph.build(from: tree)
-    let pivots = MinimizationQuery.deferredScopes(graph: graph, stopAtFirst: false)
+    let pivots = MinimizationQuery.build(graph: graph)
     let pivot = try #require(pivots.compactMap { operation -> BindPivotScope? in
         guard case let .bindPivot(pivot) = operation else {
             return nil
@@ -559,7 +559,7 @@ private struct Fixture {
     }
 
     func session(recorder: ProbeTraceRecorder? = nil) -> ProbeSession {
-        var encoder = EncoderDispatch(domainFixtureEncoder())
+        var encoder = EncoderDispatch(traceFixtureEncoder())
         encoder.start(scope: scope)
         return ProbeSession(
             encoder: encoder,

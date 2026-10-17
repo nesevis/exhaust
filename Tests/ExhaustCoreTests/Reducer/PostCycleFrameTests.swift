@@ -41,8 +41,7 @@ struct PostCycleFrameTests {
                 cycle: 0
             )
         }
-        machine.convergence.deferBindInner = false
-        machine.phase = .postCycle(remaining: [.releaseDeferral])
+        machine.phase = .postCycle(remaining: [.confirmConvergence])
         let accepted = machine.runStagedJointSearch()
         #expect(accepted == acceptsProbe)
         #expect(machine.output as? [Int] == (acceptsProbe ? [3, 4] : initial))
@@ -52,8 +51,7 @@ struct PostCycleFrameTests {
         #expect(machine.stats.encoderProbes[.numericReorder] == nil)
         #expect(machine.dispatchLoop.activeSession == nil)
         #expect(machine.dispatchLoop.pendingReport == nil)
-        #expect(machine.deferralReleasedThisCycle == false)
-        guard case .postCycle(remaining: [.releaseDeferral]) = machine.phase else {
+        guard case .postCycle(remaining: [.confirmConvergence]) = machine.phase else {
             Issue.record("Synchronous staged search must restore the caller's continuation")
             return
         }
@@ -92,13 +90,12 @@ struct PostCycleFrameTests {
                 cycle: 0
             )
         }
-        machine.convergence.deferBindInner = false
         machine.rejectCache = [0xFEED]
         switch encoder {
             case .relationSearch:
-                machine.phase = .postCycle(remaining: [.relationPass, .releaseDeferral])
+                machine.phase = .postCycle(remaining: [.relationPass, .confirmConvergence])
             case .stagedJointSearch:
-                machine.phase = .postCycle(remaining: [.stagedJointPass, .releaseDeferral])
+                machine.phase = .postCycle(remaining: [.stagedJointPass, .confirmConvergence])
             default:
                 machine.phase = .reorderPass
         }
@@ -132,7 +129,6 @@ struct PostCycleFrameTests {
         #expect(machine.stats.encoderProbesAccepted[encoder] == (accepted ? 1 : 0))
         #expect(machine.stats.graphStats.fullGraphRebuilds == initialRebuilds)
         #expect(machine.stats.reductionWasCapped)
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.rejectCache == [0xFEED])
         #expect(machine.dispatchLoop.activeSession == nil)
         #expect(machine.dispatchLoop.pendingReport == nil)

@@ -82,7 +82,7 @@ extension ChoiceGraphScheduler {
             chain: BoundValueChain(
                 gen: gen,
                 upstreamBudget: upstreamBudget,
-                rootSequenceCount: scope.baseSequence.count,
+                rootSequence: scope.baseSequence,
                 seenBindFingerprints: seenBindFingerprints,
                 buildTally: buildTally,
                 depth: 0,
@@ -143,7 +143,7 @@ extension ChoiceGraphScheduler {
                     generator: generator,
                     prefix: candidate,
                     fallbackTree: fallbackTree,
-                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequenceCount
+                    maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequence.count
                 ) else {
                     let proposed = controllerBitPattern(in: candidate, at: controllerSequenceIndex)
                     Self.logReducer("bound_value_lift_failed", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
@@ -328,6 +328,9 @@ extension ChoiceGraphScheduler {
         parent: EncoderInput,
         chain: BoundValueChain
     ) -> DownstreamBuild {
+        if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: chain.rootSequence) {
+            return .failed(.nonImprovingPrefix)
+        }
         let liftedGraph = lifted.terminalGraph()
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else { return false }

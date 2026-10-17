@@ -124,7 +124,6 @@ struct HigherOrderCouplingChallengeTests {
         let generator = Gen.eachOf(Array(repeating: Gen.choose(in: 1 ... 1_000_000), count: values.count))
         let tree = try #require(try Interpreters.reflect(generator, with: values))
         var machine = ReductionMachine(gen: generator, initialTree: tree, initialOutput: values, config: .init(maxStalls: 2, enabledEncoders: [.stagedJointSearch], tuning: tuning), collectStats: true, property: property)
-        machine.convergence.deferBindInner = false
         for nodeID in machine.graph.leafNodes {
             guard case let .chooseBits(metadata) = machine.graph.nodes[nodeID].kind else { continue }
             machine.graph.convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)

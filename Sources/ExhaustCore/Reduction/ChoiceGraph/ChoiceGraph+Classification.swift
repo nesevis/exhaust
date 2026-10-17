@@ -169,7 +169,7 @@ extension ChoiceGraph {
     /// For each non-getSize bind node, reads the upstream leaf's current bit pattern from the graph and computes the bound subtree's topology fingerprint from `tree`. Compares against the stored ``BindTopologyObservation``:
     /// - Upstream unchanged: updates the stored downstream fingerprint (structural ops may have changed it independently).
     /// - Upstream changed, downstream fingerprint same: classifies as `.identical` — the bind produces the same shape for different upstream values.
-    /// - Upstream changed, downstream fingerprint different: classifies as `.divergent` — the bind reshapes under upstream variation.
+    /// - Upstream changed, downstream fingerprint different: leaves the bind unclassified. Cardinality contributes to the fingerprint but does not by itself change topology; endpoint classification resolves the difference when needed.
     ///
     /// Call after each graph rebuild. Avoids the two materialization probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
     mutating func observeBindTopologies(tree: ChoiceTree) {
@@ -210,10 +210,12 @@ extension ChoiceGraph {
                 continue
             }
 
-            let topology: BindTopology = previous.downstreamFingerprint == downstreamFingerprint
-                ? .identical
-                : .divergent
-            let classification = BindClassification(topology: topology, liftability: .both)
+            // A changed fingerprint is inconclusive: sequence cardinality contributes to the hash, while sameTopology deliberately allows length changes. Leave it to the endpoint classifier before rejecting dependent search.
+            guard previous.downstreamFingerprint == downstreamFingerprint else {
+                bindTopologyObservations[metadata.fingerprint] = newObservation
+                continue
+            }
+            let classification = BindClassification(topology: .identical, liftability: .both)
             bindClassifications[metadata.fingerprint] = classification
             bindTopologyObservations.removeValue(forKey: metadata.fingerprint)
         }

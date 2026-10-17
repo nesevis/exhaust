@@ -22,7 +22,7 @@ extension ScopedReductionRunner {
         case relationPass
         case stagedJointPass
         case reorder
-        /// Cycle bookkeeping that no bucket reports: beginning a cycle, evaluating it, and releasing deferral.
+        /// Cycle bookkeeping that no bucket reports: beginning and evaluating a cycle.
         case untimed
     }
 

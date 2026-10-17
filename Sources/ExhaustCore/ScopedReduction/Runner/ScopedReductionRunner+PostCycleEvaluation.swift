@@ -14,7 +14,6 @@ extension ScopedReductionRunner {
         let hasUnprobedImprovingPivot: Bool
         let allConverged: Bool
         let improved: Bool
-        let structurallyImproved: Bool
         let shouldAttemptStagedJoint: Bool
     }
 
@@ -30,23 +29,19 @@ extension ScopedReductionRunner {
         case stagedJointPass
         /// Perturbs the counterexample with a structural replacement that may worsen it, exploits it, and keeps the result only if it strictly precedes the checkpoint.
         case relaxRound
-        /// Lifts bind-inner deferral, so the next cycle's sources include bind-inner scopes.
-        case releaseDeferral
     }
 
     /// The actions to attempt, in order, with the loop control values that follow from the cycle.
     struct PostCycleEvaluation: Equatable {
         let actions: [PostCycleAction]
         let newStallBudget: Int
-        let newDeferBindInner: Bool
     }
 
-    /// Decides what follows a cycle from its outcome, the stall budget, and bind-inner deferral.
+    /// Decides what follows a cycle from its outcome, the stall budget, and max stalls.
     static func evaluatePostCycle(
         outcome: CycleOutcome,
         stallBudget: Int,
-        maxStalls: Int,
-        deferBindInner: Bool
+        maxStalls: Int
     ) -> PostCycleEvaluation {
         var actions: [PostCycleAction] = []
 
@@ -74,20 +69,13 @@ extension ScopedReductionRunner {
             actions.append(.relaxRound)
         }
 
-        var newDeferBindInner = deferBindInner
-        if deferBindInner, outcome.structurallyImproved == false {
-            newDeferBindInner = false
-            actions.append(.releaseDeferral)
-        }
-
         return PostCycleEvaluation(
             actions: actions,
-            newStallBudget: newStallBudget,
-            newDeferBindInner: newDeferBindInner
+            newStallBudget: newStallBudget
         )
     }
 
-    /// Filters probing actions by encoder eligibility. Releasing deferral emits no probe, so it stays eligible in restricted runs.
+    /// Filters post-cycle actions by encoder eligibility.
     func isPostCycleActionEnabled(_ action: PostCycleAction) -> Bool {
         switch action {
             case .confirmConvergence:
@@ -100,8 +88,6 @@ extension ScopedReductionRunner {
                 isEncoderEnabled(.stagedJointSearch)
             case .relaxRound:
                 isEncoderEnabled(.branchPivot) || isEncoderEnabled(.substitution)
-            case .releaseDeferral:
-                true
         }
     }
 }

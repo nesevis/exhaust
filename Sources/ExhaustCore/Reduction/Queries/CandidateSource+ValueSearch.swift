@@ -7,10 +7,10 @@
 
 extension CandidateSourceBuilder {
     /// Constructs minimization candidates that drive leaf values toward their reduction targets via binary search.
-    static func buildMinimizationCandidates(graph: ChoiceGraph, deferBindInner: Bool) -> [GraphTransformation] {
+    static func buildMinimizationCandidates(graph: ChoiceGraph) -> [GraphTransformation] {
         var results: [GraphTransformation] = []
 
-        for scope in MinimizationQuery.build(graph: graph, deferBindInner: deferBindInner) {
+        for scope in MinimizationQuery.build(graph: graph) {
             let valueYield: Int = switch scope {
                 case let .valueLeaves(integerScope):
                     integerScope.leaves.reduce(0) { maxSoFar, leaf in
@@ -124,7 +124,6 @@ extension CandidateSourceBuilder {
         let annotation = graph.nodes[leafNodeID].scopeAnnotation
         guard let bindNodeID = annotation.controllingBindNodeID else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
-        guard metadata.isStructurallyConstant == false else { return 0 }
         guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }
         let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
         return graph.nodes[boundChildID].positionRange?.count ?? 0

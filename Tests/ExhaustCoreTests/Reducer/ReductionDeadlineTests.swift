@@ -136,7 +136,6 @@ struct ReductionDeadlineTests {
             return accepted == false
         }
         markStalledLeaves(&machine.graph)
-        machine.convergence.deferBindInner = false
         let action: ChoiceGraphScheduler.PostCycleAction = switch encoder {
             case .stagedJointSearch:
                 .stagedJointPass
@@ -149,7 +148,7 @@ struct ReductionDeadlineTests {
             default:
                 #expect(RelationQuery.build(graph: machine.graph) != nil)
         }
-        machine.phase = .postCycle(remaining: [action, .excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [action, .excursion, .confirmConvergence])
         let initialSequence = machine.sequence
         _ = try complete(&machine)
         #expect(propertyCalls == 1)
@@ -159,7 +158,6 @@ struct ReductionDeadlineTests {
         #expect(machine.sequence.shortLexPrecedes(initialSequence) == accepted)
         #expect(ChoiceSequence(machine.tree) == machine.sequence)
         #expect(machine.stats.reductionWasCapped)
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.stats.encoderProbes[.numericReorder] == nil)
     }
 

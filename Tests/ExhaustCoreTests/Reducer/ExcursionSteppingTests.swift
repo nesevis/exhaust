@@ -14,7 +14,7 @@ struct ExcursionSteppingTests {
         machine.rejectCache = [0xFEED]
         machine.graphIsStripped = true
         machine.convergence.stallBudget = 0
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
 
         let started = try nextExcursionTransition(&machine)
         guard case .excursionAdvanced(step: .started) = started else {
@@ -23,7 +23,6 @@ struct ExcursionSteppingTests {
         }
         #expect(propertyCalls == 0)
         #expect(machine.rejectCache == [0xFEED])
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.activeSession == nil)
         var timings = ReductionStats.StepTimings()
         timings.record(started, elapsed: 11)
@@ -37,7 +36,6 @@ struct ExcursionSteppingTests {
             timings.record(transition, elapsed: 11)
             steps += 1
             #expect(propertyCalls - callsBeforeStep <= 1)
-            #expect(machine.deferralReleasedThisCycle == false)
             #expect(machine.activeSession == nil, "Exploitation must retain its session in the nested loop")
             switch transition {
                 case .excursionAdvanced(step: .encoded):
@@ -89,7 +87,7 @@ struct ExcursionSteppingTests {
         #expect(timings.encodeCount == 0)
         #expect(timings.decodeCount == 0)
         #expect(timings.rebuildCount == 0)
-        guard case .deferralReleased = machine.next() else {
+        guard case .convergenceConfirmed = machine.next() else {
             Issue.record("Settlement must resume the remaining post-cycle actions")
             return
         }
@@ -143,7 +141,7 @@ struct ExcursionSteppingTests {
         let checkpoint = machine.sequence
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.rejectCache = [0xFEED]
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
         let improved = try completeExcursion(&machine)
         #expect(improved == false)
         #expect(propertyCalls == 1)
@@ -171,7 +169,7 @@ struct ExcursionSteppingTests {
         }
         let checkpoint = machine.sequence
         machine.rejectCache = [0xFEED]
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
         var reachedSettlement = false
         for _ in 0 ..< 10000 {
             _ = machine.next()
@@ -196,7 +194,6 @@ struct ExcursionSteppingTests {
         #expect(machine.stats.relaxRoundLog.count == 1)
         #expect(machine.stats.relaxRoundLog.first?.committed == committed)
         #expect(machine.excursionFrame == nil)
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.stats.reductionWasCapped)
         #expect(machine.next() == nil)
         #expect(machine.stats.relaxRoundLog.count == 1)
@@ -214,7 +211,7 @@ struct ExcursionSteppingTests {
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         let initialMaterializations = machine.stats.totalMaterializations
         machine.rejectCache = [0xFEED]
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
         try advanceExcursion(&machine, to: boundary)
         clock.expire()
         _ = machine.next()
@@ -223,7 +220,6 @@ struct ExcursionSteppingTests {
         #expect(machine.output as? [UInt64] == [10, 80])
         #expect(ChoiceSequence(machine.tree) == checkpoint)
         #expect(machine.rejectCache == [0xFEED])
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.anyAccepted == false)
         #expect(machine.stats.reductionWasCapped)
         #expect(machine.stats.relaxRoundLog.count == 1)
@@ -274,7 +270,7 @@ struct ExcursionSteppingTests {
         }
         let checkpoint = machine.sequence
         machine.rejectCache = [0xFEED]
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
         try finishMachine(&machine)
         #expect(propertyCalls == 2)
         #expect(machine.passCounter == 2)
@@ -290,7 +286,6 @@ struct ExcursionSteppingTests {
         #expect(machine.stats.relaxRoundLog.count == 1)
         #expect(machine.stats.relaxRoundLog.first?.committed == accepted)
         #expect(machine.stats.reductionWasCapped)
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.excursionFrame == nil)
         #expect(machine.next() == nil)
         #expect(machine.passCounter == 2)
@@ -306,7 +301,7 @@ struct ExcursionSteppingTests {
         }
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
         machine.rejectCache = [0xFEED]
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
         var reachedDeletion = false
         for _ in 0 ..< 1000 {
             if case .excursionAdvanced(step: .decoded(encoder: .deletion, accepted: true)) = machine.next() {
@@ -340,7 +335,6 @@ struct ExcursionSteppingTests {
         #expect(machine.anyAccepted)
         #expect(machine.stats.reductionWasCapped)
         #expect(machine.excursionFrame == nil)
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.next() == nil)
         #expect(machine.passCounter == 1)
     }
@@ -369,7 +363,7 @@ struct ExcursionSteppingTests {
         machine.rejectCache = [0xFEED]
         let checkpoint = machine.sequence
         let initialRebuilds = machine.stats.graphStats.fullGraphRebuilds
-        machine.phase = .postCycle(remaining: [.excursion, .releaseDeferral])
+        machine.phase = .postCycle(remaining: [.excursion, .confirmConvergence])
         try finishMachine(&machine)
         #expect(propertyCalls == 1)
         #expect(machine.sequence.shortLexPrecedes(checkpoint))
@@ -385,7 +379,6 @@ struct ExcursionSteppingTests {
         #expect(machine.anyAccepted)
         #expect(machine.anyAcceptanceEverOccurred)
         #expect(machine.stats.reductionWasCapped)
-        #expect(machine.deferralReleasedThisCycle == false)
         #expect(machine.excursionFrame == nil)
     }
 }

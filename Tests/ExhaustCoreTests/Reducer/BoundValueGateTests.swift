@@ -10,7 +10,7 @@ struct BoundValueGateTests {
     @Test("Fresh gate returns classifyFirst for unknown fingerprint")
     func freshGateClassifiesFirst() {
         let gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
-        let decision = gate.shouldDispatch(fingerprint: 0xAAAA, anyAcceptedThisCycle: false)
+        let decision = gate.shouldDispatch(fingerprint: 0xAAAA)
         #expect(decision == .classifyFirst)
     }
 
@@ -20,7 +20,7 @@ struct BoundValueGateTests {
     func perCycleDedup() {
         var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
         gate.markDispatched(0xBBBB)
-        let decision = gate.shouldDispatch(fingerprint: 0xBBBB, anyAcceptedThisCycle: false)
+        let decision = gate.shouldDispatch(fingerprint: 0xBBBB)
         #expect(decision == .skip)
     }
 
@@ -29,17 +29,18 @@ struct BoundValueGateTests {
         var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
         gate.markDispatched(0xCCCC)
         gate.resetForNewCycle()
-        let decision = gate.shouldDispatch(fingerprint: 0xCCCC, anyAcceptedThisCycle: false)
+        let decision = gate.shouldDispatch(fingerprint: 0xCCCC)
         #expect(decision == .classifyFirst)
     }
 
-    // MARK: - Acceptance Deferral
+    // MARK: - Earlier Acceptance
 
-    @Test("Any prior acceptance this cycle causes skip")
-    func acceptanceDeferral() {
-        let gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
-        let decision = gate.shouldDispatch(fingerprint: 0xDDDD, anyAcceptedThisCycle: true)
-        #expect(decision == .skip)
+    @Test("A prior acceptance does not defer an undispatched bind")
+    func earlierAcceptanceDoesNotDefer() {
+        var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
+        gate.recordOutcome(fingerprint: 0xAAAA, accepted: true)
+        let decision = gate.shouldDispatch(fingerprint: 0xDDDD)
+        #expect(decision == .classifyFirst)
     }
 
     // MARK: - Fruitless Tracking
@@ -48,7 +49,7 @@ struct BoundValueGateTests {
     func fruitlessSkipped() {
         var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
         gate.markFruitless(0xEEEE)
-        let decision = gate.shouldDispatch(fingerprint: 0xEEEE, anyAcceptedThisCycle: false)
+        let decision = gate.shouldDispatch(fingerprint: 0xEEEE)
         #expect(decision == .skip)
     }
 
@@ -57,7 +58,7 @@ struct BoundValueGateTests {
         var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
         gate.markFruitless(0xFFFF)
         gate.recordOutcome(fingerprint: 0xFFFF, accepted: true)
-        let decision = gate.shouldDispatch(fingerprint: 0xFFFF, anyAcceptedThisCycle: false)
+        let decision = gate.shouldDispatch(fingerprint: 0xFFFF)
         #expect(decision == .classifyFirst)
     }
 
@@ -65,7 +66,7 @@ struct BoundValueGateTests {
     func rejectedMarksFruitless() {
         var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
         gate.recordOutcome(fingerprint: 0x1111, accepted: false)
-        let decision = gate.shouldDispatch(fingerprint: 0x1111, anyAcceptedThisCycle: false)
+        let decision = gate.shouldDispatch(fingerprint: 0x1111)
         #expect(decision == .skip)
     }
 
@@ -139,8 +140,8 @@ struct BoundValueGateTests {
             #expect(gate.isFirstDispatch(fingerprint: fingerprint) == false)
         }
         #expect(gate.isFirstDispatch(fingerprint: 0x8888))
-        #expect(gate.shouldDispatch(fingerprint: 0x6666, anyAcceptedThisCycle: false) == .skip)
-        #expect(gate.shouldDispatch(fingerprint: 0x7777, anyAcceptedThisCycle: false) == .classifyFirst)
+        #expect(gate.shouldDispatch(fingerprint: 0x6666) == .skip)
+        #expect(gate.shouldDispatch(fingerprint: 0x7777) == .classifyFirst)
     }
 
     // MARK: - First Dispatch
@@ -173,11 +174,12 @@ struct BoundValueGateTests {
 
     // MARK: - Decision Priority
 
-    @Test("Per-cycle dedup takes precedence over acceptance deferral")
-    func dedupPrecedesAcceptanceDeferral() {
+    @Test("Earlier acceptances do not bypass per-cycle dedup")
+    func acceptanceDoesNotBypassDedup() {
         var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
         gate.markDispatched(0x6666)
-        let decision = gate.shouldDispatch(fingerprint: 0x6666, anyAcceptedThisCycle: true)
+        gate.recordOutcome(fingerprint: 0x7777, accepted: true)
+        let decision = gate.shouldDispatch(fingerprint: 0x6666)
         #expect(decision == .skip)
     }
 }

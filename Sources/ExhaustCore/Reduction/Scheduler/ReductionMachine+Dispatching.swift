@@ -150,7 +150,10 @@ extension ReductionMachine {
 
         switch acceptanceAction {
             case .continueDispatching:
-                if report.anyAccepted == false {
+                if report.anyAccepted {
+                    // Value changes can make an earlier joint search productive without erasing its budget decay.
+                    convergence.gate.clearFruitless()
+                } else {
                     scopeRejectionCache.recordRejection(
                         operation: report.transformation.operation,
                         sequence: sequence,
