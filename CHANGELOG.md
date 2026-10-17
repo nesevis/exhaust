@@ -6,6 +6,17 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-18
+
+### Changed
+
+- Counterexamples from generators with dependent binds now reduce further. Reduction now lowers the controlling value from the start instead of waiting for structural reduction to stall, and it searches the values under each bind separately from unrelated values.
+- Reduction of nested binds skips candidates whose leading values already rule out a smaller counterexample, and retries a bind chain after other values improve instead of skipping it for the rest of the cycle.
+
+### Fixed
+
+- A bind whose array length changed between candidates was treated as changing shape, which stopped reduction from searching its controlling value together with the values it controls.
+
 ## [1.7.0] - 2026-10-16
 
 ### Changed
@@ -278,7 +289,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/nesevis/exhaust/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/nesevis/exhaust/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/nesevis/exhaust/compare/v1.5.8...v1.6.0
 [1.5.8]: https://github.com/nesevis/exhaust/compare/v1.5.7...v1.5.8
