@@ -7,29 +7,24 @@
 
 /// Static scope builder for minimization operations.
 enum MinimizationQuery {
-    /// Computes minimization scopes: one integer scope, one float scope, and one bound value scope per non-constant reduction edge.
-    ///
-    /// Reads ``ScopeAnnotation`` on each node for bind-inner classification and depth ordering instead of building a separate index. With `deferBindInner` the result is the independent scopes alone; without it the scopes ``deferredScopes(graph:stopAtFirst:)`` describes are added, interleaved by kind after the independent scope of the same kind.
-    static func build(
-        graph: ChoiceGraph,
-        deferBindInner: Bool = false
-    ) -> [MinimizationScope] {
+    /// Groups payload work by its nearest controlling bind while preserving bind-inner deferral.
+    static func build(graph: ChoiceGraph, deferBindInner: Bool = false) -> [MinimizationScope] {
         let leaves = partitionLeaves(graph: graph)
+        let regions = BindPayloadRegions(graph: graph)
+        let integerGroups = regions.group(leaves.independentIntegers)
+        let floatGroups = regions.group(leaves.independentFloats)
         let deferred = deferBindInner
             ? DeferredScopes()
             : deferredScopes(from: leaves, graph: graph, stopAtFirst: false)
 
-        var scopes: [MinimizationScope] = []
-        if leaves.independentIntegers.isEmpty == false {
-            scopes.append(.valueLeaves(ValueMinimizationScope(
-                leaves: leaves.independentIntegers,
-                batchZeroEligible: leaves.independentIntegers.count > 1
-            )))
+        var scopes = integerGroups.map { entries in
+            MinimizationScope.valueLeaves(ValueMinimizationScope(
+                leaves: entries,
+                batchZeroEligible: entries.count > 1
+            ))
         }
         scopes += deferred.integerScopes
-        if leaves.independentFloats.isEmpty == false {
-            scopes.append(.floatLeaves(FloatMinimizationScope(leaves: leaves.independentFloats)))
-        }
+        scopes += floatGroups.map { .floatLeaves(FloatMinimizationScope(leaves: $0)) }
         scopes += deferred.floatScopes
         scopes += deferred.bindScopes
         return scopes

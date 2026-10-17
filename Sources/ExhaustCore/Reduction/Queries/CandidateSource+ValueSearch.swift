@@ -124,7 +124,6 @@ extension CandidateSourceBuilder {
         let annotation = graph.nodes[leafNodeID].scopeAnnotation
         guard let bindNodeID = annotation.controllingBindNodeID else { return 0 }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
-        guard metadata.isStructurallyConstant == false else { return 0 }
         guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }
         let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
         return graph.nodes[boundChildID].positionRange?.count ?? 0

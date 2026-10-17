@@ -569,16 +569,13 @@ extension ScopedSource {
         return results
     }
 
-    /// The size of the bound subtree `leafNodeID` controls as a bind inner, or zero when it controls none or the bind is structurally constant.
+    /// The size of the bound subtree `leafNodeID` controls as a bind inner, or zero when it controls none. Array counts can depend on controllers even in structurally constant binds.
     private static func computeValueYield(leafNodeID: Int, graph: ChoiceGraph) -> Int {
         let annotation = graph.nodes[leafNodeID].scopeAnnotation
         guard let bindNodeID = annotation.controllingBindNodeID else {
             return 0
         }
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
-            return 0
-        }
-        guard metadata.isStructurallyConstant == false else {
             return 0
         }
         guard graph.nodes[bindNodeID].children.count >= 2 else {
