@@ -213,7 +213,7 @@ package struct ScopedReductionRunner {
         isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         stallBudget = configuration.maxStalls
         maxStalls = configuration.maxStalls
-        deferBindInner = graph.reductionEdges.isEmpty == false
+        deferBindInner = false
         gate = BoundValueGate(baseBudget: configuration.tuning.boundValueBaseBudget)
         let budget = configuration.wallClockDeadlineNanoseconds
         deadline = ScopedDeadline(start: budget > 0 ? currentNanoseconds() : 0, budget: budget, clock: currentNanoseconds)

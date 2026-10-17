@@ -301,7 +301,7 @@ package struct ReductionMachine: ProbeSessionState {
         convergence = ConvergenceTracker(
             stallBudget: config.maxStalls,
             maxStalls: config.maxStalls,
-            deferBindInner: graph.reductionEdges.isEmpty == false,
+            deferBindInner: false,
             gate: BoundValueGate(baseBudget: config.tuning.boundValueBaseBudget)
         )
         deadlineNanoseconds = config.wallClockDeadlineNanoseconds
