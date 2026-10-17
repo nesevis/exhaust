@@ -409,10 +409,9 @@ extension ScopedReductionRunner {
         switch action {
             case .continueDispatching:
                 if report.anyAccepted {
-                    // Value changes can make an earlier joint search productive.
-                    gate.invalidateSearchHistory()
-                }
-                if report.anyAccepted == false {
+                    // Value changes can make an earlier joint search productive without erasing its budget decay.
+                    gate.clearFruitless()
+                } else {
                     scopeRejectionCache.recordRejection(pass.encoderScope, sequence: incumbent.sequence, graph: graph)
                 }
             case .rebuildAndResume:
