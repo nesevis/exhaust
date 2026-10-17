@@ -706,33 +706,29 @@ extension Materializer {
             elements.reserveCapacity(Int(length))
         }
 
-        var elementIndex = 0
-        var remaining = length
         if let elementBatch, case let .impure(
             .chooseBits(elementMin, elementMax, elementTag, elementIsRangeExplicit, elementScaling, elementTypeTagPayload),
             _
         ) = fusedElementGen {
-            // Batch loop: resolves each element's bits and tree, then converts the bits once. The element continuation (and the contramap wrapper's) is pure by the batch's construction contract, so skipping it changes neither value nor tree.
-            var bits: [UInt64] = []
-            bits.reserveCapacity(Int(length))
-            while remaining > 0 {
-                let elementFallback: ChoiceTree? = elementFallbacks.flatMap { fallbacks in
-                    elementIndex < fallbacks.count ? fallbacks[elementIndex] : nil
-                }
-                let (elementCalleeFallback, _) = decomposeNonGroupFallback(elementFallback)
-                let resolved = try resolveChooseBits(
-                    min: elementMin, max: elementMax, tag: elementTag,
-                    isRangeExplicit: elementIsRangeExplicit,
-                    scaling: elementScaling, typeTagPayload: elementTypeTagPayload,
-                    context: &context, calleeFallback: elementCalleeFallback
-                )
-                bits.append(resolved.bits)
-                if context.skipTree == false {
-                    elements.append(resolved.tree)
-                }
-                elementIndex += 1
-                remaining -= 1
-            }
+            let bits = try tryReplayScalarBits(
+                length: length,
+                min: elementMin,
+                max: elementMax,
+                tag: elementTag,
+                isRangeExplicit: elementIsRangeExplicit,
+                context: &context
+            ) ?? resolveScalarBatchBits(
+                length: length,
+                min: elementMin,
+                max: elementMax,
+                tag: elementTag,
+                isRangeExplicit: elementIsRangeExplicit,
+                scaling: elementScaling,
+                typeTagPayload: elementTypeTagPayload,
+                elementFallbacks: elementFallbacks,
+                elements: &elements,
+                context: &context
+            )
             context.emitFlat(.sequence(false))
             context.cursor.skipSequenceClose()
 
@@ -749,6 +745,8 @@ extension Materializer {
             }
             return nil
         }
+        var elementIndex = 0
+        var remaining = length
         if case let .impure(
             .chooseBits(elementMin, elementMax, elementTag, elementIsRangeExplicit, elementScaling, elementTypeTagPayload),
             elementContinuation

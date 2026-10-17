@@ -434,6 +434,12 @@ package extension Materializer {
         var shouldUseMaximumDepthForScreening: Bool = false
         /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materializes with the real tree only after the property fails.
         var skipTree: Bool = false
+        // Keeps unoptimized debug replay on the scalar resolver because the extra packed range pass is slower without vectorization. Tests and crossover benchmarks can override the cutoff; `UInt64.max` disables bulk replay.
+        #if DEBUG
+            package var minimumBulkScalarReplayLength: UInt64 = .max
+        #else
+            package var minimumBulkScalarReplayLength: UInt64 = 16
+        #endif
         /// Flat-emission buffer. When non-nil, the walk appends each node's flattened entries here in exactly `ChoiceSequence.flatten` order, so the caller gets the sequence without building a tree. Requires `skipTree` (handlers must not also build real nodes) and `materializePicks == false` (flatten only emits the selected branch). Handlers still return trees, but they are dummies, except `.getSize` leaves, which survive so the bind handler can choose group markers over bind markers.
         var flatOutput: ChoiceSequence?
         /// Suppresses flat emission for sub-walks whose trees the tree path discards: a sequence's generate-mode length walk and the metamorphic inner walk (which bulk-appends its flattened real tree instead).

@@ -287,6 +287,59 @@ extension Materializer {
             }
         }
 
+        /// Lets bulk replay reject an invalid leading value before allocating its buffer.
+        func peekScalarValue(expecting expected: TypeTag) -> UInt64? {
+            guard suspended == false,
+                  exhausted == false,
+                  position < effectiveEnd,
+                  case let .value(value) = entries[position],
+                  Self.tagIsCompatible(value.choice.tag, with: expected)
+            else {
+                return nil
+            }
+            return value.choice.bitPattern64
+        }
+
+        /// Extracts an uninterrupted scalar run without advancing on a structural or tag mismatch.
+        ///
+        /// The caller can fall back to individual reads after a failed probe, including when transparent markers interrupt the run. Scope limits remain authoritative even when the sequence's length scan found more entries.
+        mutating func tryConsumeScalarValues(count: Int, expecting expected: TypeTag) -> [UInt64]? {
+            guard suspended == false,
+                  exhausted == false,
+                  count >= 0,
+                  position <= effectiveEnd,
+                  count <= effectiveEnd - position
+            else {
+                return nil
+            }
+
+            if count > 0 {
+                guard case .value = entries[position + count - 1] else {
+                    return nil
+                }
+            }
+            let start = position
+            let values = entries.withUnsafeBufferPointer { source in
+                [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
+                    initializedCount = 0
+                    for index in 0 ..< count {
+                        guard case let .value(value) = source[start + index],
+                              Self.tagIsCompatible(value.choice.tag, with: expected)
+                        else {
+                            return
+                        }
+                        destination[index] = value.choice.bitPattern64
+                        initializedCount += 1
+                    }
+                }
+            }
+            guard values.count == count else {
+                return nil
+            }
+            position += count
+            return values
+        }
+
         /// Whether a prefix entry carrying `actual` may satisfy a choice site declaring `expected`.
         ///
         /// Tags are otherwise interchangeable here on purpose: the reducer re-derives width inconsistently across paths, so one reduction's `uint8` is another's `uint16` for the same field, and requiring equality would reject honest candidates. ``TypeTag/depthControl`` is the exception. Its payload is a layer index for a recursive generator rather than a value in any site's domain, so reading it at another site yields a number unrelated to the declared range instead of an out-of-range one a clamp could correct.
