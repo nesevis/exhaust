@@ -151,7 +151,7 @@ extension ScopedReductionRunner {
     /// Records perturbation work once, whether or not the provisional result is kept, and appends the round to the relax log, which is research diagnostics only.
     private mutating func recordRelaxRound(_ tally: RelaxRoundTally, committed: Bool) {
         stats.recordStructuralRelax(tally.probeCounts)
-        guard collectDiagnostics else {
+        guard diagnostics.isEnabled else {
             return
         }
         stats.relaxRoundLog.append(RelaxRoundRecord(

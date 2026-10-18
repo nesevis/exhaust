@@ -102,30 +102,15 @@ package struct ScopedReductionRunner {
 
     // MARK: - Coupling Attribution
 
-    /// Value changes by pass, for attributing coupling edges between a node's last convergence and the current pass. Kept only with diagnostics.
-    var valueChangeLog: [(passIndex: Int, nodeIDs: Set<Int>)] = []
-    /// The pass at which each node's convergence was last recorded. Kept only with diagnostics.
-    var lastConvergencePass: [Int: Int] = [:]
     /// Bounded coupling hints for joint-group ranking, kept whether or not research diagnostics are on.
     var couplingTracker = CouplingTracker()
     /// Monotonic count of applied passes.
     var passCounter = 0
 
-    // MARK: - Step Timing
+    // MARK: - Instrumentation
 
-    /// When the last step timing span ended.
-    var timingMark: UInt64 = 0
-    /// The post-cycle bucket that every span is charged to while its pass runs.
-    var timingOwner: TimingBucket?
-
-    // MARK: - Research Diagnostics
-
-    /// Enables floor-motion counters, coupling attribution, and the per-dispatch log. A maintainer-set literal rather than configuration, because these per-pass costs must not ride `collectStats`, which is on whenever a report is delivered.
-    var collectDiagnostics = false
-    /// Sequence length when the pass in flight started, for its dispatch record.
-    var dispatchBaselineLength = 0
-    /// Total distance to reduction targets when the pass in flight started, for its dispatch record.
-    var dispatchBaselineTargetDistance: Double = 0
+    var stepTimer: StepTimer
+    var diagnostics = ResearchDiagnostics()
 
     // MARK: - Entry Point
 
@@ -211,6 +196,7 @@ package struct ScopedReductionRunner {
         tuning = configuration.tuning
         enabledEncoders = configuration.enabledEncoders
         self.collectStats = collectStats
+        stepTimer = StepTimer(isEnabled: collectStats)
         isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         stallBudget = configuration.maxStalls
         maxStalls = configuration.maxStalls
@@ -232,28 +218,26 @@ package struct ScopedReductionRunner {
 
     /// Runs cycles until termination or the deadline, then the final reorder pass.
     mutating func run() {
-        if collectStats {
-            timingMark = MonotonicClock.nanoseconds()
-        }
+        stepTimer.start()
         while true {
             guard deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             beginCycle()
-            chargeElapsed(to: .untimed)
+            stepTimer.charge(.untimed)
             guard deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             buildCycleSources()
-            chargeElapsed(to: .buildSources)
+            stepTimer.charge(.buildSources)
             guard dispatchCycle() == .completed, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             let actions = endCycle()
-            chargeElapsed(to: .untimed)
+            stepTimer.charge(.untimed)
             guard runPostCycleActions(actions) == .completed, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
@@ -357,6 +341,7 @@ package struct ScopedReductionRunner {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
+        stats.stepTimings = stepTimer.timings
         let typedOutput = incumbent.output as! Output // swiftlint:disable:this force_cast
         let outcome: ReductionOutcome<Output> = incumbent.sequence != initialSequence
             ? .reduced(incumbent.sequence, incumbent.tree, typedOutput)
@@ -378,30 +363,6 @@ package struct ScopedReductionRunner {
 
     func allValuesConverged() -> Bool {
         Self.allValuesConverged(graph: graph)
-    }
-
-    /// Snapshots the sequence's length and target distance before a pass, for its dispatch record. Only with diagnostics.
-    mutating func captureDispatchBaseline() {
-        guard collectDiagnostics else {
-            return
-        }
-        dispatchBaselineLength = incumbent.sequence.count
-        dispatchBaselineTargetDistance = sequenceTargetDistance()
-    }
-
-    /// Sums each value's pattern-space distance to its reduction target. Floating point, because full-range leaves contribute distances near 2^63 that would overflow an integer sum.
-    func sequenceTargetDistance() -> Double {
-        var total: Double = 0
-        for entry in incumbent.sequence {
-            guard let value = entry.value else {
-                continue
-            }
-            let bitPattern = value.choice.bitPattern64
-            let target = value.choice.reductionTarget(in: value.validRange)
-            let distance = bitPattern.absoluteDifference(target)
-            total += Double(distance)
-        }
-        return total
     }
 
     /// Rebuilds the graph from the current tree, inheriting bind classifications and convergence records, and returns the diff that decides which sources survive.

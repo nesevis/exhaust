@@ -44,10 +44,10 @@ extension ScopedReductionRunner {
             let boundValueFingerprint: UInt64?
             switch selectDispatch(policy: policy) {
                 case .skip:
-                    chargeElapsed(to: .dispatch)
+                    stepTimer.charge(.dispatch)
                     continue
                 case let .end(outcome):
-                    chargeElapsed(to: .dispatch)
+                    stepTimer.charge(.dispatch)
                     return outcome
                 case let .dispatch(selected, fingerprint):
                     encoderScope = selected
@@ -56,18 +56,18 @@ extension ScopedReductionRunner {
 
             let pass = runPass(encoderScope, boundValueFingerprint: boundValueFingerprint)
             let action = applyPassPolicy(pass)
-            chargeElapsed(to: .passApply)
+            stepTimer.charge(.passApply)
             switch (policy, action) {
                 case (.main, _) where deadline.isExpired:
                     rebuildGraphAtDeadline(after: pass)
-                    chargeElapsed(to: .rebuild)
+                    stepTimer.charge(.rebuild)
                     return .deadline
                 case (.main, .rebuildAndResume):
                     rebuildAfterPass(pass)
-                    chargeElapsed(to: .rebuild)
+                    stepTimer.charge(.rebuild)
                 case (.exploitation, .rebuildAndResume):
                     rebuildForExploitation(after: pass)
-                    chargeElapsed(to: .rebuild)
+                    stepTimer.charge(.rebuild)
                 case (_, .continueDispatching):
                     break
             }
@@ -273,7 +273,7 @@ extension ScopedReductionRunner {
         }
 
         captureDispatchBaseline()
-        chargeElapsed(to: .dispatch)
+        stepTimer.charge(.dispatch)
         // Moved rather than copied, so neither the runner nor these locals hold a second reference while the execution edits them. Without `consume`, the locals keep their storage alive for the whole execution, and every rejection the cache records copies the entire set.
         var executionGraph = Self.vacatedGraph
         swap(&executionGraph, &graph)
@@ -290,10 +290,10 @@ extension ScopedReductionRunner {
                 encoder: typed.encoder,
                 isInstrumented: isInstrumented,
                 deadline: checksDeadline ? deadline : .none,
-                timingMark: collectStats ? timingMark : nil
+                timingMark: stepTimer.probeMark
             )
         )
-        chargeProbing(result.probeTiming)
+        stepTimer.chargeProbing(result.probeTiming)
         // The execution replaces the incumbent only on acceptance, so an unchanged one keeps its cached hash.
         if result.report.anyAccepted {
             adoptIncumbent(result.incumbent, hash: result.incumbentHash)
@@ -340,7 +340,7 @@ extension ScopedReductionRunner {
                 rebuildGeneration: stats.graphStats.fullGraphRebuilds
             )
             valueMotionNodes = motion.valueMotionNodeIDs
-            if collectDiagnostics {
+            if diagnostics.isEnabled {
                 recordFloorMotion(motion, convergedNodeIDs: Array(convergenceRecords.keys))
             }
         }
@@ -355,8 +355,8 @@ extension ScopedReductionRunner {
             )
         }
 
-        if collectDiagnostics, report.acceptedLeafNodeIDs.isEmpty == false {
-            valueChangeLog.append((passIndex: passCounter, nodeIDs: report.acceptedLeafNodeIDs))
+        if diagnostics.isEnabled, report.acceptedLeafNodeIDs.isEmpty == false {
+            diagnostics.valueChangeLog.append((passIndex: passCounter, nodeIDs: report.acceptedLeafNodeIDs))
         }
 
         if let fingerprint = pass.boundValueFingerprint {
@@ -383,7 +383,7 @@ extension ScopedReductionRunner {
             recordPassStatistics(pass)
         }
 
-        if collectDiagnostics {
+        if diagnostics.isEnabled {
             recordDispatch(pass)
         }
 
@@ -444,12 +444,12 @@ extension ScopedReductionRunner {
         let sourceEnd = MonotonicClock.nanoseconds()
 
         if collectStats {
-            stats.stepTimings.rebuildGraphNanoseconds += graphEnd - graphStart
-            stats.stepTimings.rebuildSourceNanoseconds += sourceEnd - graphEnd
+            stepTimer.timings.rebuildGraphNanoseconds += graphEnd - graphStart
+            stepTimer.timings.rebuildSourceNanoseconds += sourceEnd - graphEnd
         }
 
-        valueChangeLog = []
-        lastConvergencePass = [:]
+        diagnostics.valueChangeLog = []
+        diagnostics.lastConvergencePass = [:]
     }
 
     /// Rebuilds the graph and every source without clearing diagnostic history. The stripped-graph flag follows the rebuilt graph, so a committed relax round leaves it describing the graph the next cycle dispatches on.
@@ -492,54 +492,6 @@ extension ScopedReductionRunner {
         if report.liftAttempts > 0 {
             stats.recordMaterializations(report.liftAttempts, at: .lift)
             stats.liftAttemptsByEncoder[pass.encoderScope.encoder.name, default: 0] += report.liftAttempts
-        }
-    }
-
-    /// Attributes floor motion to the values that changed since each moving node last converged. Research diagnostics only.
-    private mutating func recordFloorMotion(_ motion: (structural: Int, value: Int, valueMotionNodeIDs: Set<Int>), convergedNodeIDs: [Int]) {
-        for motionNodeID in motion.valueMotionNodeIDs {
-            let sincePass = lastConvergencePass[motionNodeID] ?? 0
-            var partnerNodes: Set<Int> = []
-            for entry in valueChangeLog where entry.passIndex > sincePass {
-                for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
-                    partnerNodes.insert(changedNodeID)
-                    let edge = CouplingEdge(motionNodeID: motionNodeID, changedNodeID: changedNodeID)
-                    stats.couplingEdges[edge, default: 0] += 1
-                }
-            }
-            stats.floorMotionPartnerCounts[partnerNodes.count, default: 0] += 1
-        }
-
-        stats.structuralFloorMotionEvents += motion.structural
-        stats.valueFloorMotionEvents += motion.value
-        stats.valueFloorMotionNodeIDs.formUnion(motion.valueMotionNodeIDs)
-
-        for nodeID in convergedNodeIDs {
-            lastConvergencePass[nodeID] = passCounter
-        }
-    }
-
-    /// Appends the pass to the dispatch log. Research diagnostics only.
-    private mutating func recordDispatch(_ pass: PassRecord) {
-        let report = pass.report
-        let distanceDelta = dispatchBaselineTargetDistance - sequenceTargetDistance()
-        stats.dispatchLog.append(DispatchRecord(
-            cycle: cycles,
-            passIndex: passCounter,
-            encoderName: pass.encoderScope.encoder.name,
-            probeCount: report.counts.emitted,
-            acceptCount: report.counts.accepted,
-            cacheHitCount: report.counts.rejectedByCache,
-            decoderRejectCount: report.counts.decoderRejections,
-            sequenceLengthDelta: dispatchBaselineLength - incumbent.sequence.count,
-            targetDistanceDelta: distanceDelta,
-            boundValueFingerprint: pass.boundValueFingerprint,
-            composedUpstreamLifts: nil,
-            bindClassification: pass.boundValueFingerprint.flatMap { graph.bindClassifications[$0] }
-        ))
-
-        if report.anyAccepted, case .redistribution = pass.encoderScope {
-            stats.redistributionAcceptanceNodeIDs.formUnion(report.acceptedLeafNodeIDs)
         }
     }
 }

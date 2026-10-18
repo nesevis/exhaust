@@ -15,30 +15,30 @@ extension ScopedReductionRunner {
             switch action {
                 case .confirmConvergence:
                     confirmConvergence()
-                    chargeElapsed(to: .convergenceConfirmation)
+                    stepTimer.charge(.convergenceConfirmation)
                 case .relationPass:
-                    let previousOwner = beginTimingOwnership(.relationPass)
+                    let previousOwner = stepTimer.beginOwnership(.relationPass)
                     runRelationPass()
-                    endTimingOwnership(restoring: previousOwner)
+                    stepTimer.endOwnership(restoring: previousOwner)
                 case .improvingPivots:
                     if runImprovingPivotPass() {
                         recordPostCycleAcceptance()
                     }
-                    chargeElapsed(to: .relaxRound)
+                    stepTimer.charge(.relaxRound)
                 case .stagedJointPass:
-                    let previousOwner = beginTimingOwnership(.stagedJointPass)
+                    let previousOwner = stepTimer.beginOwnership(.stagedJointPass)
                     runStagedJointPass()
-                    endTimingOwnership(restoring: previousOwner)
+                    stepTimer.endOwnership(restoring: previousOwner)
                 case .relaxRound:
                     // Perturbing away from a counterexample an earlier action just improved spends budget escaping a local minimum the run may not be in.
                     guard anyAccepted == false else {
                         continue
                     }
-                    let previousOwner = beginTimingOwnership(.relaxRound)
+                    let previousOwner = stepTimer.beginOwnership(.relaxRound)
                     if runRelaxRound() {
                         recordPostCycleAcceptance()
                     }
-                    endTimingOwnership(restoring: previousOwner)
+                    stepTimer.endOwnership(restoring: previousOwner)
             }
         }
         return .completed

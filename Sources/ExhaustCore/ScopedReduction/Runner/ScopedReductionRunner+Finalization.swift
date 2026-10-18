@@ -10,9 +10,9 @@ extension ScopedReductionRunner {
     ///
     /// An accepted reordering rebuilds the graph, which ends its pass, so the groups are discovered again on the rebuilt graph and the next unsorted group gets its own pass. Each accepted pass sorts at least one group, so the first discovery's group count bounds the passes. The rejection cache is kept across these passes, so a group the property refused is not probed again while the sequence around it is unchanged.
     mutating func runReorderPass() {
-        let previousOwner = beginTimingOwnership(.reorder)
+        let previousOwner = stepTimer.beginOwnership(.reorder)
         defer {
-            endTimingOwnership(restoring: previousOwner)
+            stepTimer.endOwnership(restoring: previousOwner)
         }
         guard isEncoderEnabled(.numericReorder),
               let source = ScopedSource.prepareReorderSource(from: graph),
