@@ -37,7 +37,8 @@ extension ScopedReductionInterpreter {
         let selection = context.decoder.selection(for: ScopedDecodingRequirement(
             requiresExactDecoder: configuration.requiresExactDecoder,
             mutation: mutation,
-            admission: admission
+            admission: admission,
+            admissionOrder: context.encoder.admissionOrder
         ))
         let cacheKey = context.rejectCache.key(
             probeHash: probeHash,

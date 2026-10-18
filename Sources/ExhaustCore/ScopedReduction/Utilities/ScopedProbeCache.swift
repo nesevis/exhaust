@@ -33,8 +33,8 @@ struct ScopedProbeDecision {
         switch selection {
             case let .exact(materializePicks, admission):
                 self.init(isGuided: false, materializePicks: materializePicks, admission: admission)
-            case let .guided(materializePicks):
-                self.init(isGuided: true, materializePicks: materializePicks)
+            case let .guided(materializePicks, skipsShortlexCheck):
+                self.init(isGuided: true, materializePicks: materializePicks, skipsShortlexCheck: skipsShortlexCheck)
         }
     }
 

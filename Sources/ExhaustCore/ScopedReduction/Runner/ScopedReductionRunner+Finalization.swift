@@ -7,6 +7,8 @@
 
 extension ScopedReductionRunner {
     /// Reorders sibling groups numerically for presentation, with an empty rejection cache that is restored afterwards. Runs to completion even past the deadline, so the returned counterexample is always presented the same way.
+    ///
+    /// An accepted reordering rebuilds the graph, which ends its pass, so the groups are discovered again on the rebuilt graph and the next unsorted group gets its own pass. Each accepted pass sorts at least one group, so the first discovery's group count bounds the passes. The rejection cache is kept across these passes, so a group the property refused is not probed again while the sequence around it is unchanged.
     mutating func runReorderPass() {
         let previousOwner = beginTimingOwnership(.reorder)
         defer {
@@ -14,17 +16,36 @@ extension ScopedReductionRunner {
         }
         guard isEncoderEnabled(.numericReorder),
               var source = ScopedSource.prepareReorderSource(from: graph),
-              let priced = source.nextScope()
+              var priced = source.nextScope(),
+              case let .reorder(firstScope) = priced.encoderScope
         else {
             return
         }
         let savedRejectCache = rejectCache
         rejectCache = rejectCache.emptied
-        let pass = runPass(priced.encoderScope, boundValueFingerprint: nil, usesWarmStarts: false, checksDeadline: false)
-        rejectCache = savedRejectCache
-        applyPassPolicy(pass)
-        if isInstrumented, pass.report.anyAccepted {
-            ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
+        defer {
+            rejectCache = savedRejectCache
+        }
+        var passesRemaining = firstScope.groups.count
+        while true {
+            let pass = runPass(priced.encoderScope, boundValueFingerprint: nil, usesWarmStarts: false, checksDeadline: false)
+            let action = applyPassPolicy(pass)
+            if isInstrumented, pass.report.anyAccepted {
+                ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
+            }
+            guard action == .rebuildAndResume else {
+                return
+            }
+            rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
+            graphIsStripped = pass.report.latestTreeIsStripped
+            passesRemaining -= 1
+            guard passesRemaining > 0,
+                  var nextSource = ScopedSource.prepareReorderSource(from: graph),
+                  let nextPriced = nextSource.nextScope()
+            else {
+                return
+            }
+            priced = nextPriced
         }
     }
 
