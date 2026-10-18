@@ -92,33 +92,4 @@ extension ScopedRemovalEncoder {
                 graph.sequenceCanShrink(scope.sequenceNodeID)
         }
     }
-
-    /// Aligned removal is never cached, because its rows vary. Centered and symmetric windows have their own discriminators, so rejecting a full-window removal does not block their smaller probes or one another.
-    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey? {
-        let discriminator: UInt64 = 0xA1B2_C3D4_E5F6_0718
-        switch scope {
-            case let .elements(elementScope):
-                return ScopedRejectionKey(
-                    discriminator: discriminator,
-                    isCoarse: true,
-                    affectedNodeIDs: elementScope.targets.flatMap(\.elementNodeIDs)
-                )
-            case .coveringAligned:
-                return nil
-            case let .window(windowScope):
-                let growthDiscriminator: UInt64 = switch windowScope.growth {
-                    case .rightward:
-                        0
-                    case .outward:
-                        0xC37E_2ED0_0000_0001
-                    case .symmetric:
-                        0xC37E_2ED0_0000_0002
-                }
-                return ScopedRejectionKey(
-                    discriminator: discriminator ^ growthDiscriminator,
-                    isCoarse: true,
-                    affectedNodeIDs: windowScope.elementNodeIDs
-                )
-        }
-    }
 }

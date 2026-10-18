@@ -50,13 +50,4 @@ extension ScopedBranchPivotEncoder {
         scope.pickNodeID < graph.nodes.count
             && graph.nodes[scope.pickNodeID].positionRange != nil
     }
-
-    /// Shares substitution's discriminator, and adds the target branch so that rejecting one branch at a pick does not block another.
-    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey? {
-        ScopedRejectionKey(
-            discriminator: 0x1827_3645_5463_7281 ^ scope.targetBranchID,
-            isCoarse: true,
-            affectedNodeIDs: [scope.pickNodeID]
-        )
-    }
 }

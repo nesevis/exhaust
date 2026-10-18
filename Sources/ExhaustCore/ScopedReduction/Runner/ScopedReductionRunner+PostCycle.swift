@@ -44,13 +44,12 @@ extension ScopedReductionRunner {
         return .completed
     }
 
-    /// Records an acceptance made by a post-cycle action: marks the cycle accepted, drops scope rejections recorded against the previous sequence, and restores the stall budget.
+    /// Records an acceptance made by a post-cycle action: marks the cycle accepted and restores the stall budget.
     ///
     /// The stall that scheduled the action has already been spent, and the relax round runs only on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
     mutating func recordPostCycleAcceptance() {
         anyAccepted = true
         anyAcceptanceEverOccurred = true
-        scopeRejectionCache.clear()
         stallBudget = maxStalls
     }
 

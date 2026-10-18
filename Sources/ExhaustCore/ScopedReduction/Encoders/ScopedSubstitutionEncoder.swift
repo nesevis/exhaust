@@ -75,19 +75,4 @@ extension ScopedSubstitutionEncoder {
                     && graph.nodes[descendantPickNodeID].positionRange != nil
         }
     }
-
-    /// Shares its discriminator with branch pivot.
-    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey? {
-        let affectedNodeIDs = switch scope {
-            case let .selfSimilar(targetNodeID, donorNodeID):
-                [targetNodeID, donorNodeID]
-            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID):
-                [ancestorPickNodeID, descendantPickNodeID]
-        }
-        return ScopedRejectionKey(
-            discriminator: 0x1827_3645_5463_7281,
-            isCoarse: true,
-            affectedNodeIDs: affectedNodeIDs
-        )
-    }
 }

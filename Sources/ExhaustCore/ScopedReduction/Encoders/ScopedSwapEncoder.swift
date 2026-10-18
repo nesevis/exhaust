@@ -42,13 +42,4 @@ extension ScopedSwapEncoder {
         scope.parentNodeID < graph.nodes.count
             && graph.nodes[scope.parentNodeID].positionRange != nil
     }
-
-    /// Keyed by the values at the swapped positions, so a value change invalidates it by itself.
-    static func rejectionKey(_ scope: PermutationScope) -> ScopedRejectionKey? {
-        ScopedRejectionKey(
-            discriminator: 0x9182_7364_5546_3728,
-            isCoarse: false,
-            affectedNodeIDs: scope.swappableGroups.flatMap(\.self)
-        )
-    }
 }

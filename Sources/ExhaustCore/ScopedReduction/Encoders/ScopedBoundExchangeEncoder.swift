@@ -85,9 +85,4 @@ extension ScopedBoundExchangeEncoder {
     static func isValid(_: BoundExchangeScope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: BoundExchangeScope) -> ScopedRejectionKey? {
-        nil
-    }
 }

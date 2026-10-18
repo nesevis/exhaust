@@ -164,7 +164,7 @@ public struct ExhaustReport: Sendable {
     /// Per-encoder counts of probes admitted by their producer after the property failed and admission checks passed.
     public var encoderProbesAccepted: [String: Int] = [:]
 
-    /// Per-encoder counts of probes that were rejected by the scope rejection cache without materializing.
+    /// Per-encoder counts of probes turned away without materializing, because the same candidate was already rejected earlier in the reduction.
     public var encoderProbesRejectedByCache: [String: Int] = [:]
 
     /// Per-encoder counts of probes rejected during materialization before the property ran. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.

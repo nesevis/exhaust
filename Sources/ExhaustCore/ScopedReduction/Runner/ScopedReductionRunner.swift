@@ -85,7 +85,6 @@ package struct ScopedReductionRunner {
     // MARK: - Per-Cycle State
 
     var sources: [ScopedSource] = []
-    var scopeRejectionCache = ScopedScopeRejectionCache()
     var anyAccepted = false
     var hadUnresolvedReplacement = false
     /// True once any pass in the run accepted. Never reset: a run that ends with this false could not improve its input even once.
@@ -272,8 +271,7 @@ package struct ScopedReductionRunner {
     private mutating func beginCycle() {
         cycles += 1
         gate.resetForNewCycle()
-        scopeRejectionCache.clearCoarse()
-        // Latched across stalled cycles: the scope rejection cache can skip a replacement scope on the very stall that schedules the relax round.
+        // Latched across stalled cycles, so a replacement the ordering refused stays eligible for a relax round until the sequence changes.
         hadUnresolvedReplacement = hadUnresolvedReplacement && incumbent.sequence == sequenceBeforeCycle
         anyAccepted = false
         sequenceBeforeCycle = incumbent.sequence

@@ -132,9 +132,4 @@ extension ScopedStagedJointEncoder {
     static func isValid(_: Scope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: Scope) -> ScopedRejectionKey? {
-        nil
-    }
 }

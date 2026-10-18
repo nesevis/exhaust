@@ -37,9 +37,4 @@ extension ScopedReorderEncoder {
     static func isValid(_: ReorderingScope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: ReorderingScope) -> ScopedRejectionKey? {
-        nil
-    }
 }

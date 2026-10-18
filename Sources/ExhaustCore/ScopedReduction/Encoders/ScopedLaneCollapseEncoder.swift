@@ -41,9 +41,4 @@ extension ScopedLaneCollapseEncoder {
     static func isValid(_: ValueMinimizationScope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: ValueMinimizationScope) -> ScopedRejectionKey? {
-        nil
-    }
 }

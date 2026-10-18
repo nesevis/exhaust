@@ -41,9 +41,4 @@ extension ScopedRelationEncoder {
     static func isValid(_: RelationScope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: RelationScope) -> ScopedRejectionKey? {
-        nil
-    }
 }

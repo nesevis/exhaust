@@ -8,7 +8,7 @@
 extension ScopedReductionRunner {
     /// How a dispatch loop selects and follows up its passes.
     enum DispatchPolicy {
-        /// Ordinary cycles: dispatch gates, scope rejections, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
+        /// Ordinary cycles: dispatch gates, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
         case main
         /// Relax round exploitation: none of the main policy's dispatch decisions, and every rebuild prepares all sources again.
         case exploitation
@@ -192,10 +192,6 @@ extension ScopedReductionRunner {
             return .skip
         }
 
-        if scopeRejectionCache.isRejected(encoderScope, sequence: incumbent.sequence, graph: graph) {
-            return .skip
-        }
-
         switch typed.gate {
             case let .bindClassification(bindNodeID, upstreamLeafNodeID):
                 guard bindNodeID < graph.nodes.count,
@@ -326,7 +322,7 @@ extension ScopedReductionRunner {
 
     // MARK: - Pass Policy
 
-    /// Applies a completed pass to the runner's state: convergence, coupling, the gate, migration demotion, unresolved replacements, statistics, acceptance flags, and scope rejections.
+    /// Applies a completed pass to the runner's state: convergence, coupling, the gate, migration demotion, unresolved replacements, statistics, and acceptance flags.
     ///
     /// Shared by dispatched and post-cycle passes. The returned action lets each caller choose its own rebuild.
     ///
@@ -404,25 +400,15 @@ extension ScopedReductionRunner {
         if report.anyAccepted {
             anyAccepted = true
             anyAcceptanceEverOccurred = true
-        }
-
-        switch action {
-            case .continueDispatching:
-                if report.anyAccepted {
-                    // Value changes can make an earlier joint search productive without erasing its budget decay.
-                    gate.clearFruitless()
-                } else {
-                    scopeRejectionCache.recordRejection(pass.encoderScope, sequence: incumbent.sequence, graph: graph)
-                }
-            case .rebuildAndResume:
-                gate.clearFruitless()
+            // Value changes can make an earlier joint search productive without erasing its budget decay.
+            gate.clearFruitless()
         }
         return action
     }
 
     // MARK: - Rebuilds
 
-    /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families, rebuilds permutation and value families, and clears the scope cache; anything else rebuilds every family and clears the scope cache. Convergence the encoder reports its acceptance invalidated is cleared as well.
+    /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families and rebuilds permutation and value families; anything else rebuilds every family. Convergence the encoder reports its acceptance invalidated is cleared as well.
     mutating func rebuildAfterPass(_ pass: PassRecord) {
         let invalidatedRange = pass.encoderScope.typed.convergenceInvalidatedByAcceptance(in: graph)
 
@@ -443,7 +429,6 @@ extension ScopedReductionRunner {
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
-            scopeRejectionCache.clear()
             sources = sources.filter(\.canReuseAfterLeafKindChange)
                 + ScopedSource.preparePermutationSources(from: graph)
                 + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
@@ -451,7 +436,6 @@ extension ScopedReductionRunner {
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
-            scopeRejectionCache.clear()
             sources = prepareAllSources(previousGraph: graphBefore)
             ScopedReductionLog.reducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",

@@ -41,9 +41,4 @@ extension ScopedFloatSearchEncoder {
     static func isValid(_: FloatMinimizationScope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: FloatMinimizationScope) -> ScopedRejectionKey? {
-        nil
-    }
 }

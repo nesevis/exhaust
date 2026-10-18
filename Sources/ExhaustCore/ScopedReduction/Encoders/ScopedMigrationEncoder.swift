@@ -56,12 +56,4 @@ extension ScopedMigrationEncoder {
         return scope.receiverSequenceNodeID < graph.nodes.count
             && graph.nodes[scope.receiverSequenceNodeID].positionRange != nil
     }
-
-    static func rejectionKey(_ scope: MigrationScope) -> ScopedRejectionKey? {
-        ScopedRejectionKey(
-            discriminator: 0x6372_8190_A0B0_C0D0,
-            isCoarse: true,
-            affectedNodeIDs: scope.elementNodeIDs + [scope.receiverSequenceNodeID]
-        )
-    }
 }

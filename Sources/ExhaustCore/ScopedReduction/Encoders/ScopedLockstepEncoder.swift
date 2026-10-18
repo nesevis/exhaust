@@ -42,9 +42,4 @@ extension ScopedLockstepEncoder {
     static func isValid(_: TandemScope, in _: ChoiceGraph) -> Bool {
         true
     }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: TandemScope) -> ScopedRejectionKey? {
-        nil
-    }
 }
