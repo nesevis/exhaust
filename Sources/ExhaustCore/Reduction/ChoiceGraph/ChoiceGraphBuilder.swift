@@ -73,7 +73,123 @@ struct ChoiceGraphBuilder {
         }
         var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
-        var graph = builder.assembleGraph()
+        return builder.finishedGraph()
+    }
+
+    /// Builds the graph of one bind and everything it encloses, without the rest of the tree.
+    ///
+    /// Use it when a caller reads only one bind's subtree from a fresh tree, as bound value search does after each lift. Every node under the bind gets the position, path, bind depth, and scope annotation a full build gives it, because the walk starts at the bind's flattened offset with its path and depth. Node IDs are renumbered from zero, with the bind as node zero, so they cannot be compared with any other graph's.
+    ///
+    /// - Returns: The graph and the bind's node ID, or nil when no active, non-getSize bind with `fingerprint` sits at `bindPath`, or when the path passes through another bind's inner subtree. A full build marks nodes there as controlled by that outer bind, which this graph would not contain, so callers fall back to ``build(from:)``.
+    static func buildBind(
+        at bindPath: ChoicePath,
+        fingerprint: UInt64,
+        in tree: ChoiceTree,
+        omittingScalarSequenceElements: Bool
+    ) -> (graph: ChoiceGraph, bindNodeID: Int)? {
+        guard let location = locateBind(in: tree, remainingPath: bindPath[...], offset: 0, bindDepth: 0, fingerprint: fingerprint) else {
+            return nil
+        }
+        var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
+        _ = builder.walk(location.bind, offset: location.offset, parent: nil, bindDepth: location.bindDepth, path: bindPath)
+        return (builder.finishedGraph(), 0)
+    }
+
+    /// Follows `remainingPath` to the bind it addresses, accumulating the flattened offset and bind depth the full walk would reach it with. Mirrors the descent of ``walk(_:offset:parent:bindDepth:path:isActive:)`` along active children: a preceding sibling contributes its ``ChoiceTree/flattenedEntryCount``, which equals what the walk consumes for it.
+    private static func locateBind(
+        in tree: ChoiceTree,
+        remainingPath: ArraySlice<ChoicePathStep>,
+        offset: Int,
+        bindDepth: Int,
+        fingerprint: UInt64
+    ) -> (bind: ChoiceTree, offset: Int, bindDepth: Int)? {
+        switch tree {
+            case .choice, .just, .getSize:
+                return nil
+
+            case let .sequence(elements, _):
+                guard case let .sequenceChild(index)? = remainingPath.first, elements.indices.contains(index) else {
+                    return nil
+                }
+                return locateBind(
+                    in: elements[index],
+                    remainingPath: remainingPath.dropFirst(),
+                    offset: offset + 1 + Self.flattenedEntryCount(of: elements[..<index]),
+                    bindDepth: bindDepth,
+                    fingerprint: fingerprint
+                )
+
+            case let .branch(branch):
+                return locateBind(in: branch.choice, remainingPath: remainingPath, offset: offset, bindDepth: bindDepth, fingerprint: fingerprint)
+
+            case let .group(array, _, _):
+                if let pickSite = detectPickSite(array) {
+                    guard case let .pickBranch(branchID)? = remainingPath.first,
+                          branchID == pickSite.selectedID,
+                          let selected = array.first(where: { $0.isSelected })
+                    else {
+                        return nil
+                    }
+                    // Group open and branch marker precede the selected branch's content.
+                    return locateBind(in: selected, remainingPath: remainingPath.dropFirst(), offset: offset + 2, bindDepth: bindDepth, fingerprint: fingerprint)
+                }
+                guard case let .groupChild(index)? = remainingPath.first, array.indices.contains(index) else {
+                    return nil
+                }
+                return locateBind(
+                    in: array[index],
+                    remainingPath: remainingPath.dropFirst(),
+                    offset: offset + 1 + Self.flattenedEntryCount(of: array[..<index]),
+                    bindDepth: bindDepth,
+                    fingerprint: fingerprint
+                )
+
+            case let .bind(bindFingerprint, inner, bound):
+                if inner.isGetSize {
+                    return locateBind(in: bound, remainingPath: remainingPath, offset: offset + 1, bindDepth: bindDepth, fingerprint: fingerprint)
+                }
+                guard let step = remainingPath.first else {
+                    guard bindFingerprint == fingerprint else {
+                        return nil
+                    }
+                    return (tree, offset, bindDepth)
+                }
+                guard case .bindBound = step else {
+                    return nil
+                }
+                return locateBind(
+                    in: bound,
+                    remainingPath: remainingPath.dropFirst(),
+                    offset: offset + 1 + inner.flattenedEntryCount,
+                    bindDepth: bindDepth + 1,
+                    fingerprint: fingerprint
+                )
+
+            case let .resize(_, choices):
+                guard case let .groupChild(index)? = remainingPath.first, choices.indices.contains(index) else {
+                    return nil
+                }
+                return locateBind(
+                    in: choices[index],
+                    remainingPath: remainingPath.dropFirst(),
+                    offset: offset + 1 + Self.flattenedEntryCount(of: choices[..<index]),
+                    bindDepth: bindDepth,
+                    fingerprint: fingerprint
+                )
+        }
+    }
+
+    private static func flattenedEntryCount(of trees: ArraySlice<ChoiceTree>) -> Int {
+        var count = 0
+        for tree in trees {
+            count += tree.flattenedEntryCount
+        }
+        return count
+    }
+
+    /// Assembles the walked nodes and records the build flags every entry point sets.
+    private func finishedGraph() -> ChoiceGraph {
+        var graph = assembleGraph()
         graph.isControllerTopology = omittingScalarSequenceElements
         graph.lacksUnselectedBranches = graph.nodes.contains { node in
             guard case let .pick(metadata) = node.kind else {
@@ -306,7 +422,7 @@ struct ChoiceGraphBuilder {
         path: ChoicePath,
         isActive: Bool
     ) -> Int {
-        if let pickResult = detectPickSite(array) {
+        if let pickResult = Self.detectPickSite(array) {
             return walkPickSite(
                 array: array,
                 selectedBranch: pickResult,
@@ -642,7 +758,7 @@ struct ChoiceGraphBuilder {
     /// Detects whether a group's children form a pick site.
     ///
     /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount``.
-    func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
+    static func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
         guard array.allSatisfy({ $0.isBranch }) else {
             return nil
         }

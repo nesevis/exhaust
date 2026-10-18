@@ -205,7 +205,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: rootSequence) {
             return .fail(.nonImprovingPrefix)
         }
-        let liftedGraph = lifted.terminalGraph()
+        let liftedGraph = terminalGraph(of: lifted)
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else {
                 return false
@@ -308,15 +308,13 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         {
             return .failed(.liftedTooLong)
         }
-        let liftedGraph = controllerTopologyOnly
-            ? ChoiceGraphBuilder.buildControllerTopology(from: freshTree)
-            : ChoiceGraph.build(from: freshTree)
-
         guard bindNodeID < parent.graph.nodes.count,
               case let .bind(sourceMetadata) = parent.graph.nodes[bindNodeID].kind,
-              let liftedBindNodeID = liftedGraph.bindNodeID(
+              let (liftedGraph, liftedBindNodeID) = liftedGraph(
+                  of: freshTree,
+                  bindPath: sourceMetadata.bindPath,
                   fingerprint: sourceMetadata.fingerprint,
-                  path: sourceMetadata.bindPath
+                  controllerTopologyOnly: controllerTopologyOnly
               ),
               case let .bind(metadata) = liftedGraph.nodes[liftedBindNodeID].kind,
               liftedGraph.nodes[liftedBindNodeID].children.count > metadata.boundChildIndex
@@ -335,6 +333,41 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             boundRange: boundRange,
             isControllerTopology: controllerTopologyOnly
         ))
+    }
+
+    /// Builds the lifted graph from the dispatched bind down, because nothing outside the bind's subtree is read. Falls back to a full build where ``ChoiceGraphBuilder/buildBind(at:fingerprint:in:omittingScalarSequenceElements:)`` declines.
+    private static func liftedGraph(
+        of tree: ChoiceTree,
+        bindPath: ChoicePath,
+        fingerprint: UInt64,
+        controllerTopologyOnly: Bool
+    ) -> (graph: ChoiceGraph, bindNodeID: Int)? {
+        if let bindRooted = ChoiceGraphBuilder.buildBind(
+            at: bindPath,
+            fingerprint: fingerprint,
+            in: tree,
+            omittingScalarSequenceElements: controllerTopologyOnly
+        ) {
+            return bindRooted
+        }
+        let graph = controllerTopologyOnly
+            ? ChoiceGraphBuilder.buildControllerTopology(from: tree)
+            : ChoiceGraph.build(from: tree)
+        guard let bindNodeID = graph.bindNodeID(fingerprint: fingerprint, path: bindPath) else {
+            return nil
+        }
+        return (graph, bindNodeID)
+    }
+
+    /// The graph a terminal search runs on: the lifted graph, or for a controller topology, which omits scalar array elements, the bind's subtree built in full.
+    private static func terminalGraph(of lifted: LiftedBind) -> ChoiceGraph {
+        guard lifted.isControllerTopology,
+              case let .bind(metadata) = lifted.graph.nodes[lifted.bindNodeID].kind,
+              let full = liftedGraph(of: lifted.tree, bindPath: metadata.bindPath, fingerprint: metadata.fingerprint, controllerTopologyOnly: false)
+        else {
+            return lifted.terminalGraph()
+        }
+        return full.graph
     }
 
     /// Whether a terminal search may run on a lift of this length. Only terminal searches are gated, so an intermediate lift can grow while a deeper controller compensates.
