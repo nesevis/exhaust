@@ -72,7 +72,9 @@ extension ScopedReductionRunner {
 
     // MARK: - Convergence Confirmation
 
-    /// Probes each converged leaf below its floor to find stale floors: `floor - 1` first, then `floor - 2` when that rejects and is in range, for non-monotone gaps. A passing probe clears the record so minimization can work on the leaf again.
+    /// Probes each converged leaf one step past its floor towards its reduction target to find stale floors, then two steps when that rejects and the target is that far away, for non-monotone gaps. A passing probe clears the record so minimization can work on the leaf again.
+    ///
+    /// A leaf below its target in bit-pattern space, such as a negative signed integer, steps upward. Stepping down from it would move away from the target, which shortlex ordering skips without a probe.
     ///
     /// - Returns: Whether any stale floor was cleared.
     @discardableResult
@@ -102,13 +104,14 @@ extension ScopedReductionRunner {
                 continue
             }
 
-            let minimumBound: UInt64 = metadata.validRange?.lowerBound ?? 0
-            guard origin.bound > minimumBound else {
+            let target = metadata.value.reductionTarget(in: metadata.validRange)
+            guard origin.bound != target else {
                 continue
             }
 
-            let result = probeBelow(
-                value: origin.bound - 1,
+            let nearerBitPattern = Self.bitPattern(origin.bound, steppedTowards: target, by: 1)
+            let result = probeCloser(
+                value: nearerBitPattern,
                 at: range.lowerBound,
                 decoder: sequenceDecoder,
                 decision: decision,
@@ -119,11 +122,12 @@ extension ScopedReductionRunner {
                 anyStale = true
                 graph.clearConvergence(nodeID)
                 ScopedReductionLog.reducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
-                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
+                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(nearerBitPattern)",
                 ])
-            } else if result == .rejected, origin.bound - minimumBound >= 2, deadline.isExpired == false {
-                let gapResult = probeBelow(
-                    value: origin.bound - 2,
+            } else if result == .rejected, origin.bound.absoluteDifference(target) >= 2, deadline.isExpired == false {
+                let gapBitPattern = Self.bitPattern(origin.bound, steppedTowards: target, by: 2)
+                let gapResult = probeCloser(
+                    value: gapBitPattern,
                     at: range.lowerBound,
                     decoder: sequenceDecoder,
                     decision: decision,
@@ -133,7 +137,7 @@ extension ScopedReductionRunner {
                     anyStale = true
                     graph.clearConvergence(nodeID)
                     ScopedReductionLog.reducer("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
-                        "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(origin.bound - 2)",
+                        "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(gapBitPattern)",
                     ])
                 }
             }
@@ -148,8 +152,18 @@ extension ScopedReductionRunner {
         case skipped
     }
 
-    /// Decodes the sequence with one value lowered, without committing it: a failing decode only proves the floor stale.
-    private mutating func probeBelow(
+    /// The bit pattern `step` past `bound` in the direction of `target`.
+    private static func bitPattern(_ bound: UInt64, steppedTowards target: UInt64, by step: UInt64) -> UInt64 {
+        switch bound > target {
+            case true:
+                bound - step
+            case false:
+                bound + step
+        }
+    }
+
+    /// Decodes the sequence with one value moved closer to its target, without committing it: a failing decode only proves the floor stale.
+    private mutating func probeCloser(
         value: UInt64,
         at sequenceIndex: Int,
         decoder sequenceDecoder: SequenceDecoder,
