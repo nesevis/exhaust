@@ -20,7 +20,7 @@ struct ScopedImprovingPivotCursor {
     }
 
     /// Every improving pivot is decoded exactly with picks materialized and standard admission.
-    static let decision = ScopedProbeDecision(isGuided: false, materializePicks: true)
+    static let decision = ScopedProbeDecision(isGuided: false)
 
     private struct Pivot {
         let pickNodeID: Int

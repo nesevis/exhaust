@@ -18,32 +18,30 @@ enum ScopedProbeCacheKeying: Sendable {
 /// How one candidate is decided, for keying its probe cache entry.
 struct ScopedProbeDecision {
     let isGuided: Bool
-    let materializePicks: Bool
     let skipsShortlexCheck: Bool
     let admission: DecoderAdmission
 
-    init(isGuided: Bool, materializePicks: Bool, skipsShortlexCheck: Bool = false, admission: DecoderAdmission = .standard) {
+    init(isGuided: Bool, skipsShortlexCheck: Bool = false, admission: DecoderAdmission = .standard) {
         self.isGuided = isGuided
-        self.materializePicks = materializePicks
         self.skipsShortlexCheck = skipsShortlexCheck
         self.admission = admission
     }
 
     init(_ selection: ScopedDecoder.Selection) {
         switch selection {
-            case let .exact(materializePicks, admission):
-                self.init(isGuided: false, materializePicks: materializePicks, admission: admission)
-            case let .guided(materializePicks, skipsShortlexCheck):
-                self.init(isGuided: true, materializePicks: materializePicks, skipsShortlexCheck: skipsShortlexCheck)
+            case let .exact(_, admission):
+                self.init(isGuided: false, admission: admission)
+            case let .guided(_, skipsShortlexCheck):
+                self.init(isGuided: true, skipsShortlexCheck: skipsShortlexCheck)
         }
     }
 
     init(_ decoder: SequenceDecoder) {
         switch decoder {
-            case let .exact(materializePicks, admission):
-                self.init(isGuided: false, materializePicks: materializePicks, admission: admission)
-            case let .guided(_, _, materializePicks, _, skipShortlexCheck, _):
-                self.init(isGuided: true, materializePicks: materializePicks, skipsShortlexCheck: skipShortlexCheck)
+            case let .exact(_, admission):
+                self.init(isGuided: false, admission: admission)
+            case let .guided(_, _, _, _, skipShortlexCheck, _):
+                self.init(isGuided: true, skipsShortlexCheck: skipShortlexCheck)
         }
     }
 }
@@ -65,10 +63,6 @@ struct ScopedProbeCache: ExpressibleByArrayLiteral {
     init(arrayLiteral keys: UInt64...) {
         self.init(keying: ScopedReductionTuning().probeCacheKeying)
         self.keys = Set(keys)
-    }
-
-    var isEmpty: Bool {
-        keys.isEmpty
     }
 
     /// An empty cache with the same keying.

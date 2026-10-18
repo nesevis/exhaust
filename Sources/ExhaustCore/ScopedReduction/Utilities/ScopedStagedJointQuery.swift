@@ -24,7 +24,6 @@ enum ScopedStagedJointQuery {
     struct Groups {
         let groups: [NumericJointQuery.Group]
         let calculations: Int
-        let estimatedWork: Int
     }
 
     // MARK: - Pairs
@@ -211,7 +210,7 @@ enum ScopedStagedJointQuery {
               candidatePool.count(where: \.stalled) >= arity,
               workLimit > 0, calculationLimit > 0, scopeLimit > 0
         else {
-            return Groups(groups: [], calculations: 0, estimatedWork: 0)
+            return Groups(groups: [], calculations: 0)
         }
         var selected = BoundedSortedBuffer<NumericJointQuery.Group>(limit: scopeLimit)
         var indices = Array(0 ..< arity)
@@ -272,7 +271,7 @@ enum ScopedStagedJointQuery {
             groups.append(group)
             estimatedWork += group.estimatedWork
         }
-        return Groups(groups: groups, calculations: calculations, estimatedWork: estimatedWork)
+        return Groups(groups: groups, calculations: calculations)
     }
 
     // MARK: - Helpers

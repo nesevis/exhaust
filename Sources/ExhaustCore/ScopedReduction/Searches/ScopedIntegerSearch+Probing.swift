@@ -29,7 +29,6 @@ extension ScopedIntegerSearch {
                 leafPositions.append(LeafPosition(
                     nodeID: nodeID,
                     sequenceIndex: range.lowerBound,
-                    validRange: metadata.validRange,
                     currentBitPattern: current,
                     targetBitPattern: target,
                     typeTag: metadata.typeTag,

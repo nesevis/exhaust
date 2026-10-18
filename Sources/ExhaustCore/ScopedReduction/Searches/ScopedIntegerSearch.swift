@@ -29,7 +29,6 @@ struct ScopedIntegerSearch: ScopedSearch {
     struct LeafPosition: ScopedLeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
-        let validRange: ClosedRange<UInt64>?
         var currentBitPattern: UInt64
         let targetBitPattern: UInt64
         let typeTag: TypeTag
