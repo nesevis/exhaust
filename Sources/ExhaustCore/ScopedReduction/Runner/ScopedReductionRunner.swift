@@ -63,6 +63,8 @@ package struct ScopedReductionRunner {
     var graph: ChoiceGraph
     var stats = ReductionStats()
     var rejectCache: ScopedProbeCache
+    /// Covering rows by shape, passed to every pass's encoder input.
+    let coveringRowCache = ScopedCoveringRowCache()
     let generator: AnyGenerator
     let property: (Any) -> Bool
     let probeWrapper: ProbeWrapper?

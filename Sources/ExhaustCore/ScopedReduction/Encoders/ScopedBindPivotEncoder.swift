@@ -64,7 +64,12 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
             configuration: configuration
         ) { _ in
             .search(
-                ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: parent.tuning),
+                ScopedCoveringSearch(
+                    sequence: lifted.sequence,
+                    positionRange: boundRange,
+                    tuning: parent.tuning,
+                    rowCache: parent.coveringRowCache
+                ),
                 configuration: configuration
             )
         }

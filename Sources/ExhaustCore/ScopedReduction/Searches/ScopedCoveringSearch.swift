@@ -13,8 +13,14 @@ struct ScopedCoveringSearch: ScopedSearch {
     private var hasSearch = false
 
     /// Covers the entries at `leaves`' positions in `baseSequence`, skipping leaves without a position or a value entry.
-    init(leaves: [LeafEntry], graph: ChoiceGraph, baseSequence: ChoiceSequence, tuning: ScopedReductionTuning) {
-        search = ScopedCoveringRows(tuning: tuning)
+    init(
+        leaves: [LeafEntry],
+        graph: ChoiceGraph,
+        baseSequence: ChoiceSequence,
+        tuning: ScopedReductionTuning,
+        rowCache: ScopedCoveringRowCache
+    ) {
+        search = ScopedCoveringRows(tuning: tuning, rowCache: rowCache)
         var positions: [Int] = []
         var validEntries: [LeafEntry] = []
         for entry in leaves {
@@ -38,8 +44,13 @@ struct ScopedCoveringSearch: ScopedSearch {
     }
 
     /// Covers every value entry in `positionRange` of `sequence`, up to ``ScopedReductionTuning/maxCoveredPositions``.
-    init(sequence: ChoiceSequence, positionRange: ClosedRange<Int>, tuning: ScopedReductionTuning) {
-        search = ScopedCoveringRows(tuning: tuning)
+    init(
+        sequence: ChoiceSequence,
+        positionRange: ClosedRange<Int>,
+        tuning: ScopedReductionTuning,
+        rowCache: ScopedCoveringRowCache
+    ) {
+        search = ScopedCoveringRows(tuning: tuning, rowCache: rowCache)
         search.start(sequence: sequence, positionRange: positionRange)
         hasSearch = true
     }
@@ -81,17 +92,20 @@ struct ScopedCoveringRows {
     /// Whether row values index each coordinate's values simplest first rather than from the domain's lower end. Set in the exhaustive regime only.
     private var ordersBySimplicity = false
 
-    /// Pull-based generator for the pairwise regime. Nil in the exhaustive and range-end regimes.
-    private var generator: BalancedCoveringArrayGenerator?
+    /// Shared pairwise row streams, one per shape.
+    private let rowCache: ScopedCoveringRowCache
+    /// The pairwise rows for this pass's shape, read from ``rowCache``. Nil in the exhaustive and range-end regimes.
+    private var pairwiseRows: ScopedCoveringRowCache.Stream?
     private var pullProbeCount = 0
     /// Each leaf's representative offsets in the pairwise regime, which the generator's row values index into.
     private var representativeOffsets: [[UInt64]] = []
 
     /// Reads ``ScopedReductionTuning/coveringExhaustiveThreshold``, ``ScopedReductionTuning/coveringBudget``, and ``ScopedReductionTuning/maxCoveredPositions``.
-    init(tuning: ScopedReductionTuning) {
+    init(tuning: ScopedReductionTuning, rowCache: ScopedCoveringRowCache) {
         exhaustiveThreshold = tuning.coveringExhaustiveThreshold
         coveringBudget = tuning.coveringBudget
         maxCoveredPositions = tuning.maxCoveredPositions
+        self.rowCache = rowCache
     }
 
     private struct ValuePosition {
@@ -137,7 +151,7 @@ struct ScopedCoveringRows {
         exhaustiveProbeIndex = 0
         exhaustiveProbes = []
         ordersBySimplicity = false
-        generator = nil
+        pairwiseRows = nil
         pullProbeCount = 0
         representativeOffsets = []
 
@@ -158,7 +172,7 @@ struct ScopedCoveringRows {
             representativeOffsets = valuePositions.map {
                 CoveringRepresentatives.offsets(domainSize: $0.domainSize, count: perLeafCount)
             }
-            generator = BalancedCoveringArrayGenerator(domainSizes: representativeOffsets.map { UInt64($0.count) })
+            pairwiseRows = rowCache.stream(forDomainSizes: representativeOffsets.map { UInt64($0.count) })
         }
     }
 
@@ -166,11 +180,11 @@ struct ScopedCoveringRows {
     mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         let row: CoveringArrayRow?
 
-        if generator != nil {
+        if let pairwiseRows {
             guard pullProbeCount < coveringBudget else {
                 return nil
             }
-            row = generator?.next()
+            row = pairwiseRows.row(at: pullProbeCount)
             if row != nil {
                 pullProbeCount += 1
             }
@@ -337,5 +351,52 @@ struct ScopedCoveringRows {
             rows.append(CoveringArrayRow(values: values))
         }
         return rows
+    }
+}
+
+// MARK: - Row Cache
+
+/// Pairwise covering rows by shape, shared by every covering search in one reduction run.
+///
+/// A ``BalancedCoveringArrayGenerator`` row depends only on the domain sizes it was created with, because the reducer always uses seed zero and the default tracking threshold. Covering searches recur with few distinct shapes, so each shape's rows are generated once and replayed: every search reads the same rows, in the same order, that a generator of its own would have produced.
+///
+/// A class, so the passes of one run share it through ``ScopedEncoderInput``. One run uses it from one thread.
+final class ScopedCoveringRowCache {
+    /// One shape's rows, generated on demand and kept.
+    final class Stream {
+        private let generator: BalancedCoveringArrayGenerator
+        private var rows: [CoveringArrayRow] = []
+        private var isExhausted = false
+
+        init(domainSizes: [UInt64]) {
+            generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+        }
+
+        /// The row at `index`, generating rows up to it if no search has reached it yet, or nil when the generator ends first.
+        func row(at index: Int) -> CoveringArrayRow? {
+            while rows.count <= index, isExhausted == false {
+                guard let row = generator.next() else {
+                    isExhausted = true
+                    break
+                }
+                rows.append(row)
+            }
+            guard index < rows.count else {
+                return nil
+            }
+            return rows[index]
+        }
+    }
+
+    private var streams: [[UInt64]: Stream] = [:]
+
+    /// The shared stream for `domainSizes`, created on first request.
+    func stream(forDomainSizes domainSizes: [UInt64]) -> Stream {
+        if let stream = streams[domainSizes] {
+            return stream
+        }
+        let stream = Stream(domainSizes: domainSizes)
+        streams[domainSizes] = stream
+        return stream
     }
 }

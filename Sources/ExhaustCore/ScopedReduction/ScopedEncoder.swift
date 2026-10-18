@@ -83,6 +83,8 @@ struct ScopedEncoderInput {
     let tuning: ScopedReductionTuning
     /// The budgets a ``ScopedDispatchGate/bindClassification(bindNodeID:upstreamLeafNodeID:)`` gate resolved for this dispatch; nil for every other gate.
     var dispatchBudget: ScopedDispatchBudget?
+    /// The run's covering rows. A fresh cache is correct but regenerates rows the run's cache already holds, so every input the runner builds, and every input built from one, passes the run's cache on.
+    var coveringRowCache = ScopedCoveringRowCache()
 }
 
 // MARK: - Graph Helpers

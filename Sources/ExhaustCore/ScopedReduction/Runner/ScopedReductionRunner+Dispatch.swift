@@ -257,7 +257,8 @@ extension ScopedReductionRunner {
             tree: incumbent.tree,
             graph: graph,
             warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:],
-            tuning: tuning
+            tuning: tuning,
+            coveringRowCache: coveringRowCache
         )
         if case .bindClassification = typed.gate {
             let fingerprint = boundValueFingerprint ?? 0

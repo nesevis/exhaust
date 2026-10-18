@@ -168,7 +168,8 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
                 tree: liftedBind.tree,
                 graph: liftedBind.graph,
                 warmStartRecords: [:],
-                tuning: scope.tuning
+                tuning: scope.tuning,
+                coveringRowCache: scope.coveringRowCache
             )
             let nestedHasDescendant = liftedBind.graph.composableNestedBind(
                 under: nestedBind.nodeID,
@@ -233,7 +234,13 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         }
         let search: any ScopedSearch = downstreamLeaves.count == 1
             ? ScopedBinarySearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence)
-            : ScopedCoveringSearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence, tuning: parent.tuning)
+            : ScopedCoveringSearch(
+                leaves: leafEntries,
+                graph: liftedGraph,
+                baseSequence: lifted.sequence,
+                tuning: parent.tuning,
+                rowCache: parent.coveringRowCache
+            )
 
         ScopedReductionLog.reducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",

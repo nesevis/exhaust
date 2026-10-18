@@ -109,6 +109,27 @@ struct ScopedReducerRegressionTests {
         #expect(standard.isAccepted)
     }
 
+    // MARK: - Covering Rows
+
+    @Test("A cached covering row stream yields the rows a fresh generator for the same shape yields, whichever index is read first")
+    func cachedCoveringRowsMatchFreshGenerator() {
+        let domainSizes: [UInt64] = [3, 8, 5, 8]
+        let cache = ScopedCoveringRowCache()
+        let stream = cache.stream(forDomainSizes: domainSizes)
+        #expect(cache.stream(forDomainSizes: domainSizes) === stream)
+
+        // Reading a later row first generates every row before it.
+        _ = stream.row(at: 5)
+        let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+        var index = 0
+        while let expected = generator.next() {
+            #expect(stream.row(at: index)?.values == expected.values, "Row \(index) differs")
+            index += 1
+        }
+        #expect(index > 5)
+        #expect(stream.row(at: index) == nil)
+    }
+
     // MARK: - Swap Extension
 
     @Test("Swap extension reaches the final slot after doubling overshoots the group")
