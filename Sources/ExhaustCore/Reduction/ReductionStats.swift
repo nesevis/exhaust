@@ -1,0 +1,394 @@
+/// Where a reduction materialization ran.
+///
+/// ``decoder`` counts probe decodes. Every other site materializes outside the probe loop, so the probe counts never see it.
+package enum MaterializationSite: String, Sendable, CaseIterable {
+    /// Decoding an encoder's probe.
+    case decoder
+    /// The machine's full-tree materialization and constant-arm re-encoding, once per reduction.
+    case setup
+    /// ``ChoiceGraph/classifyBind(at:gen:baseSequence:fallbackTree:upstreamLeafNodeID:)`` endpoint lifts.
+    case classification
+    /// Restoring the unselected branches of a stripped tree.
+    case rematerialization
+    /// Lifting a controller candidate in a bound value composition, at every nesting level. Legacy reducer only.
+    case boundValueLift
+    /// Lifting a bind pivot seed. Legacy reducer only.
+    case bindPivotLift
+    /// Lifting a joint source-sink proposal, including lifts that do not preserve the sink. Legacy reducer only.
+    case boundExchangeLift
+    /// Lifting a prefix in the reducer, by any encoder. ``ReductionStats/liftAttemptsByEncoder`` breaks it down.
+    case lift
+}
+
+/// Statistics collected from a single reduction run.
+///
+/// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically during reduction and extracted at the end of the run.
+package struct ReductionStats: Sendable {
+    /// Run-wide reduction probe outcomes. Encoder passes and structural relax proposals merge into this value after their local work finishes.
+    private var probeCounts = ReductionProbeCounts()
+
+    /// Materializations outside the probe decoder, by site. Never keyed by ``MaterializationSite/decoder``, whose count lives in ``probeCounts``.
+    private var outOfLoopMaterializations: [MaterializationSite: Int] = [:]
+
+    /// Bound value composition downstream builds by stage and outcome. Diagnostic: shows where ``MaterializationSite/boundValueLift`` materializations went.
+    package var boundValueBuildOutcomes: [BoundValueBuildRecord: Int] = [:]
+
+    /// Composition build outcomes by encoder.
+    package var compositionBuildOutcomes: [EncoderName: [CompositionBuildRecord: Int]] = [:]
+
+    /// Reducer lift attempts by encoder. Their total is the ``MaterializationSite/lift`` count.
+    package var liftAttemptsByEncoder: [EncoderName: Int] = [:]
+
+    /// Reduction proposals opened across encoder passes and structural relax rounds.
+    package var reductionProbes: Int {
+        probeCounts.emitted
+    }
+
+    /// Reduction proposals admitted by the reducer after the property failed.
+    package var reductionProbesAccepted: Int {
+        probeCounts.accepted
+    }
+
+    /// Reduction proposals rejected by the cache before materialization.
+    package var reductionProbesRejectedByCache: Int {
+        probeCounts.rejectedByCache
+    }
+
+    /// Reduction proposals rejected during materialization before property entry.
+    package var reductionProbesRejectedDuringMaterialization: Int {
+        probeCounts.rejectedDuringMaterialization
+    }
+
+    /// Reduction proposals whose materialized value satisfied the property.
+    package var reductionProbesWherePropertyPassed: Int {
+        probeCounts.propertyPassed
+    }
+
+    /// Reduction proposals whose materialized value falsified the property, whether or not the reducer later admitted the proposal.
+    package var reductionProbesWherePropertyFailed: Int {
+        probeCounts.propertyFailed
+    }
+
+    /// Per-encoder probe outcome counts accumulated across all cycles.
+    package var encoderCounts: [EncoderName: ReductionProbeCounts] = [:]
+
+    /// Separates the two-, three-, and four-way stages of ``EncoderName/stagedJointSearch``.
+    package var numericSearchCountsByArity: [Int: ReductionProbeCounts] = [:]
+
+    /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
+    package var encoderProbes: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.emitted }
+    }
+
+    /// Per-encoder probes admitted by their producer after the property failed and admission checks passed.
+    package var encoderProbesAccepted: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.accepted }
+    }
+
+    /// Per-encoder probe counts that hit the reject cache before decoding (no materialization).
+    package var encoderProbesRejectedByCache: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.rejectedByCache }
+    }
+
+    /// Per-encoder probes rejected during materialization before the property was invoked.
+    package var encoderProbesRejectedDuringMaterialization: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.rejectedDuringMaterialization }
+    }
+
+    /// Per-encoder probes whose materialized value satisfied the property.
+    package var encoderProbesWherePropertyPassed: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.propertyPassed }
+    }
+
+    /// Per-encoder probes whose materialized value falsified the property. Accepted probes are a subset of this count because later materialization and admission checks can still reject a proposal.
+    package var encoderProbesWherePropertyFailed: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.propertyFailed }
+    }
+
+    /// Combines per-encoder materialization rejection, property success, and property failure that was not admitted.
+    package var encoderProbesRejectedByDecoder: [EncoderName: Int] {
+        encoderCounts.mapValues { $0.decoderRejections }
+    }
+
+    /// Every materialization during reduction: probe decodes plus the lifts, classification, setup, and rematerialization that run outside the probe loop.
+    package var totalMaterializations: Int {
+        materializationsBySite.values.reduce(0, +)
+    }
+
+    /// ``totalMaterializations`` split by where each materialization ran. Sites that never ran are absent.
+    package var materializationsBySite: [MaterializationSite: Int] {
+        var sites = outOfLoopMaterializations
+        if probeCounts.materializationAttempts > 0 {
+            sites[.decoder] = probeCounts.materializationAttempts
+        }
+        return sites
+    }
+
+    /// Records materializations that ran outside the probe decoder.
+    mutating func recordMaterializations(_ count: Int, at site: MaterializationSite) {
+        guard count > 0 else {
+            return
+        }
+        outOfLoopMaterializations[site, default: 0] += count
+    }
+
+    /// Total reduction cycles completed.
+    package var cycles: Int
+
+    /// Floor-motion events where a graph rebuild happened between the old and new convergence record. The floor shifted because the sequence structure changed (deletion, bind reshape), not because a partner coordinate's value moved. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
+    package var structuralFloorMotionEvents: Int
+
+    /// Floor-motion events within the same rebuild generation. The floor shifted because a partner coordinate's value movement changed the property boundary for this leaf. This is the observable signal for inter-coordinate value coupling. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
+    package var valueFloorMotionEvents: Int
+
+    // MARK: - Coupling Diagnostics
+
+    /// Node IDs that experienced value floor motion at least once during this run. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
+    package var valueFloorMotionNodeIDs: Set<Int> = []
+
+    /// Node IDs that were part of an accepted redistribution pair (source or sink) at least once during this run. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
+    package var redistributionAcceptanceNodeIDs: Set<Int> = []
+
+    /// Measured coupling edges. Each entry records that `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted. Multiple observations of the same edge increment `count`. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
+    package var couplingEdges: [CouplingEdge: Int] = [:]
+
+    /// Distribution of partner counts per value floor-motion event. Key is the number of distinct nodes that changed between the shifting node's previous and current convergence. A count of 1 means the floor shift is attributable to a single partner (pairwise). Counts of 2+ mean multiple partners changed and the coupling may be k-ary. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled.
+    package var floorMotionPartnerCounts: [Int: Int] = [:]
+
+    // MARK: - Dispatch Log
+
+    /// One record per completed encoder pass, in dispatch order. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled; empty in all normal runs, including stats-collecting ones. The within-cycle ordering (via ``DispatchRecord/cycle`` and ``DispatchRecord/passIndex``) is what the indexability analysis conditions on, so the log must not be reordered.
+    package var dispatchLog: [DispatchRecord] = []
+
+    /// True when the reduction phase was terminated early by the wall-clock deadline.
+    package var reductionWasCapped: Bool = false
+
+    // MARK: - Relax Rounds
+
+    /// One record per relax round that had perturbation candidates, in run order. Populated only when the reducer's maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed relax rounds actually cross.
+    package var relaxRoundLog: [RelaxRoundRecord] = []
+
+    /// Improving pivot probes spent. An improving probe has no barrier to measure, so ``relaxRoundLog`` does not hold these.
+    package var relaxImprovingProbes: Int = 0
+
+    /// Improving pivot probes accepted.
+    package var relaxImprovingAcceptances: Int = 0
+
+    // MARK: - Stall Diagnostic
+
+    /// Leaves that terminated search with a convergence record at their current value while short of their reduction target, measured on the graph before final numeric reordering. Nonzero counts are normal for successful reductions (a property demanding nonzero values leaves surviving leaves short of their targets); the silent-stall signal is a nonzero count with ``anyAcceptanceEverOccurred`` false.
+    package var stalledLeafCount: Int = 0
+
+    /// Sum of the pattern-space gaps between each stalled leaf's terminal search value and its reduction target, before final numeric reordering. A magnitude for the stall warning; meaningful only relative to the workload's value ranges.
+    package var stalledLeafResidualDistance: Double = 0
+
+    /// True when any pass in the run, including final numeric reordering, accepted at least one probe. False means the reducer could not improve the input even once — combined with a nonzero ``stalledLeafCount``, the counterexample likely sits far from minimal behind a coupling the encoder roster cannot cross.
+    package var anyAcceptanceEverOccurred: Bool = false
+
+    // MARK: - Filter Observations
+
+    /// Per-fingerprint filter predicate observations accumulated across all materializations.
+    package var filterObservations: [UInt64: FilterObservation] = [:]
+
+    // MARK: - Graph Reducer
+
+    /// Graph structure and lifecycle statistics accumulated during reduction.
+    package var graphStats: ChoiceGraphStats
+
+    /// Aggregate wall-time spent in each reduction step category, in nanoseconds.
+    package var stepTimings: StepTimings = .init()
+
+    /// Creates an empty stats value.
+    package init() {
+        cycles = 0
+        structuralFloorMotionEvents = 0
+        valueFloorMotionEvents = 0
+        graphStats = ChoiceGraphStats()
+    }
+
+    /// Merges another stats value into this one by summing counters and taking the latest graph stats.
+    package mutating func merge(_ other: ReductionStats) {
+        for (name, counts) in other.encoderCounts {
+            encoderCounts[name, default: ReductionProbeCounts()].merge(counts)
+        }
+        for (arity, counts) in other.numericSearchCountsByArity {
+            numericSearchCountsByArity[arity, default: .init()].merge(counts)
+        }
+        probeCounts.merge(other.probeCounts)
+        for (site, count) in other.outOfLoopMaterializations {
+            outOfLoopMaterializations[site, default: 0] += count
+        }
+        for (record, count) in other.boundValueBuildOutcomes {
+            boundValueBuildOutcomes[record, default: 0] += count
+        }
+        for (encoderName, records) in other.compositionBuildOutcomes {
+            compositionBuildOutcomes[encoderName, default: [:]].merge(records, uniquingKeysWith: +)
+        }
+        liftAttemptsByEncoder.merge(other.liftAttemptsByEncoder, uniquingKeysWith: +)
+        cycles += other.cycles
+        structuralFloorMotionEvents += other.structuralFloorMotionEvents
+        valueFloorMotionEvents += other.valueFloorMotionEvents
+        valueFloorMotionNodeIDs.formUnion(other.valueFloorMotionNodeIDs)
+        redistributionAcceptanceNodeIDs.formUnion(other.redistributionAcceptanceNodeIDs)
+        for (edge, count) in other.couplingEdges {
+            couplingEdges[edge, default: 0] += count
+        }
+        for (partnerCount, events) in other.floorMotionPartnerCounts {
+            floorMotionPartnerCounts[partnerCount, default: 0] += events
+        }
+        dispatchLog.append(contentsOf: other.dispatchLog)
+        reductionWasCapped = reductionWasCapped || other.reductionWasCapped
+        stalledLeafCount += other.stalledLeafCount
+        stalledLeafResidualDistance += other.stalledLeafResidualDistance
+        anyAcceptanceEverOccurred = anyAcceptanceEverOccurred || other.anyAcceptanceEverOccurred
+        relaxRoundLog.append(contentsOf: other.relaxRoundLog)
+        relaxImprovingProbes += other.relaxImprovingProbes
+        relaxImprovingAcceptances += other.relaxImprovingAcceptances
+        for (key, value) in other.filterObservations {
+            filterObservations[key, default: FilterObservation()].merge(value)
+        }
+        graphStats.merge(other.graphStats)
+        stepTimings.merge(other.stepTimings)
+    }
+
+    /// Accumulates a completed pass into the per-encoder totals.
+    mutating func record(
+        _ counts: ReductionProbeCounts,
+        for encoderName: EncoderName
+    ) {
+        probeCounts.merge(counts)
+        encoderCounts[encoderName, default: ReductionProbeCounts()].merge(counts)
+    }
+
+    /// Accumulates structural relax proposals, which do not belong to an encoder pass.
+    mutating func recordStructuralRelax(_ counts: ReductionProbeCounts) {
+        probeCounts.merge(counts)
+    }
+}
+
+// MARK: - Relax Round Record
+
+/// One relax round's barrier observation, for calibrating the relax materialization budget. Most rounds end without a perturbation decoding, so the record covers every round with candidates, not only those that go on to exploit one.
+///
+/// The observed barrier is the number of failed perturbation materializations before one decoded. Rounds where no perturbation decoded are censored observations — the true barrier is at least `materializationsUsed`, and if many rounds exhaust the budget this way, a "p95 under the cap" conclusion drawn from decoded rounds alone would be biased.
+package struct RelaxRoundRecord: Sendable {
+    /// Perturbation candidates available to the round.
+    package let candidateCount: Int
+
+    /// Failed perturbation materializations before one decoded, or before the round gave up.
+    package let materializationsUsed: Int
+
+    /// True when a perturbation decoded and the exploitation loop ran.
+    package let perturbationDecoded: Bool
+
+    /// True when the round's result beat the checkpoint and was committed.
+    package let committed: Bool
+}
+
+// MARK: - Dispatch Record
+
+/// One completed encoder pass, as seen by the scheduler.
+///
+/// This is the raw material for the scheduling analyses: reservation values need the per-encoder distribution of improvement given acceptance against probes spent, the indexability check conditions an encoder's acceptance rate on whether an earlier pass in the same cycle accepted, and potential-shaping pre-filters need whole trajectories. Relax-round exploitation passes and the post-loop reorder pass are included; a rolled-back relax round's records describe its discarded trajectory.
+package struct DispatchRecord: Sendable {
+    /// The reduction cycle this pass ran in.
+    package let cycle: Int
+
+    /// Monotonic pass counter, unique within a run. Orders passes within a cycle.
+    package let passIndex: Int
+
+    /// The encoder that ran the pass.
+    package let encoderName: EncoderName
+
+    /// Probes emitted, including reject-cache hits.
+    package let probeCount: Int
+
+    /// Probes accepted by the decoder.
+    package let acceptCount: Int
+
+    /// Probes short-circuited by the reject cache without a materialization.
+    package let cacheHitCount: Int
+
+    /// Probes materialized but rejected by the decoder.
+    package let decoderRejectCount: Int
+
+    /// Sequence length before the pass minus length after. Positive when the pass shrank the sequence.
+    package let sequenceLengthDelta: Int
+
+    /// Total distance-to-reduction-target before the pass minus after. Positive when the pass moved values toward their targets. Distance is summed over value entries as the absolute pattern-space gap to each entry's reduction target, so the scalar is meaningful for signed encodings. Floating point because full-range leaves have distances near 2^63 and sums must neither overflow nor saturate; the lost low-bit precision at that magnitude is irrelevant for scheduling diagnostics.
+    package let targetDistanceDelta: Double
+
+    /// The dispatched bind's fingerprint, for bound-value composed passes; nil for every other encoder. Fingerprints are source-location-stable, so equal values across records (and across seeds) identify the same bind site — the composed-spend analysis groups on this to distinguish many binds each paying once from few binds re-paying.
+    package let boundValueFingerprint: UInt64?
+
+    /// Upstream probes that produced a valid lift, for composed passes; nil otherwise. Every emitted probe is a wrapped downstream probe, so ``probeCount`` measures the downstream side of the composition's spend while this measures the upstream side, where each lift is one generator materialization plus a downstream search cold-start.
+    package let composedUpstreamLifts: Int?
+
+    /// The dispatched bind's classification at pass-report time, for composed passes; nil otherwise. Dispatch currently requires the identical/both verdict, so this column is a sanity check that the gate's dispatch rule held rather than a source of variation.
+    package let bindClassification: BindClassification?
+}
+
+// MARK: - Step Timings
+
+package extension ReductionStats {
+    /// Aggregate wall-time spent in each reduction step category.
+    ///
+    /// Times are in nanoseconds, measured around each unit of reduction work.
+    struct StepTimings: Sendable {
+        package var dispatch: UInt64 = 0
+        /// Bookkeeping and routing after ordinary dispatched encoder passes; post-cycle passes retain their owning timing bucket.
+        package var passApply: UInt64 = 0
+        package var buildSources: UInt64 = 0
+        package var encode: UInt64 = 0
+        package var decode: UInt64 = 0
+        package var rebuild: UInt64 = 0
+        package var convergenceConfirmation: UInt64 = 0
+        package var relaxRound: UInt64 = 0
+        package var relationPass: UInt64 = 0
+        package var stagedJointPass: UInt64 = 0
+        package var reorder: UInt64 = 0
+
+        package var dispatchCount: Int = 0
+        package var passApplyCount: Int = 0
+        package var encodeCount: Int = 0
+        package var decodeCount: Int = 0
+        package var rebuildCount: Int = 0
+        package var rebuildGraphNanoseconds: UInt64 = 0
+        package var rebuildSourceNanoseconds: UInt64 = 0
+
+        package init() {}
+
+        /// Merges another timings value by summing all counters and durations.
+        package mutating func merge(_ other: StepTimings) {
+            dispatch += other.dispatch
+            passApply += other.passApply
+            buildSources += other.buildSources
+            encode += other.encode
+            decode += other.decode
+            rebuild += other.rebuild
+            convergenceConfirmation += other.convergenceConfirmation
+            relaxRound += other.relaxRound
+            relationPass += other.relationPass
+            stagedJointPass += other.stagedJointPass
+            reorder += other.reorder
+            dispatchCount += other.dispatchCount
+            passApplyCount += other.passApplyCount
+            encodeCount += other.encodeCount
+            decodeCount += other.decodeCount
+            rebuildCount += other.rebuildCount
+            rebuildGraphNanoseconds += other.rebuildGraphNanoseconds
+            rebuildSourceNanoseconds += other.rebuildSourceNanoseconds
+        }
+    }
+}
+
+// MARK: - Coupling Edge
+
+/// A directed edge in the measured coupling graph: `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted.
+package struct CouplingEdge: Hashable, Sendable {
+    /// The node whose convergence floor shifted.
+    package let motionNodeID: Int
+
+    /// The node whose value change preceded the floor shift.
+    package let changedNodeID: Int
+}

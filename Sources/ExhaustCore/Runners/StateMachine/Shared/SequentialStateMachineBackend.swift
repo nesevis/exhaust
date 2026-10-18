@@ -30,7 +30,7 @@ package struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateM
         let config = Interpreters.ReducerConfiguration(
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
-            tuning: ScopedReductionTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
+            tuning: ReductionTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         let deadline = context.config.deadlineNanoseconds
         let commandProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { [property] commands in

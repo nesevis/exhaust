@@ -285,7 +285,7 @@ package struct SpecMachine<Backend: StateMachineBackend> {
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
             enabledEncoders: [.valueSearch, .floatSearch, .deletion, .convergenceConfirmation],
-            tuning: ScopedReductionTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
+            tuning: ReductionTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         let run = ReductionRunner.reduce(
             setupGen.gen,
