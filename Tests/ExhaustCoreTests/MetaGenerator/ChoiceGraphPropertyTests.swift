@@ -47,23 +47,6 @@ struct ChoiceGraphPropertyTests {
         }
     }
 
-    @Test("Topological order contains no duplicates and all entries are valid node IDs", arguments: recipeSeeds, metaRecipeTypes)
-    func topologicalOrderValid(seed: UInt64, type: RecipeType) throws {
-        try forEachRecipeGraph(seed: seed, type: type) { graph, recipe in
-            let orderSet = Set(graph.topologicalOrder)
-            #expect(
-                orderSet.count == graph.topologicalOrder.count,
-                "Topological order has duplicates for recipe: \(recipe)"
-            )
-            for nodeID in graph.topologicalOrder {
-                #expect(
-                    nodeID >= 0 && nodeID < graph.nodes.count,
-                    "Topological order contains invalid node ID \(nodeID) for recipe: \(recipe)"
-                )
-            }
-        }
-    }
-
     @Test("Live node IDs reference valid nodes with non-nil position ranges", arguments: recipeSeeds, metaRecipeTypes)
     func liveNodeIDsValid(seed: UInt64, type: RecipeType) throws {
         try forEachRecipeGraph(seed: seed, type: type) { graph, recipe in

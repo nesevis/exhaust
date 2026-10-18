@@ -7,7 +7,7 @@
 
 /// Constructs a ``ChoiceGraph`` from a ``ChoiceTree`` and its flattened ``ChoiceSequence``.
 ///
-/// A single recursive walk of the tree produces nodes and containment/dependency edges. ``assembleGraph()`` then computes self-similarity groups, live node IDs, leaf nodes, dependency adjacency, and topological order — all stored eagerly on the resulting struct.
+/// A single recursive walk of the tree produces nodes and containment/dependency edges. ``assembleGraph()`` then computes self-similarity groups, live node IDs, leaf nodes, and dependency adjacency, all stored eagerly on the resulting struct.
 ///
 /// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` to maintain position-to-node correspondence.
 ///
@@ -62,7 +62,6 @@ struct ChoiceGraphBuilder {
                 liveNodeIDs: [],
                 leafNodes: [],
                 characterLeafNodes: [],
-                topologicalOrder: [],
                 dependencyAdjacency: []
             )
             graph.isControllerTopology = omittingScalarSequenceElements
@@ -694,43 +693,6 @@ struct ChoiceGraphBuilder {
             dependencyAdjacency[edge.source].append(edge.target)
         }
 
-        // Topological order via Kahn's algorithm over dependency edges.
-        let topologicalOrder: [Int] = {
-            let nodeCount = nodes.count
-            var inDegree = [Int](repeating: 0, count: nodeCount)
-            for edge in allDependencyEdges {
-                inDegree[edge.target] += 1
-            }
-
-            var participatingNodes = Set<Int>()
-            for edge in allDependencyEdges {
-                participatingNodes.insert(edge.source)
-                participatingNodes.insert(edge.target)
-            }
-
-            var queue: [Int] = []
-            for nodeID in participatingNodes where inDegree[nodeID] == 0 {
-                queue.append(nodeID)
-            }
-
-            var order: [Int] = []
-            order.reserveCapacity(participatingNodes.count)
-            var front = 0
-
-            while front < queue.count {
-                let current = queue[front]
-                front += 1
-                order.append(current)
-                for dependent in dependencyAdjacency[current] {
-                    inDegree[dependent] -= 1
-                    if inDegree[dependent] == 0 {
-                        queue.append(dependent)
-                    }
-                }
-            }
-            return order
-        }()
-
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
@@ -739,7 +701,6 @@ struct ChoiceGraphBuilder {
             liveNodeIDs: liveNodeIDs,
             leafNodes: leafNodes,
             characterLeafNodes: characterLeafNodes,
-            topologicalOrder: topologicalOrder,
             dependencyAdjacency: dependencyAdjacency
         )
     }

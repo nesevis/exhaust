@@ -316,7 +316,6 @@ extension ScopedReductionRunner {
         liveNodeIDs: [],
         leafNodes: [],
         characterLeafNodes: [],
-        topologicalOrder: [],
         dependencyAdjacency: []
     )
 

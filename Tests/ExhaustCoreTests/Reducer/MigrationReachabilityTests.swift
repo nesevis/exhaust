@@ -175,7 +175,6 @@ struct MigrationReachabilityTests {
             liveNodeIDs: base.liveNodeIDs,
             leafNodes: base.leafNodes,
             characterLeafNodes: base.characterLeafNodes,
-            topologicalOrder: base.topologicalOrder,
             dependencyAdjacency: adjacency
         )
     }

@@ -11,14 +11,14 @@
 ///
 /// ## Edge Layers
 ///
-/// - **Dependency** (directed): bind-inner → bound content. Ordering constraint — parent before child. Topological sort and reachability operate here.
+/// - **Dependency** (directed): bind-inner → bound content. Ordering constraint — parent before child. Reachability operates here.
 /// - **Containment** (directed, no ordering constraint): parent → child in the tree. Lets deletion traversal prefer outer sequences and prune descendants whose containing elements are removed.
 /// - **Self-similarity** (undirected): between active pick nodes with matching fingerprint. Substitution candidates.
 /// - **Type-compatibility** (undirected): between compatible value leaves in a sequence-sibling or zip cross-slot context. Redistribution candidates. Computed on demand as a non-caching computed property.
 ///
 /// ## Lifecycle
 ///
-/// Rebuilt from the tree on every structural acceptance. All derived data (live node IDs, leaf nodes, topological order, dependency adjacency) is computed eagerly during ``ChoiceGraphBuilder/assembleGraph()`` and stored as immutable fields. Infrequently-accessed derived data (type-compatibility edges) is recomputed on each access without caching.
+/// Rebuilt from the tree on every structural acceptance. All derived data (live node IDs, leaf nodes, dependency adjacency) is computed eagerly during ``ChoiceGraphBuilder/assembleGraph()`` and stored as immutable fields. Infrequently-accessed derived data (type-compatibility edges) is recomputed on each access without caching.
 ///
 /// Value-only leaf changes (no reshape) are applied in place via ``apply(_:)`` without rebuilding. Reshape and structural mutations return ``ChangeApplication/requiresFullRebuild`` true, delegating the rebuild to the scheduler.
 ///
@@ -48,9 +48,6 @@ package struct ChoiceGraph: Sendable {
 
     /// Character leaves with known index maps, used by uniform character lockstep. Cached during graph assembly to avoid rescanning every leaf when preparing lockstep plans.
     package let characterLeafNodes: [Int]
-
-    /// Node IDs in dependency order (roots first). Computed eagerly via Kahn's algorithm during graph assembly.
-    package let topologicalOrder: [Int]
 
     /// Dependency adjacency list for on-demand reachability queries. Computed eagerly during graph assembly.
     let dependencyAdjacency: [[Int]]
