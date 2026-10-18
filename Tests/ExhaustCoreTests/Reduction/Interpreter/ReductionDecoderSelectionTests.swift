@@ -15,18 +15,6 @@ struct ReductionDecoderSelectionTests {
         #expect(admission.inspectsDecodedHistory)
     }
 
-    @Test("An unordered guided pass delegates ordering to the interpreter")
-    func unorderedGuidedPassSkipsShortlex() {
-        let mutation = ProjectedMutation.sequenceReordered
-        let selection = selectDecoder(for: mutation, requiresExactDecoder: false, hasBind: true, admissionOrder: .unordered)
-        guard case let .guided(materializePicks, skipsShortlexCheck) = selection else {
-            Issue.record("A reorder under a bind requires guided decoding")
-            return
-        }
-        #expect(materializePicks == false)
-        #expect(skipsShortlexCheck)
-    }
-
     // MARK: - requiresExactDecoder
 
     @Test("requiresExactDecoder forces exact regardless of other flags",
@@ -181,14 +169,12 @@ private func selectDecoder(
     for mutation: ProjectedMutation,
     requiresExactDecoder: Bool,
     hasBind: Bool,
-    admission: DecoderAdmission = .standard,
-    admissionOrder: ReductionOrder = .notLarger
+    admission: DecoderAdmission = .standard
 ) -> ReductionDecoder.Selection {
     let decoder = ReductionDecoder(generator: Gen.just(0).erase(), property: { _ in true }, probeWrapper: nil, hasBind: hasBind)
     return decoder.selection(for: DecodingRequirement(
         requiresExactDecoder: requiresExactDecoder,
         mutation: mutation,
-        admission: admission,
-        admissionOrder: admissionOrder
+        admission: admission
     ))
 }

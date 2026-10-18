@@ -18,12 +18,10 @@ enum ProbeCacheKeying: Sendable {
 /// How one candidate is decided, for keying its probe cache entry.
 struct ProbeDecision {
     let isGuided: Bool
-    let skipsShortlexCheck: Bool
     let admission: DecoderAdmission
 
-    init(isGuided: Bool, skipsShortlexCheck: Bool = false, admission: DecoderAdmission = .standard) {
+    init(isGuided: Bool, admission: DecoderAdmission = .standard) {
         self.isGuided = isGuided
-        self.skipsShortlexCheck = skipsShortlexCheck
         self.admission = admission
     }
 
@@ -31,8 +29,8 @@ struct ProbeDecision {
         switch selection {
             case let .exact(_, admission):
                 self.init(isGuided: false, admission: admission)
-            case let .guided(_, skipsShortlexCheck):
-                self.init(isGuided: true, skipsShortlexCheck: skipsShortlexCheck)
+            case .guided:
+                self.init(isGuided: true)
         }
     }
 
@@ -40,8 +38,8 @@ struct ProbeDecision {
         switch decoder {
             case let .exact(_, admission):
                 self.init(isGuided: false, admission: admission)
-            case let .guided(_, _, _, _, skipShortlexCheck, _):
-                self.init(isGuided: true, skipsShortlexCheck: skipShortlexCheck)
+            case .guided:
+                self.init(isGuided: true)
         }
     }
 }
@@ -111,9 +109,6 @@ struct ProbeCache: ExpressibleByArrayLiteral {
         var flags: UInt64 = 0
         if decision.isGuided {
             flags |= 1
-        }
-        if decision.skipsShortlexCheck {
-            flags |= 4
         }
         var salt = finalize(flags &+ decisionSeed)
         switch decision.admission {

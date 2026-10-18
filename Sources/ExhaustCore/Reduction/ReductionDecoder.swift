@@ -47,13 +47,11 @@ enum ReductionOrder {
 
 // MARK: - Decoding Requirement
 
-/// The inputs to decoder selection that arrive with each candidate: the encoder's declared requirement and ordering, the candidate's mutation, and its admission.
+/// The inputs to decoder selection that arrive with each candidate: the encoder's declared requirement, the candidate's mutation, and its admission.
 struct DecodingRequirement {
     let requiresExactDecoder: Bool
     let mutation: ProjectedMutation
     let admission: DecoderAdmission
-    /// The ordering the encoder admits decodings under. Guided decoding enforces shortlex improvement itself, so an unordered encoder must switch that check off for its order to take effect.
-    let admissionOrder: ReductionOrder
 }
 
 /// The decoder's answer for one candidate.
@@ -84,8 +82,7 @@ struct ReductionDecoder {
             for: requirement.mutation,
             requiresExactDecoder: requirement.requiresExactDecoder,
             hasBind: hasBind,
-            admission: requirement.admission,
-            admissionOrder: requirement.admissionOrder
+            admission: requirement.admission
         )
     }
 
@@ -151,10 +148,10 @@ struct ReductionDecoder {
 
     /// The decoding mode chosen for one candidate.
     ///
-    /// `materializePicks` is true when the probe may change the active branch path, so the decoder must reconstruct every branch alternative. `skipsShortlexCheck` is true for an unordered encoder, whose admission the interpreter decides after decoding.
+    /// `materializePicks` is true when the probe may change the active branch path, so the decoder must reconstruct every branch alternative.
     enum Selection {
         case exact(materializePicks: Bool, admission: DecoderAdmission)
-        case guided(materializePicks: Bool, skipsShortlexCheck: Bool)
+        case guided(materializePicks: Bool)
 
         var preferExact: Bool {
             switch self {
@@ -167,7 +164,7 @@ struct ReductionDecoder {
 
         var materializePicks: Bool {
             switch self {
-                case let .exact(materializePicks, _), let .guided(materializePicks, _):
+                case let .exact(materializePicks, _), let .guided(materializePicks):
                     materializePicks
             }
         }
@@ -176,8 +173,8 @@ struct ReductionDecoder {
             switch self {
                 case let .exact(materializePicks, admission):
                     .exact(materializePicks: materializePicks, admission: admission)
-                case let .guided(materializePicks, skipsShortlexCheck):
-                    .guided(fallbackTree: fallbackTree, materializePicks: materializePicks, skipShortlexCheck: skipsShortlexCheck)
+                case let .guided(materializePicks):
+                    .guided(fallbackTree: fallbackTree, materializePicks: materializePicks)
             }
         }
     }
@@ -189,8 +186,7 @@ struct ReductionDecoder {
         for mutation: ProjectedMutation,
         requiresExactDecoder: Bool,
         hasBind: Bool,
-        admission: DecoderAdmission,
-        admissionOrder: ReductionOrder
+        admission: DecoderAdmission
     ) -> Selection {
         let picksUnchanged = switch mutation {
             case let .leafValues(changes):
@@ -207,13 +203,7 @@ struct ReductionDecoder {
                 hasBind
         }
         guard requiresExactDecoder || admission.inspectsDecodedHistory || probeCanReshape == false else {
-            let skipsShortlexCheck = switch admissionOrder {
-                case .notLarger:
-                    false
-                case .unordered:
-                    true
-            }
-            return .guided(materializePicks: picksUnchanged == false, skipsShortlexCheck: skipsShortlexCheck)
+            return .guided(materializePicks: picksUnchanged == false)
         }
         return .exact(materializePicks: picksUnchanged == false, admission: admission)
     }

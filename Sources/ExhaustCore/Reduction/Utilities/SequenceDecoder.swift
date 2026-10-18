@@ -41,7 +41,7 @@ enum SequenceDecoder {
     /// Materializes in guided mode. Produces a fresh tree with current ``validRange`` and all branch alternatives. Resolves values via prefix → fallback → PRNG, with cursor suspension at bind sites.
     case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
                 materializePicks: Bool = false, usePRNGFallback: Bool = false,
-                skipShortlexCheck: Bool = false, prngSalt: UInt64 = 0)
+                prngSalt: UInt64 = 0)
 
     // MARK: - Decode
 
@@ -52,7 +52,7 @@ enum SequenceDecoder {
     /// Uses a two-phase optimization: Phase 1 materializes value-only (no tree construction) and checks the property. Phase 2 re-materializes with full tree construction only after the property fails, avoiding the tree allocation cost for passing probes.
     ///
     /// - Parameter filterObservations: Accumulator for per-fingerprint filter predicate observations. Merged from every materialization's ``DecodingReport``, including rejected and failed attempts.
-    /// - Returns: An outcome that separates materialization rejection, property success, and property failure. A property failure carries a ``ReductionResult`` only when the candidate also satisfies the decoder mode's admission policy. Guided decoding requires the materialized sequence to be shortlex-smaller than the original unless its `skipShortlexCheck` option is `true`. Exact decoding does not check ordering; its producer enforces any phase-specific ordering requirement.
+    /// - Returns: An outcome that separates materialization rejection, property success, and property failure. A property failure carries a ``ReductionResult`` only when the candidate also satisfies the decoder mode's admission policy. Guided decoding requires the materialized sequence to be shortlex-smaller than the original. Exact decoding does not check ordering; its producer enforces any phase-specific ordering requirement.
     func decodeAny(
         candidate: consuming ChoiceSequence,
         gen: AnyGenerator,
@@ -77,7 +77,7 @@ enum SequenceDecoder {
             case let .guided(
             fallbackTree, maximizeBoundRegionIndices,
             materializePicks, usePRNGFallback,
-            skipShortlexCheck, prngSalt
+            prngSalt
         ):
                 decodeGuidedAny(
                     candidate: consume candidate, gen: gen,
@@ -85,7 +85,6 @@ enum SequenceDecoder {
                     maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                     originalSequence: originalSequence, property: property,
                     materializePicks: materializePicks,
-                    skipShortlexCheck: skipShortlexCheck,
                     prngSalt: prngSalt,
                     filterObservations: &filterObservations,
                     precomputedHash: precomputedHash
@@ -183,7 +182,6 @@ enum SequenceDecoder {
         originalSequence: ChoiceSequence,
         property: (Any) -> Bool,
         materializePicks: Bool,
-        skipShortlexCheck: Bool = false,
         prngSalt: UInt64 = 0,
         filterObservations: inout [UInt64: FilterObservation],
         precomputedHash: UInt64? = nil
@@ -229,36 +227,34 @@ enum SequenceDecoder {
                 ) {
                     case let .success(_, freshTree, phase2Report):
                         let freshSequence = ChoiceSequence(freshTree)
-                        if skipShortlexCheck == false {
-                            let passes = freshSequence.shortLexPrecedes(originalSequence)
-                            if ExhaustLog.isEnabled(.debug, for: .reducer) {
-                                ExhaustLog.debug(
-                                    category: .reducer,
-                                    event: "shortlex_check",
-                                    metadata: [
-                                        "passes": "\(passes)",
-                                        "fresh_len": "\(freshSequence.count)",
-                                        "original_len": "\(originalSequence.count)",
-                                        "fresh_seq": freshSequence.shortString,
-                                        "original_seq": originalSequence.shortString,
-                                        "output": String(describing: output),
-                                    ]
-                                )
-                            }
-                            guard passes else {
-                                logDecoderRejection(
-                                    reason: "not_shortlex",
-                                    probeHash: precomputedHash,
-                                    extra: [
-                                        "fresh_seq_len": "\(freshSequence.count)",
-                                        "output": String(describing: output),
-                                    ]
-                                )
-                                return .propertyFailed(
-                                    reduction: nil,
-                                    materializationAttempts: 2
-                                )
-                            }
+                        let passes = freshSequence.shortLexPrecedes(originalSequence)
+                        if ExhaustLog.isEnabled(.debug, for: .reducer) {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "shortlex_check",
+                                metadata: [
+                                    "passes": "\(passes)",
+                                    "fresh_len": "\(freshSequence.count)",
+                                    "original_len": "\(originalSequence.count)",
+                                    "fresh_seq": freshSequence.shortString,
+                                    "original_seq": originalSequence.shortString,
+                                    "output": String(describing: output),
+                                ]
+                            )
+                        }
+                        guard passes else {
+                            logDecoderRejection(
+                                reason: "not_shortlex",
+                                probeHash: precomputedHash,
+                                extra: [
+                                    "fresh_seq_len": "\(freshSequence.count)",
+                                    "output": String(describing: output),
+                                ]
+                            )
+                            return .propertyFailed(
+                                reduction: nil,
+                                materializationAttempts: 2
+                            )
                         }
                         if let report = phase2Report, ExhaustLog.isEnabled(.debug, for: .reducer) {
                             ExhaustLog.debug(

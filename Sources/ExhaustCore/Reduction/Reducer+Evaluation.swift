@@ -37,8 +37,7 @@ extension Reducer {
         let selection = context.decoder.selection(for: DecodingRequirement(
             requiresExactDecoder: configuration.requiresExactDecoder,
             mutation: mutation,
-            admission: admission,
-            admissionOrder: context.encoder.admissionOrder
+            admission: admission
         ))
         let cacheKey = context.rejectCache.key(
             probeHash: probeHash,
