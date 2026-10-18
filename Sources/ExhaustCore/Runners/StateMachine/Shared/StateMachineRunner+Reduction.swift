@@ -131,7 +131,7 @@ package extension __ExhaustRuntime {
         collectStats: Bool,
         property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
     ) -> ConcurrentTwoPassResult<Value, Evidence> {
-        let noRelax = SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
+        let noRelax = ReductionTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         var currentOutput = output
         var currentTree = tree
         // The reducer canonicalizes its sequence at init, so the sequence each pass returns is the one that reproduces its value through `.exact` materialization — re-flattening the tree afterwards is not guaranteed to. Track it so callers on the `(sequence, tree, value)` path get the authoritative one.

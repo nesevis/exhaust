@@ -178,7 +178,7 @@ package struct PickMetadata: Sendable {
     /// Index into the parent node's ``ChoiceGraphNode/children`` identifying the active branch child.
     package let selectedChildIndex: Int
 
-    /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (with `isSelected: true` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``GraphStructuralEncoder`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
+    /// Per-branch tree elements at this pick site, in the same order as the parent ``ChoiceGraphNode/children``. Each entry is the original `.branch(...)` element (with `isSelected: true` for the active branch) as it existed in the tree at graph construction time. The graph stores these so that ``StructuralCandidates`` can enumerate branch alternatives without reading from the live tree, which may have been stripped by ``Materializer`` calls with `materializePicks: false`.
     package let branchElements: [ChoiceTree]
 }
 
@@ -202,7 +202,7 @@ package struct BindMetadata: Sendable {
     /// Structural path from the ``ChoiceTree`` root at graph-construction time to this bind. Used by ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` to locate the matching bind in a post-mutation freshTree. The root bind has the empty path.
     package let bindPath: ChoicePath
 
-    /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately.
+    /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``BoundValueEncoder``) so unsuitable sites are skipped immediately.
     package var classification: BindClassification?
 
     /// Creates bind metadata with the given structural properties and optional cached classification.

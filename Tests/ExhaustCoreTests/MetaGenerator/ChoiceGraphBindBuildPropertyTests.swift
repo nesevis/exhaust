@@ -13,6 +13,8 @@ struct ChoiceGraphBindBuildPropertyTests {
                 guard case let .bind(metadata) = full.nodes[bindNodeID].kind else {
                     continue
                 }
+                let bound = try #require(ChoiceGraph.extractBoundSubtree(from: tree, matchingPath: metadata.bindPath))
+                #expect(metadata.isStructurallyConstant == (bound.containsBind == false && bound.containsPicks == false), "Structural flags differ from the tree predicates for recipe: \(recipe)")
                 let bindRooted = ChoiceGraphBuilder.buildBind(
                     at: metadata.bindPath,
                     fingerprint: metadata.fingerprint,

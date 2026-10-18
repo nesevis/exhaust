@@ -7,7 +7,7 @@
 
 /// Encoder-published description of the mutation a probe would enact if accepted.
 ///
-/// Each ``GraphEncoder`` returns a ``ProjectedMutation`` alongside its candidate sequence on every probe. When the scheduler accepts a probe, it forwards the mutation to ``ChoiceGraph/apply(_:freshTree:)``, which performs the corresponding in-place update without rebuilding the graph from scratch.
+/// Each ``ReductionSearch`` returns a ``ProjectedMutation`` alongside its candidate sequence on every probe. When the scheduler accepts a probe, it forwards the mutation to ``ChoiceGraph/apply(_:)``, which performs the corresponding in-place update without rebuilding the graph from scratch.
 ///
 /// - SeeAlso: ``LeafChange``, ``ChangeApplication``, ``LeafEntry``
 package enum ProjectedMutation {
@@ -37,7 +37,7 @@ package enum ProjectedMutation {
     /// Two same-shaped siblings swapped within a parent (zip or sequence).
     case siblingsSwapped(parentNodeID: Int, lhs: Int, rhs: Int)
 
-    /// Sequence elements permuted into natural numeric order by ``GraphReorderEncoder``.
+    /// Sequence elements permuted into natural numeric order by ``ReorderEncoder``.
     ///
     /// The graph's in-place apply path does not implement sequence reordering; the scheduler performs a full rebuild from `freshTree` after any accepted probe. Only dispatched by the post-loop reorder pass where graph freshness after the accepted probe is not required.
     case sequenceReordered

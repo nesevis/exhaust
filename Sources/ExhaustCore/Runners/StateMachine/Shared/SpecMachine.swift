@@ -2,7 +2,7 @@
 
 /// Pulls candidates from prioritized sources, dispatches to a ``StateMachineBackend`` for probing, and reduces the first failure found.
 ///
-/// Modeled after ``ReductionMachine``'s stepped architecture. Each call to ``next()`` advances one phase and returns a ``Transition`` describing what happened. The caller iterates until `nil`:
+/// Each call to ``next()`` advances one phase and returns a ``Transition`` describing what happened. The caller iterates until `nil`:
 /// ```swift
 /// var machine = SpecMachine(...)
 /// while let transition = machine.next() {
@@ -285,7 +285,7 @@ package struct SpecMachine<Backend: StateMachineBackend> {
             maxStalls: 2,
             wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
             enabledEncoders: [.valueSearch, .floatSearch, .deletion, .convergenceConfirmation],
-            tuning: SchedulerTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
+            tuning: ReductionTuning(relaxMaterializationBudget: 0, relaxImprovingProbeBudget: 0)
         )
         let run = ReductionRunner.reduce(
             setupGen.gen,

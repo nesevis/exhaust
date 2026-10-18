@@ -1,0 +1,415 @@
+//
+//  ReductionSession.swift
+//  Exhaust
+//
+
+// MARK: - Reduction Session
+
+/// Owns a complete reduction: setup, cycles of dispatch over the family sources, post-cycle actions, relax rounds, and the final reorder pass.
+///
+/// The runner is written in direct style. The encoder's reduction for each scope runs to completion in its own interpreter execution, which the runner seeds from its own state and reconciles afterwards. Cycles, post-cycle actions, and relax rounds are ordinary nested calls.
+///
+/// ## Cycle
+///
+/// A cycle builds the family sources, dispatches their scopes in priority order until every source is exhausted, then evaluates the cycle: post-cycle actions run on a stall, and the stall budget and convergence decide whether another cycle follows. The final pass reorders sibling groups numerically for presentation.
+///
+/// ## Deadline
+///
+/// The deadline is checked between every unit of work, and inside passes before each probe. On expiry, an in-flight pass applies its report, an accepted pass that needs a rebuild rebuilds the graph only, a relax round settles, and the final numeric reorder still runs to completion.
+package struct ReductionSession {
+    package typealias Configuration = Interpreters.ReducerConfiguration
+
+    // MARK: - Core State
+
+    let initialSequence: ChoiceSequence
+    /// Every assignment refreshes ``incumbentHash`` and ``hasBind``, which each pass and decoder read. ``adoptIncumbent(_:hash:)`` takes a hash already computed.
+    var incumbent: Counterexample {
+        get {
+            storedIncumbent
+        }
+        set {
+            adoptIncumbent(newValue, hash: ZobristHash.hash(of: newValue.sequence))
+        }
+    }
+
+    private var storedIncumbent: Counterexample
+    private(set) var incumbentHash: UInt64
+    /// Whether the incumbent holds a bind, which decides between guided and exact decoding.
+    private(set) var hasBind: Bool
+    var graph: ChoiceGraph
+    var stats = ReductionStats()
+    var rejectCache: ProbeCache
+    /// Covering rows by shape, passed to every pass's encoder input.
+    let coveringRowCache = CoveringRowCache()
+    let generator: AnyGenerator
+    let property: (Any) -> Bool
+    let probeWrapper: ProbeWrapper?
+    let tuning: ReductionTuning
+    let enabledEncoders: Set<EncoderName>?
+    /// Gates timings, graph statistics, and materializations outside decoding. Probe outcomes, including decoder attempts and property calls, are recorded either way.
+    let collectStats: Bool
+    let isInstrumented: Bool
+
+    // MARK: - Loop Control
+
+    var cycles = 0
+    /// Cycles without progress left before the run ends. Restored to ``maxStalls`` by any improvement.
+    var stallBudget: Int
+    let maxStalls: Int
+    /// Per-bind dispatch control for bound value search: per-cycle deduplication, fruitless verdicts, and budget decay.
+    var gate: BoundValueGate
+    /// Whether the latest tree lacks unselected branches, so pick nodes cannot offer pivots until rematerialized.
+    var graphIsStripped = false
+    /// Read from the production monotonic clock unless a test injects one to make deadline boundaries deterministic. A value, so passes that hold the runner `inout` can carry it.
+    let deadline: ReductionDeadline
+
+    // MARK: - Per-Cycle State
+
+    var sources: [any ScopeSource] = []
+    var anyAccepted = false
+    var hadUnresolvedReplacement = false
+    /// True once any pass in the run accepted. Never reset: a run that ends with this false could not improve its input even once.
+    var anyAcceptanceEverOccurred = false
+    /// Consecutive passes that rejected every probe, across the run, for encoders behind a ``DispatchGate/demotedAfterRejects`` gate. Reset by the encoder's next acceptance.
+    var consecutiveRejectsByEncoder: [EncoderName: Int] = [:]
+    var sequenceBeforeCycle: ChoiceSequence = []
+    /// The staged joint checkpoint last searched, so an unchanged one is not searched again.
+    var exhaustedStagedJoint: StagedJointSource.Checkpoint?
+
+    // MARK: - Coupling Attribution
+
+    /// Bounded coupling hints for joint-group ranking, kept whether or not research diagnostics are on.
+    var couplingTracker = CouplingTracker()
+    /// Monotonic count of applied passes.
+    var passCounter = 0
+
+    // MARK: - Instrumentation
+
+    var stepTimer: StepTimer
+    var diagnostics = ResearchDiagnostics()
+
+    // MARK: - Entry Point
+
+    /// Reduces `output` while `property` keeps failing, and returns the reduced counterexample with the run's statistics.
+    package static func reduce<Output>(
+        generator: Generator<Output>,
+        tree: ChoiceTree,
+        output: Output,
+        configuration: Configuration,
+        collectStats: Bool,
+        currentNanoseconds: @escaping () -> UInt64 = MonotonicClock.nanoseconds,
+        property: (Output) -> Bool
+    ) -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+        withoutActuallyEscaping(property) { escapingProperty in
+            var runner = ReductionSession(
+                generator: generator,
+                initialTree: tree,
+                initialOutput: output,
+                configuration: configuration,
+                collectStats: collectStats,
+                currentNanoseconds: currentNanoseconds,
+                property: escapingProperty
+            )
+            runner.run()
+            return runner.result()
+        }
+    }
+
+    // MARK: - Setup
+
+    /// Restores unselected branches with one exact materialization, re-encodes constant arms once, and builds the first graph.
+    init<Output>(
+        generator: Generator<Output>,
+        initialTree: ChoiceTree,
+        initialOutput: Output,
+        configuration: Configuration,
+        collectStats: Bool,
+        currentNanoseconds: @escaping () -> UInt64 = MonotonicClock.nanoseconds,
+        property: @escaping (Output) -> Bool
+    ) {
+        let erasedGenerator = generator.erase()
+        let wrappedProperty: (Any) -> Bool = { property($0 as! Output) } // swiftlint:disable:this force_cast
+
+        var sequence = ChoiceSequence.flatten(initialTree)
+        var tree = initialTree
+        var setupMaterializations = 1
+        if case let .success(_, fullTree, _) = Materializer.materializeAny(
+            erasedGenerator,
+            context: .init(
+                prefix: sequence,
+                mode: .exact,
+                fallbackTree: initialTree,
+                materializePicks: true
+            )
+        ) {
+            tree = fullTree
+            sequence = ChoiceSequence(fullTree)
+        }
+        let reencoded = ConstantArmReencoder.reencode(
+            sequence: sequence,
+            tree: tree,
+            gen: erasedGenerator,
+            materializations: &setupMaterializations
+        )
+        if let reencoded {
+            sequence = reencoded.sequence
+            tree = reencoded.tree
+        }
+
+        var graph = ChoiceGraph.build(from: tree)
+        graph.observeBindTopologies(tree: tree)
+        graph.excludedPivots = reencoded?.excludedPivots ?? []
+
+        initialSequence = sequence
+        storedIncumbent = Counterexample(sequence: sequence, tree: tree, output: initialOutput)
+        incumbentHash = ZobristHash.hash(of: sequence)
+        hasBind = Self.containsBind(sequence)
+        rejectCache = ProbeCache(keying: configuration.tuning.probeCacheKeying)
+        self.graph = graph
+        self.generator = erasedGenerator
+        self.property = wrappedProperty
+        probeWrapper = configuration.probeWrapper
+        tuning = configuration.tuning
+        enabledEncoders = configuration.enabledEncoders
+        self.collectStats = collectStats
+        stepTimer = StepTimer(isEnabled: collectStats)
+        isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
+        stallBudget = configuration.maxStalls
+        maxStalls = configuration.maxStalls
+        gate = BoundValueGate(baseBudget: configuration.tuning.boundValueBaseBudget)
+        let budget = configuration.wallClockDeadlineNanoseconds
+        deadline = ReductionDeadline(start: budget > 0 ? currentNanoseconds() : 0, budget: budget, clock: currentNanoseconds)
+
+        if collectStats {
+            stats.graphStats = ChoiceGraphStats.from(graph)
+            stats.recordMaterializations(setupMaterializations, at: .setup)
+        }
+
+        ReductionLog.reducer("graph_reducer_start", isInstrumented: isInstrumented, metadata: [
+            "seq_len": "\(incumbent.sequence.count)", "max_stalls": "\(configuration.maxStalls)", "nodes": "\(graph.nodes.count)",
+        ])
+    }
+
+    // MARK: - Run
+
+    /// Runs cycles until termination or the deadline, then the final reorder pass.
+    mutating func run() {
+        stepTimer.start()
+        while true {
+            guard deadline.isExpired == false else {
+                finishAtDeadline()
+                return
+            }
+            beginCycle()
+            stepTimer.charge(.untimed)
+            guard deadline.isExpired == false else {
+                finishAtDeadline()
+                return
+            }
+            buildCycleSources()
+            stepTimer.charge(.buildSources)
+            guard dispatchCycle() == .completed, deadline.isExpired == false else {
+                finishAtDeadline()
+                return
+            }
+            let actions = endCycle()
+            stepTimer.charge(.untimed)
+            guard runPostCycleActions(actions) == .completed, deadline.isExpired == false else {
+                finishAtDeadline()
+                return
+            }
+            guard continuesAfterCycle() else {
+                break
+            }
+        }
+        runReorderPass()
+        recordStallDiagnostic()
+    }
+
+    /// Whether a phase ran to its end, or the deadline cut it short and the run must finish.
+    enum PhaseOutcome {
+        case completed
+        case deadline
+    }
+
+    // MARK: - Cycle
+
+    private mutating func beginCycle() {
+        cycles += 1
+        gate.resetForNewCycle()
+        // Latched across stalled cycles, so a replacement the ordering refused stays eligible for a relax round until the sequence changes.
+        hadUnresolvedReplacement = hadUnresolvedReplacement && incumbent.sequence == sequenceBeforeCycle
+        anyAccepted = false
+        sequenceBeforeCycle = incumbent.sequence
+    }
+
+    private mutating func buildCycleSources() {
+        sources = prepareAllSources(previousGraph: nil)
+        ReductionLog.reducer("graph_cycle_start", isInstrumented: isInstrumented, metadata: [
+            "cycle": "\(cycles)", "seq_len": "\(incumbent.sequence.count)",
+            "sources": "\(sources.count)", "stall_budget": "\(stallBudget)",
+        ])
+    }
+
+    /// Structural families followed by value families.
+    func prepareAllSources(previousGraph: ChoiceGraph?) -> [any ScopeSource] {
+        ScopeSources.prepareStructuralSources(from: graph, previousGraph: previousGraph)
+            + ScopeSources.prepareValueSources(from: graph, tuning: tuning)
+    }
+
+    /// Rematerializes a stripped graph when pivots could follow, then evaluates the cycle and returns the enabled post-cycle actions.
+    private mutating func endCycle() -> [PostCycleAction] {
+        // A stripped graph has no pivot scopes.
+        if anyAccepted == false, graphIsStripped, isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 {
+            rematerializeUnselectedBranches()
+        }
+        let evaluation = Self.evaluatePostCycle(
+            outcome: CycleOutcome(
+                anyAccepted: anyAccepted,
+                hadUnresolvedReplacement: hadUnresolvedReplacement,
+                // The pivot's source is spent in the cycle that probed it, so no encoder sees it in the stalled cycle and the graph has to answer.
+                hasUnprobedImprovingPivot: anyAccepted == false && hasUnprobedImprovingPivot,
+                allConverged: allValuesConverged(),
+                improved: incumbent.sequence != sequenceBeforeCycle,
+                shouldAttemptStagedJoint: anyAccepted == false && hasPendingStagedJointCheckpoint()
+            ),
+            stallBudget: stallBudget,
+            maxStalls: maxStalls
+        )
+        stallBudget = evaluation.newStallBudget
+        return evaluation.actions.filter(isPostCycleActionEnabled)
+    }
+
+    /// Decides whether another cycle runs, logging the cycle's end or the run's completion.
+    private mutating func continuesAfterCycle() -> Bool {
+        let continues = shouldRunAnotherCycle()
+        if continues {
+            ReductionLog.reducer("graph_cycle_end", isInstrumented: isInstrumented, metadata: [
+                "cycle": "\(cycles)", "improved": "\(incumbent.sequence != sequenceBeforeCycle)",
+                "seq_len": "\(incumbent.sequence.count)", "total_mats": "\(stats.totalMaterializations)",
+            ])
+        } else if isInstrumented {
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "graph_reducer_complete",
+                metadata: [
+                    "cycles": "\(cycles)",
+                    "seq_len": "\(incumbent.sequence.count)",
+                    "total_mats": "\(stats.totalMaterializations)",
+                ]
+            )
+        }
+        return continues
+    }
+
+    /// A converged stall without structural improvement ends the run; otherwise the stall budget decides.
+    private func shouldRunAnotherCycle() -> Bool {
+        if incumbent.sequence.count >= sequenceBeforeCycle.count, anyAccepted == false, allValuesConverged() {
+            return false
+        }
+        return stallBudget > 0
+    }
+
+    // MARK: - Result
+
+    /// The reduced counterexample and the run's statistics, with the graph-level accounting folded in.
+    mutating func result<Output>() -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+        stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
+        stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
+        stats.cycles = cycles
+        stats.stepTimings = stepTimer.timings
+        let typedOutput = incumbent.output as! Output // swiftlint:disable:this force_cast
+        let outcome: ReductionOutcome<Output> = incumbent.sequence != initialSequence
+            ? .reduced(incumbent.sequence, incumbent.tree, typedOutput)
+            : .unreduced(incumbent.sequence, incumbent.tree, typedOutput)
+        return (outcome: outcome, stats: stats)
+    }
+
+    // MARK: - Shared Helpers
+
+    /// One eligibility rule for dispatch, post-cycle probes, and relax round exploitation.
+    func isEncoderEnabled(_ name: EncoderName) -> Bool {
+        enabledEncoders?.contains(name) != false
+    }
+
+    /// A decoder for the current sequence. Whether it holds a bind decides between guided and exact decoding.
+    var decoder: ReductionDecoder {
+        ReductionDecoder(generator: generator, property: property, probeWrapper: probeWrapper, hasBind: hasBind)
+    }
+
+    func allValuesConverged() -> Bool {
+        Self.allValuesConverged(graph: graph)
+    }
+
+    /// Rebuilds the graph from the current tree, inheriting bind classifications and convergence records, and returns the diff that decides which sources survive.
+    ///
+    /// - Parameter valueGuardExemptNodeIDs: Old-graph leaves whose values are stale because they accepted a change in the pass that triggered this rebuild. Their records transfer without the value guard.
+    @discardableResult
+    mutating func rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Set<Int> = []) -> ChoiceGraphDiff {
+        stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
+        stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
+        let oldConvergence = Self.extractAllConvergence(from: graph, valueGuardExemptNodeIDs: valueGuardExemptNodeIDs)
+        var newGraph = ChoiceGraph.build(
+            from: incumbent.tree,
+            inheriting: graph.bindClassifications,
+            observations: graph.bindTopologyObservations,
+            excludedPivots: graph.excludedPivots
+        )
+        newGraph.observeBindTopologies(tree: incumbent.tree)
+        Self.transferConvergence(oldConvergence, to: &newGraph)
+        let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
+        if diff.canReuseStructuralSources {
+            newGraph.couplingDependents = graph.couplingDependents
+        } else {
+            couplingTracker = CouplingTracker()
+        }
+        stats.graphStats.fullGraphRebuilds += 1
+        graph = newGraph
+        return diff
+    }
+
+    /// Restores the unselected branches of a stripped tree and rebuilds the graph, so pick nodes carry every arm.
+    ///
+    /// The flag is cleared even when materialization fails. Dispatch prepares every source again after a rematerialization, so a flag left set would have the same path-changing scope ask again forever. The next accepted pass that strips the tree sets the flag again, and with it the next attempt.
+    ///
+    /// - Returns: The graph before the rebuild.
+    @discardableResult
+    mutating func rematerializeUnselectedBranches() -> ChoiceGraph {
+        if collectStats {
+            stats.recordMaterializations(1, at: .rematerialization)
+        }
+        if case let .success(_, fullTree, _) = Materializer.materializeAny(
+            generator,
+            context: .init(
+                prefix: incumbent.sequence,
+                mode: .exact,
+                fallbackTree: incumbent.tree,
+                materializePicks: true
+            )
+        ) {
+            incumbent = Counterexample(sequence: incumbent.sequence, tree: fullTree, output: incumbent.output)
+        }
+        let graphBefore = graph
+        rebuildAndUpdateGraph()
+        graphIsStripped = false
+        return graphBefore
+    }
+
+    /// Replaces the incumbent with `counterexample`, whose sequence has the Zobrist hash `hash`.
+    mutating func adoptIncumbent(_ counterexample: Counterexample, hash: UInt64) {
+        storedIncumbent = counterexample
+        incumbentHash = hash
+        hasBind = Self.containsBind(counterexample.sequence)
+    }
+
+    // MARK: - Helpers
+
+    private static func containsBind(_ sequence: ChoiceSequence) -> Bool {
+        sequence.contains { entry in
+            guard case .bind = entry else {
+                return false
+            }
+            return true
+        }
+    }
+}

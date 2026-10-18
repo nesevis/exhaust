@@ -8,7 +8,7 @@
 extension ChoiceGraph {
     /// Classifies the bind at `bindNodeID` by lifting its upstream leaf at the clamped low and high endpoints of the leaf's valid range, comparing the two resulting bound subtrees in lockstep, and recording the verdict on the bind node's ``BindMetadata/classification``.
     ///
-    /// Semantic analysis, not search: emits no probes and reports no mutations. Invoked lazily by the scheduler when cheap encoders have stalled and an expensive dependent-node encoder (for example ``GraphComposedEncoder``) is about to dispatch on this bind. The verdict persists on the graph until a reshape or full rebuild clears it, so later dispatches in the same graph state reuse the result.
+    /// Semantic analysis, not search: emits no probes and reports no mutations. Invoked lazily by the scheduler when cheap encoders have stalled and an expensive dependent-node encoder (for example ``BoundValueEncoder``) is about to dispatch on this bind. The verdict persists on the graph until a reshape or full rebuild clears it, so later dispatches in the same graph state reuse the result.
     ///
     /// Idempotent. If ``BindMetadata/classification`` is already populated the call returns immediately.
     ///

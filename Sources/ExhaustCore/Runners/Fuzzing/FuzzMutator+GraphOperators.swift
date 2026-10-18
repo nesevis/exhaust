@@ -1014,7 +1014,7 @@ package extension FuzzMutator {
            donorGraph.selfSimilarityGroups[chosen.fingerprint] != nil
         {
             let donorEntries = Array(donorSequence[donor.range.lowerBound ... donor.range.upperBound])
-            let expanded = GraphStructuralEncoder.expandDepthZeroLeaves(
+            let expanded = PivotCandidates.expandDepthZeroLeaves(
                 donorEntries,
                 donorNodeID: donor.donorNodeID,
                 donorRangeStart: donor.range.lowerBound,

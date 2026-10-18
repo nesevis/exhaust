@@ -430,7 +430,7 @@ private func printComposedSpendReport(name: String, allDispatchLogs: [[DispatchR
     var verdictCounts: [String: Int] = [:]
     for log in allDispatchLogs {
         var dispatchesPerFingerprint: [UInt64: Int] = [:]
-        for record in log where record.encoderName == .composed {
+        for record in log where record.encoderName == .boundValueSearch {
             composedDispatches += 1
             composedProbes += record.probeCount
             composedCacheHits += record.cacheHitCount

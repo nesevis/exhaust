@@ -24,7 +24,7 @@ package struct BindClassification: Equatable, Hashable, Sendable {
 
 /// Shape-stability verdict from the classifier's two lifts.
 package enum BindTopology: Equatable, Hashable, Sendable {
-    /// The two lifted bound subtrees have the same skeleton — same node kinds and child counts at matching positions. Leaf-level descriptor differences (tag, width, range) do not break this verdict; they are the signal expensive encoders such as ``GraphComposedEncoder`` converge on.
+    /// The two lifted bound subtrees have the same skeleton — same node kinds and child counts at matching positions. Leaf-level descriptor differences (tag, width, range) do not break this verdict; they are the signal expensive encoders such as ``BoundValueEncoder`` converge on.
     case identical
     /// The two lifted bound subtrees disagree on node kind or child count at some non-leaf position. Binary-search-style dependent-node encoders cannot converge because each upstream probe reshapes the downstream topology.
     case divergent

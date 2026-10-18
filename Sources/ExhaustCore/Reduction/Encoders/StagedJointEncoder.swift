@@ -1,61 +1,132 @@
-/// Consumes the sequential two-, three-, and four-way scopes of staged joint search.
+//
+//  StagedJointEncoder.swift
+//  Exhaust
+//
+
+// MARK: - Staged Joint Encoder
+
+/// Searches stalled numeric leaves jointly: pairs first, then three-way and four-way groups while each preceding stage stalls.
 ///
-/// Stops after the first acceptance, because every group's addresses and domain samples belong to the original checkpoint. The scheduler unlocks each higher-order scope only after the lower stage stalls.
-struct StagedJointEncoder: GraphEncoder {
-    let name: EncoderName = .stagedJointSearch
-    private var base = ChoiceSequence()
-    private var cursor: StagedPairSearchCursor?
-    private var jointCursor: NumericJointSearchCursor?
-    private var probeBudget = 0
-    private var emitted = 0
-    /// Admission for the most recent probe. ``ProbeSession`` folds it into the probe's decoder selection.
-    private(set) var admission: DecoderAdmission = .standard
-
-    mutating func start(scope: EncoderInput) {
-        base = scope.baseSequence
-        emitted = 0
-        cursor = nil
-        jointCursor = nil
-        switch scope.transformation.operation {
-            case let .exchange(.stagedNumericPairs(pairs, probeBudget)):
-                cursor = StagedPairSearchCursor(pairs: pairs)
-                self.probeBudget = probeBudget
-            case let .exchange(.numericJoint(groups, probeBudget)):
-                jointCursor = NumericJointSearchCursor(groups: groups)
-                self.probeBudget = probeBudget
-            default:
-                probeBudget = 0
-        }
+/// The encoder's reduction covers a whole checkpoint, as a chain of stages that follow one rule. A stage searches its arity's candidates; a stage that accepts ends the chain, because every group's addresses and domain samples belong to the checkpoint. A stage that exhausts widens the search to one more leaf per group when probes and group calculations remain and a wider group is cheap enough to search: its cheapest sampled grid fits that arity's work limit. All stages share ``ReductionTuning/stagedJointProbeBudget``, and a stage after which the search can widen reserves half of what remains for the wider stage.
+enum StagedJointEncoder: ReductionEncoder {
+    /// One checkpoint: the pairs to search and the candidate pool that three-way and four-way groups are drawn from, both discovered against the same graph.
+    struct Scope: Equatable {
+        let pairs: [NumericPairQuery.Pair]
+        let candidatePool: [StagedJointQuery.Entry]
     }
 
-    mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
-        prepareProbe(into: &candidate, lastAccepted: lastAccepted)?.write(into: &candidate)
-    }
+    static let maximumArity = 4
 
-    /// Keeps the candidate buffer untouched until the session has checked the sparse hash against its rejection cache.
-    mutating func prepareProbe(into _: inout ChoiceSequence, lastAccepted: Bool) -> PreparedEncoderProbe? {
-        nextSparseProbe(lastAccepted: lastAccepted).map { .sparse($0, baseSequence: base) }
-    }
+    static let name: EncoderName = .stagedJointSearch
+    static let isPathChanging = false
+    static let admissionOrder: ReductionOrder = .notLarger
 
-    /// Advances the same probe stream without constructing a sequence. The session checks its hash before writing uncached edits.
-    mutating func nextSparseProbe(lastAccepted: Bool) -> SparseEncoderProbe? {
-        guard lastAccepted == false, emitted < probeBudget else {
-            return nil
-        }
-        if jointCursor != nil {
-            guard let proposal = jointCursor?.next() else { return nil }
-            emitted += 1
-            admission = .numericJoint(proposal.leaves)
-            return SparseEncoderProbe(leaves: proposal.leaves, patterns: proposal.patterns)
-        }
-        guard let proposal = cursor?.next() else {
-            return nil
-        }
-        emitted += 1
-        admission = .numericPair(proposal.pair)
-        return SparseEncoderProbe(
-            leaves: [proposal.pair.source, proposal.pair.sink],
-            patterns: [proposal.sourceBitPattern, proposal.sinkBitPattern]
+    static func reduce(_ scope: Scope, input: EncoderInput) -> Reduction {
+        stage(
+            arity: 2,
+            candidates: .pairs(scope.pairs),
+            candidatePool: scope.candidatePool,
+            remaining: input.tuning.stagedJointProbeBudget,
+            calculationsRemaining: input.tuning.numericJointGroupCalculationLimit,
+            input: input
         )
+    }
+
+    /// Probes a stage of `arity` may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it.
+    static func stageBudget(
+        arity: Int,
+        candidatePool: [StagedJointQuery.Entry],
+        remaining: Int,
+        calculationsRemaining: Int,
+        tuning: ReductionTuning
+    ) -> Int {
+        let reservesProbesForWiderSearch = calculationsRemaining > 0 && canWidenSearch(after: arity, candidatePool: candidatePool, tuning: tuning)
+        return reservesProbesForWiderSearch ? max(1, remaining / 2) : remaining
+    }
+
+    // MARK: - Helpers
+
+    private enum Candidates {
+        case pairs([NumericPairQuery.Pair])
+        case groups([NumericJointQuery.Group])
+    }
+
+    /// Searches one arity, then widens to the next while the stage stalls and the search can widen.
+    private static func stage(
+        arity: Int,
+        candidates: Candidates,
+        candidatePool: [StagedJointQuery.Entry],
+        remaining: Int,
+        calculationsRemaining: Int,
+        input: EncoderInput
+    ) -> Reduction {
+        let budget = stageBudget(
+            arity: arity,
+            candidatePool: candidatePool,
+            remaining: remaining,
+            calculationsRemaining: calculationsRemaining,
+            tuning: input.tuning
+        )
+        let search = switch candidates {
+            case let .pairs(pairs):
+                StagedJointSearch(pairs: pairs, base: input.baseSequence, probeBudget: budget)
+            case let .groups(groups):
+                StagedJointSearch(groups: groups, base: input.baseSequence, probeBudget: budget)
+        }
+        return .search(search, configuration: .standard) { outcome in
+            let nextArity = arity + 1
+            let remaining = remaining - outcome.counts.emitted
+            guard outcome.anyAccepted == false,
+                  remaining > 0,
+                  calculationsRemaining > 0,
+                  canWidenSearch(after: arity, candidatePool: candidatePool, tuning: input.tuning)
+            else {
+                return .pure(.finished)
+            }
+            let found = StagedJointQuery.groups(
+                candidatePool: candidatePool,
+                graph: input.graph,
+                arity: nextArity,
+                workLimit: input.tuning.jointWorkLimit(arity: nextArity),
+                calculationLimit: calculationsRemaining,
+                scopeLimit: input.tuning.numericJointScopeLimit
+            )
+            guard found.groups.isEmpty == false else {
+                return .pure(.finished)
+            }
+            return stage(
+                arity: nextArity,
+                candidates: .groups(found.groups),
+                candidatePool: candidatePool,
+                remaining: remaining,
+                calculationsRemaining: calculationsRemaining - found.calculations,
+                input: input
+            )
+        }
+    }
+
+    /// Whether a stage of one more leaf per group can follow a stage of `arity`: the four-way stage is the last, and a wider stage needs a group whose cheapest sampled grid fits that arity's work limit.
+    private static func canWidenSearch(after arity: Int, candidatePool: [StagedJointQuery.Entry], tuning: ReductionTuning) -> Bool {
+        arity < maximumArity && StagedJointQuery.canWiden(
+            to: arity + 1,
+            candidatePool: candidatePool,
+            workLimit: tuning.jointWorkLimit(arity: arity + 1)
+        )
+    }
+}
+
+// MARK: - Dispatch Requirements
+
+extension StagedJointEncoder {
+    static func gate(_ _: Scope) -> DispatchGate {
+        .open
+    }
+
+    static func convergenceInvalidatedByAcceptance(_: Scope, in _: ChoiceGraph) -> ClosedRange<Int>? {
+        nil
+    }
+
+    static func isValid(_: Scope, in _: ChoiceGraph) -> Bool {
+        true
     }
 }
