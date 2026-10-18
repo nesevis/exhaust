@@ -89,7 +89,7 @@ package struct ScopedReductionRunner {
 
     // MARK: - Per-Cycle State
 
-    var sources: [ScopedSource] = []
+    var sources: [any ScopedSource] = []
     var anyAccepted = false
     var hadUnresolvedReplacement = false
     /// True once any pass in the run accepted. Never reset: a run that ends with this false could not improve its input even once.
@@ -276,9 +276,9 @@ package struct ScopedReductionRunner {
     }
 
     /// Structural families followed by value families.
-    func prepareAllSources(previousGraph: ChoiceGraph?) -> [ScopedSource] {
-        ScopedSource.prepareStructuralSources(from: graph, previousGraph: previousGraph)
-            + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+    func prepareAllSources(previousGraph: ChoiceGraph?) -> [any ScopedSource] {
+        ScopedSources.prepareStructuralSources(from: graph, previousGraph: previousGraph)
+            + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
     }
 
     /// Rematerializes a stripped graph when pivots could follow, then evaluates the cycle and returns the enabled post-cycle actions.

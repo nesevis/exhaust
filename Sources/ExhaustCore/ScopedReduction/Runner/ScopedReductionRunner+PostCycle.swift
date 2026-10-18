@@ -245,9 +245,9 @@ extension ScopedReductionRunner {
         }
     }
 
-    private func stagedJointSource() -> ScopedSource {
-        ScopedSource.prepareStagedJointSource(
-            from: graph,
+    private func stagedJointSource() -> ScopedStagedJointSource {
+        ScopedStagedJointSource(
+            graph: graph,
             sequence: incumbent.sequence,
             isFruitlessBind: gate.isFruitless,
             exhausted: exhaustedStagedJoint,

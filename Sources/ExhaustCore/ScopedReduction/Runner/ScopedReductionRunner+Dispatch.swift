@@ -95,7 +95,7 @@ extension ScopedReductionRunner {
         guard deadline.isExpired == false else {
             return .end(.deadline)
         }
-        guard let sourceIndex = ScopedSource.highestPrioritySourceIndex(&sources) else {
+        guard let sourceIndex = ScopedSources.highestPrioritySourceIndex(&sources) else {
             return .end(.completed)
         }
         guard let priced = sources[sourceIndex].nextScope() else {
@@ -123,7 +123,7 @@ extension ScopedReductionRunner {
                         return .skip
                     case .demoted:
                         // Only the migration source yields scopes behind a demotion gate, and the encoder stays demoted until it accepts, which it cannot do without dispatching.
-                        if case .migration = sources[sourceIndex] {
+                        if sources[sourceIndex] is ScopedMigrationSource {
                             sources.remove(at: sourceIndex)
                         }
                         return .skip
@@ -443,14 +443,14 @@ extension ScopedReductionRunner {
 
         if diff.canReuseStructuralSources {
             sources = sources.filter { $0.invalidation != .anyValueChange }
-                + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+                + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
             sources = sources.filter { $0.invalidation == .structuralChange }
-                + ScopedSource.preparePermutationSources(from: graph)
-                + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+                + ScopedSources.preparePermutationSources(from: graph)
+                + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
@@ -478,9 +478,9 @@ extension ScopedReductionRunner {
     }
 
     /// Every family over the current graph.
-    func prepareExploitationSources() -> [ScopedSource] {
-        ScopedSource.prepareStructuralSources(from: graph)
-            + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+    func prepareExploitationSources() -> [any ScopedSource] {
+        ScopedSources.prepareStructuralSources(from: graph)
+            + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
     }
 
     // MARK: - Helpers

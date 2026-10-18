@@ -12,7 +12,9 @@
 /// A structural acceptance rebuilds the sources. Advancing this source therefore means the previous scope did not accept, so its range can be bisected without explicit feedback.
 ///
 /// Prepared before the emptying family: a successful first probe can eliminate more structure in one materialization than emptying sequences individually.
-final class ScopedBatchedCrossSequenceRemovalSource {
+final class ScopedBatchedCrossSequenceRemovalSource: ScopedSource {
+    let invalidation: ScopedSourceInvalidation = .structuralChange
+
     private let plans: [TreeDeletionSelection.Plan]
     /// Stack of index ranges to try. Continuing after an unsuccessful scope appends its two halves.
     private var pendingRanges: [(start: Int, end: Int)]

@@ -15,7 +15,7 @@ extension ScopedReductionRunner {
             stepTimer.endOwnership(restoring: previousOwner)
         }
         guard isEncoderEnabled(.numericReorder),
-              let source = ScopedSource.prepareReorderSource(from: graph),
+              let source = ScopedSources.prepareReorderSource(from: graph),
               var priced = source.nextScope(),
               case let .reorder(firstScope) = priced.encoderScope
         else {
@@ -39,7 +39,7 @@ extension ScopedReductionRunner {
             rebuildGraph(after: pass)
             passesRemaining -= 1
             guard passesRemaining > 0,
-                  let nextSource = ScopedSource.prepareReorderSource(from: graph),
+                  let nextSource = ScopedSources.prepareReorderSource(from: graph),
                   let nextPriced = nextSource.nextScope()
             else {
                 return

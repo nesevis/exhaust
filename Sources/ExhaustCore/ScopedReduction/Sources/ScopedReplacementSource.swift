@@ -14,7 +14,9 @@
 /// Domains with at most ``defaultEagerRowLimit`` candidate rows skip the heap: direct loops enumerate every scope in discovery order, and priority order stable-sorts that list by benefit. Both paths emit identical streams; the heap only pays for itself when the row count makes buffering every scope expensive.
 ///
 /// - Complexity: O(P + B + V + E) retained state, where P is the number of family members, B is the prepared branch metadata, and V + E is the topology snapshot. Preparation sorts family members in O(P log P) time and scans each pick's branches for eligibility. Containment is indexed in O(V) time and queried in O(1). Heap advancement costs O(log R), where R is the number of pending rows, plus rejected entries and dependency cache misses encountered before the next valid scope. Each cache miss costs O(V + E); cached membership is expected O(1). The dependency cache retains a bounded working set of restricted results, plus O(V) negative-source identities, within the overall storage bound.
-final class ScopedReplacementSource {
+final class ScopedReplacementSource: ScopedSource {
+    let invalidation: ScopedSourceInvalidation = .structuralChange
+
     /// Keeps scheduling order separate from the discovery order the relax round uses.
     enum EnumerationOrder {
         case priority
