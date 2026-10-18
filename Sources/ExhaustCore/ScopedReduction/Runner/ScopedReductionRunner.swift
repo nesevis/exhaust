@@ -46,14 +46,17 @@ package struct ScopedReductionRunner {
     // MARK: - Core State
 
     let initialSequence: ChoiceSequence
-    /// Every assignment refreshes ``incumbentHash`` and ``hasBind``, which each pass and decoder read.
+    /// Every assignment refreshes ``incumbentHash`` and ``hasBind``, which each pass and decoder read. ``adoptIncumbent(_:hash:)`` takes a hash already computed.
     var incumbent: ScopedCounterexample {
-        didSet {
-            incumbentHash = ZobristHash.hash(of: incumbent.sequence)
-            hasBind = Self.containsBind(incumbent.sequence)
+        get {
+            storedIncumbent
+        }
+        set {
+            adoptIncumbent(newValue, hash: ZobristHash.hash(of: newValue.sequence))
         }
     }
 
+    private var storedIncumbent: ScopedCounterexample
     private(set) var incumbentHash: UInt64
     /// Whether the incumbent holds a bind, which decides between guided and exact decoding.
     private(set) var hasBind: Bool
@@ -195,7 +198,7 @@ package struct ScopedReductionRunner {
         graph.excludedPivots = reencoded?.excludedPivots ?? []
 
         initialSequence = sequence
-        incumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
+        storedIncumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
         incumbentHash = ZobristHash.hash(of: sequence)
         hasBind = Self.containsBind(sequence)
         rejectCache = ScopedProbeCache(keying: configuration.tuning.probeCacheKeying)
@@ -449,6 +452,13 @@ package struct ScopedReductionRunner {
         rebuildAndUpdateGraph()
         graphIsStripped = false
         return graphBefore
+    }
+
+    /// Replaces the incumbent with `counterexample`, whose sequence has the Zobrist hash `hash`.
+    mutating func adoptIncumbent(_ counterexample: ScopedCounterexample, hash: UInt64) {
+        storedIncumbent = counterexample
+        incumbentHash = hash
+        hasBind = Self.containsBind(counterexample.sequence)
     }
 
     // MARK: - Helpers

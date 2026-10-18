@@ -40,6 +40,8 @@ enum ScopedReductionInterpreter {
     /// What an execution hands back to the runner.
     struct Result {
         let incumbent: ScopedCounterexample
+        /// The hash of ``incumbent``'s sequence, kept up to date by every commit, so the runner need not hash it again.
+        let incumbentHash: UInt64
         let graph: ChoiceGraph
         let rejectCache: ScopedProbeCache
         let report: ScopedPassReport
@@ -69,6 +71,7 @@ enum ScopedReductionInterpreter {
         }
         return Result(
             incumbent: context.incumbent,
+            incumbentHash: context.baseHash,
             graph: context.graph,
             rejectCache: context.rejectCache,
             report: context.report,

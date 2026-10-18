@@ -273,7 +273,7 @@ extension ScopedReductionRunner {
 
         captureDispatchBaseline()
         chargeElapsed(to: .dispatch)
-        // Moved rather than copied, so the runner holds no second reference while the execution edits them, and the first edit does not copy their storage.
+        // Moved rather than copied, so neither the runner nor these locals hold a second reference while the execution edits them. Without `consume`, the locals keep their storage alive for the whole execution, and every rejection the cache records copies the entire set.
         var executionGraph = Self.vacatedGraph
         swap(&executionGraph, &graph)
         var executionRejectCache = rejectCache.emptied
@@ -283,8 +283,8 @@ extension ScopedReductionRunner {
             context: ScopedReductionInterpreter.Context(
                 incumbent: incumbent,
                 incumbentHash: incumbentHash,
-                graph: executionGraph,
-                rejectCache: executionRejectCache,
+                graph: consume executionGraph,
+                rejectCache: consume executionRejectCache,
                 decoder: decoder,
                 encoder: typed.encoder,
                 isInstrumented: isInstrumented,
@@ -295,7 +295,7 @@ extension ScopedReductionRunner {
         chargeProbing(result.probeTiming)
         // The execution replaces the incumbent only on acceptance, so an unchanged one keeps its cached hash.
         if result.report.anyAccepted {
-            incumbent = result.incumbent
+            adoptIncumbent(result.incumbent, hash: result.incumbentHash)
         }
         graph = result.graph
         rejectCache = result.rejectCache

@@ -60,6 +60,22 @@ struct ScopedIntegerSearch: ScopedSearch {
         var semanticSimplestProbed: Bool = false
         /// Per-leaf-zero pre-round state, active during the ``Phase/perLeafZero`` phase.
         var perLeafZero: PerLeafZeroState?
+
+        /// Stands in for the search's state while ``ScopedIntegerSearch/next(_:into:)`` advances the moved-out original, so the original's collections stay uniquely referenced and editing them does not copy them.
+        static var vacant: State {
+            State(
+                sequence: [],
+                leafPositions: [],
+                phase: .perLeaf,
+                leafIndex: 0,
+                stepper: nil,
+                warmStartRecords: [:],
+                batchRejected: false,
+                candidateList: nil,
+                crossZero: nil,
+                bisection: nil
+            )
+        }
     }
 
     /// Where the candidates came from, which decides when the list ends and how its convergence is recorded.
@@ -219,10 +235,13 @@ struct ScopedIntegerSearch: ScopedSearch {
     }
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
-        var current = state
+        // The phases mutate `convergenceStore` on the search as well as the state they are handed, so the state is moved out rather than passed in place.
+        var current = State.vacant
+        swap(&current, &state)
         if case let .accepted(recovered) = feedback {
             // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
             guard recovered.count == current.sequence.count else {
+                state = current
                 return nil
             }
             current.sequence = recovered

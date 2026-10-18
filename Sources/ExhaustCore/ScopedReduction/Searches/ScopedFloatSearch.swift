@@ -63,6 +63,28 @@ struct ScopedFloatSearch: ScopedSearch {
         var ratioRemainder: Int64
         var ratioIntegerPart: Int64
         var ratioDistance: UInt64
+
+        /// Stands in for the search's state while ``ScopedFloatSearch/next(_:into:)`` advances the moved-out original, so the original's collections stay uniquely referenced and editing them does not copy them.
+        static var vacant: State {
+            State(
+                sequence: [],
+                targets: [],
+                currentTargetIndex: 0,
+                stage: .specialValues,
+                batchCandidates: [],
+                batchIndex: 0,
+                stepper: FindIntegerStepper(),
+                needsFirstProbe: true,
+                binarySearchMinDelta: 1,
+                binarySearchMaxQuantum: 0,
+                binarySearchMovesUp: false,
+                binarySearchCurrentInt: 0,
+                ratioDenominator: 0,
+                ratioRemainder: 0,
+                ratioIntegerPart: 0,
+                ratioDistance: 0
+            )
+        }
     }
 
     // MARK: - Search
@@ -73,10 +95,13 @@ struct ScopedFloatSearch: ScopedSearch {
     }
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
-        var current = state
+        // The stages mutate `convergenceStore` on the search as well as the state they are handed, so the state is moved out rather than passed in place.
+        var current = State.vacant
+        swap(&current, &state)
         if case let .accepted(recovered) = feedback {
             // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
             guard recovered.count == current.sequence.count else {
+                state = current
                 return nil
             }
             current.sequence = recovered
