@@ -26,6 +26,10 @@ struct ChoiceGraphBuilder {
     /// The ``BindMetadata/bindDepth`` of the outermost enclosing bind, when inside a bind's inner subtree.
     var enclosingBindDepth: Int?
 
+    /// Whether the walk has passed a non-getSize bind, or a branch, since the enclosing ``walkBind`` reset them. ``walkBind`` reads them after walking a bound subtree, so it learns what ``ChoiceTree/containsBind`` and ``ChoiceTree/containsPicks`` would report without walking the subtree a second time.
+    var walkedBind = false
+    var walkedBranch = false
+
     var currentBindRole: BindRole {
         if let nodeID = enclosingBindNodeID, let depth = enclosingBindDepth {
             .bindInner(controllingNodeID: nodeID, depth: depth)
@@ -152,6 +156,7 @@ struct ChoiceGraphBuilder {
                 )
 
             case let .branch(b):
+                walkedBranch = true
                 return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
             case let .group(array, isOpaque, _):
@@ -464,10 +469,11 @@ struct ChoiceGraphBuilder {
             return 0
         }
 
+        walkedBind = true
         let nodeID = emitNode(
             kind: .bind(BindMetadata(
                 fingerprint: fingerprint,
-                isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
+                isStructurallyConstant: false,
                 bindDepth: bindDepth,
                 innerChildIndex: 0,
                 boundChildIndex: 1,
@@ -504,6 +510,11 @@ struct ChoiceGraphBuilder {
         enclosingBindNodeID = savedBindNodeID
         enclosingBindDepth = savedBindDepth
 
+        // The flags start clear for the bound subtree, so afterwards they describe it alone. Everything walked so far set the outer flags already, so restoring them by OR keeps them correct for any enclosing bind.
+        let walkedBindBeforeBound = walkedBind
+        let walkedBranchBeforeBound = walkedBranch
+        walkedBind = false
+        walkedBranch = false
         let boundStartID = nextNodeID
         if isActive {
             let boundConsumed = walk(bound, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth + 1, path: path + [.bindBound])
@@ -512,6 +523,9 @@ struct ChoiceGraphBuilder {
         } else {
             walk(bound, offset: 0, parent: nodeID, bindDepth: bindDepth + 1, path: [], isActive: false)
         }
+        let isStructurallyConstant = walkedBind == false && walkedBranch == false
+        walkedBind = walkedBind || walkedBindBeforeBound
+        walkedBranch = walkedBranch || walkedBranchBeforeBound
 
         var childIDs: [Int] = []
         if innerStartID < nextNodeID {
@@ -523,7 +537,14 @@ struct ChoiceGraphBuilder {
 
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
-            kind: nodes[nodeID].kind,
+            kind: .bind(BindMetadata(
+                fingerprint: fingerprint,
+                isStructurallyConstant: isStructurallyConstant,
+                bindDepth: bindDepth,
+                innerChildIndex: 0,
+                boundChildIndex: 1,
+                bindPath: isActive ? path : []
+            )),
             positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
             children: childIDs,
             parent: parent,
