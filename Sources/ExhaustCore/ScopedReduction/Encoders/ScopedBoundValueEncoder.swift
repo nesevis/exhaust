@@ -10,7 +10,6 @@
 /// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the branch either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
 enum ScopedBoundValueEncoder: ScopedEncoder {
     static let name: EncoderName = .boundValueSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
 

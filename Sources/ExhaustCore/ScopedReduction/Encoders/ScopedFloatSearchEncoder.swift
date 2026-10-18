@@ -10,7 +10,6 @@
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate. An acceptance that reshapes a bound subtree still ends the pass.
 enum ScopedFloatSearchEncoder: ScopedEncoder {
     static let name: EncoderName = .floatSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
 

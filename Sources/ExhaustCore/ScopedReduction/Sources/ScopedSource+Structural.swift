@@ -36,7 +36,7 @@ extension ScopedSource {
 
         let emptying = emptyingEncoderScopes(graph: graph, elementScopes: elementScopes)
         if emptying.isEmpty == false {
-            sources.append(.emptying(ScopedSortedSource(emptying)))
+            sources.append(.sorted(ScopedSortedSource(emptying, invalidation: .structuralChange)))
         }
 
         for scope in elementScopes {
@@ -51,12 +51,12 @@ extension ScopedSource {
 
         let centered = centeredWindowEncoderScopes(graph: graph, elementScopes: elementScopes)
         if centered.isEmpty == false {
-            sources.append(.centeredWindows(ScopedSortedSource(centered)))
+            sources.append(.sorted(ScopedSortedSource(centered, invalidation: .structuralChange)))
         }
 
         let symmetric = symmetricWindowEncoderScopes(graph: graph, elementScopes: elementScopes)
         if symmetric.isEmpty == false {
-            sources.append(.symmetricWindows(ScopedSortedSource(symmetric)))
+            sources.append(.sorted(ScopedSortedSource(symmetric, invalidation: .structuralChange)))
         }
 
         var migration = ScopedSource.migration(ScopedMigrationSource(graph: graph))
@@ -66,12 +66,12 @@ extension ScopedSource {
 
         let perElement = perElementRemovalEncoderScopes(graph: graph, elementScopes: elementScopes)
         if perElement.isEmpty == false {
-            sources.append(.perElementRemoval(ScopedSortedSource(perElement)))
+            sources.append(.sorted(ScopedSortedSource(perElement, invalidation: .structuralChange)))
         }
 
         let aligned = alignedRemovalEncoderScopes(graph: graph)
         if aligned.isEmpty == false {
-            sources.append(.alignedRemoval(ScopedSortedSource(aligned)))
+            sources.append(.sorted(ScopedSortedSource(aligned, invalidation: .structuralChange)))
         }
 
         var replacement = ScopedSource.replacement(ScopedReplacementSource(graph: graph, previousGraph: previousGraph))
@@ -90,7 +90,7 @@ extension ScopedSource {
         guard permutation.isEmpty == false else {
             return []
         }
-        return [.permutation(ScopedSortedSource(permutation))]
+        return [.sorted(ScopedSortedSource(permutation, invalidation: .leafKindChange))]
     }
 
     /// The numeric reorder family over the current graph: one scope holding every reorderable sibling group, or nil when there is none. Reordering is for presentation, so the runner drains this family only in the final pass.
@@ -98,11 +98,12 @@ extension ScopedSource {
         guard let reorderScope = ReorderingQuery.build(graph: graph) else {
             return nil
         }
-        return .numericReorder(ScopedSortedSource(
+        return .sorted(ScopedSortedSource(
             [PricedEncoderScope(
                 encoderScope: .reorder(reorderScope),
                 priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
-            )]
+            )],
+            invalidation: .structuralChange
         ))
     }
 

@@ -10,7 +10,6 @@
 /// Each seed is the plain pivot candidate or a variant that transplants a smaller descendant of the bound subtree into it, up to ``ScopedReductionTuning/maxPivotTransplants``. Changing the pick regenerates the bound subtree, so each seed is lifted through the generator and the bind relocated in the lifted graph before anything is probed. The lifted seed is a ``ScopedSingleCandidateSearch``, and the branch continues with a ``ScopedCoveringSearch`` over the seed's bound range once the seed is evaluated. Both run in the branch's member, so the pool schedules them as one. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
 enum ScopedBindPivotEncoder: ScopedEncoder {
     static let name: EncoderName = .bindPivot
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
 

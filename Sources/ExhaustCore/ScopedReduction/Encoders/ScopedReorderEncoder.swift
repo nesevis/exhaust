@@ -10,7 +10,6 @@
 /// A reordering need not precede the incumbent: the interpreter admits it under ``ReductionOrder/unordered``. The first accepted reordering requires a rebuild, which ends the pass.
 enum ScopedReorderEncoder: ScopedEncoder {
     static let name: EncoderName = .numericReorder
-    static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .unordered
 

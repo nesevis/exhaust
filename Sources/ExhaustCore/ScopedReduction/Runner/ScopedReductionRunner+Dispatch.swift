@@ -423,13 +423,13 @@ extension ScopedReductionRunner {
         let graphEnd = MonotonicClock.nanoseconds()
 
         if diff.canReuseStructuralSources {
-            sources = sources.filter { $0.isValueDependent == false }
+            sources = sources.filter { $0.invalidation != .anyValueChange }
                 + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
-            sources = sources.filter(\.canReuseAfterLeafKindChange)
+            sources = sources.filter { $0.invalidation == .structuralChange }
                 + ScopedSource.preparePermutationSources(from: graph)
                 + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [

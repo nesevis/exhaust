@@ -15,15 +15,15 @@ struct PricedEncoderScope {
 
 /// Yields encoder scopes that were priced and sorted when the source was prepared.
 ///
-/// Priority inspection reads the next encoder scope without consuming it. The invalidation metadata describes everything the source was prepared with and stays available after exhaustion.
+/// Priority inspection reads the next encoder scope without consuming it. The invalidation describes everything the source was prepared with and stays available after exhaustion.
 struct ScopedSortedSource {
     private var cursor: BufferedScopeCursor<PricedEncoderScope>
-    let isValueDependent: Bool
+    let invalidation: ScopedSourceInvalidation
 
     /// - Precondition: `encoderScopes` is already in dispatch order.
-    init(_ encoderScopes: [PricedEncoderScope]) {
+    init(_ encoderScopes: [PricedEncoderScope], invalidation: ScopedSourceInvalidation) {
         cursor = BufferedScopeCursor(encoderScopes)
-        isValueDependent = encoderScopes.contains { $0.encoderScope.encoder.isValueDependent }
+        self.invalidation = invalidation
     }
 
     var dispatchPriority: DispatchPriority? {
@@ -61,7 +61,6 @@ struct ScopedStagedJointSource {
     }
 
     private var state: State
-    let isValueDependent = true
 
     /// - Parameters:
     ///   - isFruitlessBind: Whether bound value search came back fruitless for the bind with this fingerprint.
@@ -149,57 +148,42 @@ struct ScopedStagedJointSource {
     }
 }
 
+// MARK: - Invalidation
+
+/// The least graph change that invalidates a family's scopes, which decides whether the family survives a rebuild.
+enum ScopedSourceInvalidation {
+    /// Any value change: the scopes read leaf values.
+    case anyValueChange
+    /// A change of leaf kind: the family groups siblings by shape, which a leaf-kind change can invalidate without changing node identities.
+    case leafKindChange
+    /// Only a structural change: the scopes depend on graph topology alone.
+    case structuralChange
+}
+
 // MARK: - Family Sources
 
 /// One source per discovery family. A family yields several encoders' scopes in one priority order, so ties keep the order the family's query emits them in.
 ///
-/// Families hold only encoder scopes for registered encoders. Scopes the family's query finds for other operations are dropped at preparation.
+/// Families hold only encoder scopes for registered encoders. Scopes the family's query finds for other operations are dropped at preparation. Families whose scopes are discovered and priced up front share ``ScopedSortedSource``, which records their invalidation; the other families each discover lazily.
 enum ScopedSource {
-    // MARK: Value Families
-
-    /// The single ``LaneCollapseQuery`` scope.
-    case laneCollapse(ScopedSortedSource)
-    /// ``DepthCollapseQuery`` scopes, deepest first.
-    case depthCollapse(ScopedSortedSource)
-    /// ``MinimizationQuery`` scopes: integer and float value search, bound value, and bind pivot.
-    case minimization(ScopedSortedSource)
-    /// ``ExchangeQuery`` scopes: redistribution, lockstep, relation, and bound exchange.
-    case exchange(ScopedSortedSource)
+    /// A family whose scopes were priced and sorted at preparation.
+    case sorted(ScopedSortedSource)
     /// The staged joint checkpoint, for the post-cycle phase.
     case stagedJoint(ScopedStagedJointSource)
-
-    // MARK: Structural Families
-
     /// All compatible sequences at their minimum lengths, bisected on rejection.
     case batchedCrossSequenceRemoval(ScopedBatchedCrossSequenceRemovalSource)
-    /// Each sequence with no minimum length, emptied whole, largest first.
-    case emptying(ScopedSortedSource)
     /// One sequence's halving batches and interior window seeds.
     case batchRemoval(ScopedBatchRemovalSource)
-    /// Center-out window growth, one scope per sequence.
-    case centeredWindows(ScopedSortedSource)
-    /// Equal prefix and suffix window growth, one scope per sequence.
-    case symmetricWindows(ScopedSortedSource)
     /// Every element of an earlier sequence moved into a later compatible one.
     case migration(ScopedMigrationSource)
-    /// Single-element removals, at-target elements first.
-    case perElementRemoval(ScopedSortedSource)
-    /// Covering-array removal across sibling sequences under one zip.
-    case alignedRemoval(ScopedSortedSource)
     /// Self-similar replacement, descendant promotion, and branch pivots, in descending benefit.
     case replacement(ScopedReplacementSource)
-    /// Same-shaped sibling swaps under each zip.
-    case permutation(ScopedSortedSource)
-    /// The numeric reordering of every reorderable sibling group, for the final pass.
-    case numericReorder(ScopedSortedSource)
 
     /// Mutating because a lazy family discovers its scopes on first peek.
     var dispatchPriority: DispatchPriority? {
         mutating get {
             switch self {
-                case let .laneCollapse(source), let .depthCollapse(source), let .minimization(source), let .exchange(source),
-                     let .emptying(source), let .centeredWindows(source), let .symmetricWindows(source),
-                     let .perElementRemoval(source), let .alignedRemoval(source), let .permutation(source), let .numericReorder(source):
+                case let .sorted(source):
                     return source.dispatchPriority
                 case var .stagedJoint(source):
                     let priority = source.dispatchPriority
@@ -217,34 +201,15 @@ enum ScopedSource {
         }
     }
 
-    var isValueDependent: Bool {
+    var invalidation: ScopedSourceInvalidation {
         switch self {
-            case let .laneCollapse(source), let .depthCollapse(source), let .minimization(source), let .exchange(source),
-                 let .emptying(source), let .centeredWindows(source), let .symmetricWindows(source),
-                 let .perElementRemoval(source), let .alignedRemoval(source), let .permutation(source), let .numericReorder(source):
-                source.isValueDependent
-            case let .stagedJoint(source):
-                source.isValueDependent
+            case let .sorted(source):
+                source.invalidation
+            case .stagedJoint:
+                .anyValueChange
             case .batchedCrossSequenceRemoval, .batchRemoval, .migration, .replacement:
-                false
+                .structuralChange
         }
-    }
-
-    /// Whether the family groups siblings by shape, which a change of leaf kind can invalidate without changing node identities.
-    var isPermutationSource: Bool {
-        switch self {
-            case .permutation:
-                true
-            case .laneCollapse, .depthCollapse, .minimization, .exchange, .stagedJoint,
-                 .batchedCrossSequenceRemoval, .emptying, .batchRemoval, .centeredWindows, .symmetricWindows,
-                 .migration, .perElementRemoval, .alignedRemoval, .replacement, .numericReorder:
-                false
-        }
-    }
-
-    /// Leaf-kind changes invalidate value-dependent scopes and sibling-shape groups, even when node identities remain stable.
-    var canReuseAfterLeafKindChange: Bool {
-        isValueDependent == false && isPermutationSource == false
     }
 
     /// Whether the family asks for one scope before ordinary priority ordering resumes. Only batched cross-sequence removal does, for its all-sequence probe.
@@ -258,21 +223,9 @@ enum ScopedSource {
     /// Releases the source's storage before advancing, so its buffer stays uniquely referenced.
     mutating func nextScope() -> PricedEncoderScope? {
         switch consume self {
-            case var .laneCollapse(source):
+            case var .sorted(source):
                 let next = source.nextScope()
-                self = .laneCollapse(source)
-                return next
-            case var .depthCollapse(source):
-                let next = source.nextScope()
-                self = .depthCollapse(source)
-                return next
-            case var .minimization(source):
-                let next = source.nextScope()
-                self = .minimization(source)
-                return next
-            case var .exchange(source):
-                let next = source.nextScope()
-                self = .exchange(source)
+                self = .sorted(source)
                 return next
             case var .stagedJoint(source):
                 let next = source.nextScope()
@@ -282,45 +235,17 @@ enum ScopedSource {
                 let next = source.nextScope()
                 self = .batchedCrossSequenceRemoval(source)
                 return next
-            case var .emptying(source):
-                let next = source.nextScope()
-                self = .emptying(source)
-                return next
             case var .batchRemoval(source):
                 let next = source.nextScope()
                 self = .batchRemoval(source)
-                return next
-            case var .centeredWindows(source):
-                let next = source.nextScope()
-                self = .centeredWindows(source)
-                return next
-            case var .symmetricWindows(source):
-                let next = source.nextScope()
-                self = .symmetricWindows(source)
                 return next
             case var .migration(source):
                 let next = source.nextScope()
                 self = .migration(source)
                 return next
-            case var .perElementRemoval(source):
-                let next = source.nextScope()
-                self = .perElementRemoval(source)
-                return next
-            case var .alignedRemoval(source):
-                let next = source.nextScope()
-                self = .alignedRemoval(source)
-                return next
             case var .replacement(source):
                 let next = source.nextScope()
                 self = .replacement(source)
-                return next
-            case var .permutation(source):
-                let next = source.nextScope()
-                self = .permutation(source)
-                return next
-            case var .numericReorder(source):
-                let next = source.nextScope()
-                self = .numericReorder(source)
                 return next
         }
     }
@@ -337,22 +262,22 @@ extension ScopedSource {
         var sources: [ScopedSource] = []
 
         if let laneCollapse = laneCollapseEncoderScope(graph: graph) {
-            sources.append(.laneCollapse(ScopedSortedSource([laneCollapse])))
+            sources.append(.sorted(ScopedSortedSource([laneCollapse], invalidation: .anyValueChange)))
         }
 
         let depthCollapse = depthCollapseEncoderScopes(graph: graph)
         if depthCollapse.isEmpty == false {
-            sources.append(.depthCollapse(ScopedSortedSource(depthCollapse)))
+            sources.append(.sorted(ScopedSortedSource(depthCollapse, invalidation: .anyValueChange)))
         }
 
         let minimization = minimizationEncoderScopes(graph: graph, tuning: tuning)
         if minimization.isEmpty == false {
-            sources.append(.minimization(ScopedSortedSource(minimization)))
+            sources.append(.sorted(ScopedSortedSource(minimization, invalidation: .anyValueChange)))
         }
 
         let exchange = exchangeEncoderScopes(graph: graph, tuning: tuning)
         if exchange.isEmpty == false {
-            sources.append(.exchange(ScopedSortedSource(exchange)))
+            sources.append(.sorted(ScopedSortedSource(exchange, invalidation: .anyValueChange)))
         }
 
         return sources

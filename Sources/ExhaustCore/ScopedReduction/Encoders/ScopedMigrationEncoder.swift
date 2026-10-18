@@ -10,7 +10,6 @@
 /// The scope fully determines the probe, and an accepted migration requires a rebuild, which ends the pass.
 enum ScopedMigrationEncoder: ScopedEncoder {
     static let name: EncoderName = .migration
-    static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
 

@@ -10,7 +10,6 @@
 /// The search keeps going after an acceptance, building its next probe on the recovered sequence.
 enum ScopedSwapEncoder: ScopedEncoder {
     static let name: EncoderName = .siblingSwap
-    static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
 

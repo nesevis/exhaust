@@ -18,7 +18,6 @@ enum ScopedStagedJointEncoder: ScopedEncoder {
     static let maximumArity = 4
 
     static let name: EncoderName = .stagedJointSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
 

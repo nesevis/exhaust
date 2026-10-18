@@ -19,9 +19,6 @@ protocol ScopedEncoder {
 
     // MARK: What It Needs
 
-    /// Whether the encoder's scopes depend on leaf values rather than only on graph topology. A source holding such scopes is prepared again after any value change.
-    static var isValueDependent: Bool { get }
-
     /// What the runner checks before dispatching `scope`, beyond its validity. Relax round exploitation applies no gate.
     static func gate(_ scope: Scope) -> ScopedDispatchGate
 

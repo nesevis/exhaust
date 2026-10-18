@@ -16,7 +16,6 @@ enum ScopedSubstitutionEncoder: ScopedEncoder {
     }
 
     static let name: EncoderName = .substitution
-    static let isValueDependent = false
     static let isPathChanging = true
     static let admissionOrder: ReductionOrder = .notLarger
 

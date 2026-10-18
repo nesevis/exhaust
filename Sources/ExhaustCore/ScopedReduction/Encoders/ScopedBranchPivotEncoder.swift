@@ -15,7 +15,6 @@ enum ScopedBranchPivotEncoder: ScopedEncoder {
     }
 
     static let name: EncoderName = .branchPivot
-    static let isValueDependent = false
     static let isPathChanging = true
     static let admissionOrder: ReductionOrder = .notLarger
 
