@@ -6,12 +6,15 @@
 // MARK: - Relax Round
 
 extension ScopedReductionRunner {
-    /// The state a relax round restores when its provisional result does not beat the checkpoint. Work already recorded by exploitation passes is kept either way.
+    /// The state a relax round restores when its provisional result does not beat the checkpoint. Statistics recorded by exploitation passes are kept either way.
+    ///
+    /// Demotion counts are part of the checkpoint because exploitation passes record them against the perturbed graph, where they describe a different counterexample.
     private struct RelaxRoundCheckpoint {
         let incumbent: ScopedCounterexample
         let convergence: [ChoicePath: TransferableConvergence]
         let anyAccepted: Bool
         let hadUnresolvedReplacement: Bool
+        let consecutiveRejectsByEncoder: [EncoderName: Int]
     }
 
     /// Accumulates a relax round's perturbation work, recorded once whether or not its result is kept.
@@ -24,7 +27,7 @@ extension ScopedReductionRunner {
 
     /// Perturbs the counterexample with a structural replacement that may worsen it, exploits the perturbation with ordinary dispatch, and keeps the result only when it strictly precedes the checkpoint.
     ///
-    /// The first perturbation that decodes to a failure is adopted; each one that does not spends one unit of ``ScopedReductionTuning/relaxMaterializationBudget``. Exploitation rebuilds the graph and every source, seeds an empty rejection cache, and dispatches under the exploitation policy until its sources are exhausted or the deadline passes. Settlement restores the saved cache, then commits a strict improvement or restores the checkpoint, rebuilding its graph, clearing coupling evidence, and transferring the checkpoint's convergence.
+    /// The first perturbation that decodes to a failure is adopted; each one that does not spends one unit of ``ScopedReductionTuning/relaxMaterializationBudget``. Exploitation rebuilds the graph and every source, seeds an empty rejection cache, and dispatches under the exploitation policy until its sources are exhausted or the deadline passes. Settlement restores the saved cache, then commits a strict improvement or restores the checkpoint: its demotion counts, a graph rebuilt with no convergence carried over from exploitation, the checkpoint's own convergence, and no coupling evidence.
     ///
     /// - Returns: Whether the relax round committed an improvement.
     mutating func runRelaxRound() -> Bool {
@@ -35,7 +38,8 @@ extension ScopedReductionRunner {
             incumbent: incumbent,
             convergence: Self.extractAllConvergence(from: graph),
             anyAccepted: anyAccepted,
-            hadUnresolvedReplacement: hadUnresolvedReplacement
+            hadUnresolvedReplacement: hadUnresolvedReplacement,
+            consecutiveRejectsByEncoder: consecutiveRejectsByEncoder
         )
         let budget = tuning.relaxMaterializationBudget
         ScopedReductionLog.reducer("relax_round_start", isInstrumented: isInstrumented, metadata: [
@@ -117,6 +121,9 @@ extension ScopedReductionRunner {
         incumbent = checkpoint.incumbent
         anyAccepted = checkpoint.anyAccepted
         hadUnresolvedReplacement = checkpoint.hadUnresolvedReplacement
+        consecutiveRejectsByEncoder = checkpoint.consecutiveRejectsByEncoder
+        // Exploitation floors describe the perturbed counterexample, so none may transfer onto the restored one.
+        graph.convergenceStore.removeAll()
         rebuildAndUpdateGraph()
         graph.couplingDependents.removeAll()
         couplingTracker = CouplingTracker()

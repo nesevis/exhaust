@@ -431,6 +431,8 @@ package struct ScopedReductionRunner {
 
     /// Restores the unselected branches of a stripped tree and rebuilds the graph, so pick nodes carry every arm.
     ///
+    /// The flag is cleared even when materialization fails. Dispatch prepares every source again after a rematerialization, so a flag left set would have the same path-changing scope ask again forever. The next accepted pass that strips the tree sets the flag again, and with it the next attempt.
+    ///
     /// - Returns: The graph before the rebuild.
     @discardableResult
     mutating func rematerializeUnselectedBranches() -> ChoiceGraph {
