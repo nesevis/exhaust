@@ -47,20 +47,13 @@ final class ScopedStagedJointSource {
         let scope: ScopedStagedJointEncoder.Scope
     }
 
-    private struct Discovery {
-        let graph: ChoiceGraph
-        let sequence: ChoiceSequence
-        let isFruitlessBind: (UInt64) -> Bool
-        let exhausted: Checkpoint?
-        let tuning: ScopedReductionTuning
-    }
-
-    private enum State {
-        case pending(Discovery)
-        case discovered(PricedEncoderScope?)
-    }
-
-    private var state: State
+    private let graph: ChoiceGraph
+    private let sequence: ChoiceSequence
+    private let isFruitlessBind: (UInt64) -> Bool
+    private let exhausted: Checkpoint?
+    private let tuning: ScopedReductionTuning
+    /// The checkpoint, discovered on first read and cleared once pulled.
+    private lazy var pending: PricedEncoderScope? = discover()
 
     /// - Parameters:
     ///   - isFruitlessBind: Whether bound value search came back fruitless for the bind with this fingerprint.
@@ -72,60 +65,45 @@ final class ScopedStagedJointSource {
         exhausted: Checkpoint?,
         tuning: ScopedReductionTuning
     ) {
-        state = .pending(Discovery(
-            graph: graph,
-            sequence: sequence,
-            isFruitlessBind: isFruitlessBind,
-            exhausted: exhausted,
-            tuning: tuning
-        ))
+        self.graph = graph
+        self.sequence = sequence
+        self.isFruitlessBind = isFruitlessBind
+        self.exhausted = exhausted
+        self.tuning = tuning
     }
 
-    /// Discovers the checkpoint on first read.
     var dispatchPriority: DispatchPriority? {
-        discoveredEncoderScope()?.priority
+        pending?.priority
     }
 
     func nextScope() -> PricedEncoderScope? {
-        let next = discoveredEncoderScope()
-        state = .discovered(nil)
+        let next = pending
+        pending = nil
         return next
     }
 
     // MARK: - Helpers
 
-    private func discoveredEncoderScope() -> PricedEncoderScope? {
-        switch state {
-            case let .discovered(encoderScope):
-                return encoderScope
-            case let .pending(discovery):
-                let encoderScope = Self.discover(discovery)
-                state = .discovered(encoderScope)
-                return encoderScope
-        }
-    }
-
     /// Offers the checkpoint when pairs exist and it differs from the exhausted one. Priced with no benefit and the first stage's budget as cost.
-    private static func discover(_ discovery: Discovery) -> PricedEncoderScope? {
-        let tuning = discovery.tuning
+    private func discover() -> PricedEncoderScope? {
         guard tuning.stagedJointProbeBudget > 0 else {
             return nil
         }
         let pairs = ScopedStagedJointQuery.pairs(
-            graph: discovery.graph,
-            isFruitlessBind: discovery.isFruitlessBind,
+            graph: graph,
+            isFruitlessBind: isFruitlessBind,
             tuning: tuning
         )
         guard pairs.isEmpty == false else {
             return nil
         }
         let candidatePool = ScopedStagedJointQuery.candidatePool(
-            graph: discovery.graph,
-            isFruitlessBind: discovery.isFruitlessBind,
+            graph: graph,
+            isFruitlessBind: isFruitlessBind,
             tuning: tuning
         )
         let scope = ScopedStagedJointEncoder.Scope(pairs: pairs, candidatePool: candidatePool)
-        guard discovery.exhausted != Checkpoint(base: discovery.sequence, scope: scope) else {
+        guard exhausted != Checkpoint(base: sequence, scope: scope) else {
             return nil
         }
         let firstStageBudget = ScopedStagedJointEncoder.stageBudget(
