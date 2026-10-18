@@ -712,7 +712,7 @@ package final class FuzzCorpus {
 
     /// Replaces the stored tree with a pick-materialised tree and rebuilds the targeting tables from it.
     ///
-    /// Called after mutable-tier admission so the graph carries inactive branch layouts for ``GraphStructuralEncoder/expandDepthZeroLeaves(_:donorNodeID:donorRangeStart:graph:)``. Only entries whose targets were already built (the eager path under `pairMutation`) pay the rebuild; entries on the lazy path see the full tree when targets are built on first parent draw.
+    /// Called after mutable-tier admission so the graph carries inactive branch layouts for ``ScopedPivotCandidates/expandDepthZeroLeaves(_:donorNodeID:donorRangeStart:graph:)``. Only entries whose targets were already built (the eager path under `pairMutation`) pay the rebuild; entries on the lazy path see the full tree when targets are built on first parent draw.
     package func upgradeToFullTree(at index: Int, fullTree: ChoiceTree) {
         entries[index].tree = fullTree
         if entries[index].mutationTargets != nil {

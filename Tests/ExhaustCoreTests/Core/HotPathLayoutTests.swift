@@ -10,7 +10,7 @@ import Testing
 ///
 /// None of these assertions can be derived from behavior. A violation costs throughput and nothing else, so no functional test fails and no reviewer sees a symptom. That is the whole reason they are written down.
 ///
-/// ``ChoiceTree`` and ``FreerMonad`` are recursive indirect enums whose case tags use the boxed pointer's spare bits. ``EncoderDispatch`` uses reference payloads to keep each concrete encoder in its own copy-on-write box. The pointer-width assertions guard against exposing inline payloads or adding enough enum cases to require a separate discriminator.
+/// ``ChoiceTree`` and ``FreerMonad`` are recursive indirect enums whose case tags use the boxed pointer's spare bits. The pointer-width assertions guard against exposing inline payloads or adding enough enum cases to require a separate discriminator.
 ///
 /// The payload budgets matter more, because that is where the cost actually accrued once before. Boxing hides a payload from the enum's own size, so a payload can grow without any of the pointer-width assertions moving. Inlining ``TypeTagPayload`` into ``ChoiceMetadata`` took the `.choice` box from 48 to 113 bytes and the `.sequence` box from 40 to 105, and cost roughly 15% across the ECOOP suite, uniformly, in workloads that generate no dates at all (measured 2026-07-28 against the 0.17.4 baseline).
 ///
@@ -32,17 +32,6 @@ struct HotPathLayoutTests {
         #expect(MemoryLayout<Generator<String>>.size == pointerSize)
         #expect(MemoryLayout<Generator<[Double]>>.size == pointerSize)
         #expect(MemoryLayout<AnyGenerator>.size == pointerSize)
-    }
-
-    @Test("EncoderDispatch stays pointer sized as encoder cases are added")
-    func encoderDispatchIsPointerSized() {
-        #expect(MemoryLayout<EncoderDispatch>.size == pointerSize)
-    }
-
-    @Test("Post-cycle continuation state stays behind a pointer in the reducer phase")
-    func reducerPhaseFitsOnePointerAndTag() {
-        #expect(MemoryLayout<PostCycleFrame>.size == pointerSize)
-        #expect(MemoryLayout<ReductionMachine.Phase>.size <= MemoryLayout<(UnsafeRawPointer, UInt8)>.size)
     }
 
     // MARK: - Boxed payload budgets

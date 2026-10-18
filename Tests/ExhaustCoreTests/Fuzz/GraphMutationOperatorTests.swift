@@ -122,8 +122,12 @@ struct GraphMutationOperatorTests {
         let sequence = ChoiceSequence.flatten(tree)
         let indices = sequence.indices.filter { sequence[$0].value != nil }
         let targets = MutationTargets(tree: tree)
-        var reducer = GraphLockstepEncoder()
-        reducer.valueState.reset(sequence: sequence)
+        var reducer = ScopedLockstepSearch(
+            scope: .init(groups: []),
+            sequence: sequence,
+            graph: targets.graph,
+            maxSuffixWindows: ScopedReductionTuning().lockstepMaxSuffixWindows
+        )
         let plan = try #require(reducer.makeLockstepWindowPlan(windowIndices: indices))
         var prng = Xoshiro256(seed: 5)
         var compared = 0

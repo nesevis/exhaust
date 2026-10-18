@@ -9,10 +9,10 @@
 ///
 /// Built with no candidate when the scope yields none. A replacement whose candidate the ordering dropped reports ``ScopedSearchReport/hadUnresolvedReplacement``, so a relax round can try it without the ordering.
 struct ScopedSingleCandidateSearch: ScopedSearch {
-    private var pending: (candidate: ChoiceSequence, mutation: EncoderProbe)?
+    private var pending: (candidate: ChoiceSequence, mutation: ProjectedMutation)?
     private let hadUnresolvedReplacement: Bool
 
-    init(candidate: ChoiceSequence, mutation: EncoderProbe) {
+    init(candidate: ChoiceSequence, mutation: ProjectedMutation) {
         self.init(pending: (candidate: candidate, mutation: mutation), hadUnresolvedReplacement: false)
     }
 
@@ -22,7 +22,7 @@ struct ScopedSingleCandidateSearch: ScopedSearch {
     }
 
     /// Emits a replacement candidate only when it precedes `base`. A candidate the ordering drops is reported as unresolved instead.
-    static func replacement(_ candidate: ChoiceSequence?, mutation: EncoderProbe, base: ChoiceSequence) -> Self {
+    static func replacement(_ candidate: ChoiceSequence?, mutation: ProjectedMutation, base: ChoiceSequence) -> Self {
         guard let candidate else {
             return Self()
         }
@@ -32,7 +32,7 @@ struct ScopedSingleCandidateSearch: ScopedSearch {
         return Self(candidate: candidate, mutation: mutation)
     }
 
-    private init(pending: (candidate: ChoiceSequence, mutation: EncoderProbe)?, hadUnresolvedReplacement: Bool) {
+    private init(pending: (candidate: ChoiceSequence, mutation: ProjectedMutation)?, hadUnresolvedReplacement: Bool) {
         self.pending = pending
         self.hadUnresolvedReplacement = hadUnresolvedReplacement
     }

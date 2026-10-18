@@ -31,7 +31,7 @@ enum ScopedRemovalEncoder: ScopedEncoder {
                 guard let candidate = ScopedStructuralCandidates.elementRemoval(elementScope, sequence: sequence, graph: graph) else {
                     return Self.search(ScopedSingleCandidateSearch())
                 }
-                let mutation = EncoderProbe.sequenceElementsRemoved(
+                let mutation = ProjectedMutation.sequenceElementsRemoved(
                     elementScope.targets.map { target in
                         (seqNodeID: target.sequenceNodeID, removedNodeIDs: target.elementNodeIDs)
                     }

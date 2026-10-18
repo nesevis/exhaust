@@ -22,7 +22,7 @@ enum ScopedSubstitutionEncoder: ScopedEncoder {
     static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
         let sequence = input.baseSequence
         let built: ChoiceSequence?
-        let mutation: EncoderProbe
+        let mutation: ProjectedMutation
         switch scope {
             case let .selfSimilar(targetNodeID, donorNodeID):
                 built = ScopedStructuralCandidates.selfSimilarReplacement(

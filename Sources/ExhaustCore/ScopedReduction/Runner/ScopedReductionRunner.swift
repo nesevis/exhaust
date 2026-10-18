@@ -17,31 +17,7 @@
 ///
 /// The deadline is checked between every unit of work, and inside passes before each probe. On expiry, an in-flight pass applies its report, an accepted pass that needs a rebuild rebuilds the graph only, a relax round settles, and the final numeric reorder still runs to completion.
 package struct ScopedReductionRunner {
-    /// Run-wide settings the runner reads but never changes.
-    package struct Configuration {
-        /// Cycles without improvement before the run ends.
-        let maxStalls: Int
-        /// Wall-clock budget for the run. Zero is unlimited.
-        let wallClockDeadlineNanoseconds: UInt64
-        /// Encoders allowed to dispatch, run post-cycle actions, and exploit relax rounds. Nil enables all; an empty set enables none.
-        let enabledEncoders: Set<EncoderName>?
-        let tuning: ScopedReductionTuning
-        let probeWrapper: ProbeWrapper?
-
-        package init(
-            maxStalls: Int,
-            wallClockDeadlineNanoseconds: UInt64 = 0,
-            enabledEncoders: Set<EncoderName>? = nil,
-            tuning: ScopedReductionTuning = ScopedReductionTuning(),
-            probeWrapper: ProbeWrapper? = nil
-        ) {
-            self.maxStalls = maxStalls
-            self.wallClockDeadlineNanoseconds = wallClockDeadlineNanoseconds
-            self.enabledEncoders = enabledEncoders
-            self.tuning = tuning
-            self.probeWrapper = probeWrapper
-        }
-    }
+    package typealias Configuration = Interpreters.ReducerConfiguration
 
     // MARK: - Core State
 
@@ -70,7 +46,7 @@ package struct ScopedReductionRunner {
     let probeWrapper: ProbeWrapper?
     let tuning: ScopedReductionTuning
     let enabledEncoders: Set<EncoderName>?
-    /// Gates timings, graph statistics, and materialization counts. Probe counts are recorded either way, because callers report property invocations from them.
+    /// Gates timings, graph statistics, and materializations outside decoding. Probe outcomes, including decoder attempts and property calls, are recorded either way.
     let collectStats: Bool
     let isInstrumented: Bool
 

@@ -145,7 +145,7 @@ struct ScopedSearchConfiguration {
     /// Forces exact decoding, whatever decoder the candidate's mutation would otherwise select.
     let requiresExactDecoder: Bool
     /// Replaces every candidate's mutation when set. A composition reports its upstream mutation, because the downstream search's node IDs refer to the lifted graph.
-    let reportedMutation: EncoderProbe?
+    let reportedMutation: ProjectedMutation?
 
     /// Keeps searching after an acceptance, decodes as the candidate's mutation allows, and reports each candidate's own mutation.
     static let standard = ScopedSearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)

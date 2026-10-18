@@ -19,7 +19,7 @@ extension ScopedReductionInterpreter {
     ///
     /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
     static func evaluate(_ candidate: ScopedCandidate, configuration: ScopedSearchConfiguration, context: inout Context) -> Evaluation {
-        let mutation: EncoderProbe
+        let mutation: ProjectedMutation
         let admission: DecoderAdmission
         let probeHash: UInt64
         switch candidate {
@@ -147,7 +147,7 @@ extension ScopedReductionInterpreter {
     /// Makes `recovered` the incumbent and applies what the search does after an acceptance.
     private static func commit(
         _ recovered: ScopedCounterexample,
-        mutation: EncoderProbe,
+        mutation: ProjectedMutation,
         decoding: ScopedDecoding,
         configuration: ScopedSearchConfiguration,
         observationID: Int?,
@@ -193,11 +193,11 @@ extension ScopedReductionInterpreter {
 
     /// The mutation to write into the graph in place: each changed leaf takes the value decoding produced at its position, which is not the candidate's when exact decoding clamped it. A change whose position no longer holds a value, or a decoding of a different length, is marked reshaping so the graph is rebuilt instead.
     private static func decodedMutation(
-        _ mutation: EncoderProbe,
+        _ mutation: ProjectedMutation,
         recovered: ChoiceSequence,
         candidateCount: Int,
         graph: ChoiceGraph
-    ) -> EncoderProbe {
+    ) -> ProjectedMutation {
         guard case let .leafValues(changes) = mutation else {
             return mutation
         }

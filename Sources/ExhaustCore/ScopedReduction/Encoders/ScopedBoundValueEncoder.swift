@@ -76,7 +76,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         stage: BoundValueStage,
         chain: Chain,
         totalProbeCap: Int,
-        rootMutation: EncoderProbe?
+        rootMutation: ProjectedMutation?
     ) -> ScopedReducer {
         let chainLimits: ScopedChainLimits? = switch stage {
             case .single:
@@ -133,7 +133,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         controllerLeafNodeID: Int,
         stage: BoundValueStage,
         chain: Chain,
-        reportedMutation: EncoderProbe
+        reportedMutation: ProjectedMutation
     ) -> ScopedReducer {
         let upstreamSequenceIndex = scope.graph.nodes[controllerLeafNodeID].positionRange?.lowerBound
         let upstreamProposedBitPattern = controllerBitPattern(in: proposal.prefix, at: upstreamSequenceIndex)
@@ -199,7 +199,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         upstreamProposedBitPattern: UInt64?,
         parent: ScopedEncoderInput,
         rootSequence: ChoiceSequence,
-        reportedMutation: EncoderProbe
+        reportedMutation: ProjectedMutation
     ) -> ScopedReducer {
         if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: rootSequence) {
             return .fail(.nonImprovingPrefix)

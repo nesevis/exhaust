@@ -9,7 +9,7 @@
 ///
 /// Starts below full emptying, which the emptying family covers, and halves after each head and tail pair. Alternates tail and head anchors at each batch size. Each emitted scope fully specifies which positions to remove, so the encoder applies it in one probe.
 ///
-/// Once halving finishes, emits one ``RemovalScope/window(_:)`` seed per halving-grid offset (`count / 2`, `count / 4`, and so on). Window removal grows each seed rightward, reaching runs that neither anchor covers. Seeds whose window cannot hold two elements are skipped, because a one-element window duplicates the per-element removal scopes.
+/// Once halving finishes, emits one ``ScopedRemovalEncoder/Scope/window(_:)`` seed per halving-grid offset (`count / 2`, `count / 4`, and so on). Window removal grows each seed rightward, reaching runs that neither anchor covers. Seeds whose window cannot hold two elements are skipped, because a one-element window duplicates the per-element removal scopes.
 final class ScopedBatchRemovalSource: ScopedSource {
     let invalidation: ScopedSourceInvalidation = .structuralChange
 

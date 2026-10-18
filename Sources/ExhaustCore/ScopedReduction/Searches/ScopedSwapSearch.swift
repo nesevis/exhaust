@@ -12,7 +12,7 @@
 /// The search keeps going after an acceptance. It adopts the recovered sequence as the base for the next probe; a recovered sequence of a different length invalidates the slot ranges, so the extension ends.
 struct ScopedSwapSearch: ScopedSearch {
     /// The first probe, consumed on the first pull.
-    private var initialProbe: (candidate: ChoiceSequence, mutation: EncoderProbe)?
+    private var initialProbe: (candidate: ChoiceSequence, mutation: ProjectedMutation)?
 
     /// Non-nil when the first probe targets a group of three or more.
     private var extensionState: ExtensionState?
@@ -171,7 +171,7 @@ struct ScopedSwapSearch: ScopedSearch {
     /// 4. When the bisection converges (no untried midpoint), stop.
     ///
     /// The first call carries feedback for the initial swap, which is the first outstanding probe. Probes are built from ``ExtensionState/runningSequence``, which advances only when a probe is accepted.
-    private mutating func nextExtensionProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
+    private mutating func nextExtensionProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> ProjectedMutation? {
         guard var state = extensionState,
               let pending = state.pending
         else {
@@ -204,7 +204,7 @@ struct ScopedSwapSearch: ScopedSearch {
     }
 
     /// Doubles the step and tries the next target, falling back to bisection when the target overshoots or does not improve shortlex.
-    private static func nextDoublingProbe(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> EncoderProbe? {
+    private static func nextDoublingProbe(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> ProjectedMutation? {
         state.step *= 2
         let nextTarget = state.contentSlotIndex + state.step
         guard nextTarget < state.slots.count else {
@@ -233,7 +233,7 @@ struct ScopedSwapSearch: ScopedSearch {
     }
 
     /// Bisects between the last accepted slot and the rejected boundary.
-    private static func bisectExtension(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> EncoderProbe? {
+    private static func bisectExtension(into candidate: inout ChoiceSequence, state: inout ExtensionState) -> ProjectedMutation? {
         guard let highBound = state.bisectHi else {
             return nil
         }
@@ -262,7 +262,7 @@ struct ScopedSwapSearch: ScopedSearch {
         target: Int,
         into candidate: inout ChoiceSequence,
         state: inout ExtensionState
-    ) -> EncoderProbe {
+    ) -> ProjectedMutation {
         state.pending = PendingSwap(
             targetSlotIndex: target,
             sequence: built

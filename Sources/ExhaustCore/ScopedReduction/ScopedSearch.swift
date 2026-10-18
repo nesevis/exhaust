@@ -68,7 +68,7 @@ struct ScopedSearchReport {
 ///
 /// Each candidate carries its own admission, so a search can vary the checks decoding applies from one candidate to the next.
 enum ScopedCandidate {
-    case written(mutation: EncoderProbe, admission: DecoderAdmission)
+    case written(mutation: ProjectedMutation, admission: DecoderAdmission)
     case sparse(SparseEncoderProbe, baseSequence: ChoiceSequence, admission: DecoderAdmission)
 }
 
