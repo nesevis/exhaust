@@ -64,9 +64,8 @@ extension ScopedReductionRunner {
     /// Applies a post-cycle pass's policy and, for an acceptance that needs one, a graph-only rebuild. Post-cycle actions never rebuild sources.
     mutating func applyPostCycleReport(_ pass: PassRecord, appliedPasses: Int = 1) {
         applyPassPolicy(pass, appliedPasses: appliedPasses)
-        if pass.report.anyAccepted, pass.report.anyRequiresRebuild {
-            rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-            graphIsStripped = pass.report.latestTreeIsStripped
+        if pass.requiresRebuild {
+            rebuildGraph(after: pass)
         }
     }
 

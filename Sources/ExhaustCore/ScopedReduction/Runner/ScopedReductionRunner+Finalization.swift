@@ -36,8 +36,7 @@ extension ScopedReductionRunner {
             guard action == .rebuildAndResume else {
                 return
             }
-            rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-            graphIsStripped = pass.report.latestTreeIsStripped
+            rebuildGraph(after: pass)
             passesRemaining -= 1
             guard passesRemaining > 0,
                   let nextSource = ScopedSource.prepareReorderSource(from: graph),

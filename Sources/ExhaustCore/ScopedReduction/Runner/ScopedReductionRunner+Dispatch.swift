@@ -33,6 +33,11 @@ extension ScopedReductionRunner {
         let encoderScope: AnyEncoderScope
         let boundValueFingerprint: UInt64?
         let report: ScopedPassReport
+
+        /// Whether the pass accepted a change the graph could not take in place.
+        var requiresRebuild: Bool {
+            report.anyAccepted && report.anyRequiresRebuild
+        }
     }
 
     // MARK: - Dispatch Loop
@@ -59,7 +64,10 @@ extension ScopedReductionRunner {
             stepTimer.charge(.passApply)
             switch (policy, action) {
                 case (.main, _) where deadline.isExpired:
-                    rebuildGraphAtDeadline(after: pass)
+                    // Only the graph is rebuilt, for the final reorder and stall diagnostics.
+                    if pass.requiresRebuild {
+                        rebuildGraph(after: pass)
+                    }
                     stepTimer.charge(.rebuild)
                     return .deadline
                 case (.main, .rebuildAndResume):
@@ -393,7 +401,7 @@ extension ScopedReductionRunner {
             "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(incumbent.sequence.count)",
         ])
 
-        let action: PostAcceptanceAction = report.anyAccepted && report.anyRequiresRebuild
+        let action: PostAcceptanceAction = pass.requiresRebuild
             ? .rebuildAndResume
             : .continueDispatching
 
@@ -408,14 +416,25 @@ extension ScopedReductionRunner {
 
     // MARK: - Rebuilds
 
+    /// Rebuilds the graph after an accepting pass and records whether the accepted tree lacks unselected branches. Every rebuild that follows a pass goes through here; callers decide what happens to the sources.
+    ///
+    /// Leaves that accepted in the pass hold stale values in the old graph, because reshaping and continuing passes skip the in-place write, so their records transfer without the value guard.
+    @discardableResult
+    mutating func rebuildGraph(after pass: PassRecord) -> ChoiceGraphDiff {
+        let diff = rebuildAndUpdateGraph(
+            valueGuardExemptNodeIDs: pass.report.acceptedLeafNodeIDs.union(pass.report.searchReport.convergenceRecords.keys)
+        )
+        graphIsStripped = pass.report.latestTreeIsStripped
+        return diff
+    }
+
     /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families and rebuilds permutation and value families; anything else rebuilds every family. Convergence the encoder reports its acceptance invalidated is cleared as well.
     mutating func rebuildAfterPass(_ pass: PassRecord) {
         let invalidatedRange = pass.encoderScope.typed.convergenceInvalidatedByAcceptance(in: graph)
 
         let graphBefore = graph
         let graphStart = MonotonicClock.nanoseconds()
-        let diff = rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-        graphIsStripped = pass.report.latestTreeIsStripped
+        let diff = rebuildGraph(after: pass)
 
         if let invalidatedRange {
             graph.clearConvergence(inPositionRange: invalidatedRange)
@@ -454,8 +473,7 @@ extension ScopedReductionRunner {
 
     /// Rebuilds the graph and every source without clearing diagnostic history. The stripped-graph flag follows the rebuilt graph, so a committed relax round leaves it describing the graph the next cycle dispatches on.
     mutating func rebuildForExploitation(after pass: PassRecord) {
-        rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-        graphIsStripped = pass.report.latestTreeIsStripped
+        rebuildGraph(after: pass)
         sources = deadline.isExpired ? [] : prepareExploitationSources()
     }
 
@@ -465,21 +483,7 @@ extension ScopedReductionRunner {
             + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
     }
 
-    /// At the deadline, an accepted pass that needs a rebuild rebuilds only the graph, for the final reorder and stall diagnostics.
-    mutating func rebuildGraphAtDeadline(after pass: PassRecord) {
-        guard pass.report.anyAccepted, pass.report.anyRequiresRebuild else {
-            return
-        }
-        rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-        graphIsStripped = pass.report.latestTreeIsStripped
-    }
-
     // MARK: - Helpers
-
-    /// Leaves that accepted in the pass hold stale values in the old graph, because reshaping and continuing passes skip the in-place write, so their records transfer without the value guard.
-    static func valueGuardExemptNodeIDs(of pass: PassRecord) -> Set<Int> {
-        pass.report.acceptedLeafNodeIDs.union(pass.report.searchReport.convergenceRecords.keys)
-    }
 
     private mutating func recordPassStatistics(_ pass: PassRecord) {
         let report = pass.report
