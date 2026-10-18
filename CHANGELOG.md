@@ -6,6 +6,21 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-10-18
+
+### Changed
+
+- Reduction of generators with nested binds does less repeated work. After changing a controlling value, it rebuilds only the part of the counterexample under that bind, and it reuses combinations it has already worked out instead of generating them again.
+- When reduction tries every combination of a few small-range values, it now tries the simplest values first, such as 0, −1, 1, −2 for a signed integer, so the combination it keeps is the simplest one that fails.
+
+### Fixed
+
+- Negative integers could stop reducing before reaching their smallest failing magnitude, because reduction's final check for missed improvements moved them away from zero instead of toward it.
+- Final numeric reordering now sorts every group of same-typed sibling values into ascending order. It previously sorted only the first group, and could reject a sort that made the counterexample larger in reduction order.
+- Reduction moving a value across several same-shaped siblings could stop one sibling short of the last.
+- Reduction could continue from a candidate's original value after replay had clamped it into the generator's range.
+- An abandoned attempt to escape a local minimum could leave reduction with progress records from the attempt, which stopped it from retrying values it had not finished reducing.
+
 ## [1.7.1] - 2026-10-18
 
 ### Changed
@@ -289,7 +304,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.2...HEAD
+[1.7.2]: https://github.com/nesevis/exhaust/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/nesevis/exhaust/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/nesevis/exhaust/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/nesevis/exhaust/compare/v1.5.8...v1.6.0
