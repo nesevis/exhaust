@@ -58,6 +58,8 @@ struct ScopedSearchReport {
     var convergenceRecords: [Int: ConvergedOrigin] = [:]
     /// Whether a replacement candidate was dropped for not preceding the base sequence. The runner uses it to schedule a relax round, which can try the replacement without the ordering.
     var hadUnresolvedReplacement = false
+    /// The number of leaves each candidate moves when the search is a staged joint stage, which the runner attributes the search's counts to. Nil for every other search.
+    var stagedJointArity: Int?
 }
 
 // MARK: - Candidate

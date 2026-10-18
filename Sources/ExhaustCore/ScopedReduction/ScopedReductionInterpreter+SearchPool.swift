@@ -364,7 +364,7 @@ extension ScopedReductionInterpreter {
             context.report.searchReport.hadUnresolvedReplacement = true
         }
         if slot.wasAskedForCandidate {
-            context.report.searchCounts.append(ScopedSearchCounts(stagedJointArity: slot.stagedJointArity, counts: slot.counts))
+            context.report.searchCounts.append(ScopedSearchCounts(stagedJointArity: searchReport.stagedJointArity, counts: slot.counts))
         }
     }
 }
@@ -386,8 +386,6 @@ final class ScopedSearchPool {
         let continuation: (ScopedReductionResult) -> ScopedReducer
         /// Whether the search was built outside any `propose`, so it keeps its report and records its own counts.
         let isRoot: Bool
-        /// The number of leaves each candidate moves for a staged joint stage, which its recorded counts are attributed to.
-        let stagedJointArity: Int?
         /// Whether any of the search's candidates was accepted, for its outcome.
         var anyAccepted = false
         /// Whether the search was asked for a candidate. A root search stopped before then, by the deadline, records no counts.
@@ -405,7 +403,6 @@ final class ScopedSearchPool {
             self.configuration = configuration
             self.continuation = continuation
             self.isRoot = isRoot
-            stagedJointArity = (search as? ScopedStagedJointSearch)?.arity
         }
 
         /// The outcome of a search that ran out of candidates.
