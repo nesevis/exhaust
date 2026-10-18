@@ -29,7 +29,7 @@ extension ScopedSource {
 
         let elementScopes = RemovalQuery.elementRemovalScopes(graph: graph)
 
-        var batchedCrossSequence = ScopedSource.batchedCrossSequenceRemoval(ScopedBatchedCrossSequenceRemovalSource(graph: graph))
+        let batchedCrossSequence = ScopedSource.batchedCrossSequenceRemoval(ScopedBatchedCrossSequenceRemovalSource(graph: graph))
         if batchedCrossSequence.dispatchPriority != nil {
             sources.append(batchedCrossSequence)
         }
@@ -43,7 +43,7 @@ extension ScopedSource {
             guard scope.targets.count == 1, let target = scope.targets.first else {
                 continue
             }
-            var batchRemoval = ScopedSource.batchRemoval(ScopedBatchRemovalSource(sequenceNodeID: target.sequenceNodeID, graph: graph))
+            let batchRemoval = ScopedSource.batchRemoval(ScopedBatchRemovalSource(sequenceNodeID: target.sequenceNodeID, graph: graph))
             if batchRemoval.dispatchPriority != nil {
                 sources.append(batchRemoval)
             }
@@ -59,7 +59,7 @@ extension ScopedSource {
             sources.append(.sorted(ScopedSortedSource(symmetric, invalidation: .structuralChange)))
         }
 
-        var migration = ScopedSource.migration(ScopedMigrationSource(graph: graph))
+        let migration = ScopedSource.migration(ScopedMigrationSource(graph: graph))
         if migration.dispatchPriority != nil {
             sources.append(migration)
         }
@@ -74,7 +74,7 @@ extension ScopedSource {
             sources.append(.sorted(ScopedSortedSource(aligned, invalidation: .structuralChange)))
         }
 
-        var replacement = ScopedSource.replacement(ScopedReplacementSource(graph: graph, previousGraph: previousGraph))
+        let replacement = ScopedSource.replacement(ScopedReplacementSource(graph: graph, previousGraph: previousGraph))
         if replacement.dispatchPriority != nil {
             sources.append(replacement)
         }

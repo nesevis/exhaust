@@ -16,7 +16,7 @@ struct PricedEncoderScope {
 /// Yields encoder scopes that were priced and sorted when the source was prepared.
 ///
 /// Priority inspection reads the next encoder scope without consuming it. The invalidation describes everything the source was prepared with and stays available after exhaustion.
-struct ScopedSortedSource {
+final class ScopedSortedSource {
     private var cursor: BufferedScopeCursor<PricedEncoderScope>
     let invalidation: ScopedSourceInvalidation
 
@@ -30,7 +30,7 @@ struct ScopedSortedSource {
         cursor.peekScope?.priority
     }
 
-    mutating func nextScope() -> PricedEncoderScope? {
+    func nextScope() -> PricedEncoderScope? {
         cursor.next()
     }
 }
@@ -40,7 +40,7 @@ struct ScopedSortedSource {
 /// Yields the one staged joint checkpoint, discovered the first time the source is peeked or pulled.
 ///
 /// Discovery reads the stall evidence the runner holds: convergence in the graph, and which bound value searches came back fruitless. Its price depends on the discovered candidate pool, so a peek discovers too. A checkpoint equal to the last one searched is not offered again.
-struct ScopedStagedJointSource {
+final class ScopedStagedJointSource {
     /// A searched checkpoint: the sequence it was discovered on and what it found.
     struct Checkpoint: Equatable {
         let base: ChoiceSequence
@@ -81,13 +81,12 @@ struct ScopedStagedJointSource {
         ))
     }
 
+    /// Discovers the checkpoint on first read.
     var dispatchPriority: DispatchPriority? {
-        mutating get {
-            discoveredEncoderScope()?.priority
-        }
+        discoveredEncoderScope()?.priority
     }
 
-    mutating func nextScope() -> PricedEncoderScope? {
+    func nextScope() -> PricedEncoderScope? {
         let next = discoveredEncoderScope()
         state = .discovered(nil)
         return next
@@ -95,7 +94,7 @@ struct ScopedStagedJointSource {
 
     // MARK: - Helpers
 
-    private mutating func discoveredEncoderScope() -> PricedEncoderScope? {
+    private func discoveredEncoderScope() -> PricedEncoderScope? {
         switch state {
             case let .discovered(encoderScope):
                 return encoderScope
@@ -165,6 +164,8 @@ enum ScopedSourceInvalidation {
 /// One source per discovery family. A family yields several encoders' scopes in one priority order, so ties keep the order the family's query emits them in.
 ///
 /// Families hold only encoder scopes for registered encoders. Scopes the family's query finds for other operations are dropped at preparation. Families whose scopes are discovered and priced up front share ``ScopedSortedSource``, which records their invalidation; the other families each discover lazily.
+///
+/// Every payload is a reference that advances in place, so a copy of a source shares its position. Nothing copies a source to read it independently; the relax round sets the outer sources aside and restores the same objects.
 enum ScopedSource {
     /// A family whose scopes were priced and sorted at preparation.
     case sorted(ScopedSortedSource)
@@ -179,25 +180,21 @@ enum ScopedSource {
     /// Self-similar replacement, descendant promotion, and branch pivots, in descending benefit.
     case replacement(ScopedReplacementSource)
 
-    /// Mutating because a lazy family discovers its scopes on first peek.
+    /// A lazy family discovers its scopes on first peek.
     var dispatchPriority: DispatchPriority? {
-        mutating get {
-            switch self {
-                case let .sorted(source):
-                    return source.dispatchPriority
-                case var .stagedJoint(source):
-                    let priority = source.dispatchPriority
-                    self = .stagedJoint(source)
-                    return priority
-                case let .batchedCrossSequenceRemoval(source):
-                    return source.dispatchPriority
-                case let .batchRemoval(source):
-                    return source.dispatchPriority
-                case let .migration(source):
-                    return source.dispatchPriority
-                case let .replacement(source):
-                    return source.dispatchPriority
-            }
+        switch self {
+            case let .sorted(source):
+                source.dispatchPriority
+            case let .stagedJoint(source):
+                source.dispatchPriority
+            case let .batchedCrossSequenceRemoval(source):
+                source.dispatchPriority
+            case let .batchRemoval(source):
+                source.dispatchPriority
+            case let .migration(source):
+                source.dispatchPriority
+            case let .replacement(source):
+                source.dispatchPriority
         }
     }
 
@@ -220,33 +217,20 @@ enum ScopedSource {
         return source.prefersInitialDispatch
     }
 
-    /// Releases the source's storage before advancing, so its buffer stays uniquely referenced.
-    mutating func nextScope() -> PricedEncoderScope? {
-        switch consume self {
-            case var .sorted(source):
-                let next = source.nextScope()
-                self = .sorted(source)
-                return next
-            case var .stagedJoint(source):
-                let next = source.nextScope()
-                self = .stagedJoint(source)
-                return next
-            case var .batchedCrossSequenceRemoval(source):
-                let next = source.nextScope()
-                self = .batchedCrossSequenceRemoval(source)
-                return next
-            case var .batchRemoval(source):
-                let next = source.nextScope()
-                self = .batchRemoval(source)
-                return next
-            case var .migration(source):
-                let next = source.nextScope()
-                self = .migration(source)
-                return next
-            case var .replacement(source):
-                let next = source.nextScope()
-                self = .replacement(source)
-                return next
+    func nextScope() -> PricedEncoderScope? {
+        switch self {
+            case let .sorted(source):
+                source.nextScope()
+            case let .stagedJoint(source):
+                source.nextScope()
+            case let .batchedCrossSequenceRemoval(source):
+                source.nextScope()
+            case let .batchRemoval(source):
+                source.nextScope()
+            case let .migration(source):
+                source.nextScope()
+            case let .replacement(source):
+                source.nextScope()
         }
     }
 }
@@ -304,7 +288,7 @@ extension ScopedSource {
         ))
     }
 
-    /// The index of the source advertising the highest priority, the earliest one on ties, or nil when every source is exhausted. The earliest source that asks for its initial dispatch wins outright. Peeking may discover a lazy family's scopes, so the sources are inout.
+    /// The index of the source advertising the highest priority, the earliest one on ties, or nil when every source is exhausted. The earliest source that asks for its initial dispatch wins outright. Peeking may discover a lazy family's scopes.
     ///
     /// Removes exhausted sources, keeping the others in order. A source's priority changes only when it hands out a scope, and an exhausted source is never asked for one, so it stays exhausted.
     static func highestPrioritySourceIndex(_ sources: inout [ScopedSource]) -> Int? {

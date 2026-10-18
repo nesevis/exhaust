@@ -14,7 +14,7 @@
 /// Only the source is checked for reaching the receiver. Every dependency edge runs from a bind's inner to its bound content, which follows it in the sequence, and a receiver always follows its source, so a receiver can never reach its source.
 ///
 /// - Complexity: O(V + S log S + C) descriptor preparation and O(S + C + V + E) retained state, where S is the number of sequences and C is their collected child extents. Buffering the first scope and each subsequent scope may scan multiple ineligible pairs. Enumerating every eligible pair still requires O(S²) receiver checks. Dependency cache hits are expected O(1); each miss traverses O(V + E), and bounded positive-result retention can cause repeated searches after eviction.
-struct ScopedMigrationSource {
+final class ScopedMigrationSource {
     private struct SequenceDescriptor {
         let nodeID: Int
         let positionRange: ClosedRange<Int>
@@ -103,7 +103,7 @@ struct ScopedMigrationSource {
     }
 
     /// Searches only far enough to buffer the next valid pair, preserving capacity, containment, and dependency gates.
-    private mutating func prepareNext() {
+    private func prepareNext() {
         pendingEncoderScope = nil
         while sourceIndex < sources.count {
             let source = sources[sourceIndex]
@@ -156,7 +156,7 @@ struct ScopedMigrationSource {
         pendingEncoderScope?.priority
     }
 
-    mutating func nextScope() -> PricedEncoderScope? {
+    func nextScope() -> PricedEncoderScope? {
         guard let encoderScope = pendingEncoderScope else {
             return nil
         }

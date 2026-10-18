@@ -14,7 +14,7 @@
 /// Domains with at most ``defaultEagerRowLimit`` candidate rows skip the heap: direct loops enumerate every scope in discovery order, and priority order stable-sorts that list by benefit. Both paths emit identical streams; the heap only pays for itself when the row count makes buffering every scope expensive.
 ///
 /// - Complexity: O(P + B + V + E) retained state, where P is the number of family members, B is the prepared branch metadata, and V + E is the topology snapshot. Preparation sorts family members in O(P log P) time and scans each pick's branches for eligibility. Containment is indexed in O(V) time and queried in O(1). Heap advancement costs O(log R), where R is the number of pending rows, plus rejected entries and dependency cache misses encountered before the next valid scope. Each cache miss costs O(V + E); cached membership is expected O(1). The dependency cache retains a bounded working set of restricted results, plus O(V) negative-source identities, within the overall storage bound.
-struct ScopedReplacementSource {
+final class ScopedReplacementSource {
     /// Keeps scheduling order separate from the discovery order the relax round uses.
     enum EnumerationOrder {
         case priority
@@ -94,12 +94,12 @@ struct ScopedReplacementSource {
     static let defaultEagerRowLimit = 1024
 
     /// Prepares complete families once, then selects a seeding strategy before enumeration begins.
-    init(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil, order: EnumerationOrder = .priority, eagerRowLimit: Int = defaultEagerRowLimit) {
+    convenience init(graph: ChoiceGraph, previousGraph: ChoiceGraph? = nil, order: EnumerationOrder = .priority, eagerRowLimit: Int = defaultEagerRowLimit) {
         self.init(graph: graph, families: Self.prepareFamilies(graph: graph, previousGraph: previousGraph), order: order, eagerRowLimit: eagerRowLimit)
     }
 
     /// Avoids family and reachability preparation when the relax round or improving pivots need only branch pivots.
-    init(pivotGraph graph: ChoiceGraph, eagerRowLimit: Int = defaultEagerRowLimit) {
+    convenience init(pivotGraph graph: ChoiceGraph, eagerRowLimit: Int = defaultEagerRowLimit) {
         self.init(graph: graph, families: [], order: .discovery, eagerRowLimit: eagerRowLimit)
     }
 
@@ -215,7 +215,7 @@ struct ScopedReplacementSource {
     /// Emits the same stream as the merged heap: discovery order is the loop order, and priority order breaks benefit ties by that discovery order.
     ///
     /// Promotion eligibility queries containment before dependency reachability, as heap selection does, so the dependency cache sees the same searches.
-    private mutating func enumerateEagerly(graph: ChoiceGraph, order: EnumerationOrder) -> [PricedEncoderScope] {
+    private func enumerateEagerly(graph: ChoiceGraph, order: EnumerationOrder) -> [PricedEncoderScope] {
         var scopes: [(scope: ReplacementScope, benefit: Int)] = []
         for family in families {
             for firstIndex in family.members.indices {
@@ -289,7 +289,7 @@ struct ScopedReplacementSource {
     /// Merges size-ordered donor prefixes so every row emits non-increasing benefit.
     ///
     /// Equal-sized targets share the same strictly smaller donor prefix for promotion. Self-similarity includes equal sizes and uses original identities to orient ties.
-    private mutating func seedPriorityRows() {
+    private func seedPriorityRows() {
         for (familyIndex, family) in families.enumerated() {
             var smallerDonorCount = 0
             for (offset, targetIndex) in family.sizeOrder.enumerated() {
@@ -305,7 +305,7 @@ struct ScopedReplacementSource {
     }
 
     /// Preserves family pair discovery and positional promotion order, filtering eligibility when each row is visited.
-    private mutating func seedDiscoveryRows() {
+    private func seedDiscoveryRows() {
         for (familyIndex, family) in families.enumerated() {
             for targetIndex in family.members.indices {
                 insert(.selfSimilar(PairRow(familyIndex: familyIndex, targetIndex: targetIndex, donorOrder: .original, nextDonor: targetIndex + 1, donorEnd: family.members.count)))
@@ -317,7 +317,7 @@ struct ScopedReplacementSource {
     }
 
     /// Computes only row ordering metadata; promotion validity is deferred until the row is selected.
-    private mutating func insert(_ row: Row) {
+    private func insert(_ row: Row) {
         let benefit: Int
         let discoveryOrder: (Int, Int, Int, Int)
         switch row {
@@ -365,7 +365,7 @@ struct ScopedReplacementSource {
     }
 
     /// Advances only the selected row, skipping ineligible descendant promotions without buffering their scopes.
-    private mutating func prepareNext() {
+    private func prepareNext() {
         guard bufferedScopes == nil else {
             pendingEncoderScope = bufferedScopes?.next()
             return
@@ -397,7 +397,7 @@ struct ScopedReplacementSource {
     /// Constructs the selected scope, retaining original orientation for equal-size self-similar pairs.
     ///
     /// Inserted pair rows always have a current donor; exhaustion is rejected before a row enters the heap.
-    private mutating func scope(for entry: Entry) -> ReplacementScope? {
+    private func scope(for entry: Entry) -> ReplacementScope? {
         switch entry.row {
             case let .selfSimilar(pair):
                 guard let second = currentDonor(of: pair) else {
@@ -435,7 +435,7 @@ struct ScopedReplacementSource {
         pendingEncoderScope?.priority
     }
 
-    mutating func nextScope() -> PricedEncoderScope? {
+    func nextScope() -> PricedEncoderScope? {
         guard let encoderScope = pendingEncoderScope else {
             return nil
         }

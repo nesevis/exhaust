@@ -225,7 +225,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.stagedJointSearch) else {
             return false
         }
-        var source = stagedJointSource()
+        let source = stagedJointSource()
         return source.dispatchPriority != nil
     }
 
@@ -234,7 +234,7 @@ extension ScopedReductionRunner {
         guard deadline.isExpired == false else {
             return
         }
-        var source = stagedJointSource()
+        let source = stagedJointSource()
         guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.encoderScope else {
             return
         }

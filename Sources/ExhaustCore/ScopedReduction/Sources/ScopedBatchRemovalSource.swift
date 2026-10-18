@@ -10,7 +10,7 @@
 /// Starts below full emptying, which the emptying family covers, and halves after each head and tail pair. Alternates tail and head anchors at each batch size. Each emitted scope fully specifies which positions to remove, so the encoder applies it in one probe.
 ///
 /// Once halving finishes, emits one ``RemovalScope/window(_:)`` seed per halving-grid offset (`count / 2`, `count / 4`, and so on). Window removal grows each seed rightward, reaching runs that neither anchor covers. Seeds whose window cannot hold two elements are skipped, because a one-element window duplicates the per-element removal scopes.
-struct ScopedBatchRemovalSource {
+final class ScopedBatchRemovalSource {
     private enum RemovalAnchor {
         case head
         case tail
@@ -89,7 +89,7 @@ struct ScopedBatchRemovalSource {
         cachedPriority
     }
 
-    mutating func nextScope() -> PricedEncoderScope? {
+    func nextScope() -> PricedEncoderScope? {
         if let encoderScope = nextHalvingWindow() {
             return encoderScope
         }
@@ -105,7 +105,7 @@ struct ScopedBatchRemovalSource {
         return interiorSeeds[interiorIndex].priority
     }
 
-    private mutating func nextHalvingWindow() -> PricedEncoderScope? {
+    private func nextHalvingWindow() -> PricedEncoderScope? {
         guard exhausted == false, currentBatch > 0 else {
             return nil
         }
@@ -167,7 +167,7 @@ struct ScopedBatchRemovalSource {
         return encoderScope
     }
 
-    private mutating func nextInteriorSeed() -> PricedEncoderScope? {
+    private func nextInteriorSeed() -> PricedEncoderScope? {
         guard interiorIndex < interiorSeeds.count else {
             cachedPriority = nil
             return nil
@@ -178,7 +178,7 @@ struct ScopedBatchRemovalSource {
         return encoderScope
     }
 
-    private mutating func recomputePriority() {
+    private func recomputePriority() {
         guard exhausted == false, currentBatch > 0 else {
             cachedPriority = nextInteriorSeedPriority
             return
