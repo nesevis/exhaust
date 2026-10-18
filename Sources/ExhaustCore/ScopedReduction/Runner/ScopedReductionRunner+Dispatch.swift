@@ -452,9 +452,10 @@ extension ScopedReductionRunner {
         lastConvergencePass = [:]
     }
 
-    /// Rebuilds the graph and every source without updating stripped-graph state or clearing diagnostic history.
+    /// Rebuilds the graph and every source without clearing diagnostic history. The stripped-graph flag follows the rebuilt graph, so a committed relax round leaves it describing the graph the next cycle dispatches on.
     mutating func rebuildForExploitation(after pass: PassRecord) {
         rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
+        graphIsStripped = pass.report.latestTreeIsStripped
         sources = deadline.isExpired ? [] : prepareExploitationSources()
     }
 

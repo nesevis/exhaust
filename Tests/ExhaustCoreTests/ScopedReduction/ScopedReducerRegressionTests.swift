@@ -150,6 +150,42 @@ struct ScopedReducerRegressionTests {
         #expect(buffer.compactMap { $0.value?.choice.bitPattern64 } == [1, 2, 3])
     }
 
+    // MARK: - Relax Round
+
+    @Test("A committed relax round flags a graph its exploitation rebuilt without unselected branches")
+    func committedRelaxRoundFlagsStrippedGraph() throws {
+        let arms = Gen.pick(choices: [
+            (1, Gen.choose(in: UInt64(0) ... 100)),
+            (1, Gen.choose(in: UInt64(200) ... 300)),
+        ])
+        let generator = Gen.arrayOf(arms, within: 0 ... 3)
+        let start = [UInt64(10), 80]
+        let tree = try #require(try Interpreters.reflect(generator, with: start))
+        var tuning = ScopedReductionTuning()
+        tuning.relaxMaterializationBudget = 1
+        var runner = ScopedReductionRunner(
+            generator: generator,
+            initialTree: tree,
+            initialOutput: start,
+            configuration: .init(maxStalls: 2, enabledEncoders: [.substitution, .deletion], tuning: tuning),
+            collectStats: false,
+            property: { $0.isEmpty }
+        )
+
+        // The substitution perturbation decodes with picks materialized; exploitation then removes an element, whose decoding leaves picks unmaterialized and rebuilds the graph from that tree.
+        let committed = runner.runRelaxRound()
+
+        #expect(committed)
+        let lacksUnselectedBranches = runner.graph.nodes.contains { node in
+            guard case let .pick(metadata) = node.kind else {
+                return false
+            }
+            return UInt64(metadata.branchElements.count) < metadata.branchCount
+        }
+        try #require(lacksUnselectedBranches, "The fixture must leave the committed graph without unselected branches")
+        #expect(runner.graphIsStripped)
+    }
+
     // MARK: - Final Reorder
 
     @Test("The final reorder sorts a group under a bind as it does without one")
