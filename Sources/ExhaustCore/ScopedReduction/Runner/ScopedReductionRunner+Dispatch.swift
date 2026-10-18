@@ -276,7 +276,7 @@ extension ScopedReductionRunner {
         // Moved rather than copied, so the runner holds no second reference while the execution edits them, and the first edit does not copy their storage.
         var executionGraph = Self.vacatedGraph
         swap(&executionGraph, &graph)
-        var executionRejectCache: Set<UInt64> = []
+        var executionRejectCache = rejectCache.emptied
         swap(&executionRejectCache, &rejectCache)
         let result = ScopedReductionInterpreter.reduce(
             scopedReducer,

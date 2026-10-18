@@ -16,34 +16,48 @@ extension ScopedReductionInterpreter {
     }
 
     /// Takes one candidate through the rejection cache, decoding, and the ordering check, and commits it when admitted.
+    ///
+    /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
     static func evaluate(_ candidate: ScopedCandidate, configuration: ScopedSearchConfiguration, context: inout Context) -> Evaluation {
         let mutation: EncoderProbe
         let admission: DecoderAdmission
         let probeHash: UInt64
-        let cacheHit: Bool
         switch candidate {
             case let .written(writtenMutation, writtenAdmission):
                 mutation = configuration.reportedMutation ?? writtenMutation
                 admission = writtenAdmission
                 probeHash = ZobristHash.incrementalHash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence, probe: context.candidateBuffer)
-                cacheHit = context.rejectCache.contains(probeHash)
                 context.previousSparseProbe = nil
             case let .sparse(probe, baseSequence, sparseAdmission):
                 mutation = configuration.reportedMutation ?? probe.mutation
                 admission = sparseAdmission
                 probeHash = probe.hash(baseHash: context.baseHash, baseSequence: baseSequence)
-                cacheHit = context.rejectCache.contains(probeHash)
-                // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
-                if cacheHit == false || context.observer != nil {
-                    if let previousSparseProbe = context.previousSparseProbe {
-                        previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
-                    } else {
-                        context.candidateBuffer = baseSequence
-                    }
-                    probe.write(into: &context.candidateBuffer)
-                    context.previousSparseProbe = probe
-                }
         }
+
+        let selection = context.decoder.selection(for: ScopedDecodingRequirement(
+            requiresExactDecoder: configuration.requiresExactDecoder,
+            mutation: mutation,
+            admission: admission
+        ))
+        let cacheKey = context.rejectCache.key(
+            probeHash: probeHash,
+            decision: ScopedProbeDecision(selection),
+            incumbentHash: context.baseHash
+        )
+
+        if case let .sparse(probe, baseSequence, _) = candidate {
+            // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
+            if context.rejectCache.contains(cacheKey) == false || context.observer != nil {
+                if let previousSparseProbe = context.previousSparseProbe {
+                    previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
+                } else {
+                    context.candidateBuffer = baseSequence
+                }
+                probe.write(into: &context.candidateBuffer)
+                context.previousSparseProbe = probe
+            }
+        }
+        let cacheHit = context.rejectCache.contains(cacheKey)
 
         context.report.counts.recordEmission()
         var observationID: Int?
@@ -70,11 +84,7 @@ extension ScopedReductionInterpreter {
         let decoding = context.decoder.decode(
             context.candidateBuffer,
             against: context.incumbent,
-            requirement: ScopedDecodingRequirement(
-                requiresExactDecoder: configuration.requiresExactDecoder,
-                mutation: mutation,
-                admission: admission
-            ),
+            selection: selection,
             precomputedHash: probeHash
         )
         if let observationID {
@@ -108,7 +118,7 @@ extension ScopedReductionInterpreter {
         }
         terminate(observationID, disposition, materializationAttempts: outcome.materializationAttempts, context: &context)
 
-        context.rejectCache.insert(probeHash)
+        context.rejectCache.insert(cacheKey)
         if context.isInstrumented {
             ScopedReductionLog.replacementProbeRejection(
                 mutation: mutation,

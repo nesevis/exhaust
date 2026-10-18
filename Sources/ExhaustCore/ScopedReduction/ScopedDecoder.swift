@@ -76,19 +76,23 @@ struct ScopedDecoder {
     let probeWrapper: ProbeWrapper?
     var hasBind: Bool
 
-    /// Selects a decoder for `candidate` and decodes it, running the property, against `incumbent`, which supplies the fallback tree and the guided admission baseline.
-    func decode(
-        _ candidate: ChoiceSequence,
-        against incumbent: ScopedCounterexample,
-        requirement: ScopedDecodingRequirement,
-        precomputedHash: UInt64
-    ) -> ScopedDecoding {
-        let selection = Self.selectDecoder(
+    /// The decoding mode `requirement` selects for the current sequence.
+    func selection(for requirement: ScopedDecodingRequirement) -> Selection {
+        Self.selectDecoder(
             for: requirement.mutation,
             requiresExactDecoder: requirement.requiresExactDecoder,
             hasBind: hasBind,
             admission: requirement.admission
         )
+    }
+
+    /// Decodes `candidate` under `selection`, running the property, against `incumbent`, which supplies the fallback tree and the guided admission baseline.
+    func decode(
+        _ candidate: ChoiceSequence,
+        against incumbent: ScopedCounterexample,
+        selection: Selection,
+        precomputedHash: UInt64
+    ) -> ScopedDecoding {
         let outcome = decode(
             candidate,
             using: selection.decoder(fallbackTree: incumbent.tree),

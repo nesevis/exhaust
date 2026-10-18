@@ -86,7 +86,7 @@ extension ScopedReductionRunner {
         let sequenceDecoder: SequenceDecoder = hasBind
             ? .guided(fallbackTree: incumbent.tree, materializePicks: false)
             : .exact(materializePicks: false)
-        let baseHash = ZobristHash.hash(of: incumbent.sequence)
+        let decision = ScopedProbeDecision(sequenceDecoder)
 
         for nodeID in graph.leafNodes {
             if deadline.isExpired {
@@ -111,7 +111,7 @@ extension ScopedReductionRunner {
                 value: origin.bound - 1,
                 at: range.lowerBound,
                 decoder: sequenceDecoder,
-                baseHash: baseHash,
+                decision: decision,
                 counts: &counts
             )
 
@@ -126,7 +126,7 @@ extension ScopedReductionRunner {
                     value: origin.bound - 2,
                     at: range.lowerBound,
                     decoder: sequenceDecoder,
-                    baseHash: baseHash,
+                    decision: decision,
                     counts: &counts
                 )
                 if gapResult == .accepted {
@@ -153,7 +153,7 @@ extension ScopedReductionRunner {
         value: UInt64,
         at sequenceIndex: Int,
         decoder sequenceDecoder: SequenceDecoder,
-        baseHash: UInt64,
+        decision: ScopedProbeDecision,
         counts: inout ReductionProbeCounts
     ) -> ConfirmationProbeResult {
         var candidate = incumbent.sequence
@@ -165,11 +165,12 @@ extension ScopedReductionRunner {
         counts.recordEmission()
 
         let probeHash = ZobristHash.incrementalHash(
-            baseHash: baseHash,
+            baseHash: incumbentHash,
             baseSequence: incumbent.sequence,
             probe: candidate
         )
-        if rejectCache.contains(probeHash) {
+        let cacheKey = rejectCache.key(probeHash: probeHash, decision: decision, incumbentHash: incumbentHash)
+        if rejectCache.contains(cacheKey) {
             counts.recordCacheRejection()
             return .skipped
         }
@@ -181,7 +182,7 @@ extension ScopedReductionRunner {
             return .accepted
         }
 
-        rejectCache.insert(probeHash)
+        rejectCache.insert(cacheKey)
         return .rejected
     }
 
@@ -248,7 +249,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 else {
             return false
         }
-        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadline: deadline)
+        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, incumbentHash: incumbentHash, graph: graph, rejectCache: rejectCache, deadline: deadline)
         return cursor.next() != nil
     }
 
@@ -268,7 +269,7 @@ extension ScopedReductionRunner {
                 stats.relaxImprovingProbes += probesUsed
             }
         }
-        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadline: deadline)
+        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, incumbentHash: incumbentHash, graph: graph, rejectCache: rejectCache, deadline: deadline)
         while probesUsed < budget {
             guard let probe = candidates.next(), deadline.isExpired == false else {
                 break
@@ -280,7 +281,7 @@ extension ScopedReductionRunner {
             probeCounts.recordOutcome(outcome)
 
             guard let result = outcome.reduction, result.sequence.shortLexPrecedes(incumbent.sequence) else {
-                rejectCache.insert(probe.probeHash)
+                rejectCache.insert(probe.cacheKey)
                 continue
             }
             probeCounts.recordAcceptance()

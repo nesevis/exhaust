@@ -59,7 +59,7 @@ package struct ScopedReductionRunner {
     private(set) var hasBind: Bool
     var graph: ChoiceGraph
     var stats = ReductionStats()
-    var rejectCache: Set<UInt64> = []
+    var rejectCache: ScopedProbeCache
     let generator: AnyGenerator
     let property: (Any) -> Bool
     let probeWrapper: ProbeWrapper?
@@ -198,6 +198,7 @@ package struct ScopedReductionRunner {
         incumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
         incumbentHash = ZobristHash.hash(of: sequence)
         hasBind = Self.containsBind(sequence)
+        rejectCache = ScopedProbeCache(keying: configuration.tuning.probeCacheKeying)
         self.graph = graph
         self.generator = erasedGenerator
         self.property = wrappedProperty

@@ -100,7 +100,7 @@ extension ScopedReductionRunner {
             "seq_len": "\(incumbent.sequence.count)", "sources": "\(sources.count)",
         ])
         let savedRejectCache = rejectCache
-        rejectCache = []
+        rejectCache = rejectCache.emptied
         _ = dispatchCycle(policy: .exploitation)
         sources = outerSources
 

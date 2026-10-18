@@ -19,7 +19,7 @@ extension ScopedReductionRunner {
             return
         }
         let savedRejectCache = rejectCache
-        rejectCache = []
+        rejectCache = rejectCache.emptied
         let pass = runPass(priced.encoderScope, boundValueFingerprint: nil, usesWarmStarts: false, checksDeadline: false)
         rejectCache = savedRejectCache
         applyPassPolicy(pass)

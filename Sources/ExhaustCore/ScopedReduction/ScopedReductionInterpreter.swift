@@ -41,7 +41,7 @@ enum ScopedReductionInterpreter {
     struct Result {
         let incumbent: ScopedCounterexample
         let graph: ChoiceGraph
-        let rejectCache: Set<UInt64>
+        let rejectCache: ScopedProbeCache
         let report: ScopedPassReport
         /// The encode and decode time the execution spent, when the runner asked for it.
         let probeTiming: ProbeTiming?
@@ -92,7 +92,7 @@ extension ScopedReductionInterpreter {
 
         var incumbent: ScopedCounterexample
         var graph: ChoiceGraph
-        var rejectCache: Set<UInt64>
+        var rejectCache: ScopedProbeCache
         var report = ScopedPassReport()
         var baseHash: UInt64
         var candidateBuffer: ChoiceSequence
@@ -107,7 +107,7 @@ extension ScopedReductionInterpreter {
             incumbent: ScopedCounterexample,
             incumbentHash: UInt64,
             graph: ChoiceGraph,
-            rejectCache: Set<UInt64>,
+            rejectCache: ScopedProbeCache,
             decoder: ScopedDecoder,
             encoder: any ScopedEncoder.Type,
             isInstrumented: Bool = false,
