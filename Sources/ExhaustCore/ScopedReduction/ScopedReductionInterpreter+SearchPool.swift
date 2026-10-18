@@ -106,7 +106,7 @@ extension ScopedReductionInterpreter {
 
             member.probesRemainingInTurn -= 1
             pool.emitted += 1
-            if let stop = evaluation.stop {
+            if evaluation.stop != nil {
                 finishMember(&member, context: &context)
                 finishAll(&pool, context: &context)
                 return .emitted(evaluation)
@@ -420,7 +420,7 @@ struct ScopedSearchPool {
 
         /// The outcome of a search that ran out of candidates.
         var outcome: ScopedSearchOutcome {
-            ScopedSearchOutcome(anyAccepted: anyAccepted, stopReason: .exhausted, counts: counts)
+            ScopedSearchOutcome(anyAccepted: anyAccepted, counts: counts)
         }
     }
 

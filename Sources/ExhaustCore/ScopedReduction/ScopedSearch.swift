@@ -37,15 +37,12 @@ enum ScopedRejection {
     case undifferentiated
 }
 
-/// Why the interpreter stopped pulling from a search.
+/// Why a candidate ended its search, and with it the pass.
 enum ScopedStopReason {
-    /// The search returned nil.
-    case exhausted
     /// An acceptance ended the search: ``ScopedAcceptance/stop``, or a rebuild under ``ScopedAcceptance/continue``.
     case accepted
+    /// The deadline passed before the candidate was decoded.
     case deadline
-    /// A probe cap stopped a search that still had candidates.
-    case budgetExhausted
 }
 
 /// One root search's share of a pass's probe counts.

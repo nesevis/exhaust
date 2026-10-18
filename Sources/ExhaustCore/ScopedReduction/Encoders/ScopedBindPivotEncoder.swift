@@ -13,7 +13,6 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {
         let configuration = ScopedChoiceConfiguration(

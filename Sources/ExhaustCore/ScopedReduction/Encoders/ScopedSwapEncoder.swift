@@ -13,7 +13,6 @@ enum ScopedSwapEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: PermutationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(

@@ -13,7 +13,6 @@ enum ScopedDepthCollapseEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(

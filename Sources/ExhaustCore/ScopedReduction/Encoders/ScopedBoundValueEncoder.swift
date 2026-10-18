@@ -13,7 +13,6 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
     static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = true
 
     /// Reads its upstream budget and probe cap from the ``ScopedDispatchBudget`` its bind classification gate resolves.
     static func reducer(_ bindScope: BoundValueScope, input: ScopedEncoderInput) -> ScopedReducer {

@@ -13,7 +13,6 @@ enum ScopedReorderEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .unordered
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: ReorderingScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(

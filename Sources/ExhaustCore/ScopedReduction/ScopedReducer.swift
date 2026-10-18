@@ -161,10 +161,9 @@ enum ScopedAcceptance {
     case stop
 }
 
-/// Summarizes a finished search for the encoder's reducer that requested it.
+/// Summarizes a search that ran out of candidates, for the encoder's reducer that requested it. Only exhaustion resumes the reducer; an acceptance that stops the search, a probe cap, or the deadline ends the pass instead.
 struct ScopedSearchOutcome {
     let anyAccepted: Bool
-    let stopReason: ScopedStopReason
     /// Probes this search alone spent.
     let counts: ReductionProbeCounts
 }

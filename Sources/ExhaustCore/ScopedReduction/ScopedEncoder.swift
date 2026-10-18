@@ -33,9 +33,6 @@ protocol ScopedEncoder {
     /// The ordering an accepted candidate must satisfy against the incumbent.
     static var admissionOrder: ReductionOrder { get }
 
-    /// Whether any acceptance rebuilds the graph, whatever its mutation reports.
-    static var rebuildsAfterAcceptance: Bool { get }
-
     /// The positions whose convergence records an accepted pass on `scope` invalidates, read from the graph before the rebuild, or nil when it invalidates none beyond what the rebuild transfers.
     static func convergenceInvalidatedByAcceptance(_ scope: Scope, in graph: ChoiceGraph) -> ClosedRange<Int>?
 

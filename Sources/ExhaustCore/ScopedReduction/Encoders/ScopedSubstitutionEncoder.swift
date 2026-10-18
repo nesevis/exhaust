@@ -19,7 +19,6 @@ enum ScopedSubstitutionEncoder: ScopedEncoder {
     static let isValueDependent = false
     static let isPathChanging = true
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
         let sequence = input.baseSequence

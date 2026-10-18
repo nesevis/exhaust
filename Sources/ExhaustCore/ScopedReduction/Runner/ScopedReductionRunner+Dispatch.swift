@@ -393,7 +393,7 @@ extension ScopedReductionRunner {
             "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(incumbent.sequence.count)",
         ])
 
-        let action: PostAcceptanceAction = report.anyAccepted && (report.anyRequiresRebuild || typed.encoder.rebuildsAfterAcceptance)
+        let action: PostAcceptanceAction = report.anyAccepted && report.anyRequiresRebuild
             ? .rebuildAndResume
             : .continueDispatching
 
