@@ -659,21 +659,22 @@ struct ChoiceGraphBuilder {
         // Post-walk: compute dependency edges from bind node metadata.
         // Every bind has a fundamental dependency: inner child → bound child.
         // Additionally, the inner child depends on any structural (bind/pick) nodes nested within the bound subtree.
+        // Nodes are read in place by index throughout: copying a ``ChoiceGraphNode`` retains every array it holds, and the bound subtree walk visits each node once per enclosing bind.
         var allDependencyEdges = dependencyEdges
-        for node in nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            let boundChildID = node.children[metadata.boundChildIndex]
+        var stack: [Int] = []
+        for nodeID in nodes.indices {
+            guard case let .bind(metadata) = nodes[nodeID].kind else { continue }
+            guard nodes[nodeID].children.count >= 2 else { continue }
+            let innerChildID = nodes[nodeID].children[metadata.innerChildIndex]
+            let boundChildID = nodes[nodeID].children[metadata.boundChildIndex]
 
             allDependencyEdges.append(DependencyEdge(source: innerChildID, target: boundChildID))
 
-            var stack = [boundChildID]
-            while stack.isEmpty == false {
-                let current = stack.removeLast()
+            stack.removeAll(keepingCapacity: true)
+            stack.append(boundChildID)
+            while let current = stack.popLast() {
                 guard current < nodes.count else { continue }
-                let target = nodes[current]
-                switch target.kind {
+                switch nodes[current].kind {
                     case .bind, .pick:
                         if current != boundChildID {
                             allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
@@ -681,24 +682,23 @@ struct ChoiceGraphBuilder {
                     case .chooseBits, .zip, .sequence, .just:
                         break
                 }
-                for child in target.children {
-                    stack.append(child)
-                }
+                stack.append(contentsOf: nodes[current].children)
             }
         }
 
         // Self-similarity groups: active pick nodes indexed by fingerprint.
         var selfSimilarityGroups: [UInt64: [Int]] = [:]
-        for node in nodes {
-            guard case let .pick(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
+        for nodeID in nodes.indices {
+            guard case let .pick(metadata) = nodes[nodeID].kind else { continue }
+            guard nodes[nodeID].positionRange != nil else { continue }
+            selfSimilarityGroups[metadata.fingerprint, default: []].append(nodeID)
         }
 
         // Eagerly compute derived fields that are accessed multiple times per cycle.
         let liveNodeIDs = nodes.indices.filter { nodes[$0].positionRange != nil }
 
         var leafNodes: [Int] = []
+        leafNodes.reserveCapacity(liveNodeIDs.count)
         var characterLeafNodes: [Int] = []
         for nodeID in liveNodeIDs {
             guard case let .chooseBits(metadata) = nodes[nodeID].kind else { continue }
