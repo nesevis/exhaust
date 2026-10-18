@@ -15,42 +15,41 @@ extension ScopedReductionRunner {
             switch action {
                 case .confirmConvergence:
                     confirmConvergence()
-                    chargeElapsed(to: .convergenceConfirmation)
+                    stepTimer.charge(.convergenceConfirmation)
                 case .relationPass:
-                    let previousOwner = beginTimingOwnership(.relationPass)
+                    let previousOwner = stepTimer.beginOwnership(.relationPass)
                     runRelationPass()
-                    endTimingOwnership(restoring: previousOwner)
+                    stepTimer.endOwnership(restoring: previousOwner)
                 case .improvingPivots:
                     if runImprovingPivotPass() {
                         recordPostCycleAcceptance()
                     }
-                    chargeElapsed(to: .relaxRound)
+                    stepTimer.charge(.relaxRound)
                 case .stagedJointPass:
-                    let previousOwner = beginTimingOwnership(.stagedJointPass)
+                    let previousOwner = stepTimer.beginOwnership(.stagedJointPass)
                     runStagedJointPass()
-                    endTimingOwnership(restoring: previousOwner)
+                    stepTimer.endOwnership(restoring: previousOwner)
                 case .relaxRound:
                     // Perturbing away from a counterexample an earlier action just improved spends budget escaping a local minimum the run may not be in.
                     guard anyAccepted == false else {
                         continue
                     }
-                    let previousOwner = beginTimingOwnership(.relaxRound)
+                    let previousOwner = stepTimer.beginOwnership(.relaxRound)
                     if runRelaxRound() {
                         recordPostCycleAcceptance()
                     }
-                    endTimingOwnership(restoring: previousOwner)
+                    stepTimer.endOwnership(restoring: previousOwner)
             }
         }
         return .completed
     }
 
-    /// Records an acceptance made by a post-cycle action: marks the cycle accepted, drops scope rejections recorded against the previous sequence, and restores the stall budget.
+    /// Records an acceptance made by a post-cycle action: marks the cycle accepted and restores the stall budget.
     ///
     /// The stall that scheduled the action has already been spent, and the relax round runs only on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
     mutating func recordPostCycleAcceptance() {
         anyAccepted = true
         anyAcceptanceEverOccurred = true
-        scopeRejectionCache.clear()
         stallBudget = maxStalls
     }
 
@@ -65,15 +64,16 @@ extension ScopedReductionRunner {
     /// Applies a post-cycle pass's policy and, for an acceptance that needs one, a graph-only rebuild. Post-cycle actions never rebuild sources.
     mutating func applyPostCycleReport(_ pass: PassRecord, appliedPasses: Int = 1) {
         applyPassPolicy(pass, appliedPasses: appliedPasses)
-        if pass.report.anyAccepted, pass.report.anyRequiresRebuild {
-            rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-            graphIsStripped = pass.report.latestTreeIsStripped
+        if pass.requiresRebuild {
+            rebuildGraph(after: pass)
         }
     }
 
     // MARK: - Convergence Confirmation
 
-    /// Probes each converged leaf below its floor to find stale floors: `floor - 1` first, then `floor - 2` when that rejects and is in range, for non-monotone gaps. A passing probe clears the record so minimization can work on the leaf again.
+    /// Probes each converged leaf one step past its floor towards its reduction target to find stale floors, then two steps when that rejects and the target is that far away, for non-monotone gaps. A passing probe clears the record so minimization can work on the leaf again.
+    ///
+    /// A leaf below its target in bit-pattern space, such as a negative signed integer, steps upward. Stepping down from it would move away from the target, which shortlex ordering skips without a probe.
     ///
     /// - Returns: Whether any stale floor was cleared.
     @discardableResult
@@ -87,7 +87,7 @@ extension ScopedReductionRunner {
         let sequenceDecoder: SequenceDecoder = hasBind
             ? .guided(fallbackTree: incumbent.tree, materializePicks: false)
             : .exact(materializePicks: false)
-        let baseHash = ZobristHash.hash(of: incumbent.sequence)
+        let decision = ScopedProbeDecision(sequenceDecoder)
 
         for nodeID in graph.leafNodes {
             if deadline.isExpired {
@@ -103,16 +103,17 @@ extension ScopedReductionRunner {
                 continue
             }
 
-            let minimumBound: UInt64 = metadata.validRange?.lowerBound ?? 0
-            guard origin.bound > minimumBound else {
+            let target = metadata.value.reductionTarget(in: metadata.validRange)
+            guard origin.bound != target else {
                 continue
             }
 
-            let result = probeBelow(
-                value: origin.bound - 1,
+            let nearerBitPattern = Self.bitPattern(origin.bound, steppedTowards: target, by: 1)
+            let result = probeCloser(
+                value: nearerBitPattern,
                 at: range.lowerBound,
                 decoder: sequenceDecoder,
-                baseHash: baseHash,
+                decision: decision,
                 counts: &counts
             )
 
@@ -120,21 +121,22 @@ extension ScopedReductionRunner {
                 anyStale = true
                 graph.clearConvergence(nodeID)
                 ScopedReductionLog.reducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
-                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
+                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(nearerBitPattern)",
                 ])
-            } else if result == .rejected, origin.bound - minimumBound >= 2, deadline.isExpired == false {
-                let gapResult = probeBelow(
-                    value: origin.bound - 2,
+            } else if result == .rejected, origin.bound.absoluteDifference(target) >= 2, deadline.isExpired == false {
+                let gapBitPattern = Self.bitPattern(origin.bound, steppedTowards: target, by: 2)
+                let gapResult = probeCloser(
+                    value: gapBitPattern,
                     at: range.lowerBound,
                     decoder: sequenceDecoder,
-                    baseHash: baseHash,
+                    decision: decision,
                     counts: &counts
                 )
                 if gapResult == .accepted {
                     anyStale = true
                     graph.clearConvergence(nodeID)
                     ScopedReductionLog.reducer("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
-                        "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(origin.bound - 2)",
+                        "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(gapBitPattern)",
                     ])
                 }
             }
@@ -149,12 +151,22 @@ extension ScopedReductionRunner {
         case skipped
     }
 
-    /// Decodes the sequence with one value lowered, without committing it: a failing decode only proves the floor stale.
-    private mutating func probeBelow(
+    /// The bit pattern `step` past `bound` in the direction of `target`.
+    private static func bitPattern(_ bound: UInt64, steppedTowards target: UInt64, by step: UInt64) -> UInt64 {
+        switch bound > target {
+            case true:
+                bound - step
+            case false:
+                bound + step
+        }
+    }
+
+    /// Decodes the sequence with one value moved closer to its target, without committing it: a failing decode only proves the floor stale.
+    private mutating func probeCloser(
         value: UInt64,
         at sequenceIndex: Int,
         decoder sequenceDecoder: SequenceDecoder,
-        baseHash: UInt64,
+        decision: ScopedProbeDecision,
         counts: inout ReductionProbeCounts
     ) -> ConfirmationProbeResult {
         var candidate = incumbent.sequence
@@ -166,11 +178,12 @@ extension ScopedReductionRunner {
         counts.recordEmission()
 
         let probeHash = ZobristHash.incrementalHash(
-            baseHash: baseHash,
+            baseHash: incumbentHash,
             baseSequence: incumbent.sequence,
             probe: candidate
         )
-        if rejectCache.contains(probeHash) {
+        let cacheKey = rejectCache.key(probeHash: probeHash, decision: decision, incumbentHash: incumbentHash)
+        if rejectCache.contains(cacheKey) {
             counts.recordCacheRejection()
             return .skipped
         }
@@ -182,7 +195,7 @@ extension ScopedReductionRunner {
             return .accepted
         }
 
-        rejectCache.insert(probeHash)
+        rejectCache.insert(cacheKey)
         return .rejected
     }
 
@@ -211,7 +224,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.stagedJointSearch) else {
             return false
         }
-        var source = stagedJointSource()
+        let source = stagedJointSource()
         return source.dispatchPriority != nil
     }
 
@@ -220,7 +233,7 @@ extension ScopedReductionRunner {
         guard deadline.isExpired == false else {
             return
         }
-        var source = stagedJointSource()
+        let source = stagedJointSource()
         guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.encoderScope else {
             return
         }
@@ -232,9 +245,9 @@ extension ScopedReductionRunner {
         }
     }
 
-    private func stagedJointSource() -> ScopedSource {
-        ScopedSource.prepareStagedJointSource(
-            from: graph,
+    private func stagedJointSource() -> ScopedStagedJointSource {
+        ScopedStagedJointSource(
+            graph: graph,
             sequence: incumbent.sequence,
             isFruitlessBind: gate.isFruitless,
             exhausted: exhaustedStagedJoint,
@@ -249,7 +262,7 @@ extension ScopedReductionRunner {
         guard isEncoderEnabled(.branchPivot), tuning.relaxImprovingProbeBudget > 0 else {
             return false
         }
-        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadline: deadline)
+        var cursor = ScopedImprovingPivotCursor(sequence: incumbent.sequence, incumbentHash: incumbentHash, graph: graph, rejectCache: rejectCache, deadline: deadline)
         return cursor.next() != nil
     }
 
@@ -269,7 +282,7 @@ extension ScopedReductionRunner {
                 stats.relaxImprovingProbes += probesUsed
             }
         }
-        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, graph: graph, rejectCache: rejectCache, deadline: deadline)
+        var candidates = ScopedImprovingPivotCursor(sequence: incumbent.sequence, incumbentHash: incumbentHash, graph: graph, rejectCache: rejectCache, deadline: deadline)
         while probesUsed < budget {
             guard let probe = candidates.next(), deadline.isExpired == false else {
                 break
@@ -281,7 +294,7 @@ extension ScopedReductionRunner {
             probeCounts.recordOutcome(outcome)
 
             guard let result = outcome.reduction, result.sequence.shortLexPrecedes(incumbent.sequence) else {
-                rejectCache.insert(probe.probeHash)
+                rejectCache.insert(probe.cacheKey)
                 continue
             }
             probeCounts.recordAcceptance()

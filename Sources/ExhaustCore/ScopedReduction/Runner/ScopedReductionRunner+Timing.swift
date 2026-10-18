@@ -26,52 +26,79 @@ extension ScopedReductionRunner {
         case untimed
     }
 
-    /// Charges the time since the previous charge to `bucket`, or to the owning bucket while ``beginTimingOwnership(_:)`` is in effect. Reads no clock unless stats are collected.
-    mutating func chargeElapsed(to bucket: TimingBucket) {
-        guard collectStats else {
-            return
-        }
-        let now = MonotonicClock.nanoseconds()
-        let elapsed = now - timingMark
-        timingMark = now
-        stats.stepTimings.record(timingOwner ?? bucket, elapsed: elapsed, isCounted: timingOwner == nil)
-    }
+    /// Partitions the run's time into ``TimingBucket``s. ``result()`` copies the accumulated timings into the run's statistics.
+    struct StepTimer {
+        /// Whether statistics are collected. When false, no clock is read.
+        let isEnabled: Bool
+        var timings = ReductionStats.StepTimings()
+        /// When the last span ended.
+        private var mark: UInt64 = 0
+        /// The post-cycle bucket that every span is charged to while its pass runs.
+        private var owner: TimingBucket?
 
-    /// Charges a pass's encode and decode spans, then resumes from where the interpreter stopped.
-    mutating func chargeProbing(_ probeTiming: ScopedReductionInterpreter.ProbeTiming?) {
-        guard let probeTiming else {
-            return
+        init(isEnabled: Bool) {
+            self.isEnabled = isEnabled
         }
-        timingMark = probeTiming.mark
-        guard let timingOwner else {
-            stats.stepTimings.encode += probeTiming.encodeNanoseconds
-            stats.stepTimings.decode += probeTiming.decodeNanoseconds
-            stats.stepTimings.encodeCount += probeTiming.encodeCount
-            stats.stepTimings.decodeCount += probeTiming.decodeCount
-            return
-        }
-        stats.stepTimings.record(
-            timingOwner,
-            elapsed: probeTiming.encodeNanoseconds + probeTiming.decodeNanoseconds,
-            isCounted: false
-        )
-    }
 
-    /// Charges every span until the matching ``endTimingOwnership(restoring:)``, nested dispatch and probing included, to `owner`, without counting steps.
-    ///
-    /// - Returns: The previous owner, for ``endTimingOwnership(restoring:)`` to restore.
-    mutating func beginTimingOwnership(_ owner: TimingBucket) -> TimingBucket? {
-        let previousOwner = timingOwner
-        timingOwner = timingOwner ?? owner
-        return previousOwner
-    }
-
-    /// Charges the owned work's last span and restores the previous owner.
-    mutating func endTimingOwnership(restoring previousOwner: TimingBucket?) {
-        if let timingOwner {
-            chargeElapsed(to: timingOwner)
+        /// Where the interpreter starts its encode and decode spans, or nil when statistics are not collected.
+        var probeMark: UInt64? {
+            isEnabled ? mark : nil
         }
-        timingOwner = previousOwner
+
+        /// Starts the first span at the start of ``ScopedReductionRunner/run()``.
+        mutating func start() {
+            if isEnabled {
+                mark = MonotonicClock.nanoseconds()
+            }
+        }
+
+        /// Charges the time since the previous charge to `bucket`, or to the owning bucket while ``beginOwnership(_:)`` is in effect. Reads no clock unless statistics are collected.
+        mutating func charge(_ bucket: TimingBucket) {
+            guard isEnabled else {
+                return
+            }
+            let now = MonotonicClock.nanoseconds()
+            let elapsed = now - mark
+            mark = now
+            timings.record(owner ?? bucket, elapsed: elapsed, isCounted: owner == nil)
+        }
+
+        /// Charges a pass's encode and decode spans, then resumes from where the interpreter stopped.
+        mutating func chargeProbing(_ probeTiming: ScopedReductionInterpreter.ProbeTiming?) {
+            guard let probeTiming else {
+                return
+            }
+            mark = probeTiming.mark
+            guard let owner else {
+                timings.encode += probeTiming.encodeNanoseconds
+                timings.decode += probeTiming.decodeNanoseconds
+                timings.encodeCount += probeTiming.encodeCount
+                timings.decodeCount += probeTiming.decodeCount
+                return
+            }
+            timings.record(
+                owner,
+                elapsed: probeTiming.encodeNanoseconds + probeTiming.decodeNanoseconds,
+                isCounted: false
+            )
+        }
+
+        /// Charges every span until the matching ``endOwnership(restoring:)``, nested dispatch and probing included, to `owner`, without counting steps.
+        ///
+        /// - Returns: The previous owner, for ``endOwnership(restoring:)`` to restore.
+        mutating func beginOwnership(_ owner: TimingBucket) -> TimingBucket? {
+            let previousOwner = self.owner
+            self.owner = self.owner ?? owner
+            return previousOwner
+        }
+
+        /// Charges the owned work's last span and restores the previous owner.
+        mutating func endOwnership(restoring previousOwner: TimingBucket?) {
+            if let owner {
+                charge(owner)
+            }
+            owner = previousOwner
+        }
     }
 }
 

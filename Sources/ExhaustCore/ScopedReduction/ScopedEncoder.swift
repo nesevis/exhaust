@@ -19,10 +19,7 @@ protocol ScopedEncoder {
 
     // MARK: What It Needs
 
-    /// Whether the encoder's scopes depend on leaf values rather than only on graph topology. A source holding such scopes is prepared again after any value change.
-    static var isValueDependent: Bool { get }
-
-    /// What the runner checks before dispatching `scope`, beyond its validity and the scope rejection cache. Relax round exploitation applies no gate.
+    /// What the runner checks before dispatching `scope`, beyond its validity. Relax round exploitation applies no gate.
     static func gate(_ scope: Scope) -> ScopedDispatchGate
 
     // MARK: What It Does
@@ -32,9 +29,6 @@ protocol ScopedEncoder {
 
     /// The ordering an accepted candidate must satisfy against the incumbent.
     static var admissionOrder: ReductionOrder { get }
-
-    /// Whether any acceptance rebuilds the graph, whatever its mutation reports.
-    static var rebuildsAfterAcceptance: Bool { get }
 
     /// The positions whose convergence records an accepted pass on `scope` invalidates, read from the graph before the rebuild, or nil when it invalidates none beyond what the rebuild transfers.
     static func convergenceInvalidatedByAcceptance(_ scope: Scope, in graph: ChoiceGraph) -> ClosedRange<Int>?
@@ -46,16 +40,13 @@ protocol ScopedEncoder {
 
     /// Whether the scope's target nodes still exist and satisfy its preconditions in `graph`.
     static func isValid(_ scope: Scope, in graph: ChoiceGraph) -> Bool
-
-    /// How the scope rejection cache keys a rejected pass on `scope`, or nil when the scope does not determine the pass's outcome, so a rejection is never cached.
-    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey?
 }
 
 // MARK: - Dispatch Gate
 
 /// A condition the runner evaluates before dispatching a scope, from runner state the encoder cannot see.
 enum ScopedDispatchGate {
-    /// Dispatches whenever the scope is valid and not rejected.
+    /// Dispatches whenever the scope is valid.
     case open
     /// Dispatches only as often as the bind's ``BoundValueGate`` allows, and only once the bind's classification shows it lifts at both ends of its controller's range with the same bound shape at each, classifying it first if needed. The gate also supplies the dispatch's ``ScopedDispatchBudget``.
     case bindClassification(bindNodeID: Int, upstreamLeafNodeID: Int)
@@ -73,18 +64,6 @@ struct ScopedDispatchBudget {
     let totalProbeCap: Int
 }
 
-// MARK: - Rejection Key
-
-/// How the scope rejection cache identifies a scope.
-struct ScopedRejectionKey {
-    /// Separates operations, and variants of one operation, that target the same nodes.
-    let discriminator: UInt64
-    /// Whether the key is the targeted node IDs alone, cleared every cycle, rather than the values at their positions, which a value change invalidates by itself.
-    let isCoarse: Bool
-    /// Nodes whose position ranges the scope affects.
-    let affectedNodeIDs: [Int]
-}
-
 // MARK: - Encoder Input
 
 /// The snapshot the encoder's reducer for a scope is built against: the incumbent's sequence, tree, and graph when the scope is dispatched.
@@ -98,6 +77,8 @@ struct ScopedEncoderInput {
     let tuning: ScopedReductionTuning
     /// The budgets a ``ScopedDispatchGate/bindClassification(bindNodeID:upstreamLeafNodeID:)`` gate resolved for this dispatch; nil for every other gate.
     var dispatchBudget: ScopedDispatchBudget?
+    /// The run's covering rows. A fresh cache is correct but regenerates rows the run's cache already holds, so every input the runner builds, and every input built from one, passes the run's cache on.
+    var coveringRowCache = ScopedCoveringRowCache()
 }
 
 // MARK: - Graph Helpers

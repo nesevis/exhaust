@@ -26,7 +26,7 @@ struct ScopedRelaxCandidateCursor {
         var cache = ContentCache()
         var selected = BoundedSortedBuffer<KeyedSplice>(limit: limit)
         var count = 0
-        var source = isEncoderEnabled(.substitution)
+        let source = isEncoderEnabled(.substitution)
             ? ScopedReplacementSource(graph: graph, order: .discovery)
             : ScopedReplacementSource(pivotGraph: graph)
         while let priced = source.nextScope() {

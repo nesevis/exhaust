@@ -10,10 +10,8 @@
 /// A reordering need not precede the incumbent: the interpreter admits it under ``ReductionOrder/unordered``. The first accepted reordering requires a rebuild, which ends the pass.
 enum ScopedReorderEncoder: ScopedEncoder {
     static let name: EncoderName = .numericReorder
-    static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .unordered
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: ReorderingScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -36,10 +34,5 @@ extension ScopedReorderEncoder {
 
     static func isValid(_: ReorderingScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: ReorderingScope) -> ScopedRejectionKey? {
-        nil
     }
 }

@@ -33,7 +33,6 @@ struct ScopedReductionInterpreterTests {
 
         #expect(report.counts.emitted == 1)
         let outcome = try #require(continuationOutcome)
-        #expect(outcome.stopReason == .exhausted)
         #expect(outcome.anyAccepted == false)
         #expect(outcome.counts.emitted == 0)
     }

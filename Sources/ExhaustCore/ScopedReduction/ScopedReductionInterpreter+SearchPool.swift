@@ -25,7 +25,7 @@ extension ScopedReductionInterpreter {
 
     /// Emits and evaluates at most one candidate from `pool`, recursing into nested levels. Returns without a candidate when the pool is exhausted, its probe cap is reached, or the deadline passes. Only the outermost call checks the deadline per candidate, so a nested level never checks it a second time for the same candidate. Building a branch checks it too, before each build and each lift, at every level.
     static func next(
-        _ pool: inout ScopedSearchPool,
+        _ pool: ScopedSearchPool,
         checksDeadline: Bool,
         context: inout Context
     ) -> NextResult {
@@ -37,7 +37,7 @@ extension ScopedReductionInterpreter {
                 return .budgetExhausted
             }
             if pool.active == nil {
-                switch nextMember(&pool, context: &context) {
+                switch nextMember(pool, context: &context) {
                     case let .built(member):
                         pool.active = member
                     case .nothing:
@@ -78,37 +78,28 @@ extension ScopedReductionInterpreter {
                         slot.anyAccepted = true
                     }
                     slot.feedback = pool.deliversUniformFeedback ? uniform(evaluation.feedback) : evaluation.feedback
-                case .level:
-                    // Moving the level out leaves its storage uniquely referenced while it advances.
-                    let source = member.source
-                    member.source = .vacant
-                    guard case var .level(child) = consume source else {
-                        preconditionFailure("A level member must hold a level")
-                    }
-                    switch next(&child, checksDeadline: false, context: &context) {
+                case let .level(child):
+                    switch next(child, checksDeadline: false, context: &context) {
                         case .exhausted, .budgetExhausted:
                             // A nested level that returns nothing has no candidates left, so it is dropped.
-                            finishAll(&child, context: &context)
+                            finishAll(child, context: &context)
                             continue
                         case .deadline:
                             // A nested level reaches the deadline only while building, which ends the whole pool.
-                            finishAll(&child, context: &context)
+                            finishAll(child, context: &context)
                             return .deadline
                         case let .emitted(childEvaluation):
                             evaluation = childEvaluation
-                            member.source = .level(child)
                     }
-                case .vacant:
-                    preconditionFailure("A search pool member must hold a search or a level")
                 case .unbuilt:
                     preconditionFailure("A selected branch must be built before requesting a candidate")
             }
 
             member.probesRemainingInTurn -= 1
             pool.emitted += 1
-            if let stop = evaluation.stop {
-                finishMember(&member, context: &context)
-                finishAll(&pool, context: &context)
+            if evaluation.stop != nil {
+                finishMember(member, context: &context)
+                finishAll(pool, context: &context)
                 return .emitted(evaluation)
             }
             if pool.scheduling == .diagonal {
@@ -152,13 +143,13 @@ extension ScopedReductionInterpreter {
     // MARK: - Branches
 
     /// Selects the next member under the pool's policy. Diagonal scheduling compares unopened branches with suspended members before spending a build; failed builds return to selection rather than immediately building a more expensive branch.
-    private static func nextMember(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
+    private static func nextMember(_ pool: ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
         if pool.scheduling == .diagonal {
             while let member = pool.diagonalQueue.popFirst() {
                 guard case .unbuilt = member.source else {
                     return .built(member)
                 }
-                switch buildMember(pool: &pool, context: &context) {
+                switch buildMember(pool: pool, context: &context) {
                     case let .built(built):
                         return .built(built)
                     case .deadline:
@@ -169,7 +160,7 @@ extension ScopedReductionInterpreter {
             }
             return .nothing
         }
-        switch buildNextBranch(&pool, context: &context) {
+        switch buildNextBranch(pool, context: &context) {
             case let .built(member):
                 return .built(member)
             case .deadline:
@@ -181,8 +172,6 @@ extension ScopedReductionInterpreter {
             return .nothing
         }
         var resumed = pool.suspended[pool.suspendedHead]
-        // Vacating the resumed entry leaves a nested level's storage uniquely referenced while it advances.
-        pool.suspended[pool.suspendedHead].source = .vacant
         pool.suspendedHead += 1
         if pool.suspendedHead * 2 >= pool.suspended.count {
             pool.suspended.removeFirst(pool.suspendedHead)
@@ -195,9 +184,9 @@ extension ScopedReductionInterpreter {
     /// Advances branches until one constructs a search or a nested level. The search budget counts empty searches but not failed builds; chain limits count every attempted branch.
     ///
     /// Branches that fail construction are built back to back without a candidate evaluated in between, so the deadline is checked before each build.
-    private static func buildNextBranch(_ pool: inout ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
+    private static func buildNextBranch(_ pool: ScopedSearchPool, context: inout Context) -> BuildResult<ScopedSearchPool.Member> {
         while pool.branchesExhausted == false, pool.constructed < pool.searchBudget {
-            switch buildMember(pool: &pool, context: &context) {
+            switch buildMember(pool: pool, context: &context) {
                 case let .built(member):
                     return .built(member)
                 case .deadline:
@@ -211,7 +200,7 @@ extension ScopedReductionInterpreter {
 
     /// Builds one selected branch within the existing search and chain budgets. Empty searches count as constructed; failed builds consume only build limits.
     private static func buildMember(
-        pool: inout ScopedSearchPool,
+        pool: ScopedSearchPool,
         context: inout Context
     ) -> BuildResult<ScopedSearchPool.Member> {
         guard pool.branchesExhausted == false, pool.constructed < pool.searchBudget else {
@@ -336,31 +325,30 @@ extension ScopedReductionInterpreter {
 
     // MARK: - Finishing
 
-    static func finishAll(_ pool: inout ScopedSearchPool, context: inout Context) {
-        if var active = pool.active {
+    /// Finishes every member the pool still holds. Suspended members before ``ScopedSearchPool/suspendedHead`` were already resumed, so they are skipped.
+    static func finishAll(_ pool: ScopedSearchPool, context: inout Context) {
+        if let active = pool.active {
             pool.active = nil
-            finishMember(&active, context: &context)
+            finishMember(active, context: &context)
         }
-        var suspended = pool.suspended
+        let suspended = pool.suspended[pool.suspendedHead...]
         pool.suspended = []
         pool.suspendedHead = 0
-        for index in suspended.indices {
-            finishMember(&suspended[index], context: &context)
+        for member in suspended {
+            finishMember(member, context: &context)
         }
-        while var member = pool.diagonalQueue.popFirst() {
-            finishMember(&member, context: &context)
+        while let member = pool.diagonalQueue.popFirst() {
+            finishMember(member, context: &context)
         }
     }
 
-    private static func finishMember(_ member: inout ScopedSearchPool.Member, context: inout Context) {
-        let source = member.source
-        member.source = .vacant
-        switch consume source {
+    private static func finishMember(_ member: ScopedSearchPool.Member, context: inout Context) {
+        switch member.source {
             case let .search(slot):
                 finishSearch(slot, pending: slot.feedback, context: &context)
-            case var .level(child):
-                finishAll(&child, context: &context)
-            case .vacant, .unbuilt:
+            case let .level(child):
+                finishAll(child, context: &context)
+            case .unbuilt:
                 break
         }
     }
@@ -376,7 +364,7 @@ extension ScopedReductionInterpreter {
             context.report.searchReport.hadUnresolvedReplacement = true
         }
         if slot.wasAskedForCandidate {
-            context.report.searchCounts.append(ScopedSearchCounts(stagedJointArity: slot.stagedJointArity, counts: slot.counts))
+            context.report.searchCounts.append(ScopedSearchCounts(stagedJointArity: searchReport.stagedJointArity, counts: slot.counts))
         }
     }
 }
@@ -384,7 +372,9 @@ extension ScopedReductionInterpreter {
 // MARK: - Search Pool State
 
 /// The members of one `propose` level, or of the root branch, that the interpreter asks for candidates.
-struct ScopedSearchPool {
+///
+/// A class, so a nested level advances in place inside its parent's member, as a search does inside its slot.
+final class ScopedSearchPool {
     /// A search with the outcome of its last candidate, delivered when it is next asked for a candidate, including after a suspension.
     ///
     /// A class, so asking for a candidate advances the search in place: a search's state runs to hundreds of bytes, and a value slot would be copied in and out of its member on every candidate.
@@ -396,8 +386,6 @@ struct ScopedSearchPool {
         let continuation: (ScopedReductionResult) -> ScopedReducer
         /// Whether the search was built outside any `propose`, so it keeps its report and records its own counts.
         let isRoot: Bool
-        /// The number of leaves each candidate moves for a staged joint stage, which its recorded counts are attributed to.
-        let stagedJointArity: Int?
         /// Whether any of the search's candidates was accepted, for its outcome.
         var anyAccepted = false
         /// Whether the search was asked for a candidate. A root search stopped before then, by the deadline, records no counts.
@@ -415,23 +403,20 @@ struct ScopedSearchPool {
             self.configuration = configuration
             self.continuation = continuation
             self.isRoot = isRoot
-            stagedJointArity = (search as? ScopedStagedJointSearch)?.arity
         }
 
         /// The outcome of a search that ran out of candidates.
         var outcome: ScopedSearchOutcome {
-            ScopedSearchOutcome(anyAccepted: anyAccepted, stopReason: .exhausted, counts: counts)
+            ScopedSearchOutcome(anyAccepted: anyAccepted, counts: counts)
         }
     }
 
-    /// Where a member's candidates come from. A search's slot is a reference that is only ever held by its member; a nested level is boxed.
+    /// Where a member's candidates come from. A search's slot and a nested level are references, each held only by its member.
     enum Source {
         /// The next unopened branch, whose prefix and lift are constructed only when its grade is selected.
         case unbuilt
         case search(SearchSlot)
-        indirect case level(ScopedSearchPool)
-        /// Held only while the member's source is moved out to advance it.
-        case vacant
+        case level(ScopedSearchPool)
     }
 
     struct Member {
@@ -470,7 +455,7 @@ struct ScopedSearchPool {
     var buildsThisStart = 0
     var emitted = 0
     var active: Member?
-    /// Members waiting for another turn, oldest first from ``suspendedHead``. Resumed entries are vacated, and the vacated prefix is dropped once it fills half the storage, so storage stays proportional to live members while resuming stays amortized constant time.
+    /// Members waiting for another turn, oldest first from ``suspendedHead``. Entries before the head were resumed; that prefix is dropped once it fills half the storage, so storage stays proportional to live members while resuming stays amortized constant time.
     var suspended: [Member] = []
     var suspendedHead = 0
     /// Suspended branches and at most one unopened frontier. Nested levels carry their parent's local grade, not their own next grade.
@@ -497,7 +482,7 @@ struct ScopedSearchPool {
     }
 
     /// Keeps only the next unopened branch in the queue. Its prefix is not needed to compare its grade with suspended searches.
-    mutating func enqueueNextBranch() {
+    func enqueueNextBranch() {
         guard let branchIndex = branches.nextIndex else {
             return
         }

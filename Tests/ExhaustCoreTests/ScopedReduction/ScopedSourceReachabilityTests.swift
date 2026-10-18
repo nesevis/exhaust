@@ -9,8 +9,8 @@ struct ScopedSourceReachabilityTests {
     func migrationPositiveResultsAreReused() {
         let controllerCount = 8
         let graph = bindGraph(controllerCount: controllerCount, boundElementCount: 12)
-        var source = ScopedMigrationSource(graph: graph)
-        let scopes = drain(&source)
+        let source = ScopedMigrationSource(graph: graph)
+        let scopes = drain(source)
         #expect(scopes.count > 1000)
         #expect(source.dependencyTraversalCount == controllerCount)
         #expect(source.dependencyCachedSourceCount == controllerCount)
@@ -21,8 +21,8 @@ struct ScopedSourceReachabilityTests {
     func migrationNegativeResultsAreReused() {
         let controllerCount = 8
         let graph = bindGraph(controllerCount: controllerCount, boundElementCount: 0)
-        var source = ScopedMigrationSource(graph: graph)
-        let scopes = drain(&source)
+        let source = ScopedMigrationSource(graph: graph)
+        let scopes = drain(source)
         #expect(scopes.isEmpty == false)
         #expect(source.dependencyTraversalCount == controllerCount)
         #expect(source.dependencyCachedSourceCount == 0)
@@ -32,8 +32,8 @@ struct ScopedSourceReachabilityTests {
     @Test("Scoped migration over independent sequences runs no dependency search")
     func migrationIndependentSequencesNeedNoSearch() {
         let graph = ChoiceGraph.build(from: .group((0 ..< 40).map { _ in .uint64Sequence([1]) }))
-        var source = ScopedMigrationSource(graph: graph)
-        let scopes = drain(&source)
+        let source = ScopedMigrationSource(graph: graph)
+        let scopes = drain(source)
         #expect(scopes.count == 40 * 39 / 2)
         #expect(source.dependencyTraversalCount == 0)
         #expect(source.dependencyCachedSourceCount == 0)
@@ -48,8 +48,8 @@ struct ScopedSourceReachabilityTests {
     ])
     func replacementWithoutBindsNeedsNoSearch(order: ScopedReplacementSource.EnumerationOrder) {
         let graph = ChoiceGraph.build(from: nestedPickFamily(memberCount: 120, maximumDepth: 8))
-        var source = ScopedReplacementSource(graph: graph, order: order)
-        let scopes = drain(&source)
+        let source = ScopedReplacementSource(graph: graph, order: order)
+        let scopes = drain(source)
         #expect(scopes.isEmpty == false)
         #expect(source.dependencyTraversalCount == 0)
     }
@@ -70,8 +70,8 @@ struct ScopedSourceReachabilityTests {
                 })
             )
         }))
-        var source = ScopedReplacementSource(graph: graph, order: order)
-        let scopes = drain(&source)
+        let source = ScopedReplacementSource(graph: graph, order: order)
+        let scopes = drain(source)
         let promotionCount = scopes.count(where: { priced in
             guard case .substitution(.descendantPromotion) = priced.encoderScope else {
                 return false
@@ -86,7 +86,7 @@ struct ScopedSourceReachabilityTests {
 // MARK: - Helpers
 
 /// Drains `source`, checking that peeking its priority never runs a dependency search.
-private func drain(_ source: inout ScopedMigrationSource) -> [PricedEncoderScope] {
+private func drain(_ source: ScopedMigrationSource) -> [PricedEncoderScope] {
     var scopes: [PricedEncoderScope] = []
     while let priority = source.dispatchPriority {
         let searches = source.dependencyTraversalCount
@@ -103,7 +103,7 @@ private func drain(_ source: inout ScopedMigrationSource) -> [PricedEncoderScope
 }
 
 /// Drains `source`, checking that peeking its priority never runs a dependency search.
-private func drain(_ source: inout ScopedReplacementSource) -> [PricedEncoderScope] {
+private func drain(_ source: ScopedReplacementSource) -> [PricedEncoderScope] {
     var scopes: [PricedEncoderScope] = []
     while let priority = source.dispatchPriority {
         let searches = source.dependencyTraversalCount

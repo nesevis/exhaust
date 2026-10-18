@@ -10,10 +10,8 @@
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate.
 enum ScopedLockstepEncoder: ScopedEncoder {
     static let name: EncoderName = .lockstep
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: TandemScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -41,10 +39,5 @@ extension ScopedLockstepEncoder {
 
     static func isValid(_: TandemScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: TandemScope) -> ScopedRejectionKey? {
-        nil
     }
 }

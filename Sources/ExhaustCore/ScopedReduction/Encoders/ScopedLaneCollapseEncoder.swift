@@ -10,10 +10,8 @@
 /// Every candidate reorders the command sequence so prefix commands stay contiguous at the front, which the graph cannot apply in place. Acceptance therefore ends the pass and the next scope is built against the rebuilt graph.
 enum ScopedLaneCollapseEncoder: ScopedEncoder {
     static let name: EncoderName = .laneCollapse
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -40,10 +38,5 @@ extension ScopedLaneCollapseEncoder {
 
     static func isValid(_: ValueMinimizationScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: ValueMinimizationScope) -> ScopedRejectionKey? {
-        nil
     }
 }

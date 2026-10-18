@@ -15,7 +15,12 @@ struct ScopedImprovingPivotCursor {
     struct Probe {
         let sequence: ChoiceSequence
         let probeHash: UInt64
+        /// The key its rejection is recorded under: the probe hash with ``decision`` folded in.
+        let cacheKey: UInt64
     }
+
+    /// Every improving pivot is decoded exactly with picks materialized and standard admission.
+    static let decision = ScopedProbeDecision(isGuided: false)
 
     private struct Pivot {
         let pickNodeID: Int
@@ -26,7 +31,8 @@ struct ScopedImprovingPivotCursor {
 
     private let sequence: ChoiceSequence
     private let graph: ChoiceGraph
-    private let rejectCache: Set<UInt64>
+    private let rejectCache: ScopedProbeCache
+    private let incumbentHash: UInt64
     private let pivots: [Pivot]
     private var pivotIndex = 0
     private var fillIndex = 0
@@ -35,8 +41,10 @@ struct ScopedImprovingPivotCursor {
     private var emittedHashes: Set<UInt64> = []
 
     /// Captures the cache at entry; probes returned since are skipped through ``emittedHashes``.
-    init(sequence: ChoiceSequence, graph: ChoiceGraph, rejectCache: Set<UInt64>, deadline: ScopedDeadline) {
+    /// - Parameter incumbentHash: The Zobrist hash of `sequence`.
+    init(sequence: ChoiceSequence, incumbentHash: UInt64, graph: ChoiceGraph, rejectCache: ScopedProbeCache, deadline: ScopedDeadline) {
         self.sequence = sequence
+        self.incumbentHash = incumbentHash
         self.graph = graph
         self.rejectCache = rejectCache
         guard deadline.isExpired == false else {
@@ -44,7 +52,7 @@ struct ScopedImprovingPivotCursor {
             return
         }
         var prepared: [Pivot] = []
-        var source = ScopedReplacementSource(pivotGraph: graph)
+        let source = ScopedReplacementSource(pivotGraph: graph)
         while deadline.isExpired == false, let priced = source.nextScope() {
             guard case let .branchPivot(scope) = priced.encoderScope,
                   let splice = ScopedPivotCandidates.branchPivotSplice(
@@ -104,10 +112,11 @@ struct ScopedImprovingPivotCursor {
                 continue
             }
             let probeHash = ZobristHash.hash(of: candidate)
-            guard rejectCache.contains(probeHash) == false, emittedHashes.insert(probeHash).inserted else {
+            let cacheKey = rejectCache.key(probeHash: probeHash, decision: Self.decision, incumbentHash: incumbentHash)
+            guard rejectCache.contains(cacheKey) == false, emittedHashes.insert(probeHash).inserted else {
                 continue
             }
-            return Probe(sequence: candidate, probeHash: probeHash)
+            return Probe(sequence: candidate, probeHash: probeHash, cacheKey: cacheKey)
         }
         return nil
     }

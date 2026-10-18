@@ -7,7 +7,7 @@
 
 /// Directed edge from a bind-inner node to a node within its bound subtree.
 ///
-/// The bound content's structure is contingent on the bind-inner value. Reduction must be ordered — parent before child. A change upstream invalidates everything downstream. Topological sort and reachability computation operate on this edge layer.
+/// The bound content's structure is contingent on the bind-inner value. Reduction must be ordered — parent before child. A change upstream invalidates everything downstream. Reachability computation operates on this edge layer.
 package struct DependencyEdge: Equatable, Sendable {
     /// Node ID of the bind-inner (controlling) node.
     package let source: Int

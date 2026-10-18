@@ -11,7 +11,8 @@ extension ScopedIntegerSearch {
         scope: ValueMinimizationScope,
         sequence: ChoiceSequence,
         graph: ChoiceGraph,
-        warmStarts: [Int: ConvergedOrigin]
+        warmStarts: [Int: ConvergedOrigin],
+        tuning: ScopedReductionTuning
     ) -> State {
         var leafPositions: [LeafPosition] = []
 
@@ -29,7 +30,6 @@ extension ScopedIntegerSearch {
                 leafPositions.append(LeafPosition(
                     nodeID: nodeID,
                     sequenceIndex: range.lowerBound,
-                    validRange: metadata.validRange,
                     currentBitPattern: current,
                     targetBitPattern: target,
                     typeTag: metadata.typeTag,
@@ -43,6 +43,11 @@ extension ScopedIntegerSearch {
         let initialPhase: Phase = scope.batchZeroEligible ? .batchZero : .perLeaf
 
         return State(
+            linearScanThreshold: tuning.valueLinearScanThreshold,
+            bisectionInitialDivisor: tuning.valueBisectionInitialDivisor,
+            bisectionBinaryThreshold: tuning.valueBisectionBinaryThreshold,
+            interpolationBinaryThreshold: tuning.interpolationBinaryThreshold,
+            interpolationInitialDivisor: tuning.interpolationInitialDivisor,
             sequence: sequence,
             leafPositions: leafPositions,
             phase: initialPhase,
@@ -57,7 +62,7 @@ extension ScopedIntegerSearch {
     }
 
     /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. The caller has already made an accepted candidate the baseline, so subsequent probes build on it.
-    mutating func nextProbe(
+    static func nextProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -97,7 +102,7 @@ extension ScopedIntegerSearch {
     // MARK: - Per-Leaf Zero Pre-Round
 
     /// Tries each leaf individually at its reduction target. Leaves that accept converge immediately and are excluded from batch bisection. After all leaves are tried, transitions to batch bisection with only the survivors.
-    mutating func nextPerLeafZeroProbe(
+    static func nextPerLeafZeroProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -153,7 +158,7 @@ extension ScopedIntegerSearch {
             state.bisection = BisectionState(
                 pendingGroups: [],
                 activeGroup: (start: 0, end: state.leafPositions.count),
-                divisor: bisectionInitialDivisor,
+                divisor: state.bisectionInitialDivisor,
                 awaitingFeedback: false,
                 convergedIndices: perLeafZero.convergedIndices
             )
@@ -169,7 +174,7 @@ extension ScopedIntegerSearch {
     /// Drives the batch bisection phase: joint interpolation search across leaf groups with bisection on rejection.
     ///
     /// Each probe moves every unconverged leaf in the group to `1 / divisor` of its remaining distance from its target. An acceptance resets the divisor and the group keeps stepping. A rejection halves the divisor; once the divisor reaches the binary threshold, a group of two or more leaves splits into halves searched independently. Single-leaf groups are left to the per-leaf phase.
-    mutating func nextBatchBisectProbe(
+    static func nextBatchBisectProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -192,7 +197,7 @@ extension ScopedIntegerSearch {
                     state.leafPositions[index].currentBitPattern = acceptedBitPattern
                     if acceptedBitPattern == leaf.targetBitPattern {
                         bisection.convergedIndices.insert(index)
-                        convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                        state.convergenceStore[leaf.nodeID] = ConvergedOrigin(
                             bound: leaf.targetBitPattern,
                             signal: .monotoneConvergence,
                             configuration: .binarySearchSemanticSimplest,
@@ -201,10 +206,10 @@ extension ScopedIntegerSearch {
                     }
                 }
                 // The group can move, so the next step starts from the initial divisor again.
-                bisection.divisor = bisectionInitialDivisor
+                bisection.divisor = state.bisectionInitialDivisor
             } else {
                 // The group stalled, so the next step is smaller.
-                if bisection.divisor > bisectionBinaryThreshold {
+                if bisection.divisor > state.bisectionBinaryThreshold {
                     bisection.divisor /= 2
                 } else {
                     // Divisor exhausted: bisect the group.
@@ -216,7 +221,7 @@ extension ScopedIntegerSearch {
                     }
                     // A single leaf is left to the per-leaf phase.
                     bisection.activeGroup = nil
-                    bisection.divisor = bisectionInitialDivisor
+                    bisection.divisor = state.bisectionInitialDivisor
                 }
             }
         }
@@ -233,7 +238,7 @@ extension ScopedIntegerSearch {
                     continue
                 }
                 bisection.activeGroup = nextGroup
-                bisection.divisor = bisectionInitialDivisor
+                bisection.divisor = state.bisectionInitialDivisor
             }
 
             guard let group = bisection.activeGroup else {
@@ -305,7 +310,7 @@ extension ScopedIntegerSearch {
     // MARK: - Per-Leaf Orchestrator
 
     /// Searches each leaf in sequence order: a direct shot at the reduction target, then bit-pattern search, then a candidate list when one was set up (a linear scan over a non-monotone gap, or simpler forms of a character), and finally the cross-zero phase for signed types. Returns nil when every leaf is done.
-    mutating func nextPerLeafProbe(
+    static func nextPerLeafProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -409,7 +414,7 @@ extension ScopedIntegerSearch {
     /// Drives the per-leaf binary search in bit-pattern space.
     ///
     /// Returns the next candidate, or nil when the stepper converges. On convergence, records the leaf's convergence and sets up a candidate list for a small non-monotone gap or a character leaf. The caller arms cross-zero.
-    mutating func nextBitPatternSearchProbe(
+    static func nextBitPatternSearchProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -443,7 +448,7 @@ extension ScopedIntegerSearch {
             if currentBitPattern > targetBitPattern {
                 let effectiveLo = validWarmStart?.bound ?? targetBitPattern
                 let range = currentBitPattern - effectiveLo
-                if range < interpolationBinaryThreshold {
+                if range < state.interpolationBinaryThreshold {
                     state.stepper = DirectionalStepper(
                         binary: BinarySearchStepper(lo: effectiveLo, hi: currentBitPattern)
                     )
@@ -452,15 +457,15 @@ extension ScopedIntegerSearch {
                         interpolation: InterpolationSearchStepper(
                             lo: effectiveLo,
                             hi: currentBitPattern,
-                            binaryThreshold: interpolationBinaryThreshold,
-                            initialDivisor: interpolationInitialDivisor
+                            binaryThreshold: state.interpolationBinaryThreshold,
+                            initialDivisor: state.interpolationInitialDivisor
                         )
                     )
                 }
             } else {
                 let effectiveHi = validWarmStart?.bound ?? targetBitPattern
                 let range = effectiveHi - currentBitPattern
-                if range < interpolationBinaryThreshold {
+                if range < state.interpolationBinaryThreshold {
                     state.stepper = DirectionalStepper(
                         binary: BinarySearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
                     )
@@ -470,8 +475,8 @@ extension ScopedIntegerSearch {
                             lo: currentBitPattern,
                             hi: effectiveHi,
                             direction: .findLargest,
-                            binaryThreshold: interpolationBinaryThreshold,
-                            initialDivisor: interpolationInitialDivisor
+                            binaryThreshold: state.interpolationBinaryThreshold,
+                            initialDivisor: state.interpolationInitialDivisor
                         )
                     )
                 }
@@ -507,15 +512,15 @@ extension ScopedIntegerSearch {
 
             if state.batchRejected, bestAccepted == leaf.targetBitPattern {
                 // The leaf reaches its target alone but batch zero failed, so it depends on other leaves staying put.
-                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                state.convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .zeroingDependency,
                     configuration: .binarySearchSemanticSimplest,
                     cycle: 0
                 )
-            } else if remaining > 0, remaining <= linearScanThreshold {
+            } else if remaining > 0, remaining <= state.linearScanThreshold {
                 // Binary search stopped short of the target, but the gap is small enough to scan exhaustively.
-                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                state.convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .nonMonotoneGap(remainingRange: Int(remaining)),
                     configuration: .binarySearchSemanticSimplest,
@@ -528,7 +533,7 @@ extension ScopedIntegerSearch {
                     candidates: ArraySlice(scanLo ..< scanHi)
                 )
             } else {
-                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                state.convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bestAccepted,
                     signal: .monotoneConvergence,
                     configuration: .binarySearchSemanticSimplest,
@@ -558,7 +563,7 @@ extension ScopedIntegerSearch {
     /// Probes the current leaf's candidate list in ascending order, skipping candidates that do not shortlex-precede the current entry.
     ///
     /// Returns nil when the list is exhausted, or after the first acceptance when ``CandidateListSource/endsOnFirstAcceptance`` holds.
-    func nextCandidateListProbe(
+    static func nextCandidateListProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -592,7 +597,7 @@ extension ScopedIntegerSearch {
     }
 
     /// Records the convergence of a finished candidate list and clears it.
-    mutating func finishCandidateList(state: inout State) {
+    static func finishCandidateList(state: inout State) {
         guard let list = state.candidateList else {
             return
         }
@@ -601,9 +606,9 @@ extension ScopedIntegerSearch {
         switch list.source {
             case .gapScan:
                 let bound = list.bestAccepted
-                    ?? convergenceStore[leaf.nodeID]?.bound
+                    ?? state.convergenceStore[leaf.nodeID]?.bound
                     ?? leaf.targetBitPattern
-                convergenceStore[leaf.nodeID] = ConvergedOrigin(
+                state.convergenceStore[leaf.nodeID] = ConvergedOrigin(
                     bound: bound,
                     signal: .scanComplete(foundLowerFloor: list.bestAccepted != nil),
                     configuration: .linearScan,
@@ -613,21 +618,8 @@ extension ScopedIntegerSearch {
                 guard let bestAccepted = list.bestAccepted else {
                     return
                 }
-                lowerRecordedBound(to: bestAccepted, nodeID: leaf.nodeID)
+                state.lowerRecordedBound(to: bestAccepted, nodeID: leaf.nodeID)
         }
-    }
-
-    /// Replaces the bound of the leaf's existing record, keeping its signal and configuration. Does nothing when the leaf has no record.
-    mutating func lowerRecordedBound(to bound: UInt64, nodeID: Int) {
-        guard let record = convergenceStore[nodeID] else {
-            return
-        }
-        convergenceStore[nodeID] = ConvergedOrigin(
-            bound: bound,
-            signal: record.signal,
-            configuration: record.configuration,
-            cycle: record.cycle
-        )
     }
 
     // MARK: - Cross-Zero Phase
@@ -637,7 +629,7 @@ extension ScopedIntegerSearch {
     /// Returns `true` when the leaf is signed and its shortlex key is above zero, so a simpler value exists. ``State/crossZero`` is then set, and the per-leaf loop emits the first probe on its next iteration.
     ///
     /// The walk covers at most `⌈log₂(key + 1)⌉ + 4` keys, capped at 16. Bit-pattern search has already covered large magnitudes, so cross-zero only needs the keys nearest zero: a small key gets every key below it, a large key the simplest 16.
-    mutating func tryEnterCrossZero(state: inout State) -> Bool {
+    static func tryEnterCrossZero(state: inout State) -> Bool {
         let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else {
             return false
@@ -687,7 +679,7 @@ extension ScopedIntegerSearch {
     /// Walks shortlex keys up from zero, one candidate per call. The first accepted probe is the simplest value the walk can reach, so the phase ends there.
     ///
     /// Returns `nil` when the walk is exhausted (all probes rejected or budget reached) or when the caller should advance to the next leaf (acceptance happened on the prior call). The caller clears ``State/crossZero`` and advances `leafIndex` when `nil` is returned.
-    mutating func nextCrossZeroProbe(
+    static func nextCrossZeroProbe(
         state: inout State,
         lastAccepted: Bool
     ) -> ChoiceSequence? {
@@ -699,7 +691,7 @@ extension ScopedIntegerSearch {
             crossZero.lastEmittedKey = nil
             if lastAccepted {
                 // `next` has already made the accepted candidate the baseline. Record its bit pattern so the next pass's binary search warm-starts from it.
-                recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: state.leafPositions[state.leafIndex].nodeID)
+                state.recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: state.leafPositions[state.leafIndex].nodeID)
                 state.crossZero = crossZero
                 return nil
             }
@@ -732,6 +724,23 @@ extension ScopedIntegerSearch {
 
         state.crossZero = crossZero
         return nil
+    }
+}
+
+// MARK: - Convergence Records
+
+extension ScopedIntegerSearch.State {
+    /// Replaces the bound of the leaf's existing record, keeping its signal and configuration. Does nothing when the leaf has no record.
+    mutating func lowerRecordedBound(to bound: UInt64, nodeID: Int) {
+        guard let record = convergenceStore[nodeID] else {
+            return
+        }
+        convergenceStore[nodeID] = ConvergedOrigin(
+            bound: bound,
+            signal: record.signal,
+            configuration: record.configuration,
+            cycle: record.cycle
+        )
     }
 
     /// Records an accepted cross-zero probe as the leaf's binary search bound.

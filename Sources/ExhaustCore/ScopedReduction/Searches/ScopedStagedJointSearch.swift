@@ -62,4 +62,8 @@ struct ScopedStagedJointSearch: ScopedSearch {
             admission: .numericPair(proposal.pair)
         )
     }
+
+    consuming func finish(pending _: ScopedSearchFeedback) -> ScopedSearchReport {
+        ScopedSearchReport(stagedJointArity: arity)
+    }
 }

@@ -10,10 +10,8 @@
 /// The search keeps going after an acceptance, building its next probe on the recovered sequence.
 enum ScopedSwapEncoder: ScopedEncoder {
     static let name: EncoderName = .siblingSwap
-    static let isValueDependent = false
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: PermutationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -41,14 +39,5 @@ extension ScopedSwapEncoder {
     static func isValid(_ scope: PermutationScope, in graph: ChoiceGraph) -> Bool {
         scope.parentNodeID < graph.nodes.count
             && graph.nodes[scope.parentNodeID].positionRange != nil
-    }
-
-    /// Keyed by the values at the swapped positions, so a value change invalidates it by itself.
-    static func rejectionKey(_ scope: PermutationScope) -> ScopedRejectionKey? {
-        ScopedRejectionKey(
-            discriminator: 0x9182_7364_5546_3728,
-            isCoarse: false,
-            affectedNodeIDs: scope.swappableGroups.flatMap(\.self)
-        )
     }
 }

@@ -10,10 +10,8 @@
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate. An acceptance that reshapes a bound subtree still ends the pass.
 enum ScopedValueSearchEncoder: ScopedEncoder {
     static let name: EncoderName = .valueSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: ValueMinimizationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -42,10 +40,5 @@ extension ScopedValueSearchEncoder {
 
     static func isValid(_: ValueMinimizationScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: ValueMinimizationScope) -> ScopedRejectionKey? {
-        nil
     }
 }

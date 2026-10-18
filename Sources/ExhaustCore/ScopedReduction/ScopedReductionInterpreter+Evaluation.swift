@@ -16,34 +16,51 @@ extension ScopedReductionInterpreter {
     }
 
     /// Takes one candidate through the rejection cache, decoding, and the ordering check, and commits it when admitted.
+    ///
+    /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
     static func evaluate(_ candidate: ScopedCandidate, configuration: ScopedSearchConfiguration, context: inout Context) -> Evaluation {
         let mutation: EncoderProbe
         let admission: DecoderAdmission
         let probeHash: UInt64
-        let cacheHit: Bool
         switch candidate {
             case let .written(writtenMutation, writtenAdmission):
                 mutation = configuration.reportedMutation ?? writtenMutation
                 admission = writtenAdmission
                 probeHash = ZobristHash.incrementalHash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence, probe: context.candidateBuffer)
-                cacheHit = context.rejectCache.contains(probeHash)
                 context.previousSparseProbe = nil
             case let .sparse(probe, baseSequence, sparseAdmission):
                 mutation = configuration.reportedMutation ?? probe.mutation
                 admission = sparseAdmission
                 probeHash = probe.hash(baseHash: context.baseHash, baseSequence: baseSequence)
-                cacheHit = context.rejectCache.contains(probeHash)
-                // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
-                if cacheHit == false || context.observer != nil {
-                    if let previousSparseProbe = context.previousSparseProbe {
-                        previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
-                    } else {
-                        context.candidateBuffer = baseSequence
-                    }
-                    probe.write(into: &context.candidateBuffer)
-                    context.previousSparseProbe = probe
-                }
         }
+
+        let selection = context.decoder.selection(for: ScopedDecodingRequirement(
+            requiresExactDecoder: configuration.requiresExactDecoder,
+            mutation: mutation,
+            admission: admission,
+            admissionOrder: context.encoder.admissionOrder
+        ))
+        let cacheKey = context.rejectCache.key(
+            probeHash: probeHash,
+            decision: ScopedProbeDecision(selection),
+            incumbentHash: context.baseHash
+        )
+
+        if case let .sparse(probe, baseSequence, _) = candidate {
+            // The buffer is restored from `baseSequence` and the hash starts from the incumbent's, so both are right only when the two are the same sequence.
+            assert(baseSequence == context.incumbent.sequence, "A sparse candidate's base must be the incumbent's sequence")
+            // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
+            if context.rejectCache.contains(cacheKey) == false || context.observer != nil {
+                if let previousSparseProbe = context.previousSparseProbe {
+                    previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
+                } else {
+                    context.candidateBuffer = baseSequence
+                }
+                probe.write(into: &context.candidateBuffer)
+                context.previousSparseProbe = probe
+            }
+        }
+        let cacheHit = context.rejectCache.contains(cacheKey)
 
         context.report.counts.recordEmission()
         var observationID: Int?
@@ -70,11 +87,7 @@ extension ScopedReductionInterpreter {
         let decoding = context.decoder.decode(
             context.candidateBuffer,
             against: context.incumbent,
-            requirement: ScopedDecodingRequirement(
-                requiresExactDecoder: configuration.requiresExactDecoder,
-                mutation: mutation,
-                admission: admission
-            ),
+            selection: selection,
             precomputedHash: probeHash
         )
         if let observationID {
@@ -108,7 +121,7 @@ extension ScopedReductionInterpreter {
         }
         terminate(observationID, disposition, materializationAttempts: outcome.materializationAttempts, context: &context)
 
-        context.rejectCache.insert(probeHash)
+        context.rejectCache.insert(cacheKey)
         if context.isInstrumented {
             ScopedReductionLog.replacementProbeRejection(
                 mutation: mutation,
@@ -141,6 +154,8 @@ extension ScopedReductionInterpreter {
         context: inout Context
     ) -> Evaluation {
         context.report.counts.recordAcceptance()
+        // The buffer holds the candidate, which decoding may have changed, so the next sparse probe starts from the new base rather than restoring the last one's positions.
+        context.previousSparseProbe = nil
         context.incumbent = recovered
         context.baseHash = ZobristHash.hash(of: recovered.sequence)
         context.report.anyAccepted = true
@@ -162,13 +177,42 @@ extension ScopedReductionInterpreter {
                 context.report.anyRequiresRebuild = true
                 return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
             case .continue:
-                let application = context.graph.apply(mutation)
+                let application = context.graph.apply(Self.decodedMutation(
+                    mutation,
+                    recovered: recovered.sequence,
+                    candidateCount: context.candidateBuffer.count,
+                    graph: context.graph
+                ))
                 if application.requiresFullRebuild {
                     context.report.anyRequiresRebuild = true
                     return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
                 }
                 return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
         }
+    }
+
+    /// The mutation to write into the graph in place: each changed leaf takes the value decoding produced at its position, which is not the candidate's when exact decoding clamped it. A change whose position no longer holds a value, or a decoding of a different length, is marked reshaping so the graph is rebuilt instead.
+    private static func decodedMutation(
+        _ mutation: EncoderProbe,
+        recovered: ChoiceSequence,
+        candidateCount: Int,
+        graph: ChoiceGraph
+    ) -> EncoderProbe {
+        guard case let .leafValues(changes) = mutation else {
+            return mutation
+        }
+        let isAligned = recovered.count == candidateCount
+        return .leafValues(changes.map { change in
+            guard isAligned,
+                  change.leafNodeID < graph.nodes.count,
+                  let position = graph.nodes[change.leafNodeID].positionRange?.lowerBound,
+                  position < recovered.count,
+                  let decoded = recovered[position].value?.choice
+            else {
+                return LeafChange(leafNodeID: change.leafNodeID, newValue: change.newValue, mayReshape: true)
+            }
+            return LeafChange(leafNodeID: change.leafNodeID, newValue: decoded, mayReshape: change.mayReshape)
+        })
     }
 
     private static func terminate(

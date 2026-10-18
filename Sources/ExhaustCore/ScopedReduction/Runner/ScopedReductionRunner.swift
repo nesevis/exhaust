@@ -46,20 +46,25 @@ package struct ScopedReductionRunner {
     // MARK: - Core State
 
     let initialSequence: ChoiceSequence
-    /// Every assignment refreshes ``incumbentHash`` and ``hasBind``, which each pass and decoder read.
+    /// Every assignment refreshes ``incumbentHash`` and ``hasBind``, which each pass and decoder read. ``adoptIncumbent(_:hash:)`` takes a hash already computed.
     var incumbent: ScopedCounterexample {
-        didSet {
-            incumbentHash = ZobristHash.hash(of: incumbent.sequence)
-            hasBind = Self.containsBind(incumbent.sequence)
+        get {
+            storedIncumbent
+        }
+        set {
+            adoptIncumbent(newValue, hash: ZobristHash.hash(of: newValue.sequence))
         }
     }
 
+    private var storedIncumbent: ScopedCounterexample
     private(set) var incumbentHash: UInt64
     /// Whether the incumbent holds a bind, which decides between guided and exact decoding.
     private(set) var hasBind: Bool
     var graph: ChoiceGraph
     var stats = ReductionStats()
-    var rejectCache: Set<UInt64> = []
+    var rejectCache: ScopedProbeCache
+    /// Covering rows by shape, passed to every pass's encoder input.
+    let coveringRowCache = ScopedCoveringRowCache()
     let generator: AnyGenerator
     let property: (Any) -> Bool
     let probeWrapper: ProbeWrapper?
@@ -84,8 +89,7 @@ package struct ScopedReductionRunner {
 
     // MARK: - Per-Cycle State
 
-    var sources: [ScopedSource] = []
-    var scopeRejectionCache = ScopedScopeRejectionCache()
+    var sources: [any ScopedSource] = []
     var anyAccepted = false
     var hadUnresolvedReplacement = false
     /// True once any pass in the run accepted. Never reset: a run that ends with this false could not improve its input even once.
@@ -98,30 +102,15 @@ package struct ScopedReductionRunner {
 
     // MARK: - Coupling Attribution
 
-    /// Value changes by pass, for attributing coupling edges between a node's last convergence and the current pass. Kept only with diagnostics.
-    var valueChangeLog: [(passIndex: Int, nodeIDs: Set<Int>)] = []
-    /// The pass at which each node's convergence was last recorded. Kept only with diagnostics.
-    var lastConvergencePass: [Int: Int] = [:]
     /// Bounded coupling hints for joint-group ranking, kept whether or not research diagnostics are on.
     var couplingTracker = CouplingTracker()
     /// Monotonic count of applied passes.
     var passCounter = 0
 
-    // MARK: - Step Timing
+    // MARK: - Instrumentation
 
-    /// When the last step timing span ended.
-    var timingMark: UInt64 = 0
-    /// The post-cycle bucket that every span is charged to while its pass runs.
-    var timingOwner: TimingBucket?
-
-    // MARK: - Research Diagnostics
-
-    /// Enables floor-motion counters, coupling attribution, and the per-dispatch log. A maintainer-set literal rather than configuration, because these per-pass costs must not ride `collectStats`, which is on whenever a report is delivered.
-    var collectDiagnostics = false
-    /// Sequence length when the pass in flight started, for its dispatch record.
-    var dispatchBaselineLength = 0
-    /// Total distance to reduction targets when the pass in flight started, for its dispatch record.
-    var dispatchBaselineTargetDistance: Double = 0
+    var stepTimer: StepTimer
+    var diagnostics = ResearchDiagnostics()
 
     // MARK: - Entry Point
 
@@ -196,9 +185,10 @@ package struct ScopedReductionRunner {
         graph.excludedPivots = reencoded?.excludedPivots ?? []
 
         initialSequence = sequence
-        incumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
+        storedIncumbent = ScopedCounterexample(sequence: sequence, tree: tree, output: initialOutput)
         incumbentHash = ZobristHash.hash(of: sequence)
         hasBind = Self.containsBind(sequence)
+        rejectCache = ScopedProbeCache(keying: configuration.tuning.probeCacheKeying)
         self.graph = graph
         self.generator = erasedGenerator
         self.property = wrappedProperty
@@ -206,6 +196,7 @@ package struct ScopedReductionRunner {
         tuning = configuration.tuning
         enabledEncoders = configuration.enabledEncoders
         self.collectStats = collectStats
+        stepTimer = StepTimer(isEnabled: collectStats)
         isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         stallBudget = configuration.maxStalls
         maxStalls = configuration.maxStalls
@@ -227,28 +218,26 @@ package struct ScopedReductionRunner {
 
     /// Runs cycles until termination or the deadline, then the final reorder pass.
     mutating func run() {
-        if collectStats {
-            timingMark = MonotonicClock.nanoseconds()
-        }
+        stepTimer.start()
         while true {
             guard deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             beginCycle()
-            chargeElapsed(to: .untimed)
+            stepTimer.charge(.untimed)
             guard deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             buildCycleSources()
-            chargeElapsed(to: .buildSources)
+            stepTimer.charge(.buildSources)
             guard dispatchCycle() == .completed, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
             let actions = endCycle()
-            chargeElapsed(to: .untimed)
+            stepTimer.charge(.untimed)
             guard runPostCycleActions(actions) == .completed, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
@@ -272,8 +261,7 @@ package struct ScopedReductionRunner {
     private mutating func beginCycle() {
         cycles += 1
         gate.resetForNewCycle()
-        scopeRejectionCache.clearCoarse()
-        // Latched across stalled cycles: the scope rejection cache can skip a replacement scope on the very stall that schedules the relax round.
+        // Latched across stalled cycles, so a replacement the ordering refused stays eligible for a relax round until the sequence changes.
         hadUnresolvedReplacement = hadUnresolvedReplacement && incumbent.sequence == sequenceBeforeCycle
         anyAccepted = false
         sequenceBeforeCycle = incumbent.sequence
@@ -288,9 +276,9 @@ package struct ScopedReductionRunner {
     }
 
     /// Structural families followed by value families.
-    func prepareAllSources(previousGraph: ChoiceGraph?) -> [ScopedSource] {
-        ScopedSource.prepareStructuralSources(from: graph, previousGraph: previousGraph)
-            + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+    func prepareAllSources(previousGraph: ChoiceGraph?) -> [any ScopedSource] {
+        ScopedSources.prepareStructuralSources(from: graph, previousGraph: previousGraph)
+            + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
     }
 
     /// Rematerializes a stripped graph when pivots could follow, then evaluates the cycle and returns the enabled post-cycle actions.
@@ -353,6 +341,7 @@ package struct ScopedReductionRunner {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
         stats.cycles = cycles
+        stats.stepTimings = stepTimer.timings
         let typedOutput = incumbent.output as! Output // swiftlint:disable:this force_cast
         let outcome: ReductionOutcome<Output> = incumbent.sequence != initialSequence
             ? .reduced(incumbent.sequence, incumbent.tree, typedOutput)
@@ -374,30 +363,6 @@ package struct ScopedReductionRunner {
 
     func allValuesConverged() -> Bool {
         Self.allValuesConverged(graph: graph)
-    }
-
-    /// Snapshots the sequence's length and target distance before a pass, for its dispatch record. Only with diagnostics.
-    mutating func captureDispatchBaseline() {
-        guard collectDiagnostics else {
-            return
-        }
-        dispatchBaselineLength = incumbent.sequence.count
-        dispatchBaselineTargetDistance = sequenceTargetDistance()
-    }
-
-    /// Sums each value's pattern-space distance to its reduction target. Floating point, because full-range leaves contribute distances near 2^63 that would overflow an integer sum.
-    func sequenceTargetDistance() -> Double {
-        var total: Double = 0
-        for entry in incumbent.sequence {
-            guard let value = entry.value else {
-                continue
-            }
-            let bitPattern = value.choice.bitPattern64
-            let target = value.choice.reductionTarget(in: value.validRange)
-            let distance = bitPattern.absoluteDifference(target)
-            total += Double(distance)
-        }
-        return total
     }
 
     /// Rebuilds the graph from the current tree, inheriting bind classifications and convergence records, and returns the diff that decides which sources survive.
@@ -429,6 +394,8 @@ package struct ScopedReductionRunner {
 
     /// Restores the unselected branches of a stripped tree and rebuilds the graph, so pick nodes carry every arm.
     ///
+    /// The flag is cleared even when materialization fails. Dispatch prepares every source again after a rematerialization, so a flag left set would have the same path-changing scope ask again forever. The next accepted pass that strips the tree sets the flag again, and with it the next attempt.
+    ///
     /// - Returns: The graph before the rebuild.
     @discardableResult
     mutating func rematerializeUnselectedBranches() -> ChoiceGraph {
@@ -450,6 +417,13 @@ package struct ScopedReductionRunner {
         rebuildAndUpdateGraph()
         graphIsStripped = false
         return graphBefore
+    }
+
+    /// Replaces the incumbent with `counterexample`, whose sequence has the Zobrist hash `hash`.
+    mutating func adoptIncumbent(_ counterexample: ScopedCounterexample, hash: UInt64) {
+        storedIncumbent = counterexample
+        incumbentHash = hash
+        hasBind = Self.containsBind(counterexample.sequence)
     }
 
     // MARK: - Helpers

@@ -40,8 +40,10 @@ enum ScopedReductionInterpreter {
     /// What an execution hands back to the runner.
     struct Result {
         let incumbent: ScopedCounterexample
+        /// The hash of ``incumbent``'s sequence, kept up to date by every commit, so the runner need not hash it again.
+        let incumbentHash: UInt64
         let graph: ChoiceGraph
-        let rejectCache: Set<UInt64>
+        let rejectCache: ScopedProbeCache
         let report: ScopedPassReport
         /// The encode and decode time the execution spent, when the runner asked for it.
         let probeTiming: ProbeTiming?
@@ -52,13 +54,13 @@ enum ScopedReductionInterpreter {
     /// The root is built without recording a build outcome. A search it reaches keeps its report and records its own counts; a `propose` it reaches becomes the outermost level.
     static func reduce(_ reducer: ScopedReducer, context: consuming Context) -> Result {
         if case let .built(root) = buildBranch(reducer, depth: nil, context: &context) {
-            var pool = ScopedSearchPool(root: root)
+            let pool = ScopedSearchPool(root: root)
             evaluating: while true {
-                switch next(&pool, checksDeadline: true, context: &context) {
+                switch next(pool, checksDeadline: true, context: &context) {
                     case .exhausted:
                         break evaluating
                     case .deadline, .budgetExhausted:
-                        finishAll(&pool, context: &context)
+                        finishAll(pool, context: &context)
                         break evaluating
                     case let .emitted(evaluation):
                         if evaluation.stop != nil {
@@ -69,6 +71,7 @@ enum ScopedReductionInterpreter {
         }
         return Result(
             incumbent: context.incumbent,
+            incumbentHash: context.baseHash,
             graph: context.graph,
             rejectCache: context.rejectCache,
             report: context.report,
@@ -92,7 +95,7 @@ extension ScopedReductionInterpreter {
 
         var incumbent: ScopedCounterexample
         var graph: ChoiceGraph
-        var rejectCache: Set<UInt64>
+        var rejectCache: ScopedProbeCache
         var report = ScopedPassReport()
         var baseHash: UInt64
         var candidateBuffer: ChoiceSequence
@@ -107,7 +110,7 @@ extension ScopedReductionInterpreter {
             incumbent: ScopedCounterexample,
             incumbentHash: UInt64,
             graph: ChoiceGraph,
-            rejectCache: Set<UInt64>,
+            rejectCache: ScopedProbeCache,
             decoder: ScopedDecoder,
             encoder: any ScopedEncoder.Type,
             isInstrumented: Bool = false,

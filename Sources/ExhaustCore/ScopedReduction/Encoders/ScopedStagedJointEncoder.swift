@@ -18,10 +18,8 @@ enum ScopedStagedJointEncoder: ScopedEncoder {
     static let maximumArity = 4
 
     static let name: EncoderName = .stagedJointSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
         stage(
@@ -79,7 +77,6 @@ enum ScopedStagedJointEncoder: ScopedEncoder {
             let nextArity = arity + 1
             let remaining = remaining - outcome.counts.emitted
             guard outcome.anyAccepted == false,
-                  outcome.stopReason == .exhausted,
                   remaining > 0,
                   calculationsRemaining > 0,
                   canWidenSearch(after: arity, candidatePool: candidatePool, tuning: input.tuning)
@@ -131,10 +128,5 @@ extension ScopedStagedJointEncoder {
 
     static func isValid(_: Scope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: Scope) -> ScopedRejectionKey? {
-        nil
     }
 }

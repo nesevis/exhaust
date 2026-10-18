@@ -99,6 +99,9 @@ package struct ScopedReductionTuning: Sendable {
     /// Consecutive migration passes that reject every probe, after which migration is skipped for the rest of the run. An acceptance resets the count. Zero never demotes.
     public var migrationDemotionThreshold: Int
 
+    /// What a probe cache rejection is recorded against beyond the candidate's hash.
+    var probeCacheKeying: ScopedProbeCacheKeying = .sequence
+
     package init(
         boundValueBaseBudget: Int = 15,
         composedFirstDispatchProbeCap: Int = 16,

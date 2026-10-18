@@ -10,10 +10,8 @@
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate.
 enum ScopedRelationEncoder: ScopedEncoder {
     static let name: EncoderName = .relationSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: RelationScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -40,10 +38,5 @@ extension ScopedRelationEncoder {
 
     static func isValid(_: RelationScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: RelationScope) -> ScopedRejectionKey? {
-        nil
     }
 }

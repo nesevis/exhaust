@@ -10,10 +10,8 @@
 /// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the branch either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``ScopedBinarySearch`` for one leaf or a ``ScopedCoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ScopedChoiceConfiguration``; every budget comes from ``ScopedReductionTuning``.
 enum ScopedBoundValueEncoder: ScopedEncoder {
     static let name: EncoderName = .boundValueSearch
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = true
 
     /// Reads its upstream budget and probe cap from the ``ScopedDispatchBudget`` its bind classification gate resolves.
     static func reducer(_ bindScope: BoundValueScope, input: ScopedEncoderInput) -> ScopedReducer {
@@ -168,7 +166,8 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
                 tree: liftedBind.tree,
                 graph: liftedBind.graph,
                 warmStartRecords: [:],
-                tuning: scope.tuning
+                tuning: scope.tuning,
+                coveringRowCache: scope.coveringRowCache
             )
             let nestedHasDescendant = liftedBind.graph.composableNestedBind(
                 under: nestedBind.nodeID,
@@ -205,7 +204,7 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: rootSequence) {
             return .fail(.nonImprovingPrefix)
         }
-        let liftedGraph = lifted.terminalGraph()
+        let liftedGraph = terminalGraph(of: lifted)
         let boundLeaves = liftedGraph.leafNodes.filter { leafID in
             guard let range = liftedGraph.nodes[leafID].positionRange else {
                 return false
@@ -233,7 +232,13 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         }
         let search: any ScopedSearch = downstreamLeaves.count == 1
             ? ScopedBinarySearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence)
-            : ScopedCoveringSearch(leaves: leafEntries, graph: liftedGraph, baseSequence: lifted.sequence, tuning: parent.tuning)
+            : ScopedCoveringSearch(
+                leaves: leafEntries,
+                graph: liftedGraph,
+                baseSequence: lifted.sequence,
+                tuning: parent.tuning,
+                rowCache: parent.coveringRowCache
+            )
 
         ScopedReductionLog.reducer("bound_value_lift_built", isInstrumented: ExhaustLog.isEnabled(.debug, for: .reducer), metadata: [
             "upstream_bp": upstreamProposedBitPattern.map { "\($0)" } ?? "nil",
@@ -308,15 +313,13 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
         {
             return .failed(.liftedTooLong)
         }
-        let liftedGraph = controllerTopologyOnly
-            ? ChoiceGraphBuilder.buildControllerTopology(from: freshTree)
-            : ChoiceGraph.build(from: freshTree)
-
         guard bindNodeID < parent.graph.nodes.count,
               case let .bind(sourceMetadata) = parent.graph.nodes[bindNodeID].kind,
-              let liftedBindNodeID = liftedGraph.bindNodeID(
+              let (liftedGraph, liftedBindNodeID) = liftedGraph(
+                  of: freshTree,
+                  bindPath: sourceMetadata.bindPath,
                   fingerprint: sourceMetadata.fingerprint,
-                  path: sourceMetadata.bindPath
+                  controllerTopologyOnly: controllerTopologyOnly
               ),
               case let .bind(metadata) = liftedGraph.nodes[liftedBindNodeID].kind,
               liftedGraph.nodes[liftedBindNodeID].children.count > metadata.boundChildIndex
@@ -335,6 +338,41 @@ enum ScopedBoundValueEncoder: ScopedEncoder {
             boundRange: boundRange,
             isControllerTopology: controllerTopologyOnly
         ))
+    }
+
+    /// Builds the lifted graph from the dispatched bind down, because nothing outside the bind's subtree is read. Falls back to a full build where ``ChoiceGraphBuilder/buildBind(at:fingerprint:in:omittingScalarSequenceElements:)`` declines.
+    private static func liftedGraph(
+        of tree: ChoiceTree,
+        bindPath: ChoicePath,
+        fingerprint: UInt64,
+        controllerTopologyOnly: Bool
+    ) -> (graph: ChoiceGraph, bindNodeID: Int)? {
+        if let bindRooted = ChoiceGraphBuilder.buildBind(
+            at: bindPath,
+            fingerprint: fingerprint,
+            in: tree,
+            omittingScalarSequenceElements: controllerTopologyOnly
+        ) {
+            return bindRooted
+        }
+        let graph = controllerTopologyOnly
+            ? ChoiceGraphBuilder.buildControllerTopology(from: tree)
+            : ChoiceGraph.build(from: tree)
+        guard let bindNodeID = graph.bindNodeID(fingerprint: fingerprint, path: bindPath) else {
+            return nil
+        }
+        return (graph, bindNodeID)
+    }
+
+    /// The graph a terminal search runs on: the lifted graph, or for a controller topology, which omits scalar array elements, the bind's subtree built in full.
+    private static func terminalGraph(of lifted: LiftedBind) -> ChoiceGraph {
+        guard lifted.isControllerTopology,
+              case let .bind(metadata) = lifted.graph.nodes[lifted.bindNodeID].kind,
+              let full = liftedGraph(of: lifted.tree, bindPath: metadata.bindPath, fingerprint: metadata.fingerprint, controllerTopologyOnly: false)
+        else {
+            return lifted.terminalGraph()
+        }
+        return full.graph
     }
 
     /// Whether a terminal search may run on a lift of this length. Only terminal searches are gated, so an intermediate lift can grow while a deeper controller compensates.
@@ -386,10 +424,5 @@ extension ScopedBoundValueEncoder {
 
     static func isValid(_: BoundValueScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: BoundValueScope) -> ScopedRejectionKey? {
-        nil
     }
 }

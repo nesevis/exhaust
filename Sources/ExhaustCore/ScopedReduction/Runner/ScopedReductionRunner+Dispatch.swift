@@ -8,7 +8,7 @@
 extension ScopedReductionRunner {
     /// How a dispatch loop selects and follows up its passes.
     enum DispatchPolicy {
-        /// Ordinary cycles: dispatch gates, scope rejections, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
+        /// Ordinary cycles: dispatch gates, classification, and rematerialization all apply, and rebuilds keep whatever sources survive.
         case main
         /// Relax round exploitation: none of the main policy's dispatch decisions, and every rebuild prepares all sources again.
         case exploitation
@@ -33,6 +33,11 @@ extension ScopedReductionRunner {
         let encoderScope: AnyEncoderScope
         let boundValueFingerprint: UInt64?
         let report: ScopedPassReport
+
+        /// Whether the pass accepted a change the graph could not take in place.
+        var requiresRebuild: Bool {
+            report.anyAccepted && report.anyRequiresRebuild
+        }
     }
 
     // MARK: - Dispatch Loop
@@ -44,10 +49,10 @@ extension ScopedReductionRunner {
             let boundValueFingerprint: UInt64?
             switch selectDispatch(policy: policy) {
                 case .skip:
-                    chargeElapsed(to: .dispatch)
+                    stepTimer.charge(.dispatch)
                     continue
                 case let .end(outcome):
-                    chargeElapsed(to: .dispatch)
+                    stepTimer.charge(.dispatch)
                     return outcome
                 case let .dispatch(selected, fingerprint):
                     encoderScope = selected
@@ -56,18 +61,21 @@ extension ScopedReductionRunner {
 
             let pass = runPass(encoderScope, boundValueFingerprint: boundValueFingerprint)
             let action = applyPassPolicy(pass)
-            chargeElapsed(to: .passApply)
+            stepTimer.charge(.passApply)
             switch (policy, action) {
                 case (.main, _) where deadline.isExpired:
-                    rebuildGraphAtDeadline(after: pass)
-                    chargeElapsed(to: .rebuild)
+                    // Only the graph is rebuilt, for the final reorder and stall diagnostics.
+                    if pass.requiresRebuild {
+                        rebuildGraph(after: pass)
+                    }
+                    stepTimer.charge(.rebuild)
                     return .deadline
                 case (.main, .rebuildAndResume):
                     rebuildAfterPass(pass)
-                    chargeElapsed(to: .rebuild)
+                    stepTimer.charge(.rebuild)
                 case (.exploitation, .rebuildAndResume):
                     rebuildForExploitation(after: pass)
-                    chargeElapsed(to: .rebuild)
+                    stepTimer.charge(.rebuild)
                 case (_, .continueDispatching):
                     break
             }
@@ -87,7 +95,7 @@ extension ScopedReductionRunner {
         guard deadline.isExpired == false else {
             return .end(.deadline)
         }
-        guard let sourceIndex = ScopedSource.highestPrioritySourceIndex(&sources) else {
+        guard let sourceIndex = ScopedSources.highestPrioritySourceIndex(&sources) else {
             return .end(.completed)
         }
         guard let priced = sources[sourceIndex].nextScope() else {
@@ -115,7 +123,7 @@ extension ScopedReductionRunner {
                         return .skip
                     case .demoted:
                         // Only the migration source yields scopes behind a demotion gate, and the encoder stays demoted until it accepts, which it cannot do without dispatching.
-                        if case .migration = sources[sourceIndex] {
+                        if sources[sourceIndex] is ScopedMigrationSource {
                             sources.remove(at: sourceIndex)
                         }
                         return .skip
@@ -192,10 +200,6 @@ extension ScopedReductionRunner {
             return .skip
         }
 
-        if scopeRejectionCache.isRejected(encoderScope, sequence: incumbent.sequence, graph: graph) {
-            return .skip
-        }
-
         switch typed.gate {
             case let .bindClassification(bindNodeID, upstreamLeafNodeID):
                 guard bindNodeID < graph.nodes.count,
@@ -261,7 +265,8 @@ extension ScopedReductionRunner {
             tree: incumbent.tree,
             graph: graph,
             warmStartRecords: usesWarmStarts ? graph.convergenceStore : [:],
-            tuning: tuning
+            tuning: tuning,
+            coveringRowCache: coveringRowCache
         )
         if case .bindClassification = typed.gate {
             let fingerprint = boundValueFingerprint ?? 0
@@ -276,30 +281,30 @@ extension ScopedReductionRunner {
         }
 
         captureDispatchBaseline()
-        chargeElapsed(to: .dispatch)
-        // Moved rather than copied, so the runner holds no second reference while the execution edits them, and the first edit does not copy their storage.
+        stepTimer.charge(.dispatch)
+        // Moved rather than copied, so neither the runner nor these locals hold a second reference while the execution edits them. Without `consume`, the locals keep their storage alive for the whole execution, and every rejection the cache records copies the entire set.
         var executionGraph = Self.vacatedGraph
         swap(&executionGraph, &graph)
-        var executionRejectCache: Set<UInt64> = []
+        var executionRejectCache = rejectCache.emptied
         swap(&executionRejectCache, &rejectCache)
         let result = ScopedReductionInterpreter.reduce(
             scopedReducer,
             context: ScopedReductionInterpreter.Context(
                 incumbent: incumbent,
                 incumbentHash: incumbentHash,
-                graph: executionGraph,
-                rejectCache: executionRejectCache,
+                graph: consume executionGraph,
+                rejectCache: consume executionRejectCache,
                 decoder: decoder,
                 encoder: typed.encoder,
                 isInstrumented: isInstrumented,
                 deadline: checksDeadline ? deadline : .none,
-                timingMark: collectStats ? timingMark : nil
+                timingMark: stepTimer.probeMark
             )
         )
-        chargeProbing(result.probeTiming)
+        stepTimer.chargeProbing(result.probeTiming)
         // The execution replaces the incumbent only on acceptance, so an unchanged one keeps its cached hash.
         if result.report.anyAccepted {
-            incumbent = result.incumbent
+            adoptIncumbent(result.incumbent, hash: result.incumbentHash)
         }
         graph = result.graph
         rejectCache = result.rejectCache
@@ -320,13 +325,12 @@ extension ScopedReductionRunner {
         liveNodeIDs: [],
         leafNodes: [],
         characterLeafNodes: [],
-        topologicalOrder: [],
         dependencyAdjacency: []
     )
 
     // MARK: - Pass Policy
 
-    /// Applies a completed pass to the runner's state: convergence, coupling, the gate, migration demotion, unresolved replacements, statistics, acceptance flags, and scope rejections.
+    /// Applies a completed pass to the runner's state: convergence, coupling, the gate, migration demotion, unresolved replacements, statistics, and acceptance flags.
     ///
     /// Shared by dispatched and post-cycle passes. The returned action lets each caller choose its own rebuild.
     ///
@@ -344,7 +348,7 @@ extension ScopedReductionRunner {
                 rebuildGeneration: stats.graphStats.fullGraphRebuilds
             )
             valueMotionNodes = motion.valueMotionNodeIDs
-            if collectDiagnostics {
+            if diagnostics.isEnabled {
                 recordFloorMotion(motion, convergedNodeIDs: Array(convergenceRecords.keys))
             }
         }
@@ -359,8 +363,8 @@ extension ScopedReductionRunner {
             )
         }
 
-        if collectDiagnostics, report.acceptedLeafNodeIDs.isEmpty == false {
-            valueChangeLog.append((passIndex: passCounter, nodeIDs: report.acceptedLeafNodeIDs))
+        if diagnostics.isEnabled, report.acceptedLeafNodeIDs.isEmpty == false {
+            diagnostics.valueChangeLog.append((passIndex: passCounter, nodeIDs: report.acceptedLeafNodeIDs))
         }
 
         if let fingerprint = pass.boundValueFingerprint {
@@ -387,7 +391,7 @@ extension ScopedReductionRunner {
             recordPassStatistics(pass)
         }
 
-        if collectDiagnostics {
+        if diagnostics.isEnabled {
             recordDispatch(pass)
         }
 
@@ -397,39 +401,40 @@ extension ScopedReductionRunner {
             "decoder_rejects": "\(report.counts.decoderRejections)", "seq_len": "\(incumbent.sequence.count)",
         ])
 
-        let action: PostAcceptanceAction = report.anyAccepted && (report.anyRequiresRebuild || typed.encoder.rebuildsAfterAcceptance)
+        let action: PostAcceptanceAction = pass.requiresRebuild
             ? .rebuildAndResume
             : .continueDispatching
 
         if report.anyAccepted {
             anyAccepted = true
             anyAcceptanceEverOccurred = true
-        }
-
-        switch action {
-            case .continueDispatching:
-                if report.anyAccepted {
-                    // Value changes can make an earlier joint search productive without erasing its budget decay.
-                    gate.clearFruitless()
-                } else {
-                    scopeRejectionCache.recordRejection(pass.encoderScope, sequence: incumbent.sequence, graph: graph)
-                }
-            case .rebuildAndResume:
-                gate.clearFruitless()
+            // Value changes can make an earlier joint search productive without erasing its budget decay.
+            gate.clearFruitless()
         }
         return action
     }
 
     // MARK: - Rebuilds
 
-    /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families, rebuilds permutation and value families, and clears the scope cache; anything else rebuilds every family and clears the scope cache. Convergence the encoder reports its acceptance invalidated is cleared as well.
+    /// Rebuilds the graph after an accepting pass and records whether the accepted tree lacks unselected branches. Every rebuild that follows a pass goes through here; callers decide what happens to the sources.
+    ///
+    /// Leaves that accepted in the pass hold stale values in the old graph, because reshaping and continuing passes skip the in-place write, so their records transfer without the value guard.
+    @discardableResult
+    mutating func rebuildGraph(after pass: PassRecord) -> ChoiceGraphDiff {
+        let diff = rebuildAndUpdateGraph(
+            valueGuardExemptNodeIDs: pass.report.acceptedLeafNodeIDs.union(pass.report.searchReport.convergenceRecords.keys)
+        )
+        graphIsStripped = pass.report.latestTreeIsStripped
+        return diff
+    }
+
+    /// Rebuilds the graph after an accepting pass and keeps whatever sources the diff allows: a value-only change keeps the structural families; a leaf-kind change keeps reusable structural families and rebuilds permutation and value families; anything else rebuilds every family. Convergence the encoder reports its acceptance invalidated is cleared as well.
     mutating func rebuildAfterPass(_ pass: PassRecord) {
         let invalidatedRange = pass.encoderScope.typed.convergenceInvalidatedByAcceptance(in: graph)
 
         let graphBefore = graph
         let graphStart = MonotonicClock.nanoseconds()
-        let diff = rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-        graphIsStripped = pass.report.latestTreeIsStripped
+        let diff = rebuildGraph(after: pass)
 
         if let invalidatedRange {
             graph.clearConvergence(inPositionRange: invalidatedRange)
@@ -437,21 +442,19 @@ extension ScopedReductionRunner {
         let graphEnd = MonotonicClock.nanoseconds()
 
         if diff.canReuseStructuralSources {
-            sources = sources.filter { $0.isValueDependent == false }
-                + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+            sources = sources.filter { $0.invalidation != .anyValueChange }
+                + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
-            scopeRejectionCache.clear()
-            sources = sources.filter(\.canReuseAfterLeafKindChange)
-                + ScopedSource.preparePermutationSources(from: graph)
-                + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
+            sources = sources.filter { $0.invalidation == .structuralChange }
+                + ScopedSources.preparePermutationSources(from: graph)
+                + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
             ScopedReductionLog.reducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
-            scopeRejectionCache.clear()
             sources = prepareAllSources(previousGraph: graphBefore)
             ScopedReductionLog.reducer("graph_structural_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
@@ -460,41 +463,27 @@ extension ScopedReductionRunner {
         let sourceEnd = MonotonicClock.nanoseconds()
 
         if collectStats {
-            stats.stepTimings.rebuildGraphNanoseconds += graphEnd - graphStart
-            stats.stepTimings.rebuildSourceNanoseconds += sourceEnd - graphEnd
+            stepTimer.timings.rebuildGraphNanoseconds += graphEnd - graphStart
+            stepTimer.timings.rebuildSourceNanoseconds += sourceEnd - graphEnd
         }
 
-        valueChangeLog = []
-        lastConvergencePass = [:]
+        diagnostics.valueChangeLog = []
+        diagnostics.lastConvergencePass = [:]
     }
 
-    /// Rebuilds the graph and every source without updating stripped-graph state or clearing diagnostic history.
+    /// Rebuilds the graph and every source without clearing diagnostic history. The stripped-graph flag follows the rebuilt graph, so a committed relax round leaves it describing the graph the next cycle dispatches on.
     mutating func rebuildForExploitation(after pass: PassRecord) {
-        rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
+        rebuildGraph(after: pass)
         sources = deadline.isExpired ? [] : prepareExploitationSources()
     }
 
     /// Every family over the current graph.
-    func prepareExploitationSources() -> [ScopedSource] {
-        ScopedSource.prepareStructuralSources(from: graph)
-            + ScopedSource.prepareValueSources(from: graph, tuning: tuning)
-    }
-
-    /// At the deadline, an accepted pass that needs a rebuild rebuilds only the graph, for the final reorder and stall diagnostics.
-    mutating func rebuildGraphAtDeadline(after pass: PassRecord) {
-        guard pass.report.anyAccepted, pass.report.anyRequiresRebuild else {
-            return
-        }
-        rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Self.valueGuardExemptNodeIDs(of: pass))
-        graphIsStripped = pass.report.latestTreeIsStripped
+    func prepareExploitationSources() -> [any ScopedSource] {
+        ScopedSources.prepareStructuralSources(from: graph)
+            + ScopedSources.prepareValueSources(from: graph, tuning: tuning)
     }
 
     // MARK: - Helpers
-
-    /// Leaves that accepted in the pass hold stale values in the old graph, because reshaping and continuing passes skip the in-place write, so their records transfer without the value guard.
-    static func valueGuardExemptNodeIDs(of pass: PassRecord) -> Set<Int> {
-        pass.report.acceptedLeafNodeIDs.union(pass.report.searchReport.convergenceRecords.keys)
-    }
 
     private mutating func recordPassStatistics(_ pass: PassRecord) {
         let report = pass.report
@@ -507,54 +496,6 @@ extension ScopedReductionRunner {
         if report.liftAttempts > 0 {
             stats.recordMaterializations(report.liftAttempts, at: .lift)
             stats.liftAttemptsByEncoder[pass.encoderScope.encoder.name, default: 0] += report.liftAttempts
-        }
-    }
-
-    /// Attributes floor motion to the values that changed since each moving node last converged. Research diagnostics only.
-    private mutating func recordFloorMotion(_ motion: (structural: Int, value: Int, valueMotionNodeIDs: Set<Int>), convergedNodeIDs: [Int]) {
-        for motionNodeID in motion.valueMotionNodeIDs {
-            let sincePass = lastConvergencePass[motionNodeID] ?? 0
-            var partnerNodes: Set<Int> = []
-            for entry in valueChangeLog where entry.passIndex > sincePass {
-                for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
-                    partnerNodes.insert(changedNodeID)
-                    let edge = CouplingEdge(motionNodeID: motionNodeID, changedNodeID: changedNodeID)
-                    stats.couplingEdges[edge, default: 0] += 1
-                }
-            }
-            stats.floorMotionPartnerCounts[partnerNodes.count, default: 0] += 1
-        }
-
-        stats.structuralFloorMotionEvents += motion.structural
-        stats.valueFloorMotionEvents += motion.value
-        stats.valueFloorMotionNodeIDs.formUnion(motion.valueMotionNodeIDs)
-
-        for nodeID in convergedNodeIDs {
-            lastConvergencePass[nodeID] = passCounter
-        }
-    }
-
-    /// Appends the pass to the dispatch log. Research diagnostics only.
-    private mutating func recordDispatch(_ pass: PassRecord) {
-        let report = pass.report
-        let distanceDelta = dispatchBaselineTargetDistance - sequenceTargetDistance()
-        stats.dispatchLog.append(DispatchRecord(
-            cycle: cycles,
-            passIndex: passCounter,
-            encoderName: pass.encoderScope.encoder.name,
-            probeCount: report.counts.emitted,
-            acceptCount: report.counts.accepted,
-            cacheHitCount: report.counts.rejectedByCache,
-            decoderRejectCount: report.counts.decoderRejections,
-            sequenceLengthDelta: dispatchBaselineLength - incumbent.sequence.count,
-            targetDistanceDelta: distanceDelta,
-            boundValueFingerprint: pass.boundValueFingerprint,
-            composedUpstreamLifts: nil,
-            bindClassification: pass.boundValueFingerprint.flatMap { graph.bindClassifications[$0] }
-        ))
-
-        if report.anyAccepted, case .redistribution = pass.encoderScope {
-            stats.redistributionAcceptanceNodeIDs.formUnion(report.acceptedLeafNodeIDs)
         }
     }
 }

@@ -16,10 +16,8 @@ enum ScopedSubstitutionEncoder: ScopedEncoder {
     }
 
     static let name: EncoderName = .substitution
-    static let isValueDependent = false
     static let isPathChanging = true
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: Scope, input: ScopedEncoderInput) -> ScopedReducer {
         let sequence = input.baseSequence
@@ -74,20 +72,5 @@ extension ScopedSubstitutionEncoder {
                     && descendantPickNodeID < graph.nodes.count
                     && graph.nodes[descendantPickNodeID].positionRange != nil
         }
-    }
-
-    /// Shares its discriminator with branch pivot.
-    static func rejectionKey(_ scope: Scope) -> ScopedRejectionKey? {
-        let affectedNodeIDs = switch scope {
-            case let .selfSimilar(targetNodeID, donorNodeID):
-                [targetNodeID, donorNodeID]
-            case let .descendantPromotion(ancestorPickNodeID, descendantPickNodeID):
-                [ancestorPickNodeID, descendantPickNodeID]
-        }
-        return ScopedRejectionKey(
-            discriminator: 0x1827_3645_5463_7281,
-            isCoarse: true,
-            affectedNodeIDs: affectedNodeIDs
-        )
     }
 }

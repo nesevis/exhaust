@@ -10,10 +10,8 @@
 /// Each seed is the plain pivot candidate or a variant that transplants a smaller descendant of the bound subtree into it, up to ``ScopedReductionTuning/maxPivotTransplants``. Changing the pick regenerates the bound subtree, so each seed is lifted through the generator and the bind relocated in the lifted graph before anything is probed. The lifted seed is a ``ScopedSingleCandidateSearch``, and the branch continues with a ``ScopedCoveringSearch`` over the seed's bound range once the seed is evaluated. Both run in the branch's member, so the pool schedules them as one. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
 enum ScopedBindPivotEncoder: ScopedEncoder {
     static let name: EncoderName = .bindPivot
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ pivotScope: BindPivotScope, input scope: ScopedEncoderInput) -> ScopedReducer {
         let configuration = ScopedChoiceConfiguration(
@@ -64,7 +62,12 @@ enum ScopedBindPivotEncoder: ScopedEncoder {
             configuration: configuration
         ) { _ in
             .search(
-                ScopedCoveringSearch(sequence: lifted.sequence, positionRange: boundRange, tuning: parent.tuning),
+                ScopedCoveringSearch(
+                    sequence: lifted.sequence,
+                    positionRange: boundRange,
+                    tuning: parent.tuning,
+                    rowCache: parent.coveringRowCache
+                ),
                 configuration: configuration
             )
         }
@@ -168,14 +171,5 @@ extension ScopedBindPivotEncoder {
             && graph.nodes[scope.bindNodeID].positionRange != nil
             && scope.pickNodeID < graph.nodes.count
             && graph.nodes[scope.pickNodeID].positionRange != nil
-    }
-
-    /// The candidate is a function of the bind's current entries, and the bind's range covers the pick, so the bind alone is the affected set; reporting the pick as well would cancel its positions out of the hash. The pick's node ID joins the target branch in the discriminator, because one bind inner can hold several picks with the same branch identifiers.
-    static func rejectionKey(_ scope: BindPivotScope) -> ScopedRejectionKey? {
-        ScopedRejectionKey(
-            discriminator: 0x4B1D_9140_7A5E_0002 ^ (scope.targetBranchID ^ (UInt64(scope.pickNodeID) &* 0x9E37_79B9_7F4A_7C15)),
-            isCoarse: false,
-            affectedNodeIDs: [scope.bindNodeID]
-        )
     }
 }

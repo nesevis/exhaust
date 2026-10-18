@@ -16,12 +16,6 @@ struct ScopedIntegerSearch: ScopedSearch {
     // MARK: - State
 
     var state: State
-    let linearScanThreshold: UInt64
-    let bisectionInitialDivisor: UInt64
-    let bisectionBinaryThreshold: UInt64
-    let interpolationBinaryThreshold: UInt64
-    let interpolationInitialDivisor: UInt64
-    var convergenceStore: [Int: ConvergedOrigin] = [:]
 
     // MARK: - Leaf Position
 
@@ -29,7 +23,6 @@ struct ScopedIntegerSearch: ScopedSearch {
     struct LeafPosition: ScopedLeafMutationSource {
         let nodeID: Int
         let sequenceIndex: Int
-        let validRange: ClosedRange<UInt64>?
         var currentBitPattern: UInt64
         let targetBitPattern: UInt64
         let typeTag: TypeTag
@@ -40,8 +33,14 @@ struct ScopedIntegerSearch: ScopedSearch {
 
     // MARK: - Phase State
 
-    /// The search's position across its phases. At most one of ``crossZero``, ``candidateList``, and ``stepper`` is active for the current leaf.
+    /// Everything the search carries between pulls: its tuning limits, its position across its phases, and the convergence records it has gathered. The phases are static functions over this state, so a pull edits it in place. At most one of ``crossZero``, ``candidateList``, and ``stepper`` is active for the current leaf.
     struct State {
+        // Limits from ``ScopedReductionTuning``, fixed for the search.
+        let linearScanThreshold: UInt64
+        let bisectionInitialDivisor: UInt64
+        let bisectionBinaryThreshold: UInt64
+        let interpolationBinaryThreshold: UInt64
+        let interpolationInitialDivisor: UInt64
         var sequence: ChoiceSequence
         var leafPositions: [LeafPosition]
         var phase: Phase
@@ -60,6 +59,8 @@ struct ScopedIntegerSearch: ScopedSearch {
         var semanticSimplestProbed: Bool = false
         /// Per-leaf-zero pre-round state, active during the ``Phase/perLeafZero`` phase.
         var perLeafZero: PerLeafZeroState?
+        /// Convergence records keyed by graph node ID, which ``ScopedIntegerSearch/finish(pending:)`` reports.
+        var convergenceStore: [Int: ConvergedOrigin] = [:]
     }
 
     /// Where the candidates came from, which decides when the list ends and how its convergence is recorded.
@@ -210,37 +211,29 @@ struct ScopedIntegerSearch: ScopedSearch {
         warmStarts: [Int: ConvergedOrigin],
         tuning: ScopedReductionTuning
     ) {
-        linearScanThreshold = tuning.valueLinearScanThreshold
-        bisectionInitialDivisor = tuning.valueBisectionInitialDivisor
-        bisectionBinaryThreshold = tuning.valueBisectionBinaryThreshold
-        interpolationBinaryThreshold = tuning.interpolationBinaryThreshold
-        interpolationInitialDivisor = tuning.interpolationInitialDivisor
-        state = Self.initialState(scope: scope, sequence: sequence, graph: graph, warmStarts: warmStarts)
+        state = Self.initialState(scope: scope, sequence: sequence, graph: graph, warmStarts: warmStarts, tuning: tuning)
     }
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
-        var current = state
         if case let .accepted(recovered) = feedback {
             // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
-            guard recovered.count == current.sequence.count else {
+            guard recovered.count == state.sequence.count else {
                 return nil
             }
-            current.sequence = recovered
+            state.sequence = recovered
         }
-        guard let built = nextProbe(state: &current, lastAccepted: feedback.isAccepted) else {
-            state = current
+        guard let built = Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted) else {
             return nil
         }
         buffer = built
-        let mutation = current.leafPositions.leafValuesMutation(candidate: buffer, baseline: current.sequence)
-        state = current
+        let mutation = state.leafPositions.leafValuesMutation(candidate: buffer, baseline: state.sequence)
         return .written(mutation: mutation, admission: .standard)
     }
 
     /// Reports the convergence records gathered so far, first recording the progress of the leaf in progress so its search resumes from there on the next dispatch.
     consuming func finish(pending: ScopedSearchFeedback) -> ScopedSearchReport {
         flushPartialConvergence(pendingAccepted: pending.isAccepted)
-        return ScopedSearchReport(convergenceRecords: convergenceStore)
+        return ScopedSearchReport(convergenceRecords: state.convergenceStore)
     }
 
     /// Records the in-progress leaf's progress, which each per-leaf phase otherwise records only when it completes. Without this, the progress is lost and the search restarts from the previous record on the next dispatch.
@@ -253,7 +246,7 @@ struct ScopedIntegerSearch: ScopedSearch {
         let leaf = state.leafPositions[state.leafIndex]
         if let crossZero = state.crossZero {
             if pendingAccepted, let acceptedKey = crossZero.lastEmittedKey {
-                recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: leaf.nodeID)
+                state.recordCrossZeroAcceptance(acceptedKey, tag: crossZero.tag, nodeID: leaf.nodeID)
             }
             return
         }
@@ -263,17 +256,17 @@ struct ScopedIntegerSearch: ScopedSearch {
             }
             // An unfinished scan is not complete, so the record keeps its binary search configuration. The next dispatch warm-starts at the lowered bound and scans the gap below it again.
             if let bestAccepted = list.bestAccepted {
-                lowerRecordedBound(to: bestAccepted, nodeID: leaf.nodeID)
+                state.lowerRecordedBound(to: bestAccepted, nodeID: leaf.nodeID)
             }
             return
         }
-        guard convergenceStore[leaf.nodeID] == nil else {
+        guard state.convergenceStore[leaf.nodeID] == nil else {
             return
         }
         guard let resumeBound = state.stepper?.resumeBound else {
             return
         }
-        convergenceStore[leaf.nodeID] = ConvergedOrigin(
+        state.convergenceStore[leaf.nodeID] = ConvergedOrigin(
             bound: resumeBound,
             signal: .monotoneConvergence,
             configuration: .binarySearchSemanticSimplest,

@@ -78,7 +78,6 @@ protocol AnyTypedEncoderScope {
     var encoder: any ScopedEncoder.Type { get }
     var gate: ScopedDispatchGate { get }
     func isValid(in graph: ChoiceGraph) -> Bool
-    var rejectionKey: ScopedRejectionKey? { get }
     func convergenceInvalidatedByAcceptance(in graph: ChoiceGraph) -> ClosedRange<Int>?
     func reducer(input: ScopedEncoderInput) -> ScopedReducer
 }
@@ -97,10 +96,6 @@ struct TypedEncoderScope<Encoder: ScopedEncoder>: AnyTypedEncoderScope {
 
     func isValid(in graph: ChoiceGraph) -> Bool {
         Encoder.isValid(scope, in: graph)
-    }
-
-    var rejectionKey: ScopedRejectionKey? {
-        Encoder.rejectionKey(scope)
     }
 
     func convergenceInvalidatedByAcceptance(in graph: ChoiceGraph) -> ClosedRange<Int>? {

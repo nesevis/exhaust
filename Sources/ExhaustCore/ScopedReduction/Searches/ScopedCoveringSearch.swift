@@ -13,8 +13,14 @@ struct ScopedCoveringSearch: ScopedSearch {
     private var hasSearch = false
 
     /// Covers the entries at `leaves`' positions in `baseSequence`, skipping leaves without a position or a value entry.
-    init(leaves: [LeafEntry], graph: ChoiceGraph, baseSequence: ChoiceSequence, tuning: ScopedReductionTuning) {
-        search = ScopedCoveringRows(tuning: tuning)
+    init(
+        leaves: [LeafEntry],
+        graph: ChoiceGraph,
+        baseSequence: ChoiceSequence,
+        tuning: ScopedReductionTuning,
+        rowCache: ScopedCoveringRowCache
+    ) {
+        search = ScopedCoveringRows(tuning: tuning, rowCache: rowCache)
         var positions: [Int] = []
         var validEntries: [LeafEntry] = []
         for entry in leaves {
@@ -38,8 +44,13 @@ struct ScopedCoveringSearch: ScopedSearch {
     }
 
     /// Covers every value entry in `positionRange` of `sequence`, up to ``ScopedReductionTuning/maxCoveredPositions``.
-    init(sequence: ChoiceSequence, positionRange: ClosedRange<Int>, tuning: ScopedReductionTuning) {
-        search = ScopedCoveringRows(tuning: tuning)
+    init(
+        sequence: ChoiceSequence,
+        positionRange: ClosedRange<Int>,
+        tuning: ScopedReductionTuning,
+        rowCache: ScopedCoveringRowCache
+    ) {
+        search = ScopedCoveringRows(tuning: tuning, rowCache: rowCache)
         search.start(sequence: sequence, positionRange: positionRange)
         hasSearch = true
     }
@@ -62,7 +73,7 @@ struct ScopedCoveringSearch: ScopedSearch {
 /// Enumerates value assignments over a set of sequence positions.
 ///
 /// Only the first ``ScopedReductionTuning/maxCoveredPositions`` value positions are searched; the rest keep their base values. Three regimes based on the searched positions' total domain size:
-/// - **Small domains** (total space ≤ ``ScopedReductionTuning/coveringExhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
+/// - **Small domains** (total space ≤ ``ScopedReductionTuning/coveringExhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting. Each coordinate visits its values simplest first, nearest its reduction target and below before above at equal distance, so for a signed leaf 0, −1, 1, −2, and so on. Floating-point leaves keep bit-pattern order. Under ``ScopedAcceptance/stop`` the first failing row is the one committed, so this order makes it the simplest assignment the regime reaches.
 /// - **Large domains, two or more parameters**: pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator`` over each leaf's ``CoveringRepresentatives``, one greedy row per call, with no upfront batch build. Within ``ScopedReductionTuning/coveringBudget`` rows, every combination of two leaves' representatives can be tried.
 /// - **Large domain, one parameter**: the ends of the range, alternating lowest and highest and working inward, up to ``ScopedReductionTuning/coveringBudget`` rows. Pairwise covering needs two parameters, and a range that a lift has just widened fails at its edges when it fails at all: the values the previous configuration could not express are the ones farthest from where it sat.
 struct ScopedCoveringRows {
@@ -78,24 +89,31 @@ struct ScopedCoveringRows {
     /// Prebuilt rows for the exhaustive and range-end regimes. Empty in the pairwise regime.
     private var exhaustiveProbes: [CoveringArrayRow] = []
     private var exhaustiveProbeIndex = 0
+    /// Whether row values index each coordinate's values simplest first rather than from the domain's lower end. Set in the exhaustive regime only.
+    private var ordersBySimplicity = false
 
-    /// Pull-based generator for the pairwise regime. Nil in the exhaustive and range-end regimes.
-    private var generator: BalancedCoveringArrayGenerator?
+    /// Shared pairwise row streams, one per shape.
+    private let rowCache: ScopedCoveringRowCache
+    /// The pairwise rows for this pass's shape, read from ``rowCache``. Nil in the exhaustive and range-end regimes.
+    private var pairwiseRows: ScopedCoveringRowCache.Stream?
     private var pullProbeCount = 0
     /// Each leaf's representative offsets in the pairwise regime, which the generator's row values index into.
     private var representativeOffsets: [[UInt64]] = []
 
     /// Reads ``ScopedReductionTuning/coveringExhaustiveThreshold``, ``ScopedReductionTuning/coveringBudget``, and ``ScopedReductionTuning/maxCoveredPositions``.
-    init(tuning: ScopedReductionTuning) {
+    init(tuning: ScopedReductionTuning, rowCache: ScopedCoveringRowCache) {
         exhaustiveThreshold = tuning.coveringExhaustiveThreshold
         coveringBudget = tuning.coveringBudget
         maxCoveredPositions = tuning.maxCoveredPositions
+        self.rowCache = rowCache
     }
 
     private struct ValuePosition {
         let index: Int
         let domainLower: UInt64
         let domainSize: UInt64
+        /// The reduction target's offset from ``domainLower``.
+        let targetOffset: UInt64
         let tag: TypeTag
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
@@ -132,7 +150,8 @@ struct ScopedCoveringRows {
         self.valuePositions = valuePositions
         exhaustiveProbeIndex = 0
         exhaustiveProbes = []
-        generator = nil
+        ordersBySimplicity = false
+        pairwiseRows = nil
         pullProbeCount = 0
         representativeOffsets = []
 
@@ -144,6 +163,7 @@ struct ScopedCoveringRows {
 
         if totalSpace <= exhaustiveThreshold {
             exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
+            ordersBySimplicity = true
         } else if valuePositions.count == 1 {
             exhaustiveProbes = buildRangeEndRows(domainSize: totalSpace)
         } else {
@@ -152,7 +172,7 @@ struct ScopedCoveringRows {
             representativeOffsets = valuePositions.map {
                 CoveringRepresentatives.offsets(domainSize: $0.domainSize, count: perLeafCount)
             }
-            generator = BalancedCoveringArrayGenerator(domainSizes: representativeOffsets.map { UInt64($0.count) })
+            pairwiseRows = rowCache.stream(forDomainSizes: representativeOffsets.map { UInt64($0.count) })
         }
     }
 
@@ -160,11 +180,11 @@ struct ScopedCoveringRows {
     mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         let row: CoveringArrayRow?
 
-        if generator != nil {
+        if let pairwiseRows {
             guard pullProbeCount < coveringBudget else {
                 return nil
             }
-            row = generator?.next()
+            row = pairwiseRows.row(at: pullProbeCount)
             if row != nil {
                 pullProbeCount += 1
             }
@@ -187,9 +207,15 @@ struct ScopedCoveringRows {
                 break
             }
             let position = valuePositions[offset]
-            let valueIndex = representativeOffsets.isEmpty
+            let rowValue = representativeOffsets.isEmpty
                 ? row.values[offset]
                 : representativeOffsets[offset][Int(row.values[offset])]
+            let valueIndex = switch ordersBySimplicity && position.tag.isFloatingPoint == false {
+                case true:
+                    Self.offset(simplicityRank: rowValue, targetOffset: position.targetOffset, domainSize: position.domainSize)
+                case false:
+                    rowValue
+            }
             // A full-width leaf's highest index overflows a nonzero lower bound. Clamp to the domain's top.
             let (sum, overflowed) = position.domainLower.addingReportingOverflow(valueIndex)
             let bitPattern = overflowed ? UInt64.max : sum
@@ -235,10 +261,18 @@ struct ScopedCoveringRows {
         else {
             return nil
         }
+        let target = value.choice.reductionTarget(in: validRange)
+        let targetOffset: UInt64 = switch validRange.contains(target) {
+            case true:
+                target - validRange.lowerBound
+            case false:
+                0
+        }
         return ValuePosition(
             index: index,
             domainLower: validRange.lowerBound,
             domainSize: validRange.saturatingCount,
+            targetOffset: targetOffset,
             tag: value.choice.tag,
             validRange: validRange,
             isRangeExplicit: value.isRangeExplicit
@@ -277,7 +311,32 @@ struct ScopedCoveringRows {
         return rows
     }
 
-    /// Builds exhaustive rows in shortlex order (leftmost coordinate changes slowest).
+    /// The domain offset of the value at `rank` in simplicity order: the target first, then alternately one step below and one step above, continuing on the longer side once the shorter one is used up.
+    private static func offset(simplicityRank rank: UInt64, targetOffset: UInt64, domainSize: UInt64) -> UInt64 {
+        guard rank > 0 else {
+            return targetOffset
+        }
+        let below = targetOffset
+        let above = domainSize - 1 - targetOffset
+        let alternating = min(below, above)
+        guard rank > 2 * alternating else {
+            let distance = (rank + 1) / 2
+            return Self.offset(targetOffset, movedBy: distance, below: rank % 2 == 1)
+        }
+        let distance = alternating + (rank - 2 * alternating)
+        return Self.offset(targetOffset, movedBy: distance, below: below > above)
+    }
+
+    private static func offset(_ targetOffset: UInt64, movedBy distance: UInt64, below: Bool) -> UInt64 {
+        switch below {
+            case true:
+                targetOffset - distance
+            case false:
+                targetOffset + distance
+        }
+    }
+
+    /// Builds exhaustive rows with the leftmost coordinate changing slowest. Row values are simplicity ranks, which ``nextProbe(lastAccepted:)`` maps to domain offsets.
     private func buildExhaustiveRows(count: Int) -> [CoveringArrayRow] {
         var rows: [CoveringArrayRow] = []
         rows.reserveCapacity(count)
@@ -292,5 +351,52 @@ struct ScopedCoveringRows {
             rows.append(CoveringArrayRow(values: values))
         }
         return rows
+    }
+}
+
+// MARK: - Row Cache
+
+/// Pairwise covering rows by shape, shared by every covering search in one reduction run.
+///
+/// A ``BalancedCoveringArrayGenerator`` row depends only on the domain sizes it was created with, because the reducer always uses seed zero and the default tracking threshold. Covering searches recur with few distinct shapes, so each shape's rows are generated once and replayed: every search reads the same rows, in the same order, that a generator of its own would have produced.
+///
+/// A class, so the passes of one run share it through ``ScopedEncoderInput``. One run uses it from one thread.
+final class ScopedCoveringRowCache {
+    /// One shape's rows, generated on demand and kept.
+    final class Stream {
+        private let generator: BalancedCoveringArrayGenerator
+        private var rows: [CoveringArrayRow] = []
+        private var isExhausted = false
+
+        init(domainSizes: [UInt64]) {
+            generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+        }
+
+        /// The row at `index`, generating rows up to it if no search has reached it yet, or nil when the generator ends first.
+        func row(at index: Int) -> CoveringArrayRow? {
+            while rows.count <= index, isExhausted == false {
+                guard let row = generator.next() else {
+                    isExhausted = true
+                    break
+                }
+                rows.append(row)
+            }
+            guard index < rows.count else {
+                return nil
+            }
+            return rows[index]
+        }
+    }
+
+    private var streams: [[UInt64]: Stream] = [:]
+
+    /// The shared stream for `domainSizes`, created on first request.
+    func stream(forDomainSizes domainSizes: [UInt64]) -> Stream {
+        if let stream = streams[domainSizes] {
+            return stream
+        }
+        let stream = Stream(domainSizes: domainSizes)
+        streams[domainSizes] = stream
+        return stream
     }
 }

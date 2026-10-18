@@ -10,10 +10,8 @@
 /// Value edits apply to the graph in place, so the search keeps going after an acceptance, working from the accepted candidate.
 enum ScopedRedistributionEncoder: ScopedEncoder {
     static let name: EncoderName = .redistribution
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ scope: RedistributionScope, input: ScopedEncoderInput) -> ScopedReducer {
         .search(
@@ -41,10 +39,5 @@ extension ScopedRedistributionEncoder {
 
     static func isValid(_: RedistributionScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: RedistributionScope) -> ScopedRejectionKey? {
-        nil
     }
 }

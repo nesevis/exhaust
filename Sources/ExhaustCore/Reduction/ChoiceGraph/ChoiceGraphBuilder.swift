@@ -7,7 +7,7 @@
 
 /// Constructs a ``ChoiceGraph`` from a ``ChoiceTree`` and its flattened ``ChoiceSequence``.
 ///
-/// A single recursive walk of the tree produces nodes and containment/dependency edges. ``assembleGraph()`` then computes self-similarity groups, live node IDs, leaf nodes, dependency adjacency, and topological order — all stored eagerly on the resulting struct.
+/// A single recursive walk of the tree produces nodes and containment/dependency edges. ``assembleGraph()`` then computes self-similarity groups, live node IDs, leaf nodes, and dependency adjacency, all stored eagerly on the resulting struct.
 ///
 /// The walk mirrors the offset arithmetic of ``ChoiceSequence/flatten(_:includingAllBranches:)`` to maintain position-to-node correspondence.
 ///
@@ -25,6 +25,10 @@ struct ChoiceGraphBuilder {
 
     /// The ``BindMetadata/bindDepth`` of the outermost enclosing bind, when inside a bind's inner subtree.
     var enclosingBindDepth: Int?
+
+    /// Whether the walk has passed a non-getSize bind, or a branch, since the enclosing ``walkBind`` reset them. ``walkBind`` reads them after walking a bound subtree, so it learns what ``ChoiceTree/containsBind`` and ``ChoiceTree/containsPicks`` would report without walking the subtree a second time.
+    var walkedBind = false
+    var walkedBranch = false
 
     var currentBindRole: BindRole {
         if let nodeID = enclosingBindNodeID, let depth = enclosingBindDepth {
@@ -62,7 +66,6 @@ struct ChoiceGraphBuilder {
                 liveNodeIDs: [],
                 leafNodes: [],
                 characterLeafNodes: [],
-                topologicalOrder: [],
                 dependencyAdjacency: []
             )
             graph.isControllerTopology = omittingScalarSequenceElements
@@ -70,7 +73,12 @@ struct ChoiceGraphBuilder {
         }
         var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
         _ = builder.walk(tree, offset: 0, parent: nil, bindDepth: 0, path: [])
-        var graph = builder.assembleGraph()
+        return builder.finishedGraph()
+    }
+
+    /// Applies the same graph flags to full and bind-rooted builds.
+    func finishedGraph() -> ChoiceGraph {
+        var graph = assembleGraph()
         graph.isControllerTopology = omittingScalarSequenceElements
         graph.lacksUnselectedBranches = graph.nodes.contains { node in
             guard case let .pick(metadata) = node.kind else {
@@ -153,6 +161,7 @@ struct ChoiceGraphBuilder {
                 )
 
             case let .branch(b):
+                walkedBranch = true
                 return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
             case let .group(array, isOpaque, _):
@@ -302,7 +311,7 @@ struct ChoiceGraphBuilder {
         path: ChoicePath,
         isActive: Bool
     ) -> Int {
-        if let pickResult = detectPickSite(array) {
+        if let pickResult = Self.detectPickSite(array) {
             return walkPickSite(
                 array: array,
                 selectedBranch: pickResult,
@@ -443,6 +452,7 @@ struct ChoiceGraphBuilder {
         return consumed
     }
 
+    /// Preserves the outermost controller annotation while classifying the bound subtree in the same walk.
     private mutating func walkBind(
         fingerprint: UInt64,
         inner: ChoiceTree,
@@ -465,15 +475,10 @@ struct ChoiceGraphBuilder {
             return 0
         }
 
+        walkedBind = true
+        // Children need the bind's preorder ID, not its metadata. Replace this placeholder after classifying the bound subtree.
         let nodeID = emitNode(
-            kind: .bind(BindMetadata(
-                fingerprint: fingerprint,
-                isStructurallyConstant: bound.containsBind == false && bound.containsPicks == false,
-                bindDepth: bindDepth,
-                innerChildIndex: 0,
-                boundChildIndex: 1,
-                bindPath: isActive ? path : []
-            )),
+            kind: .just,
             positionRange: nil,
             children: [],
             parent: parent,
@@ -505,6 +510,11 @@ struct ChoiceGraphBuilder {
         enclosingBindNodeID = savedBindNodeID
         enclosingBindDepth = savedBindDepth
 
+        // The flags start clear for the bound subtree, so afterwards they describe it alone. Everything walked so far set the outer flags already, so restoring them by OR keeps them correct for any enclosing bind.
+        let walkedBindBeforeBound = walkedBind
+        let walkedBranchBeforeBound = walkedBranch
+        walkedBind = false
+        walkedBranch = false
         let boundStartID = nextNodeID
         if isActive {
             let boundConsumed = walk(bound, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth + 1, path: path + [.bindBound])
@@ -513,6 +523,9 @@ struct ChoiceGraphBuilder {
         } else {
             walk(bound, offset: 0, parent: nodeID, bindDepth: bindDepth + 1, path: [], isActive: false)
         }
+        let isStructurallyConstant = walkedBind == false && walkedBranch == false
+        walkedBind = walkedBind || walkedBindBeforeBound
+        walkedBranch = walkedBranch || walkedBranchBeforeBound
 
         var childIDs: [Int] = []
         if innerStartID < nextNodeID {
@@ -524,7 +537,14 @@ struct ChoiceGraphBuilder {
 
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
-            kind: nodes[nodeID].kind,
+            kind: .bind(BindMetadata(
+                fingerprint: fingerprint,
+                isStructurallyConstant: isStructurallyConstant,
+                bindDepth: bindDepth,
+                innerChildIndex: 0,
+                boundChildIndex: 1,
+                bindPath: isActive ? path : []
+            )),
             positionRange: isActive ? (offset ... (offset + consumed - 1)) : nil,
             children: childIDs,
             parent: parent,
@@ -622,7 +642,7 @@ struct ChoiceGraphBuilder {
     /// Detects whether a group's children form a pick site.
     ///
     /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount``.
-    func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
+    static func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
         guard array.allSatisfy({ $0.isBranch }) else {
             return nil
         }
@@ -639,21 +659,22 @@ struct ChoiceGraphBuilder {
         // Post-walk: compute dependency edges from bind node metadata.
         // Every bind has a fundamental dependency: inner child → bound child.
         // Additionally, the inner child depends on any structural (bind/pick) nodes nested within the bound subtree.
+        // Nodes are read in place by index throughout: copying a ``ChoiceGraphNode`` retains every array it holds, and the bound subtree walk visits each node once per enclosing bind.
         var allDependencyEdges = dependencyEdges
-        for node in nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
-            let innerChildID = node.children[metadata.innerChildIndex]
-            let boundChildID = node.children[metadata.boundChildIndex]
+        var stack: [Int] = []
+        for nodeID in nodes.indices {
+            guard case let .bind(metadata) = nodes[nodeID].kind else { continue }
+            guard nodes[nodeID].children.count >= 2 else { continue }
+            let innerChildID = nodes[nodeID].children[metadata.innerChildIndex]
+            let boundChildID = nodes[nodeID].children[metadata.boundChildIndex]
 
             allDependencyEdges.append(DependencyEdge(source: innerChildID, target: boundChildID))
 
-            var stack = [boundChildID]
-            while stack.isEmpty == false {
-                let current = stack.removeLast()
+            stack.removeAll(keepingCapacity: true)
+            stack.append(boundChildID)
+            while let current = stack.popLast() {
                 guard current < nodes.count else { continue }
-                let target = nodes[current]
-                switch target.kind {
+                switch nodes[current].kind {
                     case .bind, .pick:
                         if current != boundChildID {
                             allDependencyEdges.append(DependencyEdge(source: innerChildID, target: current))
@@ -661,24 +682,23 @@ struct ChoiceGraphBuilder {
                     case .chooseBits, .zip, .sequence, .just:
                         break
                 }
-                for child in target.children {
-                    stack.append(child)
-                }
+                stack.append(contentsOf: nodes[current].children)
             }
         }
 
         // Self-similarity groups: active pick nodes indexed by fingerprint.
         var selfSimilarityGroups: [UInt64: [Int]] = [:]
-        for node in nodes {
-            guard case let .pick(metadata) = node.kind else { continue }
-            guard node.positionRange != nil else { continue }
-            selfSimilarityGroups[metadata.fingerprint, default: []].append(node.id)
+        for nodeID in nodes.indices {
+            guard case let .pick(metadata) = nodes[nodeID].kind else { continue }
+            guard nodes[nodeID].positionRange != nil else { continue }
+            selfSimilarityGroups[metadata.fingerprint, default: []].append(nodeID)
         }
 
         // Eagerly compute derived fields that are accessed multiple times per cycle.
         let liveNodeIDs = nodes.indices.filter { nodes[$0].positionRange != nil }
 
         var leafNodes: [Int] = []
+        leafNodes.reserveCapacity(liveNodeIDs.count)
         var characterLeafNodes: [Int] = []
         for nodeID in liveNodeIDs {
             guard case let .chooseBits(metadata) = nodes[nodeID].kind else { continue }
@@ -694,43 +714,6 @@ struct ChoiceGraphBuilder {
             dependencyAdjacency[edge.source].append(edge.target)
         }
 
-        // Topological order via Kahn's algorithm over dependency edges.
-        let topologicalOrder: [Int] = {
-            let nodeCount = nodes.count
-            var inDegree = [Int](repeating: 0, count: nodeCount)
-            for edge in allDependencyEdges {
-                inDegree[edge.target] += 1
-            }
-
-            var participatingNodes = Set<Int>()
-            for edge in allDependencyEdges {
-                participatingNodes.insert(edge.source)
-                participatingNodes.insert(edge.target)
-            }
-
-            var queue: [Int] = []
-            for nodeID in participatingNodes where inDegree[nodeID] == 0 {
-                queue.append(nodeID)
-            }
-
-            var order: [Int] = []
-            order.reserveCapacity(participatingNodes.count)
-            var front = 0
-
-            while front < queue.count {
-                let current = queue[front]
-                front += 1
-                order.append(current)
-                for dependent in dependencyAdjacency[current] {
-                    inDegree[dependent] -= 1
-                    if inDegree[dependent] == 0 {
-                        queue.append(dependent)
-                    }
-                }
-            }
-            return order
-        }()
-
         return ChoiceGraph(
             nodes: nodes,
             containmentEdges: containmentEdges,
@@ -739,7 +722,6 @@ struct ChoiceGraphBuilder {
             liveNodeIDs: liveNodeIDs,
             leafNodes: leafNodes,
             characterLeafNodes: characterLeafNodes,
-            topologicalOrder: topologicalOrder,
             dependencyAdjacency: dependencyAdjacency
         )
     }

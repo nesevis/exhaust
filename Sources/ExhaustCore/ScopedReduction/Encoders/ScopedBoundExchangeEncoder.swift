@@ -10,10 +10,8 @@
 /// Lowering the source can regenerate the bound subtree and shift or clamp the sink, so each proposal from ``BoundExchangeProposalCursor`` is lifted through the generator before anything is probed. A lift whose sink no longer holds the proposed value fails its branch. Each kept lift is one ``ScopedSingleCandidateSearch`` over the lifted sequence, decoded exactly. The first acceptance stops the pass, because it makes every other branch's lifted graph stale.
 enum ScopedBoundExchangeEncoder: ScopedEncoder {
     static let name: EncoderName = .boundExchange
-    static let isValueDependent = true
     static let isPathChanging = false
     static let admissionOrder: ReductionOrder = .notLarger
-    static let rebuildsAfterAcceptance = false
 
     static func reducer(_ exchange: BoundExchangeScope, input scope: ScopedEncoderInput) -> ScopedReducer {
         let configuration = ScopedChoiceConfiguration(
@@ -84,10 +82,5 @@ extension ScopedBoundExchangeEncoder {
 
     static func isValid(_: BoundExchangeScope, in _: ChoiceGraph) -> Bool {
         true
-    }
-
-    /// A search, whose outcome the scope does not determine.
-    static func rejectionKey(_: BoundExchangeScope) -> ScopedRejectionKey? {
-        nil
     }
 }

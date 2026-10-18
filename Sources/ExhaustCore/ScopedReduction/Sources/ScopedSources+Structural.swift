@@ -1,5 +1,5 @@
 //
-//  ScopedSource+Structural.swift
+//  ScopedSources+Structural.swift
 //  Exhaust
 //
 
@@ -15,7 +15,7 @@
 
 // MARK: - Structural Preparation
 
-extension ScopedSource {
+extension ScopedSources {
     /// Prepares the structural families in the order batched cross-sequence removal, emptying, batch removal (one source per sequence), centered windows, symmetric windows, migration, per-element removal, aligned removal, replacement, and permutation, omitting empty ones. The order matters only on priority ties, which go to the earlier source.
     ///
     /// Structural families depend on graph topology, not leaf values, so they survive rebuilds that leave the structure unchanged.
@@ -24,26 +24,26 @@ extension ScopedSource {
     static func prepareStructuralSources(
         from graph: ChoiceGraph,
         previousGraph: ChoiceGraph? = nil
-    ) -> [ScopedSource] {
-        var sources: [ScopedSource] = []
+    ) -> [any ScopedSource] {
+        var sources: [any ScopedSource] = []
 
         let elementScopes = RemovalQuery.elementRemovalScopes(graph: graph)
 
-        var batchedCrossSequence = ScopedSource.batchedCrossSequenceRemoval(ScopedBatchedCrossSequenceRemovalSource(graph: graph))
+        let batchedCrossSequence = ScopedBatchedCrossSequenceRemovalSource(graph: graph)
         if batchedCrossSequence.dispatchPriority != nil {
             sources.append(batchedCrossSequence)
         }
 
         let emptying = emptyingEncoderScopes(graph: graph, elementScopes: elementScopes)
         if emptying.isEmpty == false {
-            sources.append(.emptying(ScopedSortedSource(emptying)))
+            sources.append(ScopedSortedSource(emptying, invalidation: .structuralChange))
         }
 
         for scope in elementScopes {
             guard scope.targets.count == 1, let target = scope.targets.first else {
                 continue
             }
-            var batchRemoval = ScopedSource.batchRemoval(ScopedBatchRemovalSource(sequenceNodeID: target.sequenceNodeID, graph: graph))
+            let batchRemoval = ScopedBatchRemovalSource(sequenceNodeID: target.sequenceNodeID, graph: graph)
             if batchRemoval.dispatchPriority != nil {
                 sources.append(batchRemoval)
             }
@@ -51,30 +51,30 @@ extension ScopedSource {
 
         let centered = centeredWindowEncoderScopes(graph: graph, elementScopes: elementScopes)
         if centered.isEmpty == false {
-            sources.append(.centeredWindows(ScopedSortedSource(centered)))
+            sources.append(ScopedSortedSource(centered, invalidation: .structuralChange))
         }
 
         let symmetric = symmetricWindowEncoderScopes(graph: graph, elementScopes: elementScopes)
         if symmetric.isEmpty == false {
-            sources.append(.symmetricWindows(ScopedSortedSource(symmetric)))
+            sources.append(ScopedSortedSource(symmetric, invalidation: .structuralChange))
         }
 
-        var migration = ScopedSource.migration(ScopedMigrationSource(graph: graph))
+        let migration = ScopedMigrationSource(graph: graph)
         if migration.dispatchPriority != nil {
             sources.append(migration)
         }
 
         let perElement = perElementRemovalEncoderScopes(graph: graph, elementScopes: elementScopes)
         if perElement.isEmpty == false {
-            sources.append(.perElementRemoval(ScopedSortedSource(perElement)))
+            sources.append(ScopedSortedSource(perElement, invalidation: .structuralChange))
         }
 
         let aligned = alignedRemovalEncoderScopes(graph: graph)
         if aligned.isEmpty == false {
-            sources.append(.alignedRemoval(ScopedSortedSource(aligned)))
+            sources.append(ScopedSortedSource(aligned, invalidation: .structuralChange))
         }
 
-        var replacement = ScopedSource.replacement(ScopedReplacementSource(graph: graph, previousGraph: previousGraph))
+        let replacement = ScopedReplacementSource(graph: graph, previousGraph: previousGraph)
         if replacement.dispatchPriority != nil {
             sources.append(replacement)
         }
@@ -85,25 +85,26 @@ extension ScopedSource {
     }
 
     /// The permutation family alone, which depends on sibling shapes, so a leaf-kind change rebuilds it while other structural families survive.
-    static func preparePermutationSources(from graph: ChoiceGraph) -> [ScopedSource] {
+    static func preparePermutationSources(from graph: ChoiceGraph) -> [any ScopedSource] {
         let permutation = permutationEncoderScopes(graph: graph)
         guard permutation.isEmpty == false else {
             return []
         }
-        return [.permutation(ScopedSortedSource(permutation))]
+        return [ScopedSortedSource(permutation, invalidation: .leafKindChange)]
     }
 
     /// The numeric reorder family over the current graph: one scope holding every reorderable sibling group, or nil when there is none. Reordering is for presentation, so the runner drains this family only in the final pass.
-    static func prepareReorderSource(from graph: ChoiceGraph) -> ScopedSource? {
+    static func prepareReorderSource(from graph: ChoiceGraph) -> ScopedSortedSource? {
         guard let reorderScope = ReorderingQuery.build(graph: graph) else {
             return nil
         }
-        return .numericReorder(ScopedSortedSource(
+        return ScopedSortedSource(
             [PricedEncoderScope(
                 encoderScope: .reorder(reorderScope),
                 priority: DispatchPriority(structuralBenefit: 0, valueBenefit: 0, reductionMagnitude: 0, estimatedCost: 1)
-            )]
-        ))
+            )],
+            invalidation: .structuralChange
+        )
     }
 
     // MARK: - Removal Families
