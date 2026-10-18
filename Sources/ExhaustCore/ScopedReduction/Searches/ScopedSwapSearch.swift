@@ -35,7 +35,7 @@ struct ScopedSwapSearch: ScopedSearch {
         var contentSlotIndex: Int
         /// Doubles on success; a failure starts bisection.
         var step: Int
-        /// When non-nil, the search is bisecting between ``contentSlotIndex`` and this rejected slot.
+        /// When non-nil, the search is bisecting between ``contentSlotIndex`` and this exclusive bound: a rejected slot, or `slots.count` after doubling overshot the group.
         var bisectHi: Int?
         /// The emitted probe awaiting feedback, or nil when no probe is outstanding. The initial swap is the first outstanding probe.
         var pending: PendingSwap?
@@ -208,11 +208,11 @@ struct ScopedSwapSearch: ScopedSearch {
         state.step *= 2
         let nextTarget = state.contentSlotIndex + state.step
         guard nextTarget < state.slots.count else {
-            // Doubling overshot, so bisect between the current position and the end.
+            // Doubling overshot, so bisect between the current position and the end. The bound is one past the last slot, which has not been tried.
             guard state.contentSlotIndex + 1 < state.slots.count else {
                 return nil
             }
-            state.bisectHi = state.slots.count - 1
+            state.bisectHi = state.slots.count
             return bisectExtension(into: &candidate, state: &state)
         }
 

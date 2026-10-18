@@ -46,6 +46,8 @@ extension ScopedReductionInterpreter {
         )
 
         if case let .sparse(probe, baseSequence, _) = candidate {
+            // The buffer is restored from `baseSequence` and the hash starts from the incumbent's, so both are right only when the two are the same sequence.
+            assert(baseSequence == context.incumbent.sequence, "A sparse candidate's base must be the incumbent's sequence")
             // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
             if context.rejectCache.contains(cacheKey) == false || context.observer != nil {
                 if let previousSparseProbe = context.previousSparseProbe {
@@ -151,6 +153,8 @@ extension ScopedReductionInterpreter {
         context: inout Context
     ) -> Evaluation {
         context.report.counts.recordAcceptance()
+        // The buffer holds the candidate, which decoding may have changed, so the next sparse probe starts from the new base rather than restoring the last one's positions.
+        context.previousSparseProbe = nil
         context.incumbent = recovered
         context.baseHash = ZobristHash.hash(of: recovered.sequence)
         context.report.anyAccepted = true
@@ -172,13 +176,42 @@ extension ScopedReductionInterpreter {
                 context.report.anyRequiresRebuild = true
                 return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
             case .continue:
-                let application = context.graph.apply(mutation)
+                let application = context.graph.apply(Self.decodedMutation(
+                    mutation,
+                    recovered: recovered.sequence,
+                    candidateCount: context.candidateBuffer.count,
+                    graph: context.graph
+                ))
                 if application.requiresFullRebuild {
                     context.report.anyRequiresRebuild = true
                     return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
                 }
                 return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
         }
+    }
+
+    /// The mutation to write into the graph in place: each changed leaf takes the value decoding produced at its position, which is not the candidate's when exact decoding clamped it. A change whose position no longer holds a value, or a decoding of a different length, is marked reshaping so the graph is rebuilt instead.
+    private static func decodedMutation(
+        _ mutation: EncoderProbe,
+        recovered: ChoiceSequence,
+        candidateCount: Int,
+        graph: ChoiceGraph
+    ) -> EncoderProbe {
+        guard case let .leafValues(changes) = mutation else {
+            return mutation
+        }
+        let isAligned = recovered.count == candidateCount
+        return .leafValues(changes.map { change in
+            guard isAligned,
+                  change.leafNodeID < graph.nodes.count,
+                  let position = graph.nodes[change.leafNodeID].positionRange?.lowerBound,
+                  position < recovered.count,
+                  let decoded = recovered[position].value?.choice
+            else {
+                return LeafChange(leafNodeID: change.leafNodeID, newValue: change.newValue, mayReshape: true)
+            }
+            return LeafChange(leafNodeID: change.leafNodeID, newValue: decoded, mayReshape: change.mayReshape)
+        })
     }
 
     private static func terminate(
