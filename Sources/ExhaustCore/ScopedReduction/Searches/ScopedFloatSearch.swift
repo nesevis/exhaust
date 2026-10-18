@@ -14,7 +14,6 @@ struct ScopedFloatSearch: ScopedSearch {
     // MARK: - State
 
     var state: State
-    var convergenceStore: [Int: ConvergedOrigin] = [:]
 
     // MARK: - Float State
 
@@ -42,7 +41,7 @@ struct ScopedFloatSearch: ScopedSearch {
         }
     }
 
-    /// The search's position across every target and stage. The binary search context is shared between the integral and ratio stages.
+    /// Everything the search carries between pulls: its position across every target and stage, and the convergence records it has gathered. The stages are static functions over this state, so a pull edits it in place. The binary search context is shared between the integral and ratio stages.
     struct State {
         var sequence: ChoiceSequence
         var targets: [Target]
@@ -63,28 +62,8 @@ struct ScopedFloatSearch: ScopedSearch {
         var ratioRemainder: Int64
         var ratioIntegerPart: Int64
         var ratioDistance: UInt64
-
-        /// Stands in for the search's state while ``ScopedFloatSearch/next(_:into:)`` advances the moved-out original, so the original's collections stay uniquely referenced and editing them does not copy them.
-        static var vacant: State {
-            State(
-                sequence: [],
-                targets: [],
-                currentTargetIndex: 0,
-                stage: .specialValues,
-                batchCandidates: [],
-                batchIndex: 0,
-                stepper: FindIntegerStepper(),
-                needsFirstProbe: true,
-                binarySearchMinDelta: 1,
-                binarySearchMaxQuantum: 0,
-                binarySearchMovesUp: false,
-                binarySearchCurrentInt: 0,
-                ratioDenominator: 0,
-                ratioRemainder: 0,
-                ratioIntegerPart: 0,
-                ratioDistance: 0
-            )
-        }
+        /// Convergence records keyed by graph node ID, which ``ScopedFloatSearch/finish(pending:)`` reports.
+        var convergenceStore: [Int: ConvergedOrigin] = [:]
     }
 
     // MARK: - Search
@@ -95,29 +74,23 @@ struct ScopedFloatSearch: ScopedSearch {
     }
 
     mutating func next(_ feedback: ScopedSearchFeedback, into buffer: inout ChoiceSequence) -> ScopedCandidate? {
-        // The stages mutate `convergenceStore` on the search as well as the state they are handed, so the state is moved out rather than passed in place.
-        var current = State.vacant
-        swap(&current, &state)
         if case let .accepted(recovered) = feedback {
             // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
-            guard recovered.count == current.sequence.count else {
-                state = current
+            guard recovered.count == state.sequence.count else {
                 return nil
             }
-            current.sequence = recovered
+            state.sequence = recovered
         }
-        guard let built = nextProbe(state: &current, lastAccepted: feedback.isAccepted) else {
-            state = current
+        guard let built = Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted) else {
             return nil
         }
         buffer = built
-        let mutation = current.targets.leafValuesMutation(candidate: buffer, baseline: current.sequence)
-        state = current
+        let mutation = state.targets.leafValuesMutation(candidate: buffer, baseline: state.sequence)
         return .written(mutation: mutation, admission: .standard)
     }
 
     /// Reports the convergence records gathered so far.
     consuming func finish(pending _: ScopedSearchFeedback) -> ScopedSearchReport {
-        ScopedSearchReport(convergenceRecords: convergenceStore)
+        ScopedSearchReport(convergenceRecords: state.convergenceStore)
     }
 }
