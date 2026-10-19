@@ -29,12 +29,8 @@ extension Reduction {
         configuration: ChoiceConfiguration,
         then next: @escaping (LiftProposal) -> Reduction
     ) -> Reduction {
-        request(.propose(makeProposals, configuration: configuration)).bind { result in
-            guard case let .proposal(proposal) = result else {
-                preconditionFailure("A propose request must be answered with a proposal")
-            }
-            return next(proposal)
-        }
+        request(.propose(makeProposals, configuration: configuration))
+            .bind { $0.proposal.map(next)! }
     }
 
     /// Lifts `prefix` and continues with the lifted tree and sequence, or nil when materialization failed.
@@ -44,12 +40,8 @@ extension Reduction {
         maximumSequenceCount: Int? = nil,
         then next: @escaping (LiftResult?) -> Reduction
     ) -> Reduction {
-        request(.lift(prefix, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount)).bind { result in
-            guard case let .lifted(lifted) = result else {
-                preconditionFailure("A lift request must be answered with a lift result")
-            }
-            return next(lifted)
-        }
+        request(.lift(prefix, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount))
+            .bind { next($0.lifted) }
     }
 
     /// Runs `search` until it finishes and continues with its outcome.
@@ -58,12 +50,8 @@ extension Reduction {
         configuration: SearchConfiguration,
         then next: @escaping (SearchOutcome) -> Reduction = { _ in .pure(.finished) }
     ) -> Reduction {
-        request(.search(search, configuration: configuration)).bind { result in
-            guard case let .outcome(outcome) = result else {
-                preconditionFailure("A search request must be answered with an outcome")
-            }
-            return next(outcome)
-        }
+        request(.search(search, configuration: configuration))
+            .bind { $0.outcome.map(next)! }
     }
 
     /// Abandons the current branch, recording why construction stopped.
@@ -182,4 +170,27 @@ enum ReductionResponse {
     case outcome(SearchOutcome)
     /// The terminal value of the encoder's reduction.
     case finished
+
+    // MARK: - Conveniences
+
+    var proposal: LiftProposal? {
+        guard case let .proposal(proposal) = self else {
+            return nil
+        }
+        return proposal
+    }
+
+    var lifted: LiftResult? {
+        guard case let .lifted(lifted) = self else {
+            return nil
+        }
+        return lifted
+    }
+
+    var outcome: SearchOutcome? {
+        guard case let .outcome(outcome) = self else {
+            return nil
+        }
+        return outcome
+    }
 }
