@@ -166,7 +166,7 @@ package struct ChooseBitsMetadata: Sendable {
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
 package struct PickMetadata: Sendable {
-    /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
+    /// Source-location fingerprint of the originating pick site. Recursive expansions and helper invocations can share it while carrying different branch structures or domains; matching values identify substitution candidates, not guaranteed equivalents.
     package let fingerprint: UInt64
 
     /// The number of branches at this pick site. Branch identifiers are `0 ..< branchCount`.

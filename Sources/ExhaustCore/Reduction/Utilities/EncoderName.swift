@@ -24,7 +24,7 @@ package enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Tries selecting a different branch at a pick site. Builds a candidate by replacing the selected branch content with a minimized version of an alternative branch, using the graph's position range to locate and replace the relevant entries in the sequence.
     case branchPivot
 
-    /// Replaces a subtree with a smaller one from the same recursive generator (self-similar substitution) or promotes a descendant pick to replace its ancestor (descendant promotion). Both use the graph's self-similarity groups to identify structurally exchangeable sites.
+    /// Replaces a subtree with a smaller one at a matching pick site (self-similar substitution) or promotes a descendant pick to replace its ancestor (descendant promotion). Both use the graph's self-similarity groups to identify candidates by source-location fingerprint; materialization and property evaluation determine whether a replacement is accepted.
     case substitution
 
     /// Swaps adjacent sibling elements within a sequence to improve shortlex ordering. Tries each pair once and extends rightward on success. Produces cosmetic improvements that do not change the counterexample's meaning but make it easier to read.

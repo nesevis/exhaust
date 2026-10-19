@@ -26,7 +26,7 @@ package indirect enum ChoiceTree: Sendable { // NOTE: The entire enum is marked 
     /// A variable-length collection. Flattened as an open marker, one subtree per element, and a close marker. The element array is the sole authority for cardinality: structural encoders change length by editing the array, while value encoders minimize within its elements. Explicit metadata constrains admissible cardinality during materialization.
     case sequence(elements: [ChoiceTree], metadata: ChoiceMetadata)
 
-    /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so screening analysis can reason about alternatives without regenerating.
+    /// A branching decision. The `fingerprint` identifies the originating pick's source location: ``ChoiceGraph`` groups matching sites to propose self-similar substitutions, including across recursive expansions. Matching fingerprints do not guarantee identical structure or domains. When materialized, inactive (unselected) branches retain subtree metadata so screening analysis can inspect alternatives without regenerating them.
     case branch(BranchData)
 
     /// Represents a nested group of choices that usually represent objects or tuples.

@@ -68,7 +68,7 @@ package enum ReflectiveOperation {
     /// - **weight**: Probability mass for random selection during generation
     /// - **generator**: The sub-generator to execute if this choice is selected
     public struct PickTuple {
-        /// Derived from the generator's structural shape. Two picks with matching fingerprints share the same recursive template at different unrolling depths: the ChoiceGraph uses this to build self-similarity edges for substitution.
+        /// Identifies the originating pick site. ``Gen`` constructs this hash from `#fileID`, `#line`, and `#column`, so recursive expansions and helper invocations at the same source location share it. ``ChoiceGraph`` groups matching fingerprints to propose self-similar substitutions; a match does not prove structural or domain equivalence, because the site's generators can depend on runtime arguments.
         public let fingerprint: UInt64
         /// Zero-based index within the pick's branch list. Persisted in the ChoiceSequence so the materializer can select this exact branch during replay without re-running all branches.
         public let id: UInt64
