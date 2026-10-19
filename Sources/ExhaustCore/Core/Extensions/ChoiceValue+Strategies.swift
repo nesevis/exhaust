@@ -70,8 +70,8 @@ package extension ChoiceValue {
             return .gt
         }
         if tag.isFloatingPoint, other.tag.isFloatingPoint {
-            let isNegative = bitPattern64 < tag.simplestBitPattern
-            let otherIsNegative = other.bitPattern64 < other.tag.simplestBitPattern
+            let isNegative = hasNegativeSign
+            let otherIsNegative = other.hasNegativeSign
             if isNegative != otherIsNegative {
                 return isNegative ? .gt : .lt
             }

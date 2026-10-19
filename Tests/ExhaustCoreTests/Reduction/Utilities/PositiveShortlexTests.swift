@@ -128,6 +128,22 @@ struct PositiveShortlexTests {
         #expect(output == 1)
     }
 
+    @Test("A negative integer reduces to its positive counterpart at every magnitude", arguments: [false, true])
+    func integerCounterpartAtEveryMagnitude(isRangeEndpoint: Bool) throws {
+        let magnitudes = Gen.choose(in: 1 ... 1_000_000) as Generator<Int>
+        try exhaustCheck(magnitudes) { (magnitude: Int) throws -> Bool in
+            let bound = isRangeEndpoint ? magnitude : 1_000_000
+            let output = try reduceFromReflection(
+                Gen.choose(in: -bound ... bound),
+                startingAt: -magnitude,
+                config: .init(maxStalls: 2, enabledEncoders: [.valueSearch])
+            ) { value in
+                abs(value) < magnitude
+            }
+            return output == magnitude
+        }
+    }
+
     @Test("Exhaustive integer covering visits positive ties first")
     func integerCoveringOrder() throws {
         let cases: [(ClosedRange<Int64>, [Int64])] = [

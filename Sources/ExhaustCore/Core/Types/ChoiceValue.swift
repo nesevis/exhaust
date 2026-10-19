@@ -63,6 +63,28 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
 
     // MARK: - Semantic Properties
 
+    /// Whether a signed integer or floating-point value has a negative sign. Includes negative floating-point zero and NaNs whose sign bit is set; returns false for other tags.
+    var hasNegativeSign: Bool {
+        (tag.isSigned || tag.isFloatingPoint) && bitPattern64 < tag.simplestBitPattern
+    }
+
+    /// The value with the same magnitude and the opposite sign, or nil for tags without a sign and for a signed type's unpaired minimum.
+    ///
+    /// Floats complement their order-preserving encoding, which negates exactly at every width and keeps a NaN's payload.
+    var signFlipped: ChoiceValue? {
+        if tag.isFloatingPoint {
+            return ChoiceValue(~bitPattern64 & tag.bitPatternRange.upperBound, tag: tag)
+        }
+        guard tag.isSigned, bitPattern64 != 0 else {
+            return nil
+        }
+        let zero = tag.simplestBitPattern
+        let flipped = bitPattern64 < zero
+            ? zero + (zero - bitPattern64)
+            : zero - (bitPattern64 - zero)
+        return ChoiceValue(flipped, tag: tag)
+    }
+
     /// The semantically simplest value for a human reader: zero for all numeric types.
     package var semanticSimplest: ChoiceValue {
         ChoiceValue(tag.simplestBitPattern, tag: tag)

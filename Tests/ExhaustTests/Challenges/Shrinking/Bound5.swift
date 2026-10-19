@@ -197,7 +197,7 @@ struct Bound5ShrinkingChallenge {
         let rep = try #require(report)
         // Positive-first ordering also admits -1 → +1 as a joint-search source, even though this overflow failure needs negative values.
         #expect(rep.propertyInvocations == 218)
-        #expect(rep.totalMaterializations == 301)
+        #expect(rep.totalMaterializations == 303)
 
         let b25 = try #require(output)
         let arr = b25.0.arr + b25.1.arr + b25.2.arr + b25.3.arr + b25.4.arr

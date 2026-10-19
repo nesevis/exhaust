@@ -86,7 +86,7 @@ final class StagedJointSource: ScopeSource {
 
     // MARK: - Helpers
 
-    /// Offers the checkpoint when pairs exist and it differs from the exhausted one. Priced with no benefit and the first stage's budget as cost.
+    /// Offers a changed checkpoint when sampled pairs exist. Priced with no benefit and the first search's budget as cost.
     private func discover() -> PricedEncoderScope? {
         guard tuning.stagedJointProbeBudget > 0 else {
             return nil

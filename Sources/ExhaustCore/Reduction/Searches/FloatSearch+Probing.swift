@@ -131,7 +131,8 @@ extension FloatSearch {
             candidates.append(targetBitPattern)
         }
 
-        if let positive = target.typeTag.floatingChoice(from: target.currentValue.magnitude, allowNonFinite: true),
+        if entry.choice.hasNegativeSign,
+           let positive = entry.choice.signFlipped,
            seen.insert(positive.bitPattern64).inserted
         {
             candidates.append(positive.bitPattern64)

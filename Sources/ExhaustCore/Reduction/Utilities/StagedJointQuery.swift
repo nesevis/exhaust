@@ -7,7 +7,7 @@
 
 /// Discovers the pairs and higher-order groups of one staged joint checkpoint.
 ///
-/// A pair needs only a stalled source; its compensating partner may still be moving. Higher-order groups are discovered only after the preceding stage stalls.
+/// A pair needs a stalled source, or a stalled partner when a sign flip simplifies the source. Higher-order groups are discovered only after the preceding stage stalls.
 ///
 /// Ranking is a heuristic: generator relationships and observed floor motion suggest property coupling but do not prove it. Discovery has its own limit, ``ReductionTuning/numericJointGroupCalculationLimit``, separate from the probe budget. A leaf under a bind is eligible only when the bind's classification shows it lifts at both ends of its controller's range with the same bound shape at each. That checks only the two ends, so the candidate's ``DecoderAdmission`` still rejects any decoding that changes a proposed choice.
 enum StagedJointQuery {
@@ -41,19 +41,29 @@ enum StagedJointQuery {
         guard leaves.count > 1 else {
             return []
         }
-        let sourceIndices = leaves.indices.filter { isStalled(leaves[$0], graph: graph, isFruitlessBind: isFruitlessBind) }
+        let stalled = leaves.map { isStalled($0, graph: graph, isFruitlessBind: isFruitlessBind) }
+        let sourceIndices = leaves.indices.filter { stalled[$0] || leaves[$0].choice.hasNegativeSign }
         // Each source's nearest and farthest partners come first, alternating source by source, so neither distance class can take the whole cap.
         let lastIndex = leaves.count - 1
         let rounds = [[1, lastIndex]] + stride(from: 2, to: lastIndex, by: 1).map { [$0] }
         var seen: Set<Int> = []
         for offsets in rounds {
             for sourceIndex in sourceIndices {
+                let requiresSignFlip = leaves[sourceIndex].choice.hasNegativeSign && stalled[sourceIndex] == false
                 for offset in offsets {
                     let sinkIndex = min(sourceIndex + offset, lastIndex)
                     guard sinkIndex > sourceIndex,
                           seen.insert(sourceIndex * tuning.numericPairMaximumLeaves + sinkIndex).inserted
                     else {
                         continue
+                    }
+                    if requiresSignFlip {
+                        // Float search can leave an integral source without a floor while its fractional partner is stalled. A simplifying sign flip still gives that pair a concrete proposal.
+                        guard stalled[sinkIndex],
+                              SignFlipQuery.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) != nil
+                        else {
+                            continue
+                        }
                     }
                     pairs.append(NumericPairQuery.Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex]))
                     if pairs.count == tuning.numericPairMaximumPairs {
@@ -175,7 +185,7 @@ enum StagedJointQuery {
 
     /// Whether the search can widen to groups of `arity` leaves: the pool has at least `arity` stalled leaves, and some stalled first leaf's cheapest sampled grid fits `workLimit`. The cheapest grid multiplies the first leaf's simplifying samples by the smallest compensating sample counts among the leaves after it.
     ///
-    /// An estimate: ``groups(candidatePool:graph:arity:workLimit:calculationLimit:scopeLimit:)`` also counts every extra ratio-preserving proposal against the limit, so it can still find no group. When this is false, it finds none. A large residual magnitude never makes it false.
+    /// An estimate: ``groups(candidatePool:graph:arity:workLimit:calculationLimit:scopeLimit:)`` also counts extra sign flips and ratio-preserving proposals against the limit, so it can still find no group. When this is false, it finds none. A large residual magnitude never makes it false.
     static func canWiden(to arity: Int, candidatePool: [Entry], workLimit: Int) -> Bool {
         guard (3 ... 4).contains(arity), workLimit > 0, candidatePool.count >= arity,
               candidatePool.count(where: \.stalled) >= arity
@@ -197,7 +207,7 @@ enum StagedJointQuery {
         return false
     }
 
-    /// Scores a bounded prefix of unique combinations, then packs ranked groups under both the retention and estimated-work limits. Work sums each sampled grid plus every ratio-preserving proposal outside that grid, bounding the complete retained search before the shared probe budget truncates exploration. The earliest edited leaf must be stalled and simplify; later leaves may move in either direction.
+    /// Scores a bounded prefix of unique combinations, then packs ranked groups under both the retention and estimated-work limits. Work sums each sampled grid plus every sign flip and ratio-preserving proposal outside that grid, bounding the complete retained search before the shared probe budget truncates exploration. The earliest edited leaf must be stalled and simplify; later leaves may move in either direction.
     static func groups(
         candidatePool: [Entry],
         graph: ChoiceGraph,
@@ -237,7 +247,12 @@ enum StagedJointQuery {
             let extraWork = ratioProposals.count { proposal in
                 samples.indices.allSatisfy { samples[$0].contains(proposal.patterns[$0]) } == false
             }
-            let estimatedWork = gridWork + extraWork
+            let signFlip = SignFlipQuery.build(leaves: leaves)
+            let addsSignFlip = signFlip.map { signFlip in
+                samples.indices.allSatisfy { samples[$0].contains(signFlip.patterns[$0]) } == false
+                    && ratioProposals.contains(where: { $0.patterns == signFlip.patterns }) == false
+            } ?? false
+            let estimatedWork = gridWork + extraWork + (addsSignFlip ? 1 : 0)
             if estimatedWork <= workLimit {
                 var couplingCount = 0
                 var sharedContextCount = 0

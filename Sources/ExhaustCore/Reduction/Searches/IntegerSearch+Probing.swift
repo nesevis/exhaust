@@ -628,7 +628,7 @@ extension IntegerSearch {
     ///
     /// Returns `true` when the leaf is signed and its shortlex key is above zero, so a simpler value exists. ``State/crossZero`` is then set, and the per-leaf loop emits the first probe on its next iteration.
     ///
-    /// The walk covers at most `⌈log₂(key + 1)⌉ + 4` keys, capped at 16. Bit-pattern search has already covered large magnitudes, so cross-zero only needs the keys nearest zero: a small key gets every key below it, a large key the simplest 16.
+    /// The walk covers at most `⌈log₂(key + 1)⌉ + 4` keys, capped at 16. Bit-pattern search has already covered large magnitudes on the current side of zero, so cross-zero only needs the keys nearest zero: a small key gets every key below it, a large key the simplest 16. A negative value's positive counterpart lies on the other side, so it adds one probe when the walk stops short of it.
     static func tryEnterCrossZero(state: inout State) -> Bool {
         let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else {
@@ -650,11 +650,10 @@ extension IntegerSearch {
             if range.contains(zeroBitPattern) == false {
                 return false
             }
-            // Retain the endpoint shortcut unless an admissible positive counterpart exists. A negative lower bound can now improve by changing sign; a type's unpaired minimum still has no counterpart.
+            // Retain the endpoint shortcut unless an admissible positive counterpart exists. A negative lower bound can improve by changing sign; a type's unpaired minimum has no counterpart.
             let currentBitPattern = currentEntry.choice.bitPattern64
             if currentBitPattern == range.lowerBound || currentBitPattern == range.upperBound {
-                let counterpart = ChoiceValue.fromShortlexKey(currentKey - 1, tag: leaf.typeTag)
-                guard counterpart.decodedSignedValue > 0, counterpart.fits(in: range) else {
+                guard positiveCounterpart(of: currentEntry) != nil else {
                     return false
                 }
             }
@@ -665,6 +664,12 @@ extension IntegerSearch {
         let budget = min(bitLength + 4, 16)
         let endKey = min(currentKey, budget)
 
+        var counterpartKey = positiveCounterpart(of: currentEntry)?.shortlexKey
+        if let key = counterpartKey, key < endKey {
+            // The walk reaches it.
+            counterpartKey = nil
+        }
+
         state.crossZero = CrossZeroState(
             sequenceIndex: leaf.sequenceIndex,
             tag: leaf.typeTag,
@@ -672,9 +677,21 @@ extension IntegerSearch {
             isRangeExplicit: currentEntry.isRangeExplicit,
             nextKey: 0,
             endKey: endKey,
+            counterpartKey: counterpartKey,
             lastEmittedKey: nil
         )
         return true
+    }
+
+    /// The positive value with the magnitude of a negative entry, when the entry's explicit range admits it.
+    private static func positiveCounterpart(of entry: ChoiceSequenceValue.Value) -> ChoiceValue? {
+        guard entry.choice.hasNegativeSign,
+              let counterpart = entry.choice.signFlipped,
+              entry.isRangeExplicit == false || counterpart.fits(in: entry.validRange)
+        else {
+            return nil
+        }
+        return counterpart
     }
 
     /// Drives the cross-zero phase for the current leaf.
@@ -713,20 +730,35 @@ extension IntegerSearch {
                 continue
             }
 
-            crossZero.lastEmittedKey = probeKey
-            state.crossZero = crossZero
+            return emitCrossZeroProbe(key: probeKey, crossZero: &crossZero, state: &state)
+        }
 
-            var candidate = state.sequence
-            candidate[crossZero.sequenceIndex] = .value(.init(
-                choice: probeChoice,
-                validRange: crossZero.validRange,
-                isRangeExplicit: crossZero.isRangeExplicit
-            ))
-            return candidate
+        // Range admission was checked when the phase was armed.
+        if let counterpartKey = crossZero.counterpartKey {
+            crossZero.counterpartKey = nil
+            return emitCrossZeroProbe(key: counterpartKey, crossZero: &crossZero, state: &state)
         }
 
         state.crossZero = crossZero
         return nil
+    }
+
+    /// Records `key` as the outstanding probe and returns the sequence with the leaf set to its decoded value.
+    private static func emitCrossZeroProbe(
+        key: UInt64,
+        crossZero: inout CrossZeroState,
+        state: inout State
+    ) -> ChoiceSequence {
+        crossZero.lastEmittedKey = key
+        state.crossZero = crossZero
+
+        var candidate = state.sequence
+        candidate[crossZero.sequenceIndex] = .value(.init(
+            choice: ChoiceValue.fromShortlexKey(key, tag: crossZero.tag),
+            validRange: crossZero.validRange,
+            isRangeExplicit: crossZero.isRangeExplicit
+        ))
+        return candidate
     }
 }
 

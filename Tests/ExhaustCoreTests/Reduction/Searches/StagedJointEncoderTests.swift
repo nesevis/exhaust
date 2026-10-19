@@ -19,6 +19,63 @@ struct StagedJointEncoderTests {
         #expect(result.report.searchCounts.last?.counts.accepted == 1)
     }
 
+    @Test("A rejected sign flip continues into pair search within the shared budget")
+    func signFlipFallsBackToPairs() throws {
+        let values = [-2, -4]
+        let fixture = try StagedJointFixture(values: values, range: -100 ... 100) { candidate in
+            candidate != values && candidate != [0, 1]
+        }
+        let signFlipOnly = fixture.run(probeBudget: 1)
+        #expect(signFlipOnly.output == values)
+        #expect(signFlipOnly.report.counts.emitted == 1)
+        #expect(signFlipOnly.report.counts.propertyInvocations == 1)
+        #expect(signFlipOnly.report.searchCounts.map(\.stagedJointArity) == [2])
+
+        let complete = fixture.run()
+        #expect(complete.output == [0, 1])
+        #expect(complete.report.searchCounts.map(\.stagedJointArity) == [2])
+        #expect(complete.report.searchCounts.last?.counts.accepted == 1)
+
+        let disabled = fixture.run(probeBudget: 0)
+        #expect(disabled.output == values)
+        #expect(disabled.report.counts.emitted == 0)
+    }
+
+    @Test("An accepted group sign flip ends the checkpoint", arguments: [2, 3, 4])
+    func signFlipAcceptance(arity: Int) throws {
+        let values = Array([-2, 4, -6, 8].prefix(arity))
+        let positive = values.map { -$0 }
+        let fixture = try StagedJointFixture(values: values, range: -100 ... 100) { candidate in
+            candidate != values && candidate != positive
+        }
+        let result = fixture.run()
+        #expect(result.output == positive)
+        #expect(result.report.counts.accepted == 1)
+        #expect(result.report.searchCounts.map(\.stagedJointArity) == Array(2 ... arity))
+        #expect(result.report.searchCounts.last?.counts.emitted == 1)
+    }
+
+    @Test("A positive group emits no sign flip, because a negative earliest leaf cannot precede the checkpoint")
+    func positiveGroupEmitsNoSignFlip() throws {
+        let values = [2, 4]
+        let flipped = values.map { (-$0).bitPattern64 }
+        let fixture = try StagedJointFixture(values: values, range: -100 ... 100) { _ in false }
+        #expect(fixture.scope.pairs.isEmpty == false)
+
+        var search = StagedJointSearch(pairs: fixture.scope.pairs, base: fixture.sequence, probeBudget: 10000)
+        var buffer = fixture.sequence
+        var feedback = SearchFeedback.initial
+        var emitted = 0
+        while let candidate = search.next(feedback, into: &buffer) {
+            emitted += 1
+            if case let .sparse(probe, _, _) = candidate {
+                #expect(probe.patterns != flipped)
+            }
+            feedback = .rejected(.propertyPassed)
+        }
+        #expect(emitted > 0)
+    }
+
     @Test("A deadline that expires between stages starts no further stage", arguments: [1, 2])
     func deadlineBetweenStages(completedStages: Int) throws {
         // Only an exact linear quadruple fails, so the pair and three-way stages exhaust and the search escalates to four leaves.
@@ -59,8 +116,8 @@ private struct StagedJointFixture {
     let property: (Any) -> Bool
     static let tuning = ReductionTuning()
 
-    init(values: [Int], passes: @escaping ([Int]) -> Bool) throws {
-        let typed = Gen.eachOf(Array(repeating: Gen.choose(in: 1 ... 1_000_000), count: values.count))
+    init(values: [Int], range: ClosedRange<Int> = 1 ... 1_000_000, passes: @escaping ([Int]) -> Bool) throws {
+        let typed = Gen.eachOf(Array(repeating: Gen.choose(in: range), count: values.count))
         let reflected = try #require(try Interpreters.reflect(typed, with: values))
         var built = ChoiceGraph.build(from: reflected)
         Self.markConverged(&built)
@@ -77,9 +134,13 @@ private struct StagedJointFixture {
     }
 
     /// - Parameter deadlineAfterChecks: Expires the deadline once this many checks have passed; nil never expires.
-    func run(deadlineAfterChecks: Int? = nil) -> Run {
+    func run(deadlineAfterChecks: Int? = nil, probeBudget: Int? = nil) -> Run {
+        var tuning = Self.tuning
+        if let probeBudget {
+            tuning.stagedJointProbeBudget = probeBudget
+        }
         let checks = CheckCounter()
-        let input = EncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: Self.tuning)
+        let input = EncoderInput(baseSequence: sequence, tree: tree, graph: graph, warmStartRecords: [:], tuning: tuning)
         let result = Reducer.reduce(
             StagedJointEncoder.reduce(scope, input: input),
             context: Reducer.Context(
