@@ -97,8 +97,7 @@ private struct CandidateSamples {
         }
         let value = ChoiceValue(pattern, tag: leaf.choice.tag)
         guard leaf.choice.tag.isFloatingPoint == false || value.decodedDoubleValue.isFinite,
-              simplifying == false || value.shortlexKey < leaf.choice.shortlexKey
-              || (value.shortlexKey == leaf.choice.shortlexKey && pattern < current)
+              simplifying == false || value.shortLexCompare(leaf.choice) == .lt
         else {
             return
         }

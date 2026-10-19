@@ -25,10 +25,7 @@ struct FloatCancellationReductionTests {
             )
             let output = try #require(result.counterexample?.1)
             #expect(property(output) == false)
-            #expect(
-                (output.0 == 1 && output.1 == 1.0.nextUp)
-                    || (output.0 == -1.0.nextUp && output.1 == -1)
-            )
+            #expect(output.0 == 1 && output.1 == 1.0.nextUp)
             return
         }
         Issue.record("No cancellation failure found for seed \(seed)")

@@ -73,7 +73,7 @@ struct CoveringSearch: ReductionSearch {
 /// Enumerates value assignments over a set of sequence positions.
 ///
 /// Only the first ``ReductionTuning/maxCoveredPositions`` value positions are searched; the rest keep their base values. Three regimes based on the searched positions' total domain size:
-/// - **Small domains** (total space ≤ ``ReductionTuning/coveringExhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting. Each coordinate visits its values simplest first, nearest its reduction target and below before above at equal distance, so for a signed leaf 0, −1, 1, −2, and so on. Floating-point leaves keep bit-pattern order. Under ``AcceptancePolicy/stop`` the first failing row is the one committed, so this order makes it the simplest assignment the regime reaches.
+/// - **Small domains** (total space ≤ ``ReductionTuning/coveringExhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting. Integer coordinates visit values simplest first, nearest their reduction target and above before below at equal distance, so a signed leaf visits 0, 1, −1, 2, and so on. Floating-point leaves keep bit-pattern order. Under ``AcceptancePolicy/stop`` the first failing row is the one committed, so integer coordinate order follows the positive-first shortlex preference.
 /// - **Large domains, two or more parameters**: pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator`` over each leaf's ``CoveringRepresentatives``, one greedy row per call, with no upfront batch build. Within ``ReductionTuning/coveringBudget`` rows, every combination of two leaves' representatives can be tried.
 /// - **Large domain, one parameter**: the ends of the range, alternating lowest and highest and working inward, up to ``ReductionTuning/coveringBudget`` rows. Pairwise covering needs two parameters, and a range that a lift has just widened fails at its edges when it fails at all: the values the previous configuration could not express are the ones farthest from where it sat.
 struct CoveringRows {
@@ -311,7 +311,7 @@ struct CoveringRows {
         return rows
     }
 
-    /// The domain offset of the value at `rank` in simplicity order: the target first, then alternately one step below and one step above, continuing on the longer side once the shorter one is used up.
+    /// The domain offset of the value at `rank` in simplicity order: the target first, then alternately one step above and one step below, continuing on the longer side once the shorter one is used up.
     private static func offset(simplicityRank rank: UInt64, targetOffset: UInt64, domainSize: UInt64) -> UInt64 {
         guard rank > 0 else {
             return targetOffset
@@ -321,7 +321,7 @@ struct CoveringRows {
         let alternating = min(below, above)
         guard rank > 2 * alternating else {
             let distance = (rank + 1) / 2
-            return Self.offset(targetOffset, movedBy: distance, below: rank % 2 == 1)
+            return Self.offset(targetOffset, movedBy: distance, below: rank % 2 == 0)
         }
         let distance = alternating + (rank - 2 * alternating)
         return Self.offset(targetOffset, movedBy: distance, below: below > above)

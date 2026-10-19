@@ -112,7 +112,7 @@ extension FloatSearch {
         }
     }
 
-    /// Sets up probes for the leaf's reduction target, then the type's greatest finite magnitude, infinity, and NaN, skipping any that match the current bit pattern. Candidates that do not precede the current entry are dropped when they are pulled.
+    /// Tries the reduction target and the positive counterpart before special magnitudes, allowing a sign-only simplification even for integral floats that skip precision search.
     static func prepareSpecialValues(state: inout State, target: Target) {
         var seen = Set<UInt64>()
         seen.insert(target.currentBitPattern)
@@ -129,6 +129,12 @@ extension FloatSearch {
             : entry.choice.semanticSimplest.bitPattern64
         if seen.insert(targetBitPattern).inserted {
             candidates.append(targetBitPattern)
+        }
+
+        if let positive = target.typeTag.floatingChoice(from: target.currentValue.magnitude, allowNonFinite: true),
+           seen.insert(positive.bitPattern64).inserted
+        {
+            candidates.append(positive.bitPattern64)
         }
 
         for special in FloatReduction.specialValues(for: target.typeTag) {

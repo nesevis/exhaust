@@ -650,10 +650,13 @@ extension IntegerSearch {
             if range.contains(zeroBitPattern) == false {
                 return false
             }
-            // Skip cross-zero when the leaf sits on a boundary of its explicit range. Binary search has already rejected everything between that boundary and the target, which is where cross-zero's simpler candidates lie.
+            // Retain the endpoint shortcut unless an admissible positive counterpart exists. A negative lower bound can now improve by changing sign; a type's unpaired minimum still has no counterpart.
             let currentBitPattern = currentEntry.choice.bitPattern64
             if currentBitPattern == range.lowerBound || currentBitPattern == range.upperBound {
-                return false
+                let counterpart = ChoiceValue.fromShortlexKey(currentKey - 1, tag: leaf.typeTag)
+                guard counterpart.decodedSignedValue > 0, counterpart.fits(in: range) else {
+                    return false
+                }
             }
         }
 

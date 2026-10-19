@@ -29,7 +29,7 @@ struct FloatSearch: ReductionSearch {
         let mayReshape: Bool
     }
 
-    /// The four stages of float reduction, cheapest first: special values (the reduction target, then the type's greatest finite magnitude, infinity, and NaN), mantissa truncation, integral binary search, and ratio binary search. Constant-count probes run before the iterative searches.
+    /// The four stages of float reduction: special values (the reduction target, the positive counterpart, then the type's greatest finite magnitude, infinity, and NaN), precision and boundary probes, integral binary search, and ratio binary search.
     enum Stage: Int, Comparable {
         case specialValues = 0
         case truncation = 1
