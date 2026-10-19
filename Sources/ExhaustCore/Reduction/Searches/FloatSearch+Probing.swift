@@ -68,6 +68,10 @@ extension FloatSearch {
                 prepareStage(state: &state)
             } else if lastAccepted {
                 handleAcceptance(state: &state)
+                if state.needsFirstProbe {
+                    // A batch acceptance advances the leaf; its successor needs its own candidates before another probe.
+                    continue
+                }
             }
 
             if let candidate = nextCandidateForCurrentStage(
@@ -143,41 +147,9 @@ extension FloatSearch {
         state.batchCandidates = candidates
     }
 
-    /// Sets up probes that truncate mantissa bits at increasing power-of-two scales, searching for the simplest representable value near the current one.
+    /// Probes simple values and progressively finer fractional boundaries with their adjacent representations, preserving failures that rounding to the boundary would erase.
     static func prepareTruncation(state: inout State, target: Target) {
-        guard target.currentValue.isFinite else {
-            state.batchCandidates = []
-            return
-        }
-
-        var seenBitPatterns = Set<UInt64>()
-        var candidates: [UInt64] = []
-
-        for power in 0 ..< 10 {
-            let scale = Double(1 << power)
-            let scaled = target.currentValue * scale
-            guard scaled.isFinite else {
-                continue
-            }
-
-            for truncated in [scaled.rounded(.down), scaled.rounded(.up)] {
-                let candidateValue = truncated / scale
-                guard candidateValue.isFinite,
-                      let candidateChoice = target.typeTag.floatingChoice(from: candidateValue)
-                else {
-                    continue
-                }
-                let bitPattern = candidateChoice.bitPattern64
-                guard bitPattern != target.currentBitPattern,
-                      seenBitPatterns.insert(bitPattern).inserted
-                else {
-                    continue
-                }
-                candidates.append(bitPattern)
-            }
-        }
-
-        state.batchCandidates = candidates
+        state.batchCandidates = FloatReduction.precisionCandidates(for: target.currentValue, tag: target.typeTag)
     }
 
     /// Sets up binary search toward the integer target for a leaf whose value is already integral, stepping in multiples of the value's ULP so every probe is representable in the leaf's type. Does nothing for a non-integral value, which the ratio stage handles.
