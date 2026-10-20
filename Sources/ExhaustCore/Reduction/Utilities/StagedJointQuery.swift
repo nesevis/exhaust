@@ -243,16 +243,11 @@ enum StagedJointQuery {
                 index == 0 ? entry.simplifyingSamples : entry.compensatingSamples
             }
             let leaves = entries.map(\.leaf)
-            let ratioProposals = NumericCommonDivisorProposal.rescalings(for: leaves)
+            let ratioProposals = priorityRescalings(for: leaves)
             let extraWork = ratioProposals.count { proposal in
                 samples.indices.allSatisfy { samples[$0].contains(proposal.patterns[$0]) } == false
             }
-            let signFlip = SignFlipQuery.build(leaves: leaves)
-            let addsSignFlip = signFlip.map { signFlip in
-                samples.indices.allSatisfy { samples[$0].contains(signFlip.patterns[$0]) } == false
-                    && ratioProposals.contains(where: { $0.patterns == signFlip.patterns }) == false
-            } ?? false
-            let estimatedWork = gridWork + extraWork + (addsSignFlip ? 1 : 0)
+            let estimatedWork = gridWork + extraWork
             if estimatedWork <= workLimit {
                 var couplingCount = 0
                 var sharedContextCount = 0
@@ -287,6 +282,19 @@ enum StagedJointQuery {
             estimatedWork += group.estimatedWork
         }
         return Groups(groups: groups, calculations: calculations)
+    }
+
+    // MARK: - Priority Proposals
+
+    /// The proposals both staged cursors try before their grids: the group's sign flip, a rescaling by −1, then its ratio-preserving rescalings.
+    ///
+    /// Ranking the flip below every rescaling priority makes each cursor emit every group's flip before any rescaling, and the cursors skip grid points that repeat a priority proposal. The flip never duplicates a rescaling: rescalings apply only to integers and strictly shrink every nonzero magnitude, while the flip preserves magnitudes and changes at least one nonzero leaf.
+    static func priorityRescalings(for leaves: [ReductionLeaf]) -> [NumericCommonDivisorProposal.Rescaling] {
+        let rescalings = NumericCommonDivisorProposal.rescalings(for: leaves)
+        guard let signFlip = SignFlipQuery.build(leaves: leaves) else {
+            return rescalings
+        }
+        return [NumericCommonDivisorProposal.Rescaling(priority: -1, patterns: signFlip.patterns)] + rescalings
     }
 
     // MARK: - Helpers

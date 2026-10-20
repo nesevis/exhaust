@@ -5,7 +5,7 @@
 
 // MARK: - Float Search
 
-/// Drives float leaves toward their semantic simplest values without changing graph structure, through four stages: special values, truncation, integral binary search, and ratio binary search.
+/// Drives float leaves toward their semantic simplest values without changing graph structure, through five stages: special values, boundaries, precision walk, integral binary search, and ratio binary search.
 ///
 /// All leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions, and an acceptance advances the baseline to the accepted candidate.
 ///
@@ -29,19 +29,20 @@ struct FloatSearch: ReductionSearch {
         let mayReshape: Bool
     }
 
-    /// The four stages of float reduction: special values (the reduction target, the positive counterpart, then the type's greatest finite magnitude, infinity, and NaN), precision and boundary probes, integral binary search, and ratio binary search.
+    /// The five stages of float reduction: special values (the reduction target, the positive counterpart, then the type's greatest finite magnitude, infinity, and NaN), boundary probes, the precision walk over binary grids, integral binary search, and ratio binary search.
     enum Stage: Int, Comparable {
         case specialValues = 0
-        case truncation = 1
-        case integralBinarySearch = 2
-        case ratioBinarySearch = 3
+        case boundaries = 1
+        case precisionWalk = 2
+        case integralBinarySearch = 3
+        case ratioBinarySearch = 4
 
         static func < (lhs: Stage, rhs: Stage) -> Bool {
             lhs.rawValue < rhs.rawValue
         }
     }
 
-    /// The truncation stage's walk over binary grids, driven by ``State/stepper``.
+    /// The precision-walk stage's walk over binary grids, driven by ``State/stepper``.
     ///
     /// Step `n` probes the grid 2^-(`n` − 1), coarsest first, and passes when none of that grid's admissible candidates fails. The stepper therefore converges on the coarsest grid whose rounding still fails, in probes logarithmic in that grid's depth, and each failing candidate is committed as it is found. This assumes that once a grid's rounding fails, every finer grid's does too; when it does not, the walk can settle on a finer grid than the coarsest failing one. Candidates come from the value at the start of the walk, and shortlex admission against the current entry keeps every acceptance an improvement.
     struct PrecisionWalk {
@@ -76,21 +77,21 @@ struct FloatSearch: ReductionSearch {
         var currentTargetIndex: Int
         var stage: Stage
         var batchCandidates: [UInt64]
-        /// The next batch candidate in the special-values and truncation stages. In the binary search stages, zero until the stepper has started.
+        /// The next batch candidate in the special-values and boundary stages. In the binary search stages, zero until the stepper has started.
         var batchIndex: Int
         var stepper: FindIntegerStepper
         var needsFirstProbe: Bool
-        // Stage 2/3 binary search context.
+        // Stage 3/4 binary search context.
         var binarySearchMinDelta: UInt64
         var binarySearchMaxQuantum: UInt64
         var binarySearchMovesUp: Bool
         var binarySearchCurrentInt: Int64
-        // Stage 3 ratio context.
+        // Stage 4 ratio context.
         var ratioDenominator: Int64
         var ratioRemainder: Int64
         var ratioIntegerPart: Int64
         var ratioDistance: UInt64
-        /// The truncation stage's grid walk, armed once its boundary batch is prepared. Nil outside the truncation stage and after the walk converges.
+        /// The precision-walk stage's grid walk, armed when the stage is prepared for a fractional leaf. Nil outside that stage and after the walk converges.
         var precisionWalk: PrecisionWalk?
         /// Convergence records keyed by graph node ID, which ``FloatSearch/finish(pending:)`` reports.
         var convergenceStore: [Int: ConvergedOrigin] = [:]

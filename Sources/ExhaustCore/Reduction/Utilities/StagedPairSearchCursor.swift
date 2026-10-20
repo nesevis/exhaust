@@ -1,4 +1,4 @@
-/// Tries ratio-preserving tactics in priority order across pairs before the ordinary pair grid.
+/// Tries each pair's sign flip and ratio-preserving tactics in priority order across pairs before the ordinary pair grid.
 struct StagedPairSearchCursor {
     /// Includes both addresses so equal values in different scopes do not suppress each other's proposals.
     private struct ProposalKey: Hashable {
@@ -25,7 +25,7 @@ struct StagedPairSearchCursor {
         cursor = NumericPairSearchCursor(pairs: pairs)
         var ranked: [(priority: Int, pairIndex: Int, proposal: NumericPairSearchCursor.Proposal)] = []
         for (pairIndex, pair) in pairs.enumerated() {
-            for rescaling in NumericCommonDivisorProposal.rescalings(for: [pair.source, pair.sink]) {
+            for rescaling in StagedJointQuery.priorityRescalings(for: [pair.source, pair.sink]) {
                 ranked.append((rescaling.priority, pairIndex, .init(pair: pair, sourceBitPattern: rescaling.patterns[0], sinkBitPattern: rescaling.patterns[1])))
             }
         }

@@ -1,4 +1,4 @@
-/// Tries primitive, small-scale, geometric, and nearby rescalings before coherent proposals, then shares each Cartesian diagonal across retained groups. Only index tuples are enumerated; candidate histories are written into the caller's reusable buffer.
+/// Tries sign flips, then primitive, small-scale, geometric, and nearby rescalings before coherent proposals, then shares each Cartesian diagonal across retained groups. Only index tuples are enumerated; candidate histories are written into the caller's reusable buffer.
 struct NumericJointSearchCursor {
     private struct Plan {
         let leaves: [ReductionLeaf]

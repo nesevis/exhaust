@@ -57,7 +57,7 @@ extension FloatSearch {
         )
     }
 
-    /// Advances through the four-stage float pipeline, returning the next probe candidate or nil when all stages and targets are exhausted.
+    /// Advances through the five-stage float pipeline, returning the next probe candidate or nil when all stages and targets are exhausted.
     static func nextProbe(
         state: inout State,
         lastAccepted: Bool
@@ -99,13 +99,14 @@ extension FloatSearch {
         let target = state.targets[state.currentTargetIndex]
         state.batchCandidates = []
         state.batchIndex = 0
-        state.precisionWalk = nil
 
         switch state.stage {
             case .specialValues:
                 prepareSpecialValues(state: &state, target: target)
-            case .truncation:
-                prepareTruncation(state: &state, target: target)
+            case .boundaries:
+                state.batchCandidates = FloatReduction.boundaryCandidates(for: target.currentValue, tag: target.typeTag)
+            case .precisionWalk:
+                preparePrecisionWalk(state: &state, target: target)
             case .integralBinarySearch:
                 prepareIntegralBinarySearch(state: &state, target: target)
             case .ratioBinarySearch:
@@ -155,9 +156,8 @@ extension FloatSearch {
         state.batchCandidates = candidates
     }
 
-    /// Probes the simplest boundaries as a batch, then arms a grid walk for a fractional leaf. Both include adjacent representations, preserving failures that rounding to a boundary would erase.
-    static func prepareTruncation(state: inout State, target: Target) {
-        state.batchCandidates = FloatReduction.boundaryCandidates(for: target.currentValue, tag: target.typeTag)
+    /// Arms a grid walk for a fractional leaf, leaving the walk nil for an integral or non-finite one. Like the boundary batch before it, each grid's candidates include adjacent representations, preserving failures that rounding to the grid would erase.
+    static func preparePrecisionWalk(state: inout State, target: Target) {
         guard let finestGrid = FloatReduction.finestGrid(of: target.currentValue) else {
             return
         }
@@ -249,10 +249,10 @@ extension FloatSearch {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         switch state.stage {
-            case .specialValues:
+            case .specialValues, .boundaries:
                 nextBatchCandidate(state: &state)
-            case .truncation:
-                nextBatchCandidate(state: &state) ?? nextPrecisionWalkCandidate(state: &state, lastAccepted: lastAccepted)
+            case .precisionWalk:
+                nextPrecisionWalkCandidate(state: &state, lastAccepted: lastAccepted)
             case .integralBinarySearch:
                 nextIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
             case .ratioBinarySearch:
@@ -547,33 +547,35 @@ extension FloatSearch {
 
     // MARK: - Acceptance & Advancement
 
-    /// Processes an accepted probe by updating the current target's value and bit pattern, then continuing a grid walk, advancing to the next target for batch stages, or deferring to the stepper for binary search stages.
+    /// Processes an accepted probe by updating the current target's value and bit pattern, then advancing to the next target for batch stages, continuing the grid walk, or deferring to the stepper for binary search stages.
     static func handleAcceptance(state: inout State) {
-        if let bitPattern = state.precisionWalk?.outstandingBitPattern {
-            // A grid probe was accepted: record it and keep searching coarser grids. The walk reads the acceptance on its next pull.
-            commit(bitPattern: bitPattern, state: &state)
-            return
-        }
         switch state.stage {
-            case .specialValues, .truncation:
+            case .specialValues, .boundaries:
                 // The last batch candidate was accepted: record it, then restart from the first stage on the next target.
                 commit(bitPattern: state.batchCandidates[state.batchIndex - 1], state: &state)
                 state.currentTargetIndex += 1
                 state.stage = .specialValues
                 state.needsFirstProbe = true
+            case .precisionWalk:
+                // A grid probe was accepted: record it and keep searching coarser grids. The walk reads the acceptance on its next pull.
+                if let bitPattern = state.precisionWalk?.outstandingBitPattern {
+                    commit(bitPattern: bitPattern, state: &state)
+                }
             case .integralBinarySearch, .ratioBinarySearch:
                 // Stepper handles acceptance via advance(lastAccepted:).
                 break
         }
     }
 
-    /// Moves to the next stage for the current target, or advances to the next leaf target when all four stages are exhausted, returning false when no targets remain. The stage is prepared by the next call to ``nextProbe(state:lastAccepted:)``, which sees `needsFirstProbe`.
+    /// Moves to the next stage for the current target, or advances to the next leaf target when all five stages are exhausted, returning false when no targets remain. The stage is prepared by the next call to ``nextProbe(state:lastAccepted:)``, which sees `needsFirstProbe`.
     @discardableResult
     static func advanceStageOrTarget(state: inout State) -> Bool {
         let nextStage: Stage? = switch state.stage {
             case .specialValues:
-                .truncation
-            case .truncation:
+                .boundaries
+            case .boundaries:
+                .precisionWalk
+            case .precisionWalk:
                 .integralBinarySearch
             case .integralBinarySearch:
                 .ratioBinarySearch
