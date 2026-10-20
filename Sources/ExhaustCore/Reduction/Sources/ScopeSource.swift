@@ -96,12 +96,12 @@ final class StagedJointSource: ScopeSource {
             isFruitlessBind: isFruitlessBind,
             tuning: tuning
         )
-        let signFlipPairs = StagedJointQuery.signFlipPairs(
+        let signFlipProposals = StagedJointQuery.signFlipProposals(
             graph: graph,
             isFruitlessBind: isFruitlessBind,
             tuning: tuning
         )
-        guard pairs.isEmpty == false || signFlipPairs.isEmpty == false else {
+        guard pairs.isEmpty == false || signFlipProposals.isEmpty == false else {
             return nil
         }
         let candidatePool = StagedJointQuery.candidatePool(
@@ -111,7 +111,7 @@ final class StagedJointSource: ScopeSource {
         )
         let scope = StagedJointEncoder.Scope(
             pairs: pairs,
-            signFlipPairs: signFlipPairs,
+            signFlipProposals: signFlipProposals,
             candidatePool: candidatePool
         )
         guard exhausted != Checkpoint(base: sequence, scope: scope) else {

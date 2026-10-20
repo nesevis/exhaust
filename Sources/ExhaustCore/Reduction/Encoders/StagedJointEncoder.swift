@@ -9,10 +9,10 @@
 ///
 /// The encoder's reduction covers a whole checkpoint, as a chain of stages that follow one rule. A stage searches its arity's candidates; a stage that accepts ends the chain, because every group's addresses and domain samples belong to the checkpoint. A stage that exhausts widens the search to one more leaf per group when probes and group calculations remain and a wider group is cheap enough to search: its cheapest sampled grid fits that arity's work limit. All stages share ``ReductionTuning/stagedJointProbeBudget``, and a stage after which the search can widen reserves half of what remains for the wider stage.
 enum StagedJointEncoder: ReductionEncoder {
-    /// One checkpoint: the pairs to search, the pairs searched only by their sign flip, and the candidate pool for wider groups, all discovered against the same graph.
+    /// One checkpoint: the pairs to search, the sign flips of pairs searched only by that flip, and the candidate pool for wider groups, all discovered against the same graph.
     struct Scope: Equatable {
         let pairs: [NumericPairQuery.Pair]
-        let signFlipPairs: [NumericPairQuery.Pair]
+        let signFlipProposals: [StagedJointQuery.PriorityProposal]
         let candidatePool: [StagedJointQuery.Entry]
     }
 
@@ -25,7 +25,7 @@ enum StagedJointEncoder: ReductionEncoder {
     static func reduce(_ scope: Scope, input: EncoderInput) -> Reduction {
         stage(
             arity: 2,
-            candidates: .pairs(scope.pairs, signFlipPairs: scope.signFlipPairs),
+            candidates: .pairs(scope.pairs, signFlipProposals: scope.signFlipProposals),
             candidatePool: scope.candidatePool,
             remaining: input.tuning.stagedJointProbeBudget,
             calculationsRemaining: input.tuning.numericJointGroupCalculationLimit,
@@ -51,7 +51,7 @@ enum StagedJointEncoder: ReductionEncoder {
     // MARK: - Helpers
 
     private enum Candidates {
-        case pairs([NumericPairQuery.Pair], signFlipPairs: [NumericPairQuery.Pair])
+        case pairs([NumericPairQuery.Pair], signFlipProposals: [StagedJointQuery.PriorityProposal])
         case groups([NumericJointQuery.Group])
     }
 
@@ -72,10 +72,10 @@ enum StagedJointEncoder: ReductionEncoder {
             tuning: input.tuning
         )
         let search = switch candidates {
-            case let .pairs(pairs, signFlipPairs):
+            case let .pairs(pairs, signFlipProposals):
                 StagedJointSearch(
                     pairs: pairs,
-                    signFlipPairs: signFlipPairs,
+                    signFlipProposals: signFlipProposals,
                     base: input.baseSequence,
                     probeBudget: budget
                 )

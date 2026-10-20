@@ -20,6 +20,12 @@ enum StagedJointQuery {
         let compensatingSamples: [UInt64]
     }
 
+    /// A sparse proposal a staged cursor tries before its grid. Cursors emit lower priorities first across every scope, in scope order within one priority.
+    struct PriorityProposal: Equatable {
+        let priority: Int
+        let probe: SparseEncoderProbe
+    }
+
     /// The groups one higher-order stage retains, with the discovery work spent finding them.
     struct Groups {
         let groups: [NumericJointQuery.Group]
@@ -41,21 +47,21 @@ enum StagedJointQuery {
             return []
         }
         let sourceIndices = leaves.indices.filter { isStalled(leaves[$0], graph: graph, isFruitlessBind: isFruitlessBind) }
-        return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { _, _ in
-            true
+        return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { sourceIndex, sinkIndex in
+            NumericPairQuery.Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex])
         }
     }
 
-    /// Collects pairs searched only by their sign flip: a negative source that has not stalled, with a stalled partner whose joint flip simplifies the source. Discovered in the same order as ``pairs(graph:isFruitlessBind:tuning:)``, under a separate cap so these pairs never displace sampled ones.
+    /// Builds the sign flips of pairs searched only by that flip: a negative source that has not stalled, with a stalled partner whose joint flip simplifies the source. Discovered in the same order as ``pairs(graph:isFruitlessBind:tuning:)``, under a separate cap so these pairs never displace sampled ones.
     ///
     /// Float search can leave an integral source without a floor while its fractional partner is stalled. The sign flip is the one concrete proposal such a pair has; sampling the still-moving source would spend probes that its own value search will cover.
     ///
     /// - Parameter isFruitlessBind: Whether bound value search came back fruitless for the bind with this fingerprint.
-    static func signFlipPairs(
+    static func signFlipProposals(
         graph: ChoiceGraph,
         isFruitlessBind: (UInt64) -> Bool,
         tuning: ReductionTuning
-    ) -> [NumericPairQuery.Pair] {
+    ) -> [PriorityProposal] {
         let leaves = eligibleLeaves(graph: graph, tuning: tuning)
         guard leaves.count > 1 else {
             return []
@@ -63,7 +69,10 @@ enum StagedJointQuery {
         let stalled = leaves.map { isStalled($0, graph: graph, isFruitlessBind: isFruitlessBind) }
         let sourceIndices = leaves.indices.filter { stalled[$0] == false && leaves[$0].choice.hasNegativeSign }
         return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { sourceIndex, sinkIndex in
-            stalled[sinkIndex] && SignFlipQuery.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) != nil
+            guard stalled[sinkIndex], let signFlip = SignFlipQuery.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) else {
+                return nil
+            }
+            return PriorityProposal(priority: SignFlipQuery.priority, probe: signFlip)
         }
     }
 
@@ -235,9 +244,9 @@ enum StagedJointQuery {
                 index == 0 ? entry.simplifyingSamples : entry.compensatingSamples
             }
             let leaves = entries.map(\.leaf)
-            let ratioProposals = priorityRescalings(for: leaves)
-            let extraWork = ratioProposals.count { proposal in
-                samples.indices.allSatisfy { samples[$0].contains(proposal.patterns[$0]) } == false
+            let priorityProposals = priorityProposals(for: leaves)
+            let extraWork = priorityProposals.count { proposal in
+                samples.indices.allSatisfy { samples[$0].contains(proposal.probe.patterns[$0]) } == false
             }
             let estimatedWork = gridWork + extraWork
             if estimatedWork <= workLimit {
@@ -258,7 +267,7 @@ enum StagedJointQuery {
                 selected.insert(NumericJointQuery.Group(
                     leaves: leaves,
                     samples: samples,
-                    ratioProposals: ratioProposals,
+                    priorityProposals: priorityProposals,
                     estimatedWork: estimatedWork,
                     residualVolume: saturatedVolume(entries.map(\.span)),
                     stalledCount: entries.count(where: \.stalled),
@@ -281,27 +290,26 @@ enum StagedJointQuery {
     /// The proposals both staged cursors try before their grids: the group's sign flip, a rescaling by −1, then its ratio-preserving rescalings.
     ///
     /// Ranking the flip below every rescaling priority makes each cursor emit every group's flip before any rescaling, and the cursors skip grid points that repeat a priority proposal. The flip never duplicates a rescaling: rescalings apply only to integers and strictly shrink every nonzero magnitude, while the flip preserves magnitudes and changes at least one nonzero leaf.
-    static func priorityRescalings(for leaves: [ReductionLeaf]) -> [NumericCommonDivisorProposal.Rescaling] {
-        let rescalings = NumericCommonDivisorProposal.rescalings(for: leaves)
+    static func priorityProposals(for leaves: [ReductionLeaf]) -> [PriorityProposal] {
+        let rescalings = NumericCommonDivisorProposal.rescalings(for: leaves).map { rescaling in
+            PriorityProposal(priority: rescaling.priority, probe: SparseEncoderProbe(leaves: leaves, patterns: rescaling.patterns))
+        }
         guard let signFlip = SignFlipQuery.build(leaves: leaves) else {
             return rescalings
         }
-        return [NumericCommonDivisorProposal.Rescaling(
-            priority: SignFlipQuery.priority,
-            patterns: signFlip.patterns
-        )] + rescalings
+        return [PriorityProposal(priority: SignFlipQuery.priority, probe: signFlip)] + rescalings
     }
 
     // MARK: - Helpers
 
-    /// Visits each source's later partners in discovery order and keeps the pairs `admits` accepts, up to ``ReductionTuning/numericPairMaximumPairs``.
-    private static func collectPairs(
+    /// Visits each source's later partners in discovery order and keeps what `make` builds for a pair, up to ``ReductionTuning/numericPairMaximumPairs`` elements. A pair `make` returns nil for is skipped.
+    private static func collectPairs<Element>(
         leaves: [ReductionLeaf],
         sourceIndices: [Int],
         tuning: ReductionTuning,
-        admits: (_ sourceIndex: Int, _ sinkIndex: Int) -> Bool
-    ) -> [NumericPairQuery.Pair] {
-        var pairs: [NumericPairQuery.Pair] = []
+        make: (_ sourceIndex: Int, _ sinkIndex: Int) -> Element?
+    ) -> [Element] {
+        var pairs: [Element] = []
         // Each source's nearest and farthest partners come first, alternating source by source, so neither distance class can take the whole cap.
         let lastIndex = leaves.count - 1
         let rounds = [[1, lastIndex]] + stride(from: 2, to: lastIndex, by: 1).map { [$0] }
@@ -312,11 +320,11 @@ enum StagedJointQuery {
                     let sinkIndex = min(sourceIndex + offset, lastIndex)
                     guard sinkIndex > sourceIndex,
                           seen.insert(sourceIndex * tuning.numericPairMaximumLeaves + sinkIndex).inserted,
-                          admits(sourceIndex, sinkIndex)
+                          let element = make(sourceIndex, sinkIndex)
                     else {
                         continue
                     }
-                    pairs.append(NumericPairQuery.Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex]))
+                    pairs.append(element)
                     if pairs.count == tuning.numericPairMaximumPairs {
                         return pairs
                     }

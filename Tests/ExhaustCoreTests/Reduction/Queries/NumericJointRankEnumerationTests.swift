@@ -51,7 +51,7 @@ struct NumericJointRankEnumerationTests {
     private func cartesianProposals(groups: [NumericJointQuery.Group]) -> [Snapshot] {
         var rescalings: [(priority: Int, index: Int, patterns: [UInt64])] = []
         for (index, group) in groups.enumerated() {
-            rescalings += group.ratioProposals.map { (priority: $0.priority, index: index, patterns: $0.patterns) }
+            rescalings += group.priorityProposals.map { (priority: $0.priority, index: index, patterns: $0.probe.patterns) }
         }
         rescalings.sort {
             $0.priority == $1.priority ? $0.index < $1.index : $0.priority < $1.priority
@@ -62,7 +62,7 @@ struct NumericJointRankEnumerationTests {
         func append(_ indices: [Int], group: NumericJointQuery.Group) {
             guard indices.indices.allSatisfy({ indices[$0] < group.samples[$0].count }) else { return }
             let patterns = indices.indices.map { group.samples[$0][indices[$0]] }
-            guard group.ratioProposals.contains(where: { $0.patterns == patterns }) == false else { return }
+            guard group.priorityProposals.contains(where: { $0.probe.patterns == patterns }) == false else { return }
             result.append(.init(nodeIDs: group.leaves.map(\.nodeID), patterns: patterns))
         }
         for rank in 0 ... 1 {
@@ -102,14 +102,14 @@ struct NumericJointRankEnumerationTests {
                 mayReshapeOnAcceptance: false
             )
         }
-        let ratios: [NumericCommonDivisorProposal.Rescaling] = rescaled
-            ? [.init(priority: 0, patterns: Array(repeating: 1, count: counts.count)),
-               .init(priority: 2, patterns: Array(repeating: 7, count: counts.count))]
+        let ratios: [StagedJointQuery.PriorityProposal] = rescaled
+            ? [.init(priority: 0, probe: SparseEncoderProbe(leaves: leaves, patterns: Array(repeating: 1, count: counts.count))),
+               .init(priority: 2, probe: SparseEncoderProbe(leaves: leaves, patterns: Array(repeating: 7, count: counts.count)))]
             : []
         return .init(
             leaves: leaves,
             samples: counts.map { (0 ..< $0).map(UInt64.init) },
-            ratioProposals: ratios,
+            priorityProposals: ratios,
             estimatedWork: counts.reduce(1, *) + ratios.count,
             residualVolume: 1,
             stalledCount: counts.count,

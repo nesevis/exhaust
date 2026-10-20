@@ -18,15 +18,15 @@ struct StagedJointSearch: ReductionSearch {
     private let probeBudget: Int
     private var emitted = 0
 
-    /// Searches `pairs` and the sign flips of `signFlipPairs`, emitting at most `probeBudget` candidates.
+    /// Searches `pairs` and `signFlipProposals`, emitting at most `probeBudget` candidates.
     init(
         pairs: [NumericPairQuery.Pair],
-        signFlipPairs: [NumericPairQuery.Pair] = [],
+        signFlipProposals: [StagedJointQuery.PriorityProposal] = [],
         base: ChoiceSequence,
         probeBudget: Int
     ) {
         arity = 2
-        cursor = StagedPairSearchCursor(pairs: pairs, signFlipPairs: signFlipPairs)
+        cursor = StagedPairSearchCursor(pairs: pairs, signFlipProposals: signFlipProposals)
         self.base = base
         self.probeBudget = probeBudget
     }
