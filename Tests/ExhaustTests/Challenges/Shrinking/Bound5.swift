@@ -97,9 +97,9 @@ struct Bound5ShrinkingChallenge {
         )
 
         let rep = try #require(report)
-        // Positive-first ordering also admits -1 → +1 as a joint-search source, even though this overflow failure needs negative values.
-        #expect(rep.propertyInvocations == 184)
-        #expect(rep.totalMaterializations == 385)
+        // Value search also probes a negative leaf's positive counterpart, which this overflow failure rejects.
+        #expect(rep.propertyInvocations == 136)
+        #expect(rep.totalMaterializations == 321)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -195,9 +195,9 @@ struct Bound5ShrinkingChallenge {
         }
 
         let rep = try #require(report)
-        // Positive-first ordering also admits -1 → +1 as a joint-search source, even though this overflow failure needs negative values.
-        #expect(rep.propertyInvocations == 218)
-        #expect(rep.totalMaterializations == 303)
+        // Value search also probes a negative leaf's positive counterpart, which this overflow failure rejects.
+        #expect(rep.propertyInvocations == 170)
+        #expect(rep.totalMaterializations == 239)
 
         let b25 = try #require(output)
         let arr = b25.0.arr + b25.1.arr + b25.2.arr + b25.3.arr + b25.4.arr

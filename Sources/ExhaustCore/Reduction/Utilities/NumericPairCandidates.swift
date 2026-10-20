@@ -97,11 +97,16 @@ private struct CandidateSamples {
         }
         let value = ChoiceValue(pattern, tag: leaf.choice.tag)
         guard leaf.choice.tag.isFloatingPoint == false || value.decodedDoubleValue.isFinite,
-              simplifying == false || value.shortLexCompare(leaf.choice) == .lt
+              simplifying == false || (value.shortLexCompare(leaf.choice) == .lt && isSignFlip(pattern) == false)
         else {
             return
         }
         candidates.append(pattern)
+    }
+
+    /// Whether `pattern` only flips the leaf's sign. A simplifying side is a stalled leaf whose value search has already rejected its sign flip alone, and the group's sign flip covers the coordinated change, so the grid does not repeat it.
+    private func isSignFlip(_ pattern: UInt64) -> Bool {
+        leaf.choice.signFlipped?.bitPattern64 == pattern
     }
 
     /// Bit-pattern steps of one, two, and four in each direction.

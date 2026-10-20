@@ -1,14 +1,14 @@
 extension FloatReduction {
     /// Tries the simplest boundaries and both adjacent representations for fractional leaves because rounding to a boundary can erase a floating-point failure.
     ///
-    /// Integral leaves stay with the integer search; perturbing them would introduce a fraction rather than remove one.
+    /// Zero and its neighbors come before one and its neighbors, each positive sign before its negative, because the first accepted boundary ends the leaf's boundary stage. Integral leaves stay with the integer search; perturbing them would introduce a fraction rather than remove one.
     static func boundaryCandidates(for value: Double, tag: TypeTag) -> [UInt64] {
         guard tag.isFloatingPoint, finestGrid(of: value) != nil else {
             return []
         }
         var seen: Set<UInt64> = []
         var candidates: [UInt64] = []
-        for boundary in [1.0, -1.0, 0.0, -0.0] {
+        for boundary in [0.0, -0.0, 1.0, -1.0] {
             appendRepresentations(of: boundary, tag: tag, to: &candidates, seen: &seen)
         }
         return candidates

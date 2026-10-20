@@ -202,7 +202,7 @@ struct NumericPairSearchTests {
         #expect(Set(values).count == values.count)
     }
 
-    @Test("Numeric candidate admission shares the positive-first ordering", arguments: [TypeTag.int64, .double, .float, .float16])
+    @Test("Simplifying candidates never repeat the leaf's own sign flip", arguments: [TypeTag.int64, .double, .float, .float16])
     func numericCandidateSigns(tag: TypeTag) throws {
         let positive: ChoiceValue = switch tag {
             case .int64:
@@ -227,7 +227,7 @@ struct NumericPairSearchTests {
                 mayReshapeOnAcceptance: false
             )
             let candidates = NumericPairCandidates.jointValues(for: leaf, simplifying: true)
-            #expect(candidates.contains(positive.bitPattern64) == (current == negative))
+            #expect(candidates.contains(positive.bitPattern64) == false)
             #expect(candidates.contains(negative.bitPattern64) == false)
         }
     }
@@ -261,8 +261,8 @@ struct NumericPairSearchTests {
             let value = ChoiceValue(pattern, tag: leaf.choice.tag)
             return pattern != current && leaf.range.contains(pattern) && visited.insert(pattern).inserted
                 && (leaf.choice.tag.isFloatingPoint == false || value.decodedDoubleValue.isFinite)
-                && (simplifying == false || value.shortlexKey < leaf.choice.shortlexKey
-                    || (value.shortlexKey == leaf.choice.shortlexKey && pattern < current))
+                && (simplifying == false
+                    || (value.shortLexCompare(leaf.choice) == .lt && pattern != leaf.choice.signFlipped?.bitPattern64))
         }
         return Array(admitted.prefix(NumericPairCandidates.maximumJointSamples))
     }
