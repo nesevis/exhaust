@@ -21,7 +21,9 @@ struct StagedPairSearchCursor {
     private var rescalingIndex = 0
 
     /// Interleaves each tactic across scopes so one pair cannot spend the rescaling prefix before another pair reaches its primitive tuple.
-    init(pairs: [NumericPairQuery.Pair]) {
+    ///
+    /// Each of `signFlipPairs` contributes only its sign flip, ranked after the sampled pairs' flips and before any rescaling, and joins neither the rescalings nor the grid.
+    init(pairs: [NumericPairQuery.Pair], signFlipPairs: [NumericPairQuery.Pair] = []) {
         cursor = NumericPairSearchCursor(pairs: pairs)
         var ranked: [(priority: Int, pairIndex: Int, proposal: NumericPairSearchCursor.Proposal)] = []
         for (pairIndex, pair) in pairs.enumerated() {
@@ -29,10 +31,21 @@ struct StagedPairSearchCursor {
                 ranked.append((rescaling.priority, pairIndex, .init(pair: pair, sourceBitPattern: rescaling.patterns[0], sinkBitPattern: rescaling.patterns[1])))
             }
         }
+        for (offset, pair) in signFlipPairs.enumerated() {
+            guard let signFlip = SignFlipQuery.build(leaves: [pair.source, pair.sink]) else {
+                continue
+            }
+            ranked.append((
+                SignFlipQuery.priority,
+                pairs.count + offset,
+                .init(pair: pair, sourceBitPattern: signFlip.patterns[0], sinkBitPattern: signFlip.patterns[1])
+            ))
+        }
         rescalingProposals = ranked.sorted { first, second in
             if first.priority != second.priority { return first.priority < second.priority }
             return first.pairIndex < second.pairIndex
         }.map(\.proposal)
+
         rescalingKeys = Set(rescalingProposals.map(ProposalKey.init))
     }
 

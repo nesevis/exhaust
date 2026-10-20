@@ -219,7 +219,7 @@ extension ReductionSession {
 
     // MARK: - Staged Joint Pass
 
-    /// Whether a staged joint checkpoint differs from the one last searched, with sampled pairs to search.
+    /// Whether a staged joint checkpoint differs from the one last searched, with sampled or sign-flip-only pairs to search.
     func hasPendingStagedJointCheckpoint() -> Bool {
         guard isEncoderEnabled(.stagedJointSearch) else {
             return false

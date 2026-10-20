@@ -86,7 +86,7 @@ final class StagedJointSource: ScopeSource {
 
     // MARK: - Helpers
 
-    /// Offers a changed checkpoint when sampled pairs exist. Priced with no benefit and the first search's budget as cost.
+    /// Offers a changed checkpoint when sampled or sign-flip-only pairs exist. Priced with no benefit and the first search's budget as cost.
     private func discover() -> PricedEncoderScope? {
         guard tuning.stagedJointProbeBudget > 0 else {
             return nil
@@ -96,7 +96,12 @@ final class StagedJointSource: ScopeSource {
             isFruitlessBind: isFruitlessBind,
             tuning: tuning
         )
-        guard pairs.isEmpty == false else {
+        let signFlipPairs = StagedJointQuery.signFlipPairs(
+            graph: graph,
+            isFruitlessBind: isFruitlessBind,
+            tuning: tuning
+        )
+        guard pairs.isEmpty == false || signFlipPairs.isEmpty == false else {
             return nil
         }
         let candidatePool = StagedJointQuery.candidatePool(
@@ -104,7 +109,11 @@ final class StagedJointSource: ScopeSource {
             isFruitlessBind: isFruitlessBind,
             tuning: tuning
         )
-        let scope = StagedJointEncoder.Scope(pairs: pairs, candidatePool: candidatePool)
+        let scope = StagedJointEncoder.Scope(
+            pairs: pairs,
+            signFlipPairs: signFlipPairs,
+            candidatePool: candidatePool
+        )
         guard exhausted != Checkpoint(base: sequence, scope: scope) else {
             return nil
         }

@@ -129,6 +129,7 @@ private struct StagedJointFixture {
         property = { output in passes(output as! [Int]) }
         scope = StagedJointEncoder.Scope(
             pairs: StagedJointQuery.pairs(graph: built, isFruitlessBind: { _ in false }, tuning: Self.tuning),
+            signFlipPairs: StagedJointQuery.signFlipPairs(graph: built, isFruitlessBind: { _ in false }, tuning: Self.tuning),
             candidatePool: StagedJointQuery.candidatePool(graph: built, isFruitlessBind: { _ in false }, tuning: Self.tuning)
         )
     }

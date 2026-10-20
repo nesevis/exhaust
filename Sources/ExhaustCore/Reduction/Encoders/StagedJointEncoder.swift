@@ -9,9 +9,10 @@
 ///
 /// The encoder's reduction covers a whole checkpoint, as a chain of stages that follow one rule. A stage searches its arity's candidates; a stage that accepts ends the chain, because every group's addresses and domain samples belong to the checkpoint. A stage that exhausts widens the search to one more leaf per group when probes and group calculations remain and a wider group is cheap enough to search: its cheapest sampled grid fits that arity's work limit. All stages share ``ReductionTuning/stagedJointProbeBudget``, and a stage after which the search can widen reserves half of what remains for the wider stage.
 enum StagedJointEncoder: ReductionEncoder {
-    /// One checkpoint: the pairs to search and the candidate pool for wider groups, all discovered against the same graph.
+    /// One checkpoint: the pairs to search, the pairs searched only by their sign flip, and the candidate pool for wider groups, all discovered against the same graph.
     struct Scope: Equatable {
         let pairs: [NumericPairQuery.Pair]
+        let signFlipPairs: [NumericPairQuery.Pair]
         let candidatePool: [StagedJointQuery.Entry]
     }
 
@@ -22,12 +23,9 @@ enum StagedJointEncoder: ReductionEncoder {
     static let admissionOrder: ReductionOrder = .notLarger
 
     static func reduce(_ scope: Scope, input: EncoderInput) -> Reduction {
-        guard input.tuning.stagedJointProbeBudget > 0 else {
-            return .pure(.finished)
-        }
-        return stage(
+        stage(
             arity: 2,
-            candidates: .pairs(scope.pairs),
+            candidates: .pairs(scope.pairs, signFlipPairs: scope.signFlipPairs),
             candidatePool: scope.candidatePool,
             remaining: input.tuning.stagedJointProbeBudget,
             calculationsRemaining: input.tuning.numericJointGroupCalculationLimit,
@@ -35,7 +33,7 @@ enum StagedJointEncoder: ReductionEncoder {
         )
     }
 
-    /// Probes a stage of `arity` may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it.
+    /// Probes a stage of `arity` may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it. A single remaining probe goes to this stage, and an exhausted budget gives it none.
     static func stageBudget(
         arity: Int,
         candidatePool: [StagedJointQuery.Entry],
@@ -43,14 +41,17 @@ enum StagedJointEncoder: ReductionEncoder {
         calculationsRemaining: Int,
         tuning: ReductionTuning
     ) -> Int {
+        guard remaining > 1 else {
+            return remaining
+        }
         let reservesProbesForWiderSearch = calculationsRemaining > 0 && canWidenSearch(after: arity, candidatePool: candidatePool, tuning: tuning)
-        return reservesProbesForWiderSearch ? max(1, remaining / 2) : remaining
+        return reservesProbesForWiderSearch ? remaining / 2 : remaining
     }
 
     // MARK: - Helpers
 
     private enum Candidates {
-        case pairs([NumericPairQuery.Pair])
+        case pairs([NumericPairQuery.Pair], signFlipPairs: [NumericPairQuery.Pair])
         case groups([NumericJointQuery.Group])
     }
 
@@ -71,8 +72,13 @@ enum StagedJointEncoder: ReductionEncoder {
             tuning: input.tuning
         )
         let search = switch candidates {
-            case let .pairs(pairs):
-                StagedJointSearch(pairs: pairs, base: input.baseSequence, probeBudget: budget)
+            case let .pairs(pairs, signFlipPairs):
+                StagedJointSearch(
+                    pairs: pairs,
+                    signFlipPairs: signFlipPairs,
+                    base: input.baseSequence,
+                    probeBudget: budget
+                )
             case let .groups(groups):
                 StagedJointSearch(groups: groups, base: input.baseSequence, probeBudget: budget)
         }

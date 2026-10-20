@@ -7,7 +7,7 @@
 
 /// Discovers the pairs and higher-order groups of one staged joint checkpoint.
 ///
-/// A pair needs a stalled source, or a stalled partner when a sign flip simplifies the source. Higher-order groups are discovered only after the preceding stage stalls.
+/// A sampled pair needs only a stalled source; its compensating partner may still be moving. A negative source that has not stalled pairs with a stalled partner for their sign flip alone. Higher-order groups are discovered only after the preceding stage stalls.
 ///
 /// Ranking is a heuristic: generator relationships and observed floor motion suggest property coupling but do not prove it. Discovery has its own limit, ``ReductionTuning/numericJointGroupCalculationLimit``, separate from the probe budget. A leaf under a bind is eligible only when the bind's classification shows it lifts at both ends of its controller's range with the same bound shape at each. That checks only the two ends, so the candidate's ``DecoderAdmission`` still rejects any decoding that changes a proposed choice.
 enum StagedJointQuery {
@@ -36,43 +36,35 @@ enum StagedJointQuery {
         isFruitlessBind: (UInt64) -> Bool,
         tuning: ReductionTuning
     ) -> [NumericPairQuery.Pair] {
-        var pairs: [NumericPairQuery.Pair] = []
+        let leaves = eligibleLeaves(graph: graph, tuning: tuning)
+        guard leaves.count > 1 else {
+            return []
+        }
+        let sourceIndices = leaves.indices.filter { isStalled(leaves[$0], graph: graph, isFruitlessBind: isFruitlessBind) }
+        return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { _, _ in
+            true
+        }
+    }
+
+    /// Collects pairs searched only by their sign flip: a negative source that has not stalled, with a stalled partner whose joint flip simplifies the source. Discovered in the same order as ``pairs(graph:isFruitlessBind:tuning:)``, under a separate cap so these pairs never displace sampled ones.
+    ///
+    /// Float search can leave an integral source without a floor while its fractional partner is stalled. The sign flip is the one concrete proposal such a pair has; sampling the still-moving source would spend probes that its own value search will cover.
+    ///
+    /// - Parameter isFruitlessBind: Whether bound value search came back fruitless for the bind with this fingerprint.
+    static func signFlipPairs(
+        graph: ChoiceGraph,
+        isFruitlessBind: (UInt64) -> Bool,
+        tuning: ReductionTuning
+    ) -> [NumericPairQuery.Pair] {
         let leaves = eligibleLeaves(graph: graph, tuning: tuning)
         guard leaves.count > 1 else {
             return []
         }
         let stalled = leaves.map { isStalled($0, graph: graph, isFruitlessBind: isFruitlessBind) }
-        let sourceIndices = leaves.indices.filter { stalled[$0] || leaves[$0].choice.hasNegativeSign }
-        // Each source's nearest and farthest partners come first, alternating source by source, so neither distance class can take the whole cap.
-        let lastIndex = leaves.count - 1
-        let rounds = [[1, lastIndex]] + stride(from: 2, to: lastIndex, by: 1).map { [$0] }
-        var seen: Set<Int> = []
-        for offsets in rounds {
-            for sourceIndex in sourceIndices {
-                let requiresSignFlip = leaves[sourceIndex].choice.hasNegativeSign && stalled[sourceIndex] == false
-                for offset in offsets {
-                    let sinkIndex = min(sourceIndex + offset, lastIndex)
-                    guard sinkIndex > sourceIndex,
-                          seen.insert(sourceIndex * tuning.numericPairMaximumLeaves + sinkIndex).inserted
-                    else {
-                        continue
-                    }
-                    if requiresSignFlip {
-                        // Float search can leave an integral source without a floor while its fractional partner is stalled. A simplifying sign flip still gives that pair a concrete proposal.
-                        guard stalled[sinkIndex],
-                              SignFlipQuery.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) != nil
-                        else {
-                            continue
-                        }
-                    }
-                    pairs.append(NumericPairQuery.Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex]))
-                    if pairs.count == tuning.numericPairMaximumPairs {
-                        return pairs
-                    }
-                }
-            }
+        let sourceIndices = leaves.indices.filter { stalled[$0] == false && leaves[$0].choice.hasNegativeSign }
+        return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { sourceIndex, sinkIndex in
+            stalled[sinkIndex] && SignFlipQuery.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) != nil
         }
-        return pairs
     }
 
     /// The numeric leaves pair and group discovery may use: at most ``ReductionTuning/numericPairMaximumLeaves``, in position order, each under binds that lift at both ends of their controllers' ranges with the same bound shape at each.
@@ -294,10 +286,45 @@ enum StagedJointQuery {
         guard let signFlip = SignFlipQuery.build(leaves: leaves) else {
             return rescalings
         }
-        return [NumericCommonDivisorProposal.Rescaling(priority: -1, patterns: signFlip.patterns)] + rescalings
+        return [NumericCommonDivisorProposal.Rescaling(
+            priority: SignFlipQuery.priority,
+            patterns: signFlip.patterns
+        )] + rescalings
     }
 
     // MARK: - Helpers
+
+    /// Visits each source's later partners in discovery order and keeps the pairs `admits` accepts, up to ``ReductionTuning/numericPairMaximumPairs``.
+    private static func collectPairs(
+        leaves: [ReductionLeaf],
+        sourceIndices: [Int],
+        tuning: ReductionTuning,
+        admits: (_ sourceIndex: Int, _ sinkIndex: Int) -> Bool
+    ) -> [NumericPairQuery.Pair] {
+        var pairs: [NumericPairQuery.Pair] = []
+        // Each source's nearest and farthest partners come first, alternating source by source, so neither distance class can take the whole cap.
+        let lastIndex = leaves.count - 1
+        let rounds = [[1, lastIndex]] + stride(from: 2, to: lastIndex, by: 1).map { [$0] }
+        var seen: Set<Int> = []
+        for offsets in rounds {
+            for sourceIndex in sourceIndices {
+                for offset in offsets {
+                    let sinkIndex = min(sourceIndex + offset, lastIndex)
+                    guard sinkIndex > sourceIndex,
+                          seen.insert(sourceIndex * tuning.numericPairMaximumLeaves + sinkIndex).inserted,
+                          admits(sourceIndex, sinkIndex)
+                    else {
+                        continue
+                    }
+                    pairs.append(NumericPairQuery.Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex]))
+                    if pairs.count == tuning.numericPairMaximumPairs {
+                        return pairs
+                    }
+                }
+            }
+        }
+        return pairs
+    }
 
     /// Whether every non-constant bind above the leaf is classified as lifting at both ends of its controller's range with the same bound shape at each. An unclassified bind counts as unsupported: this reads cached classifications rather than classifying, which would cost materializations.
     private static func supportsBinds(above nodeID: Int, graph: ChoiceGraph) -> Bool {
