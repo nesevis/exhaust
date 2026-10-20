@@ -7,7 +7,7 @@ struct FloatSearchTests {
     @Test("Rounding neighbors use the leaf's precision", arguments: [TypeTag.double, .float, .float16])
     func neighborsUseLeafPrecision(tag: TypeTag) throws {
         let unit = try #require(tag.floatingChoice(from: 1))
-        let candidates = FloatReduction.precisionCandidates(for: 3.125, tag: tag)
+        let candidates = FloatReduction.boundaryCandidates(for: 3.125, tag: tag)
 
         #expect(candidates.contains(unit.bitPattern64 - 1))
         #expect(candidates.contains(unit.bitPattern64 + 1))
@@ -45,6 +45,24 @@ struct FloatSearchTests {
         }
 
         #expect(output == sign * 2 * smallest)
+    }
+
+    @Test("A subnormal leaf's grid walk spends probes logarithmic in its depth")
+    func subnormalWalkIsLogarithmic() throws {
+        let smallest = Double.leastNonzeroMagnitude
+        var invocations = 0
+        let output = try reduceFromReflection(
+            Gen.choose(in: 0.0 ... 1.0),
+            startingAt: smallest,
+            config: .init(maxStalls: 2, enabledEncoders: [.floatSearch])
+        ) { value in
+            invocations += 1
+            return value != smallest
+        }
+
+        #expect(output == smallest)
+        // Probing every one of the 1074 coarser grids would spend over a thousand invocations.
+        #expect(invocations < 100)
     }
 
     @Test("Small fractions can simplify to a coarser exponent", arguments: [0.1, Double.leastNonzeroMagnitude])

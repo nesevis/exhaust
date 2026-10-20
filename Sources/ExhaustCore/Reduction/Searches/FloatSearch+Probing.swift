@@ -99,6 +99,7 @@ extension FloatSearch {
         let target = state.targets[state.currentTargetIndex]
         state.batchCandidates = []
         state.batchIndex = 0
+        state.precisionWalk = nil
 
         switch state.stage {
             case .specialValues:
@@ -154,9 +155,15 @@ extension FloatSearch {
         state.batchCandidates = candidates
     }
 
-    /// Probes simple values and progressively finer fractional boundaries with their adjacent representations, preserving failures that rounding to the boundary would erase.
+    /// Probes the simplest boundaries as a batch, then arms a grid walk for a fractional leaf. Both include adjacent representations, preserving failures that rounding to a boundary would erase.
     static func prepareTruncation(state: inout State, target: Target) {
-        state.batchCandidates = FloatReduction.precisionCandidates(for: target.currentValue, tag: target.typeTag)
+        state.batchCandidates = FloatReduction.boundaryCandidates(for: target.currentValue, tag: target.typeTag)
+        guard let finestGrid = FloatReduction.finestGrid(of: target.currentValue) else {
+            return
+        }
+        var walk = PrecisionWalk(origin: target.currentValue, finestGrid: finestGrid, tag: target.typeTag)
+        walk.begin(step: state.stepper.start())
+        state.precisionWalk = walk
     }
 
     /// Sets up binary search toward the integer target for a leaf whose value is already integral, stepping in multiples of the value's ULP so every probe is representable in the leaf's type. Does nothing for a non-integral value, which the ratio stage handles.
@@ -242,8 +249,10 @@ extension FloatSearch {
         lastAccepted: Bool
     ) -> ChoiceSequence? {
         switch state.stage {
-            case .specialValues, .truncation:
+            case .specialValues:
                 nextBatchCandidate(state: &state)
+            case .truncation:
+                nextBatchCandidate(state: &state) ?? nextPrecisionWalkCandidate(state: &state, lastAccepted: lastAccepted)
             case .integralBinarySearch:
                 nextIntegralBinarySearchCandidate(state: &state, lastAccepted: lastAccepted)
             case .ratioBinarySearch:
@@ -260,28 +269,65 @@ extension FloatSearch {
         while state.batchIndex < state.batchCandidates.count {
             let bitPattern = state.batchCandidates[state.batchIndex]
             state.batchIndex += 1
-
-            guard let candidateChoice = makeChoice(bitPattern: bitPattern, tag: target.typeTag) else {
-                continue
+            if let candidate = candidateSequence(bitPattern: bitPattern, target: target, sequence: state.sequence) {
+                return candidate
             }
-            if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
-                continue
-            }
-
-            let candidateEntry = ChoiceSequenceValue.value(.init(
-                choice: candidateChoice,
-                validRange: target.validRange,
-                isRangeExplicit: target.isRangeExplicit
-            ))
-            guard candidateEntry.shortLexCompare(state.sequence[target.sequenceIndex]) == .lt else {
-                continue
-            }
-
-            var candidate = state.sequence
-            candidate[target.sequenceIndex] = candidateEntry
-            return candidate
         }
         return nil
+    }
+
+    /// Pulls the next grid probe. Each stepper step tries its grid's candidates until one is accepted or all are rejected, and a grid whose candidates were all rejected answers the stepper as an accepted step.
+    static func nextPrecisionWalkCandidate(
+        state: inout State,
+        lastAccepted: Bool
+    ) -> ChoiceSequence? {
+        guard var walk = state.precisionWalk else {
+            return nil
+        }
+        if walk.outstandingBitPattern != nil {
+            walk.outstandingBitPattern = nil
+            walk.gridFails = lastAccepted
+        }
+        let target = state.targets[state.currentTargetIndex]
+        while true {
+            while walk.gridFails == false, walk.candidateIndex < walk.candidates.count {
+                let bitPattern = walk.candidates[walk.candidateIndex]
+                walk.candidateIndex += 1
+                if let candidate = candidateSequence(bitPattern: bitPattern, target: target, sequence: state.sequence) {
+                    walk.outstandingBitPattern = bitPattern
+                    state.precisionWalk = walk
+                    return candidate
+                }
+            }
+            guard let step = state.stepper.advance(lastAccepted: walk.gridFails == false) else {
+                state.precisionWalk = nil
+                return nil
+            }
+            walk.begin(step: step)
+        }
+    }
+
+    /// The sequence with the target set to `bitPattern`, or nil when the pattern is outside an explicit range or does not precede the current entry.
+    static func candidateSequence(bitPattern: UInt64, target: Target, sequence: ChoiceSequence) -> ChoiceSequence? {
+        guard let candidateChoice = makeChoice(bitPattern: bitPattern, tag: target.typeTag) else {
+            return nil
+        }
+        if target.isRangeExplicit, candidateChoice.fits(in: target.validRange) == false {
+            return nil
+        }
+
+        let candidateEntry = ChoiceSequenceValue.value(.init(
+            choice: candidateChoice,
+            validRange: target.validRange,
+            isRangeExplicit: target.isRangeExplicit
+        ))
+        guard candidateEntry.shortLexCompare(sequence[target.sequenceIndex]) == .lt else {
+            return nil
+        }
+
+        var candidate = sequence
+        candidate[target.sequenceIndex] = candidateEntry
+        return candidate
     }
 
     /// Generates the next binary search probe for integral reduction, stepping through ULP-aligned quanta via ``FindIntegerStepper`` and recording convergence when the stepper is exhausted.
@@ -501,25 +547,17 @@ extension FloatSearch {
 
     // MARK: - Acceptance & Advancement
 
-    /// Processes an accepted probe by updating the current target's value and bit pattern, then advancing to the next target for batch stages or deferring to the stepper for binary search stages.
+    /// Processes an accepted probe by updating the current target's value and bit pattern, then continuing a grid walk, advancing to the next target for batch stages, or deferring to the stepper for binary search stages.
     static func handleAcceptance(state: inout State) {
-        let target = state.targets[state.currentTargetIndex]
+        if let bitPattern = state.precisionWalk?.outstandingBitPattern {
+            // A grid probe was accepted: record it and keep searching coarser grids. The walk reads the acceptance on its next pull.
+            commit(bitPattern: bitPattern, state: &state)
+            return
+        }
         switch state.stage {
             case .specialValues, .truncation:
                 // The last batch candidate was accepted: record it, then restart from the first stage on the next target.
-                let bitPattern = state.batchCandidates[state.batchIndex - 1]
-                if let choice = makeChoice(bitPattern: bitPattern, tag: target.typeTag) {
-                    let entry = ChoiceSequenceValue.value(.init(
-                        choice: choice,
-                        validRange: target.validRange,
-                        isRangeExplicit: target.isRangeExplicit
-                    ))
-                    state.sequence[target.sequenceIndex] = entry
-                    if choice.tag.isFloatingPoint {
-                        state.targets[state.currentTargetIndex].currentValue = choice.decodedDoubleValue
-                    }
-                    state.targets[state.currentTargetIndex].currentBitPattern = bitPattern
-                }
+                commit(bitPattern: state.batchCandidates[state.batchIndex - 1], state: &state)
                 state.currentTargetIndex += 1
                 state.stage = .specialValues
                 state.needsFirstProbe = true
@@ -563,6 +601,24 @@ extension FloatSearch {
     }
 
     // MARK: - Helpers
+
+    /// Writes an accepted bit pattern into the sequence and the current target's mutable state.
+    static func commit(bitPattern: UInt64, state: inout State) {
+        let target = state.targets[state.currentTargetIndex]
+        guard let choice = makeChoice(bitPattern: bitPattern, tag: target.typeTag) else {
+            return
+        }
+        let entry = ChoiceSequenceValue.value(.init(
+            choice: choice,
+            validRange: target.validRange,
+            isRangeExplicit: target.isRangeExplicit
+        ))
+        state.sequence[target.sequenceIndex] = entry
+        if choice.tag.isFloatingPoint {
+            state.targets[state.currentTargetIndex].currentValue = choice.decodedDoubleValue
+        }
+        state.targets[state.currentTargetIndex].currentBitPattern = bitPattern
+    }
 
     static func makeChoice(bitPattern: UInt64, tag: TypeTag) -> ChoiceValue? {
         ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)

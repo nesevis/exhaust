@@ -41,6 +41,34 @@ struct FloatSearch: ReductionSearch {
         }
     }
 
+    /// The truncation stage's walk over binary grids, driven by ``State/stepper``.
+    ///
+    /// Step `n` probes the grid 2^-(`n` − 1), coarsest first, and passes when none of that grid's admissible candidates fails. The stepper therefore converges on the coarsest grid whose rounding still fails, in probes logarithmic in that grid's depth, and each failing candidate is committed as it is found. This assumes that once a grid's rounding fails, every finer grid's does too; when it does not, the walk can settle on a finer grid than the coarsest failing one. Candidates come from the value at the start of the walk, and shortlex admission against the current entry keeps every acceptance an improvement.
+    struct PrecisionWalk {
+        let origin: Double
+        let finestGrid: Int
+        let tag: TypeTag
+        var candidates: [UInt64] = []
+        var candidateIndex = 0
+        /// Whether the current grid holds a failing candidate. The stepper reads a passing grid as an accepted step.
+        var gridFails = false
+        /// The emitted candidate awaiting feedback, or nil when the last probe did not come from this walk.
+        var outstandingBitPattern: UInt64?
+
+        /// Prepares the candidates of the grid at `step`. A grid at or finer than the origin's finest grid reproduces the origin, which fails, so it needs no probe.
+        mutating func begin(step: Int) {
+            candidateIndex = 0
+            let grid = step - 1
+            guard grid < finestGrid else {
+                candidates = []
+                gridFails = true
+                return
+            }
+            candidates = FloatReduction.gridCandidates(for: origin, grid: grid, tag: tag)
+            gridFails = false
+        }
+    }
+
     /// Everything the search carries between pulls: its position across every target and stage, and the convergence records it has gathered. The stages are static functions over this state, so a pull edits it in place. The binary search context is shared between the integral and ratio stages.
     struct State {
         var sequence: ChoiceSequence
@@ -62,6 +90,8 @@ struct FloatSearch: ReductionSearch {
         var ratioRemainder: Int64
         var ratioIntegerPart: Int64
         var ratioDistance: UInt64
+        /// The truncation stage's grid walk, armed once its boundary batch is prepared. Nil outside the truncation stage and after the walk converges.
+        var precisionWalk: PrecisionWalk?
         /// Convergence records keyed by graph node ID, which ``FloatSearch/finish(pending:)`` reports.
         var convergenceStore: [Int: ConvergedOrigin] = [:]
     }
