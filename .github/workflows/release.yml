@@ -17,20 +17,15 @@ concurrency:
   group: exhaust-release
   cancel-in-progress: false
 
+# Each job is a unit of "Re-run failed jobs". Successful jobs keep their outputs and artifacts,
+# so a failure after build-xcframework never rebuilds the XCFramework.
 jobs:
-  build-and-release:
+  test-source:
     runs-on: xcode-27
-    outputs:
-      candidate-branch: ${{ steps.candidate.outputs.branch }}
-      candidate-sha: ${{ steps.candidate.outputs.sha }}
-      checksum: ${{ steps.checksum.outputs.checksum }}
-      version: ${{ steps.version.outputs.version }}
-      vtag: ${{ steps.version.outputs.vtag }}
 
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Select Xcode 27
@@ -48,6 +43,44 @@ jobs:
           swift test --build-system native --package-path Packages/exhaust-macros --no-parallel 2>&1 \
             | tee "$RUNNER_TEMP/test-output-macros.txt"
           exit ${PIPESTATUS[0]}
+
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          REPORT_DIR="$HOME/Library/Logs/DiagnosticReports"
+          if [ -d "$REPORT_DIR" ]; then
+            echo "### Crash reports" >> "$GITHUB_STEP_SUMMARY"
+            for f in "$REPORT_DIR"/*.ips "$REPORT_DIR"/*.crash; do
+              [ -f "$f" ] || continue
+              echo "#### $(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              head -80 "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+
+      - name: Test report
+        if: always()
+        run: |
+          python3 Scripts/test-report.py \
+            "$RUNNER_TEMP/test-output-source.txt" \
+            "$RUNNER_TEMP/test-output-macros.txt"
+
+  build-xcframework:
+    runs-on: xcode-27
+    outputs:
+      checksum: ${{ steps.checksum.outputs.checksum }}
+      version: ${{ steps.version.outputs.version }}
+      vtag: ${{ steps.version.outputs.vtag }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
       - name: Resolve version
         id: version
@@ -76,6 +109,30 @@ jobs:
       - name: Build XCFramework
         run: bash Scripts/build-xcframework.sh
 
+      - name: Compute checksum
+        id: checksum
+        run: |
+          CHECKSUM=$(swift package compute-checksum Frameworks/ExhaustCore.xcframework.zip)
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhaust-release-asset-${{ steps.version.outputs.vtag }}
+          path: Frameworks/ExhaustCore.xcframework.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-macros:
+    needs: [test-source, build-xcframework]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Create cross-repository release token
         id: release-token
         uses: actions/create-github-app-token@v3
@@ -101,7 +158,7 @@ jobs:
       - name: Publish macro implementation package
         env:
           GH_TOKEN: ${{ steps.release-token.outputs.token }}
-          VTAG: ${{ steps.version.outputs.vtag }}
+          VTAG: ${{ needs.build-xcframework.outputs.vtag }}
         run: |
           MACRO_REPOSITORY="https://github.com/nesevis/exhaust-macros.git"
           MACRO_SHA=$(git subtree split --prefix=Packages/exhaust-macros "$GITHUB_SHA")
@@ -131,14 +188,34 @@ jobs:
             git push exhaust-macros "$MACRO_SHA:refs/tags/$VTAG"
           fi
 
+  test-binary:
+    needs: [build-xcframework, publish-macros]
+    runs-on: xcode-27
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
+
+      - name: Download release asset
+        uses: actions/download-artifact@v4
+        with:
+          name: exhaust-release-asset-${{ needs.build-xcframework.outputs.vtag }}
+          path: Frameworks
+
+      - name: Unpack XCFramework
+        run: |
+          cd Frameworks
+          unzip -q ExhaustCore.xcframework.zip
+
       - name: Use published macro package in release manifest
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.build-xcframework.outputs.version }}
         run: |
           python3 Scripts/prepare-release-manifest.py macro --version "$VERSION"
-
-      - name: Clean debug artifacts
-        run: swift package clean
 
       - name: Run tests (binary xcframework)
         env:
@@ -170,85 +247,55 @@ jobs:
       - name: Test report
         if: always()
         run: |
-          python3 - \
-            "$RUNNER_TEMP/test-output-source.txt" \
-            "$RUNNER_TEMP/test-output-macros.txt" \
-            "$RUNNER_TEMP/test-output-xcframework.txt" <<'SCRIPT'
-          import sys, os, re
+          python3 Scripts/test-report.py "$RUNNER_TEMP/test-output-xcframework.txt"
 
-          requested = sys.argv[1:]
-          summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '')
+  prepare-candidate:
+    needs: [build-xcframework, test-binary]
+    runs-on: ubuntu-latest
+    outputs:
+      candidate-branch: ${{ steps.candidate.outputs.branch }}
+      candidate-sha: ${{ steps.candidate.outputs.sha }}
 
-          if not summary_path:
-              print("GITHUB_STEP_SUMMARY not set, skipping report")
-              sys.exit(0)
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-          found = [p for p in requested if os.path.exists(p)]
-          missing = [p for p in requested if not os.path.exists(p)]
+      - name: Create cross-repository release token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            exhaust
+            exhaust-macros
+          permission-contents: write
 
-          if missing:
-              print(f"Missing test output files: {missing}")
-          if not found:
-              msg = f"No test output files found. Looked for: {requested}"
-              print(msg)
-              with open(summary_path, 'a') as f:
-                  f.write(f"### Test report unavailable\n\n{msg}\n")
-              sys.exit(0)
-
-          failures = []
-          total = 0
-          summaries = 0
-          all_lines = []
-          for path in found:
-              with open(path) as f:
-                  lines = f.readlines()
-              all_lines.extend(lines)
-              for line in lines:
-                  m = re.search(r'Test "(.+?)" failed after .+ with (\d+) issue', line)
-                  if m:
-                      failures.append((m.group(1), int(m.group(2))))
-              for line in reversed(lines):
-                  m = re.search(r'Test run with (\d+) tests? in (\d+) suites? (passed|failed)', line)
-                  if m:
-                      total += int(m.group(1))
-                      summaries += 1
-                      break
-
-          errors = [l.rstrip() for l in all_lines if re.search(r'\berror:', l)]
-
-          with open(summary_path, 'a') as f:
-              if summaries == 0:
-                  f.write("### Test report unavailable\n\nCould not find test summary line in output.\n")
-                  if errors:
-                      f.write(f"\n**Build errors ({len(errors)}):**\n```\n")
-                      for line in errors:
-                          f.write(line + '\n')
-                      f.write("```\n")
-                  f.write(f"\nLast 20 lines of output:\n```\n")
-                  for line in all_lines[-20:]:
-                      f.write(line)
-                  f.write("```\n")
-              elif not failures:
-                  f.write(f"### All {total} tests passed\n")
-              else:
-                  f.write(f"### {len(failures)} of {total} tests failed\n\n")
-                  f.write("| Test | Issues |\n|------|--------|\n")
-                  for name, count in failures:
-                      f.write(f"| {name} | {count} |\n")
-          SCRIPT
-
-      - name: Compute checksum
-        id: checksum
+      - name: Configure release Git identity
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          APP_SLUG: ${{ steps.release-token.outputs.app-slug }}
         run: |
-          CHECKSUM=$(swift package compute-checksum Frameworks/ExhaustCore.xcframework.zip)
-          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          APP_USER_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+      - name: Use published macro package in release manifest
+        env:
+          VERSION: ${{ needs.build-xcframework.outputs.version }}
+        run: |
+          python3 Scripts/prepare-release-manifest.py macro --version "$VERSION"
 
       - name: Prepare release candidate branch
         id: candidate
         env:
           GH_TOKEN: ${{ steps.release-token.outputs.token }}
-          VTAG: ${{ steps.version.outputs.vtag }}
-          CHECKSUM: ${{ steps.checksum.outputs.checksum }}
+          VTAG: ${{ needs.build-xcframework.outputs.vtag }}
+          CHECKSUM: ${{ needs.build-xcframework.outputs.checksum }}
         run: |
           python3 Scripts/prepare-release-manifest.py binary \
             --tag "$VTAG" \
@@ -285,18 +332,10 @@ jobs:
           echo "branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"
           echo "sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release asset for publication
-        uses: actions/upload-artifact@v4
-        with:
-          name: exhaust-release-asset-${{ steps.version.outputs.vtag }}
-          path: Frameworks/ExhaustCore.xcframework.zip
-          if-no-files-found: error
-          retention-days: 7
-
   # Linux selects the source ExhaustCore target from the final candidate manifest.
   # This gate runs before the consumer-facing tag and release are created.
   verify-linux:
-    needs: build-and-release
+    needs: prepare-candidate
     runs-on: ubuntu-latest
     container: swift:6.4
 
@@ -307,31 +346,31 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.build-and-release.outputs.candidate-branch }}
+          ref: ${{ needs.prepare-candidate.outputs.candidate-branch }}
 
       - name: Build release manifest from source
         run: swift build --build-system native
 
   publish-release:
-    needs: [build-and-release, verify-linux]
+    needs: [build-xcframework, prepare-candidate, verify-linux]
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.build-and-release.outputs.candidate-sha }}
+          ref: ${{ needs.prepare-candidate.outputs.candidate-sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download release asset
         uses: actions/download-artifact@v4
         with:
-          name: exhaust-release-asset-${{ needs.build-and-release.outputs.vtag }}
+          name: exhaust-release-asset-${{ needs.build-xcframework.outputs.vtag }}
           path: Frameworks
 
       - name: Verify downloaded release asset
         env:
-          EXPECTED_CHECKSUM: ${{ needs.build-and-release.outputs.checksum }}
+          EXPECTED_CHECKSUM: ${{ needs.build-xcframework.outputs.checksum }}
         run: |
           ACTUAL_CHECKSUM=$(sha256sum Frameworks/ExhaustCore.xcframework.zip | awk '{print $1}')
           if [ "$ACTUAL_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
@@ -350,9 +389,9 @@ jobs:
       - name: Create and verify draft release
         env:
           GH_TOKEN: ${{ steps.release-token.outputs.token }}
-          VTAG: ${{ needs.build-and-release.outputs.vtag }}
-          CANDIDATE_SHA: ${{ needs.build-and-release.outputs.candidate-sha }}
-          EXPECTED_CHECKSUM: ${{ needs.build-and-release.outputs.checksum }}
+          VTAG: ${{ needs.build-xcframework.outputs.vtag }}
+          CANDIDATE_SHA: ${{ needs.prepare-candidate.outputs.candidate-sha }}
+          EXPECTED_CHECKSUM: ${{ needs.build-xcframework.outputs.checksum }}
         run: |
           NOTES=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
           IS_DRAFT=true
