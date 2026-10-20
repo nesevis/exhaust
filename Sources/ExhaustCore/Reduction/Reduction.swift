@@ -30,7 +30,7 @@ extension Reduction {
         then next: @escaping (LiftProposal) -> Reduction
     ) -> Reduction {
         request(.propose(makeProposals, configuration: configuration))
-            .bind { $0.proposal.map(next)! }
+            .bind { next($0.proposal) }
     }
 
     /// Lifts `prefix` and continues with the lifted tree and sequence, or nil when materialization failed.
@@ -51,7 +51,7 @@ extension Reduction {
         then next: @escaping (SearchOutcome) -> Reduction = { _ in .pure(.finished) }
     ) -> Reduction {
         request(.search(search, configuration: configuration))
-            .bind { $0.outcome.map(next)! }
+            .bind { next($0.outcome) }
     }
 
     /// Abandons the current branch, recording why construction stopped.
@@ -173,23 +173,23 @@ enum ReductionResponse {
 
     // MARK: - Conveniences
 
-    var proposal: LiftProposal? {
+    var proposal: LiftProposal {
         guard case let .proposal(proposal) = self else {
-            return nil
+            preconditionFailure("`proposal` can only be requested from the `.proposal` case")
         }
         return proposal
     }
 
     var lifted: LiftResult? {
         guard case let .lifted(lifted) = self else {
-            return nil
+            preconditionFailure("`lifted` can only be requested from the `.lifted` case")
         }
         return lifted
     }
 
-    var outcome: SearchOutcome? {
+    var outcome: SearchOutcome {
         guard case let .outcome(outcome) = self else {
-            return nil
+            preconditionFailure("`outcome` can only be requested from the `.outcome` case")
         }
         return outcome
     }
