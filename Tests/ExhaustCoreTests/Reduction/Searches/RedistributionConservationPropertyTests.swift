@@ -12,7 +12,9 @@ struct RedistributionConservationPropertyTests {
         ).map { (pair: (Int64, Int64)) in pair }
 
         try exhaustCheck(pairGen, maxIterations: 300) { sourceValue, sinkValue in
-            guard sourceValue != sinkValue else { return true }
+            guard sourceValue != sinkValue else {
+                return true
+            }
 
             let source = ChoiceValue(sourceValue, tag: .int64)
             let sink = ChoiceValue(sinkValue, tag: .int64)
@@ -37,7 +39,9 @@ struct RedistributionConservationPropertyTests {
                     continue
                 }
                 let newTotal = newSource.decodedSignedValue + newSink.decodedSignedValue
-                if newTotal != originalTotal { return false }
+                if newTotal != originalTotal {
+                    return false
+                }
             }
             return true
         }
@@ -51,8 +55,12 @@ struct RedistributionConservationPropertyTests {
         ).map { (pair: (UInt64, UInt64)) in pair }
 
         try exhaustCheck(pairGen, maxIterations: 300) { sourceValue, sinkValue in
-            guard sourceValue != sinkValue else { return true }
-            guard sourceValue > sinkValue else { return true }
+            guard sourceValue != sinkValue else {
+                return true
+            }
+            guard sourceValue > sinkValue else {
+                return true
+            }
 
             let source = ChoiceValue(sourceValue, tag: .uint64)
             let sink = ChoiceValue(sinkValue, tag: .uint64)
@@ -77,7 +85,9 @@ struct RedistributionConservationPropertyTests {
                     continue
                 }
                 let newTotal = newSource.bitPattern64 + newSink.bitPattern64
-                if newTotal != originalTotal { return false }
+                if newTotal != originalTotal {
+                    return false
+                }
             }
             return true
         }

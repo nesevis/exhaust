@@ -106,7 +106,9 @@ private func metamorphOverZero() -> AnyGenerator {
 
 private func firstBranch(in tree: ChoiceTree) -> ChoiceSequenceValue.Branch? {
     ChoiceSequence.flatten(tree).lazy.compactMap { entry -> ChoiceSequenceValue.Branch? in
-        guard case let .branch(branch) = entry else { return nil }
+        guard case let .branch(branch) = entry else {
+            return nil
+        }
         return branch
     }.first
 }

@@ -28,7 +28,9 @@ extension OnlineCGSInterpreter {
             sampleCount: sampleCount,
             cgsState: &cgsState,
             derivativeContext: derivativeContext
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result,
             continuation: continuation,
@@ -65,7 +67,9 @@ extension OnlineCGSInterpreter {
             sampleCount: sampleCount,
             cgsState: &cgsState,
             derivativeContext: derivativeContext
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result,
             continuation: continuation,
@@ -253,7 +257,9 @@ extension OnlineCGSInterpreter {
                 derivativeContext: derivativeContext
             )
         }
-        guard let innerResult else { return nil }
+        guard let innerResult else {
+            return nil
+        }
         return try runContinuation(
             result: innerResult,
             continuation: continuation,
@@ -292,7 +298,9 @@ extension OnlineCGSInterpreter {
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
                 derivativeContext: derivativeContext
-            ) else { return nil }
+            ) else {
+                return nil
+            }
 
             if filterPredicate(result) {
                 return try runContinuation(
@@ -333,7 +341,9 @@ extension OnlineCGSInterpreter {
             sampleCount: sampleCount,
             cgsState: &cgsState,
             derivativeContext: derivativeContext
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         for (label, classifier) in classifiers where classifier(result) {
             var byLabel = context.classifications[fingerprint, default: [:]]
             byLabel[label, default: []].insert(context.runs)
@@ -380,7 +390,9 @@ extension OnlineCGSInterpreter {
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
                     derivativeContext: innerContext
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 result = try forward(innerValue)
             case let .bind(_, forward, _, _, _):
                 var innerContext = derivativeContext
@@ -399,7 +411,9 @@ extension OnlineCGSInterpreter {
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
                     derivativeContext: innerContext
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 let boundGen = try forward(innerValue)
                 var boundContext = derivativeContext
                 boundContext.descendSitePath(through: .bindBound)
@@ -411,7 +425,9 @@ extension OnlineCGSInterpreter {
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
                     derivativeContext: boundContext
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 result = boundValue
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
@@ -425,7 +441,9 @@ extension OnlineCGSInterpreter {
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
                     derivativeContext: innerContext
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
                 // Copies replay from the original's PRNG state; tuning does not own generation-time uniqueness state.
@@ -439,7 +457,9 @@ extension OnlineCGSInterpreter {
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
                         derivativeContext: innerContext
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     try results.append(transform(copy))
                 }
                 result = results
@@ -478,7 +498,9 @@ extension OnlineCGSInterpreter {
             sampleCount: sampleCount,
             cgsState: &cgsState,
             derivativeContext: derivativeContext
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result,
             continuation: continuation,
@@ -713,7 +735,9 @@ extension OnlineCGSInterpreter {
                 var secondBest: UInt64 = 0
                 var nonZeroCount = 0
                 for f in fitnesses {
-                    if f > 0 { nonZeroCount += 1 }
+                    if f > 0 {
+                        nonZeroCount += 1
+                    }
                     if f > best {
                         secondBest = best
                         best = f
@@ -722,11 +746,17 @@ extension OnlineCGSInterpreter {
                     }
                 }
                 // All zero — keep sampling, might still find something
-                guard best > 0 else { continue }
+                guard best > 0 else {
+                    continue
+                }
                 // Only one viable choice — ranking is decided
-                if nonZeroCount == 1 { break sampling }
+                if nonZeroCount == 1 {
+                    break sampling
+                }
                 // Leader dominates — ranking is unlikely to change
-                if best >= secondBest &* 3 { break sampling }
+                if best >= secondBest &* 3 {
+                    break sampling
+                }
             }
         }
 

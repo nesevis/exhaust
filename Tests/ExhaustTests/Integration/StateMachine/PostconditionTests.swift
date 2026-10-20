@@ -18,7 +18,9 @@ struct PostconditionTests {
         )
 
         #expect(result.trace.contains { step in
-            if case .checkFailed = step.outcome { return true }
+            if case .checkFailed = step.outcome {
+                return true
+            }
             return false
         })
     }
@@ -35,7 +37,9 @@ struct PostconditionTests {
         )
 
         #expect(result.trace.contains { step in
-            if case .checkFailed = step.outcome { return true }
+            if case .checkFailed = step.outcome {
+                return true
+            }
             return false
         })
     }
@@ -114,7 +118,9 @@ final class StackLIFOSpec {
 
     @Command(weight: 2)
     func pop() throws {
-        guard stack.isEmpty == false else { throw skip() }
+        guard stack.isEmpty == false else {
+            throw skip()
+        }
         let previousCount = stack.count
         _ = stack.pop()
         // Postcondition: count decreased by 1
@@ -192,7 +198,9 @@ struct BuggyStack<Element: Equatable> {
     }
 
     mutating func pop() -> Element? {
-        guard elements.isEmpty == false else { return nil }
+        guard elements.isEmpty == false else {
+            return nil
+        }
         return elements.removeLast()
     }
 

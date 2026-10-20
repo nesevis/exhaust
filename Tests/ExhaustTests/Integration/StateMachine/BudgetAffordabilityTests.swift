@@ -42,7 +42,9 @@ struct BudgetAffordabilityTests {
             )
         )
         #expect(result.trace.contains { step in
-            if case .checkFailed = step.outcome { return true }
+            if case .checkFailed = step.outcome {
+                return true
+            }
             return false
         })
     }
@@ -146,14 +148,20 @@ struct BillItem {
 /// - Returns: `true` if both the total limit and all category limits remain non-negative under an optimal category assignment.
 func canAfford(budget: Budget, bill: [BillItem]) -> Bool {
     let totalCost = bill.reduce(0) { $0 + $1.effectiveCost }
-    guard totalCost <= budget.totalLimit else { return false }
+    guard totalCost <= budget.totalLimit else {
+        return false
+    }
 
     let categorizedItems: [(cost: Int, categories: [String])] = bill.compactMap { item in
         let matching = item.categories.filter { budget.categoryLimits[$0] != nil }
-        guard matching.isEmpty == false else { return nil }
+        guard matching.isEmpty == false else {
+            return nil
+        }
         return (item.effectiveCost, matching)
     }
-    guard categorizedItems.isEmpty == false else { return true }
+    guard categorizedItems.isEmpty == false else {
+        return true
+    }
 
     var remainingLimits = budget.categoryLimits
     return backtrackAssignment(categorizedItems, index: 0, limits: &remainingLimits)
@@ -166,14 +174,20 @@ func canAfford(budget: Budget, bill: [BillItem]) -> Bool {
 /// Feasibility is checked only at the leaves of the search tree, making this structurally different from the backtracking version. Serves as an independent oracle for correctness testing.
 func bruteForceCanAfford(budget: Budget, bill: [BillItem]) -> Bool {
     let totalCost = bill.reduce(0) { $0 + $1.effectiveCost }
-    guard totalCost <= budget.totalLimit else { return false }
+    guard totalCost <= budget.totalLimit else {
+        return false
+    }
 
     let categorizedItems: [(cost: Int, categories: [String])] = bill.compactMap { item in
         let matching = item.categories.filter { budget.categoryLimits[$0] != nil }
-        guard matching.isEmpty == false else { return nil }
+        guard matching.isEmpty == false else {
+            return nil
+        }
         return (item.effectiveCost, matching)
     }
-    guard categorizedItems.isEmpty == false else { return true }
+    guard categorizedItems.isEmpty == false else {
+        return true
+    }
 
     var totals: [String: Int] = [:]
     return enumerateAssignments(
@@ -191,14 +205,18 @@ func bruteForceCanAfford(budget: Budget, bill: [BillItem]) -> Bool {
 /// This heuristic fails when an earlier item consumes capacity in a high-capacity category that a later, less flexible item needs. For example, with limits a=5 and b=4, assigning a cost-3 item to "a" (more capacity) before a cost-5 item that can only fit in "a" makes the bill look unaffordable when it is not.
 func greedyCanAfford(budget: Budget, bill: [BillItem]) -> Bool {
     let totalCost = bill.reduce(0) { $0 + $1.effectiveCost }
-    guard totalCost <= budget.totalLimit else { return false }
+    guard totalCost <= budget.totalLimit else {
+        return false
+    }
 
     var remainingLimits = budget.categoryLimits
 
     let categorizedItems: [(cost: Int, categories: [String])] = bill
         .compactMap { item in
             let matching = item.categories.filter { budget.categoryLimits[$0] != nil }
-            guard matching.isEmpty == false else { return nil }
+            guard matching.isEmpty == false else {
+                return nil
+            }
             return (item.effectiveCost, matching)
         }
         .sorted { $0.categories.count < $1.categories.count }
@@ -223,10 +241,14 @@ private func backtrackAssignment(
     index: Int,
     limits: inout [String: Int]
 ) -> Bool {
-    guard index < items.count else { return true }
+    guard index < items.count else {
+        return true
+    }
     let (cost, categories) = items[index]
     for category in categories {
-        guard let remaining = limits[category], remaining >= cost else { continue }
+        guard let remaining = limits[category], remaining >= cost else {
+            continue
+        }
         limits[category] = remaining - cost
         if backtrackAssignment(items, index: index + 1, limits: &limits) {
             return true
@@ -260,8 +282,14 @@ private func enumerateAssignments(
 
 private func categoriesFromMask(_ mask: Int) -> [String] {
     var result: [String] = []
-    if (mask & 1) != 0 { result.append("a") }
-    if (mask & 2) != 0 { result.append("b") }
-    if (mask & 4) != 0 { result.append("c") }
+    if (mask & 1) != 0 {
+        result.append("a")
+    }
+    if (mask & 2) != 0 {
+        result.append("b")
+    }
+    if (mask & 4) != 0 {
+        result.append("c")
+    }
     return result
 }

@@ -17,7 +17,9 @@ package extension ExhaustIterator where Self: ~Copyable {
         var result = [Element]()
         result.reserveCapacity(n)
         for _ in 0 ..< n {
-            guard let element = try next() else { break }
+            guard let element = try next() else {
+                break
+            }
             result.append(element)
         }
         return result

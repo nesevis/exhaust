@@ -32,10 +32,18 @@ struct AdvancedCoupledScenariosTests {
         let property: ((Int, Int)) -> Bool = { pair in
             let a = pair.0
             let b = pair.1
-            if a < 1000 { return true }
-            if b < 1000 { return true }
-            if b < a { return true }
-            if abs(a - b) < 10 { return true }
+            if a < 1000 {
+                return true
+            }
+            if b < 1000 {
+                return true
+            }
+            if b < a {
+                return true
+            }
+            if abs(a - b) < 10 {
+                return true
+            }
             return b - a >= 1000
         }
 
@@ -212,7 +220,9 @@ private enum AdvancedCoupledFixtures {
         }
 
         mutating func pop() {
-            guard storage.isEmpty == false else { return }
+            guard storage.isEmpty == false else {
+                return
+            }
             storage.removeLast()
         }
 
@@ -246,7 +256,9 @@ private enum AdvancedCoupledFixtures {
     }
 
     static func buggyRLEEncode(_ s: String) -> [(Int, Character)] {
-        guard let first = s.first else { return [] }
+        guard let first = s.first else {
+            return []
+        }
 
         var output: [(Int, Character)] = []
         var current = first

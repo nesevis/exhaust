@@ -34,7 +34,9 @@ extension ChoiceGraph {
                 guard let step = remainingPath.first,
                       case let .sequenceChild(index) = step,
                       elements.indices.contains(index)
-                else { return nil }
+                else {
+                    return nil
+                }
                 return walkForPathMatch(
                     tree: elements[index],
                     remainingPath: remainingPath.dropFirst()
@@ -48,7 +50,9 @@ extension ChoiceGraph {
                 if isPickSite(array) {
                     guard let step = remainingPath.first,
                           case let .pickBranch(targetID) = step
-                    else { return nil }
+                    else {
+                        return nil
+                    }
                     for element in array {
                         // The selected element carries the originally-picked branch.
                         if case let .branch(b) = element, b.isSelected,
@@ -66,7 +70,9 @@ extension ChoiceGraph {
                 guard let step = remainingPath.first,
                       case let .groupChild(index) = step,
                       array.indices.contains(index)
-                else { return nil }
+                else {
+                    return nil
+                }
                 return walkForPathMatch(
                     tree: array[index],
                     remainingPath: remainingPath.dropFirst()
@@ -81,7 +87,9 @@ extension ChoiceGraph {
                     // This is the target bind — return its bound child.
                     return bound
                 }
-                guard let step = remainingPath.first else { return nil }
+                guard let step = remainingPath.first else {
+                    return nil
+                }
                 switch step {
                     case .bindBound:
                         return walkForPathMatch(
@@ -101,7 +109,9 @@ extension ChoiceGraph {
                 guard let step = remainingPath.first,
                       case let .groupChild(index) = step,
                       choices.indices.contains(index)
-                else { return nil }
+                else {
+                    return nil
+                }
                 return walkForPathMatch(
                     tree: choices[index],
                     remainingPath: remainingPath.dropFirst()

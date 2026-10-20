@@ -42,7 +42,9 @@ final class PreemptiveNonAtomicCounterParitySpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard counter.value > 0 else { throw skip() }
+        guard counter.value > 0 else {
+            throw skip()
+        }
         await counter.decrement()
     }
 
@@ -82,13 +84,17 @@ final class PreemptiveLeakyBucketParitySpec {
 
     @Command(weight: 4)
     func refill() async throws {
-        guard bucket.tokens < 5 else { throw skip() }
+        guard bucket.tokens < 5 else {
+            throw skip()
+        }
         await bucket.refill()
     }
 
     @Command(weight: 3)
     func tryConsume() async throws {
-        guard bucket.tokens > 0 else { throw skip() }
+        guard bucket.tokens > 0 else {
+            throw skip()
+        }
         await bucket.tryConsume()
     }
 

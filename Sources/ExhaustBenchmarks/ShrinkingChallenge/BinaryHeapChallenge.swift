@@ -141,7 +141,9 @@ private func heapLte<Element: Comparable>(_ x: Element, _ heap: Heap<Element>) -
 // MARK: - Property
 
 let binaryHeapProperty: @Sendable (Heap<Int>) -> Bool = { heap in
-    guard heapInvariant(heap) else { return true }
+    guard heapInvariant(heap) else {
+        return true
+    }
     let sorted = heapToSortedList(heap)
     let reference = heapToList(heap).sorted()
     return reference == sorted.sorted() && sorted == sorted.sorted()

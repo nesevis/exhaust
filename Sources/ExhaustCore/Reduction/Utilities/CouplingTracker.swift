@@ -22,12 +22,20 @@ struct CouplingTracker {
         graph: inout ChoiceGraph
     ) {
         for motionNode in motionNodes.sorted() where isNumeric(motionNode, graph: graph) {
-            guard edgeCount < Self.maximumEdges else { break }
-            guard let sincePass = convergencePasses[motionNode] else { continue }
+            guard edgeCount < Self.maximumEdges else {
+                break
+            }
+            guard let sincePass = convergencePasses[motionNode] else {
+                continue
+            }
             for change in history where change.pass > sincePass {
                 for partner in change.nodes where partner != motionNode {
-                    guard edgeCount < Self.maximumEdges else { break }
-                    guard graph.couplingDependents[partner]?.contains(motionNode) != true else { continue }
+                    guard edgeCount < Self.maximumEdges else {
+                        break
+                    }
+                    guard graph.couplingDependents[partner]?.contains(motionNode) != true else {
+                        continue
+                    }
                     graph.couplingDependents[partner, default: []].insert(motionNode)
                     edgeCount += 1
                 }
@@ -41,14 +49,18 @@ struct CouplingTracker {
         let numericChanges = changedNodes.sorted().filter { isNumeric($0, graph: graph) }.prefix(Self.maximumNodes)
         if numericChanges.isEmpty == false {
             history.append(Change(pass: pass, nodes: Array(numericChanges)))
-            if history.count > Self.maximumHistory { history.removeFirst() }
+            if history.count > Self.maximumHistory {
+                history.removeFirst()
+            }
         }
     }
 
     private func isNumeric(_ nodeID: Int, graph: ChoiceGraph) -> Bool {
         guard graph.nodes.indices.contains(nodeID),
               case let .chooseBits(metadata) = graph.nodes[nodeID].kind
-        else { return false }
+        else {
+            return false
+        }
         return NumericPairQuery.isNumeric(metadata)
     }
 }

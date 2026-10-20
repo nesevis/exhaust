@@ -12,7 +12,9 @@ struct MinimizationQueryTests {
         let scopes = MinimizationQuery.build(graph: graph)
 
         let valueLeafScopes = scopes.compactMap { scope -> ValueMinimizationScope? in
-            if case let .valueLeaves(innerScope) = scope { return innerScope }
+            if case let .valueLeaves(innerScope) = scope {
+                return innerScope
+            }
             return nil
         }
         #expect(valueLeafScopes.count == 1)
@@ -25,7 +27,9 @@ struct MinimizationQueryTests {
         let scopes = MinimizationQuery.build(graph: graph)
 
         let valueLeafScopes = scopes.compactMap { scope -> ValueMinimizationScope? in
-            if case let .valueLeaves(innerScope) = scope { return innerScope }
+            if case let .valueLeaves(innerScope) = scope {
+                return innerScope
+            }
             return nil
         }
         #expect(valueLeafScopes.isEmpty, "Leaf at target should not produce a scope")
@@ -37,7 +41,9 @@ struct MinimizationQueryTests {
         let scopes = MinimizationQuery.build(graph: graph)
 
         let floatScopes = scopes.compactMap { scope -> FloatMinimizationScope? in
-            if case let .floatLeaves(innerScope) = scope { return innerScope }
+            if case let .floatLeaves(innerScope) = scope {
+                return innerScope
+            }
             return nil
         }
         #expect(floatScopes.count == 1)
@@ -67,7 +73,9 @@ struct MinimizationQueryTests {
         let scopes = MinimizationQuery.build(graph: graph)
 
         let valueLeafScopes = scopes.compactMap { scope -> ValueMinimizationScope? in
-            if case let .valueLeaves(innerScope) = scope { return innerScope }
+            if case let .valueLeaves(innerScope) = scope {
+                return innerScope
+            }
             return nil
         }
         guard let scope = valueLeafScopes.first else {
@@ -88,7 +96,9 @@ struct ExchangeQueryTests {
         let scopes = ExchangeQuery.build(graph: graph)
 
         let redistScopes = scopes.filter {
-            if case .redistribution = $0 { return true }
+            if case .redistribution = $0 {
+                return true
+            }
             return false
         }
         #expect(redistScopes.count >= 1, "Three same-type sequence elements should produce at least one redistribution pair")
@@ -100,7 +110,9 @@ struct ExchangeQueryTests {
         let scopes = ExchangeQuery.build(graph: graph)
 
         let tandemScopes = scopes.filter {
-            if case .tandem = $0 { return true }
+            if case .tandem = $0 {
+                return true
+            }
             return false
         }
         #expect(tandemScopes.count == 1, "A pair of same-type leaves should produce exactly one tandem scope")
@@ -156,7 +168,9 @@ struct ExchangeQueryTests {
         let scopes = ExchangeQuery.build(graph: graph)
 
         let redistScopes = scopes.filter {
-            if case .redistribution = $0 { return true }
+            if case .redistribution = $0 {
+                return true
+            }
             return false
         }
         #expect(redistScopes.isEmpty, "Leaves at target should not produce redistribution pairs")
@@ -180,7 +194,9 @@ struct ExchangeQueryTests {
         let graph = GraphFixture(tree).graph
 
         let pairs = ExchangeQuery.build(graph: graph).flatMap { scope -> [RedistributionPair] in
-            if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
+            if case let .redistribution(redistributionScope) = scope {
+                return redistributionScope.pairs
+            }
             return []
         }
         let controllingBinds = pairs.map { pair in
@@ -207,7 +223,9 @@ struct ExchangeQueryTests {
         let graph = GraphFixture(tree).graph
 
         let pairs = ExchangeQuery.build(graph: graph).flatMap { scope -> [RedistributionPair] in
-            if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
+            if case let .redistribution(redistributionScope) = scope {
+                return redistributionScope.pairs
+            }
             return []
         }
         let crossSlotPairs = pairs.filter { pair in
@@ -237,11 +255,15 @@ struct ExchangeQueryTests {
 
         let scopes = ExchangeQuery.build(graph: graph)
         let exchanges = scopes.compactMap { scope -> BoundExchangeScope? in
-            if case let .boundExchange(exchange) = scope { return exchange }
+            if case let .boundExchange(exchange) = scope {
+                return exchange
+            }
             return nil
         }
         let crossBindRedistributions = scopes.flatMap { scope -> [RedistributionPair] in
-            if case let .redistribution(redistributionScope) = scope { return redistributionScope.pairs }
+            if case let .redistribution(redistributionScope) = scope {
+                return redistributionScope.pairs
+            }
             return []
         }.filter { pair in
             let source = graph.nodes[pair.source.nodeID].scopeAnnotation.controllingBindNodeID
@@ -432,7 +454,9 @@ private func markStallConverged(_ graph: inout ChoiceGraph) {
 /// The value leaf whose current value is `value`. Fixtures give each leaf a distinct value.
 private func leafNodeID(holding value: UInt64, in graph: ChoiceGraph) -> Int? {
     graph.leafNodes.first { nodeID in
-        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return false }
+        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+            return false
+        }
         return metadata.value.bitPattern64 == value
     }
 }

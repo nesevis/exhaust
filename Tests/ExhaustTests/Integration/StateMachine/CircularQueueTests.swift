@@ -47,7 +47,9 @@ struct CircularQueueTests {
         )
 
         #expect(result.trace.contains { step in
-            if case .checkFailed = step.outcome { return true }
+            if case .checkFailed = step.outcome {
+                return true
+            }
             return false
         })
     }
@@ -67,14 +69,18 @@ final class CircularQueueSpec {
 
     @Command(weight: 3, #gen(.int(in: 0 ... 20)))
     func put(value: Int) throws {
-        guard queue.count < queue.capacity else { throw skip() }
+        guard queue.count < queue.capacity else {
+            throw skip()
+        }
         expected.append(value)
         queue.put(value)
     }
 
     @Command(weight: 3)
     func get() throws {
-        guard queue.isEmpty == false else { throw skip() }
+        guard queue.isEmpty == false else {
+            throw skip()
+        }
         let expectedValue = expected.removeFirst()
         let actual = queue.get()
         try check(actual == expectedValue, "get must return elements in FIFO order")

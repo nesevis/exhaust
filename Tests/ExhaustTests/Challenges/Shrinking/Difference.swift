@@ -53,9 +53,13 @@ struct DifferenceShrinkingChallenge {
         let gen = #gen(.int()).array(length: 2)
 
         let property: @Sendable ([Int]) -> Bool = { arr in
-            if arr[0] < 10 { return true }
+            if arr[0] < 10 {
+                return true
+            }
             let (result, overflow) = arr[0].subtractingReportingOverflow(arr[1])
-            if overflow || result == .min { return true }
+            if overflow || result == .min {
+                return true
+            }
             let diff = abs(result)
             return diff < 1 || diff > 4
         }
@@ -80,9 +84,13 @@ struct DifferenceShrinkingChallenge {
             .budget(.extensive),
             .suppress(.issueReporting)
         ) { arr in
-            if arr[0] < 10 { return true }
+            if arr[0] < 10 {
+                return true
+            }
             let (result, overflow) = arr[0].subtractingReportingOverflow(arr[1])
-            if overflow || result == .min { return true }
+            if overflow || result == .min {
+                return true
+            }
             let diff = abs(result)
             return diff != 1
         }

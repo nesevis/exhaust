@@ -128,7 +128,9 @@ final class HeapMergeSpec {
 
     @Command(weight: 5, .int(in: 0 ... 99), .int(in: 0 ... 50))
     func push(heapIndex: Int, value: Int) throws {
-        guard liveHeaps.isEmpty == false else { throw skip() }
+        guard liveHeaps.isEmpty == false else {
+            throw skip()
+        }
         let idx = liveHeaps[heapIndex % liveHeaps.count]
         heaps[idx].push(value)
         expectedContents[idx].append(value)
@@ -137,9 +139,13 @@ final class HeapMergeSpec {
 
     @Command(weight: 3, .int(in: 0 ... 99))
     func pop(heapIndex: Int) throws {
-        guard liveHeaps.isEmpty == false else { throw skip() }
+        guard liveHeaps.isEmpty == false else {
+            throw skip()
+        }
         let idx = liveHeaps[heapIndex % liveHeaps.count]
-        guard heaps[idx].isEmpty == false else { throw skip() }
+        guard heaps[idx].isEmpty == false else {
+            throw skip()
+        }
         let actual = heaps[idx].pop()
         let expectedMin = expectedContents[idx].removeFirst()
         try check(actual == expectedMin, "pop must return the minimum element")
@@ -147,7 +153,9 @@ final class HeapMergeSpec {
 
     @Command(weight: 2, .int(in: 0 ... 99), .int(in: 0 ... 99))
     func merge(sourceIndex: Int, targetIndex: Int) throws {
-        guard liveHeaps.count >= 2 else { throw skip() }
+        guard liveHeaps.count >= 2 else {
+            throw skip()
+        }
         let src = liveHeaps.remove(at: sourceIndex % liveHeaps.count)
         let tgt = liveHeaps[targetIndex % liveHeaps.count]
         heaps[tgt].merge(heaps[src])
@@ -193,15 +201,21 @@ final class HeapAliasingSpec {
 
     @Command(weight: 4, .int(in: 0 ... 99), .int(in: -5 ... 5))
     func push(heapIndex: Int, value: Int) throws {
-        guard allHeaps.isEmpty == false else { throw skip() }
+        guard allHeaps.isEmpty == false else {
+            throw skip()
+        }
         allHeaps[heapIndex % allHeaps.count].push(value)
     }
 
     @Command(weight: 2, .int(in: 0 ... 99))
     func pop(heapIndex: Int) throws {
-        guard allHeaps.isEmpty == false else { throw skip() }
+        guard allHeaps.isEmpty == false else {
+            throw skip()
+        }
         let heap = allHeaps[heapIndex % allHeaps.count]
-        guard heap.isEmpty == false else { throw skip() }
+        guard heap.isEmpty == false else {
+            throw skip()
+        }
         let expectedMin = heap.elements.min()!
         let actual = heap.pop()
         try check(actual == expectedMin, "pop must return the minimum element")
@@ -209,7 +223,9 @@ final class HeapAliasingSpec {
 
     @Command(weight: 4, .int(in: 0 ... 99), .int(in: 0 ... 99))
     func merge(index1: Int, index2: Int) throws {
-        guard allHeaps.isEmpty == false else { throw skip() }
+        guard allHeaps.isEmpty == false else {
+            throw skip()
+        }
         let heap1 = allHeaps[index1 % allHeaps.count]
         let heap2 = allHeaps[index2 % allHeaps.count]
         allHeaps.append(heap1.merged(with: heap2))
@@ -235,8 +251,12 @@ struct BuggyHeap {
     }
 
     mutating func pop() -> Int? {
-        guard elements.isEmpty == false else { return nil }
-        if elements.count == 1 { return elements.removeLast() }
+        guard elements.isEmpty == false else {
+            return nil
+        }
+        if elements.count == 1 {
+            return elements.removeLast()
+        }
         let min = elements[0]
         elements[0] = elements.removeLast()
         siftDown(0)
@@ -271,7 +291,9 @@ struct BuggyHeap {
         var i = index
         while i > 0 {
             let parent = (i - 1) / 2
-            guard elements[i] < elements[parent] else { break }
+            guard elements[i] < elements[parent] else {
+                break
+            }
             elements.swapAt(i, parent)
             i = parent
         }
@@ -290,7 +312,9 @@ struct BuggyHeap {
             if right < count, elements[right] < elements[smallest] {
                 smallest = right
             }
-            guard smallest != i else { break }
+            guard smallest != i else {
+                break
+            }
             elements.swapAt(i, smallest)
             i = smallest
         }
@@ -318,8 +342,12 @@ final class SpliceHeap {
     }
 
     func pop() -> Int? {
-        guard elements.isEmpty == false else { return nil }
-        if elements.count == 1 { return elements.removeLast() }
+        guard elements.isEmpty == false else {
+            return nil
+        }
+        if elements.count == 1 {
+            return elements.removeLast()
+        }
         let min = elements[0]
         elements[0] = elements.removeLast()
         siftDown(0)
@@ -343,8 +371,12 @@ final class SpliceHeap {
                 j += 1
             }
         }
-        if i < x.count { result.elements.append(contentsOf: x[i...]) }
-        if j < y.count { result.elements.append(contentsOf: y[j...]) }
+        if i < x.count {
+            result.elements.append(contentsOf: x[i...])
+        }
+        if j < y.count {
+            result.elements.append(contentsOf: y[j...])
+        }
         return result
     }
 
@@ -362,7 +394,9 @@ final class SpliceHeap {
         var i = index
         while i > 0 {
             let parent = (i - 1) / 2
-            guard elements[i] < elements[parent] else { break }
+            guard elements[i] < elements[parent] else {
+                break
+            }
             elements.swapAt(i, parent)
             i = parent
         }
@@ -381,7 +415,9 @@ final class SpliceHeap {
             if right < count, elements[right] < elements[smallest] {
                 smallest = right
             }
-            guard smallest != i else { break }
+            guard smallest != i else {
+                break
+            }
             elements.swapAt(i, smallest)
             i = smallest
         }

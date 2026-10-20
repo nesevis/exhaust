@@ -108,7 +108,9 @@ extension Materializer {
                 case 2: scopeLimits.2 = limit
                 case 3: scopeLimits.3 = limit
                 default:
-                    if scopeOverflow == nil { scopeOverflow = [] }
+                    if scopeOverflow == nil {
+                        scopeOverflow = []
+                    }
                     scopeOverflow!.append(limit)
             }
             scopeDepth &+= 1
@@ -144,7 +146,9 @@ extension Materializer {
         /// Advances past group-open, bind-open, and just markers to the first content node (value, branch, or sequence marker). Called before consuming an entry so that transparent structural wrappers do not block the cursor.
         @inline(__always)
         mutating func skipGroups() {
-            guard suspended == false else { return }
+            guard suspended == false else {
+                return
+            }
             while position < effectiveEnd {
                 switch entries[position] {
                     case .group, .zip, .bind, .just:
@@ -225,7 +229,9 @@ extension Materializer {
         ///
         /// Called in ``handleZip(_:continuation:inputValue:context:calleeFallback:continuationFallback:)`` after each child's scope is popped, so that `childStartPosition` reflects the start of the next child's entries rather than the closing markers of the completed child. This prevents the next child's scope from being computed too tightly: without this call, a getSize-bind child (whose `.group(false)` close marker is left unconsumed) causes the following child to receive a scope that excludes its own value entry.
         mutating func skipGroupCloses() {
-            guard suspended == false else { return }
+            guard suspended == false else {
+                return
+            }
             while position < effectiveEnd {
                 switch entries[position] {
                     case .group(false), .zip(false), .bind(false):
@@ -267,7 +273,9 @@ extension Materializer {
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
         @inline(__always)
         mutating func tryConsumeValue(expecting expected: TypeTag? = nil) -> ChoiceSequenceValue.Value? {
-            guard suspended == false, exhausted == false else { return nil }
+            guard suspended == false, exhausted == false else {
+                return nil
+            }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -354,7 +362,9 @@ extension Materializer {
         /// Reads and returns the next branch-selection entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a branch. Marks the cursor as exhausted on type mismatch.
         @inline(__always)
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
-            guard suspended == false, exhausted == false else { return nil }
+            guard suspended == false, exhausted == false else {
+                return nil
+            }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -374,7 +384,9 @@ extension Materializer {
 
         /// Reads the sequence-open marker and extracts the element count by scanning forward for top-level entries until the matching sequence-close. Returns nil and marks the cursor as exhausted if the next entry is not a sequence-open marker.
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
-            guard suspended == false, exhausted == false else { return nil }
+            guard suspended == false, exhausted == false else {
+                return nil
+            }
             skipGroups()
             guard position < effectiveEnd else {
                 exhausted = true
@@ -394,9 +406,13 @@ extension Materializer {
         }
 
         mutating func skipSequenceClose() {
-            guard suspended == false, exhausted == false else { return }
+            guard suspended == false, exhausted == false else {
+                return
+            }
             skipGroups()
-            guard position < effectiveEnd else { return }
+            guard position < effectiveEnd else {
+                return
+            }
             if case .sequence(false, _, _) = entries[position] {
                 position &+= 1
             }
@@ -412,12 +428,16 @@ extension Materializer {
                     case .sequence(false, _, _) where depth == 0:
                         return count
                     case .group(true), .bind(true), .zip(true), .sequence(true, _, _):
-                        if depth == 0 { count &+= 1 }
+                        if depth == 0 {
+                            count &+= 1
+                        }
                         depth &+= 1
                     case .group(false), .bind(false), .zip(false), .sequence(false, _, _):
                         depth -= 1
                     case .value, .just:
-                        if depth == 0 { count &+= 1 }
+                        if depth == 0 {
+                            count &+= 1
+                        }
                     case .branch:
                         break
                 }

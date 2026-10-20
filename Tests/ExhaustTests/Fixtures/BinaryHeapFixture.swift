@@ -134,7 +134,9 @@ enum BinaryHeapFixture {
     /// Property under test: if the heap satisfies the min-heap invariant, then ``toSortedList(_:)`` produces a sorted list with the same elements as ``toList(_:)``. False because of the buggy ``toSortedList(_:)``.
     @Sendable
     static func property(_ heap: Heap<Int>) -> Bool {
-        guard invariant(heap) else { return true }
+        guard invariant(heap) else {
+            return true
+        }
         let sortedFromHeap = toSortedList(heap)
         let sortedFromList = toList(heap).sorted()
         return sortedFromList == sortedFromHeap.sorted() && sortedFromHeap == sortedFromHeap.sorted()

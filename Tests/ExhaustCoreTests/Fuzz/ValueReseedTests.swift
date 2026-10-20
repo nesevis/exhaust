@@ -37,7 +37,9 @@ struct ValueReseedTests {
         let (parentSequence, parentTree) = try materializedParent(gen)
         let targets = MutationTargets(tree: parentTree)
         let leafSites = targets.reseedSites.filter { site in
-            if case .chooseBits = targets.graph.nodes[site.nodeID].kind { return true }
+            if case .chooseBits = targets.graph.nodes[site.nodeID].kind {
+                return true
+            }
             return false
         }
         #expect(leafSites.count == 3)
@@ -63,7 +65,9 @@ struct ValueReseedTests {
         let (parentSequence, parentTree) = try materializedParent(gen)
         let targets = MutationTargets(tree: parentTree)
         let pickSite = try #require(targets.reseedSites.first { site in
-            if case .pick = targets.graph.nodes[site.nodeID].kind { return true }
+            if case .pick = targets.graph.nodes[site.nodeID].kind {
+                return true
+            }
             return false
         })
         let trailing = (pickSite.range.upperBound + 1) ..< parentSequence.count

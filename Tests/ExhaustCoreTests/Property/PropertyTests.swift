@@ -27,7 +27,9 @@ struct SizeScalingPropertyTests {
         try exhaustCheck(sizeGen) { s1, s2 in
             let lo = min(s1, s2)
             let hi = max(s1, s2)
-            guard lo < hi else { return true }
+            guard lo < hi else {
+                return true
+            }
             let r1 = Gen.scaledRange(range, scaling: .linear, size: lo)
             let r2 = Gen.scaledRange(range, scaling: .linear, size: hi)
             return r2.lowerBound <= r1.lowerBound && r2.upperBound >= r1.upperBound
@@ -37,7 +39,9 @@ struct SizeScalingPropertyTests {
         try exhaustCheck(sizeGen) { s1, s2 in
             let lo = min(s1, s2)
             let hi = max(s1, s2)
-            guard lo < hi else { return true }
+            guard lo < hi else {
+                return true
+            }
             let r1 = Gen.scaledRange(range, scaling: .exponential, size: lo)
             let r2 = Gen.scaledRange(range, scaling: .exponential, size: hi)
             return r2.lowerBound <= r1.lowerBound && r2.upperBound >= r1.upperBound
@@ -62,7 +66,9 @@ struct SizeScalingPropertyTests {
         try exhaustCheck(gen) { distance, f1Raw, f2Raw in
             let fLo = Double(min(f1Raw, f2Raw)) / 100.0
             let fHi = Double(max(f1Raw, f2Raw)) / 100.0
-            guard fLo < fHi else { return true }
+            guard fLo < fHi else {
+                return true
+            }
             let d1 = Gen.scaledDistance(distance, fraction: fLo, isExponential: false)
             let d2 = Gen.scaledDistance(distance, fraction: fHi, isExponential: false)
             return d1 <= d2
@@ -72,7 +78,9 @@ struct SizeScalingPropertyTests {
         try exhaustCheck(gen) { distance, f1Raw, f2Raw in
             let fLo = Double(min(f1Raw, f2Raw)) / 100.0
             let fHi = Double(max(f1Raw, f2Raw)) / 100.0
-            guard fLo < fHi else { return true }
+            guard fLo < fHi else {
+                return true
+            }
             let d1 = Gen.scaledDistance(distance, fraction: fLo, isExponential: true)
             let d2 = Gen.scaledDistance(distance, fraction: fHi, isExponential: true)
             return d1 <= d2
@@ -108,7 +116,9 @@ struct FloatShortlexPropertyTests {
             Gen.choose(in: UInt64(0) ... (1 << 20)),
             Gen.choose(in: UInt64(0) ... (1 << 20))
         )) { a, b in
-            guard a < b else { return true }
+            guard a < b else {
+                return true
+            }
             return FloatShortlex.shortlexKey(for: Double(a)) < FloatShortlex.shortlexKey(for: Double(b))
         }
     }
@@ -192,8 +202,12 @@ private func assertReplayMaterializerEquivalence<Output>(
     isEqual: @escaping (Output, Output) -> Bool
 ) throws {
     try exhaustCheck(gen, maxIterations: UInt64(maxIterations)) { value in
-        guard let tree = try Interpreters.reflect(gen, with: value) else { return false }
-        guard let replayed: Output = try? Interpreters.replay(gen, using: tree) else { return false }
+        guard let tree = try Interpreters.reflect(gen, with: value) else {
+            return false
+        }
+        guard let replayed: Output = try? Interpreters.replay(gen, using: tree) else {
+            return false
+        }
 
         // Reproduction is `.exact` mode: it reads every choice — including branch selection — from the flattened prefix. `.guided` re-selects pick branches from its seed (it is for exploration, not reproduction), so it agrees with replay only for branch-free generators.
         let materializeResult = Materializer.materialize(
@@ -204,7 +218,9 @@ private func assertReplayMaterializerEquivalence<Output>(
                 fallbackTree: tree
             )
         )
-        guard case let .success(materialized, _, _) = materializeResult else { return false }
+        guard case let .success(materialized, _, _) = materializeResult else {
+            return false
+        }
 
         return isEqual(replayed, materialized)
     }
@@ -220,7 +236,9 @@ struct ShortlexKeyPropertyTests {
             Gen.choose(in: Int64(-50000) ... 50000),
             Gen.choose(in: Int64(-50000) ... 50000)
         )) { a, b in
-            guard abs(a) < abs(b) else { return true }
+            guard abs(a) < abs(b) else {
+                return true
+            }
             let va = ChoiceValue(a, tag: .int64)
             let vb = ChoiceValue(b, tag: .int64)
             return va.shortlexKey < vb.shortlexKey
@@ -285,10 +303,14 @@ struct ShrinkingPropertyTests {
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
         var reductions = 0
         while let (value, tree) = try iterator.next() {
-            guard property(value) == false else { continue }
+            guard property(value) == false else {
+                continue
+            }
             guard case let .reduced(_, _, shrunk) = Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-            ) else { continue }
+            ) else {
+                continue
+            }
             reductions += 1
             #expect(property(shrunk) == false, "Shrunk value \(shrunk) no longer fails the property")
         }
@@ -308,8 +330,12 @@ struct ChoiceValueComparablePropertyTests {
         )) { a, b in
             let va = ChoiceValue(a, tag: .uint64)
             let vb = ChoiceValue(b, tag: .uint64)
-            if a < b { return va < vb }
-            if a > b { return vb < va }
+            if a < b {
+                return va < vb
+            }
+            if a > b {
+                return vb < va
+            }
             return va == vb
         }
     }

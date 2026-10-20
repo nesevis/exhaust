@@ -20,9 +20,15 @@ enum NumericJointQuery {
         let sharedContextCount: Int
 
         func precedes(_ other: Group) -> Bool {
-            if couplingCount != other.couplingCount { return couplingCount > other.couplingCount }
-            if stalledCount != other.stalledCount { return stalledCount > other.stalledCount }
-            if sharedContextCount != other.sharedContextCount { return sharedContextCount > other.sharedContextCount }
+            if couplingCount != other.couplingCount {
+                return couplingCount > other.couplingCount
+            }
+            if stalledCount != other.stalledCount {
+                return stalledCount > other.stalledCount
+            }
+            if sharedContextCount != other.sharedContextCount {
+                return sharedContextCount > other.sharedContextCount
+            }
             return residualVolume < other.residualVolume
         }
     }

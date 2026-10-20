@@ -13,8 +13,12 @@ package extension ChoiceGraph {
         var edges: [(upstreamNodeID: Int, downstreamNodeID: Int, isStructurallyConstant: Bool)] = []
         for nodeID in liveNodeIDs {
             let node = nodes[nodeID]
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
+            guard case let .bind(metadata) = node.kind else {
+                continue
+            }
+            guard node.children.count >= 2 else {
+                continue
+            }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
             edges.append((

@@ -25,14 +25,18 @@ package struct ExhaustRangeSet<Bound: Comparable> {
 
     package func contains(_ value: Bound) -> Bool {
         let index = _partitioningIndex(in: _ranges) { $0.upperBound > value }
-        guard index < _ranges.count else { return false }
+        guard index < _ranges.count else {
+            return false
+        }
         return _ranges[index].lowerBound <= value
     }
 
     // MARK: - Insert
 
     package mutating func insert(contentsOf range: Range<Bound>) {
-        if range.isEmpty { return }
+        if range.isEmpty {
+            return
+        }
         guard _ranges.isEmpty == false else {
             _ranges.append(range)
             return
@@ -66,12 +70,20 @@ package struct ExhaustRangeSet<Bound: Comparable> {
     // MARK: - Remove
 
     package mutating func remove(contentsOf range: Range<Bound>) {
-        if range.isEmpty || _ranges.isEmpty { return }
-        guard range.lowerBound < _ranges[_ranges.count - 1].upperBound else { return }
-        guard range.upperBound > _ranges[0].lowerBound else { return }
+        if range.isEmpty || _ranges.isEmpty {
+            return
+        }
+        guard range.lowerBound < _ranges[_ranges.count - 1].upperBound else {
+            return
+        }
+        guard range.upperBound > _ranges[0].lowerBound else {
+            return
+        }
 
         let indices = _indicesOfRange(range, includeAdjacent: false)
-        guard indices.isEmpty == false else { return }
+        guard indices.isEmpty == false else {
+            return
+        }
 
         let overlapsLower = range.lowerBound > _ranges[indices.lowerBound].lowerBound
         let overlapsUpper = range.upperBound < _ranges[indices.upperBound - 1].upperBound
@@ -166,7 +178,9 @@ package struct ExhaustRangeSet<Bound: Comparable> {
     }
 
     private func _inverted(within bounds: Range<Bound>) -> ExhaustRangeSet {
-        guard _ranges.isEmpty == false else { return ExhaustRangeSet(bounds) }
+        guard _ranges.isEmpty == false else {
+            return ExhaustRangeSet(bounds)
+        }
         var result = ExhaustRangeSet()
         var low = bounds.lowerBound
         for range in _ranges {
@@ -199,7 +213,9 @@ extension ExhaustRangeSet: Hashable where Bound: Hashable {
 
 extension MutableCollection where Self: RangeReplaceableCollection {
     mutating func removeSubranges(_ subranges: ExhaustRangeSet<Index>) {
-        guard let firstRange = subranges.ranges.first else { return }
+        guard let firstRange = subranges.ranges.first else {
+            return
+        }
 
         var endOfKept = firstRange.lowerBound
         var firstUnprocessed = firstRange.upperBound

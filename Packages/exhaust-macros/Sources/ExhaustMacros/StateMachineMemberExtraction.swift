@@ -47,7 +47,9 @@ func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProper
     members.flatMap { member -> [SUTProperty] in
         guard let varDecl = member.decl.as(VariableDeclSyntax.self),
               hasAttribute("SystemUnderTest", on: varDecl)
-        else { return [] }
+        else {
+            return []
+        }
 
         return varDecl.bindings.map { binding in
             let name = binding.pattern.trimmedDescription
@@ -74,7 +76,9 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               let commandAttr = findAttribute("Command", on: funcDecl)
-        else { return nil }
+        else {
+            return nil
+        }
 
         let methodName = funcDecl.name.trimmedDescription
         let parameters = extractParameters(from: funcDecl)
@@ -126,7 +130,9 @@ func extractSetups(from members: MemberBlockItemListSyntax) -> [SetupInfo] {
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               let setupAttr = findAttribute("Setup", on: funcDecl)
-        else { return nil }
+        else {
+            return nil
+        }
 
         let methodName = funcDecl.name.trimmedDescription
         let parameters = extractParameters(from: funcDecl)
@@ -158,7 +164,9 @@ func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInf
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               hasAttribute("Invariant", on: funcDecl)
-        else { return nil }
+        else {
+            return nil
+        }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         return InvariantInfo(
             methodName: funcDecl.name.trimmedDescription,
@@ -249,9 +257,13 @@ func extractEquivalences(from members: MemberBlockItemListSyntax) -> [Equivalenc
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               hasAttribute("Equivalence", on: funcDecl)
-        else { return nil }
+        else {
+            return nil
+        }
         let params = funcDecl.signature.parameterClause.parameters
-        guard params.count == 1, let firstParam = params.first else { return nil }
+        guard params.count == 1, let firstParam = params.first else {
+            return nil
+        }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
         return EquivalenceInfo(
@@ -269,7 +281,9 @@ func equivalenceMethodsWithWrongParameterCount(from members: MemberBlockItemList
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               hasAttribute("Equivalence", on: funcDecl)
-        else { return nil }
+        else {
+            return nil
+        }
         let paramCount = funcDecl.signature.parameterClause.parameters.count
         return paramCount == 1 ? nil : funcDecl
     }

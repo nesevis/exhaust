@@ -37,10 +37,18 @@ struct FastCheckDichotomyChallenge {
         let property: @Sendable ([Int]) -> Bool = { pair in
             let a = pair[0]
             let b = pair[1]
-            if a < 1000 { return true }
-            if b < 1000 { return true }
-            if b < a { return true }
-            if abs(a - b) < 10 { return true }
+            if a < 1000 {
+                return true
+            }
+            if b < 1000 {
+                return true
+            }
+            if b < a {
+                return true
+            }
+            if abs(a - b) < 10 {
+                return true
+            }
             return b - a >= 1000
         }
 

@@ -68,7 +68,9 @@ private func runBSTThroughput() throws {
 
     let genTimer = BenchmarkTimer()
     while genTimer.elapsedSeconds < duration {
-        guard let tree = try iterator.next() else { break }
+        guard let tree = try iterator.next() else {
+            break
+        }
         total += 1
         if isValid(tree) {
             valid += 1
@@ -107,7 +109,9 @@ private func runBSTTimeToHundred() throws {
         baseTotal += 1
         if isValid(tree) {
             baseUnique.insert(tree)
-            if baseUnique.count >= target { break }
+            if baseUnique.count >= target {
+                break
+            }
         }
     }
 
@@ -137,7 +141,9 @@ private func runBSTTimeToHundred() throws {
             totalCount += 1
             if isValid(tree) {
                 uniqueValid.insert(tree)
-                if uniqueValid.count >= target { break }
+                if uniqueValid.count >= target {
+                    break
+                }
             }
         }
 

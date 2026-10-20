@@ -110,7 +110,9 @@ private extension ExamineCoverageAnalysis {
                 guard metadata.isPinnedToSize == false else {
                     break
                 }
-                guard let range = metadata.validRange, range.upperBound > range.lowerBound else { break }
+                guard let range = metadata.validRange, range.upperBound > range.lowerBound else {
+                    break
+                }
                 let tag = value.tag
                 let domainSize = range.upperBound - range.lowerBound
 
@@ -124,16 +126,22 @@ private extension ExamineCoverageAnalysis {
                         let lowerValue = ChoiceValue(range.lowerBound, tag: tag).decodedDoubleValue
                         let upperValue = ChoiceValue(range.upperBound, tag: tag).decodedDoubleValue
                         let span = upperValue - lowerValue
-                        guard span > 0 else { break }
+                        guard span > 0 else {
+                            break
+                        }
                         let normalized = (decodedValue - lowerValue) / span
                         deciles.record(tag: tag, normalized: min(max(normalized, 0), 1), decodedValue: decodedValue)
                     case .int, .int8, .int16, .int32, .int64:
-                        if domainSize < 10 { break }
+                        if domainSize < 10 {
+                            break
+                        }
                         let decodedValue = Double(value.decodedSignedValue)
                         let lowerValue = Double(ChoiceValue(range.lowerBound, tag: tag).decodedSignedValue)
                         let upperValue = Double(ChoiceValue(range.upperBound, tag: tag).decodedSignedValue)
                         let span = upperValue - lowerValue
-                        guard span > 0 else { break }
+                        guard span > 0 else {
+                            break
+                        }
                         let normalized = (decodedValue - lowerValue) / span
                         deciles.record(tag: tag, normalized: min(max(normalized, 0), 1), decodedValue: decodedValue)
                     default:
@@ -253,7 +261,9 @@ private struct DecileAccumulator {
 
     func results() -> [NumericTypeCoverage] {
         buckets.sorted(by: { $0.key < $1.key }).compactMap { discriminator, hits in
-            guard let name = typeTagName(for: discriminator) else { return nil }
+            guard let name = typeTagName(for: discriminator) else {
+                return nil
+            }
             let covered = hits.count(where: { $0 })
             let values = decodedValues[discriminator] ?? []
             let minValue = values.min() ?? 0
@@ -305,7 +315,9 @@ private struct BranchAccumulator {
 
     func result() -> Double {
         let totalBranches = siteBranchCounts.values.reduce(0 as UInt64, +)
-        guard totalBranches > 0 else { return 1.0 }
+        guard totalBranches > 0 else {
+            return 1.0
+        }
         return Double(observedBranches.count) / Double(totalBranches)
     }
 }
@@ -333,16 +345,22 @@ private struct SequenceAccumulator {
 
     var meanLength: Double {
         let allLengths = sites.values.flatMap { $0 }
-        guard allLengths.isEmpty == false else { return 0 }
+        guard allLengths.isEmpty == false else {
+            return 0
+        }
         return Double(allLengths.map { Int($0) }.reduce(0, +)) / Double(allLengths.count)
     }
 
     func result() -> Int {
-        guard sites.isEmpty == false else { return 10 }
+        guard sites.isEmpty == false else {
+            return 10
+        }
         var worstDeciles = 10
         for (range, lengths) in sites {
             let span = range.upperBound - range.lowerBound
-            guard span > 0 else { continue }
+            guard span > 0 else {
+                continue
+            }
             var buckets = [Bool](repeating: false, count: 10)
             for length in lengths {
                 let normalized = Double(length - range.lowerBound) / Double(span)
@@ -380,11 +398,15 @@ private struct CharacterAccumulator {
 // MARK: - Complexity Deciles
 
 private func computeComplexityDeciles(_ scores: [Double]) -> Int {
-    guard scores.count >= 2 else { return 10 }
+    guard scores.count >= 2 else {
+        return 10
+    }
     let minScore = scores.min()!
     let maxScore = scores.max()!
     let range = maxScore - minScore
-    guard range > 0 else { return 10 }
+    guard range > 0 else {
+        return 10
+    }
 
     var buckets = [Bool](repeating: false, count: 10)
     for score in scores {

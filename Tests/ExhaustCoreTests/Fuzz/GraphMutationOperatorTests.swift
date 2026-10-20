@@ -135,7 +135,9 @@ struct GraphMutationOperatorTests {
             guard let shifted = FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng),
                   let first = shifted[indices[0]].value?.choice.decodedDoubleValue,
                   first >= 0, first < 100
-            else { continue }
+            else {
+                continue
+            }
             let delta = UInt64(100 - first)
             #expect(reducer.makeLockstepCandidate(plan: plan, delta: delta) == shifted)
             compared += 1

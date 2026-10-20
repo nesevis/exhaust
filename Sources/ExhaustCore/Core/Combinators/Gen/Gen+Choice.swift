@@ -310,7 +310,9 @@ package extension Gen {
         size: UInt64
     ) -> ClosedRange<Output> {
         let fraction = min(Double(size) / 100.0, 1.0)
-        guard fraction < 1.0 else { return range }
+        guard fraction < 1.0 else {
+            return range
+        }
 
         let lowerBits = range.lowerBound.bitPattern64
         let upperBits = range.upperBound.bitPattern64
@@ -361,14 +363,20 @@ package extension Gen {
         fraction: Double,
         isExponential: Bool
     ) -> UInt64 {
-        guard distance > 0, fraction > 0 else { return 0 }
+        guard distance > 0, fraction > 0 else {
+            return 0
+        }
 
         let base = distance == .max ? Double(distance) : Double(distance) + 1.0
         let scaled = isExponential
             ? pow(base, fraction) - 1.0
             : base * fraction
-        guard scaled > 0 else { return 0 }
-        if scaled >= Double(distance) { return distance }
+        guard scaled > 0 else {
+            return 0
+        }
+        if scaled >= Double(distance) {
+            return distance
+        }
         return UInt64(scaled.rounded())
     }
 

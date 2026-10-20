@@ -110,7 +110,9 @@ package extension ChoiceSequence {
         usesFloatingSteps: Bool,
         policy: GroupShiftPolicy
     ) -> (candidate: ChoiceSequence, firstDifferenceOrder: ShortlexOrder)? {
-        guard delta > 0 else { return nil }
+        guard delta > 0 else {
+            return nil
+        }
 
         var candidate = self
         var firstDifferenceOrder: ShortlexOrder = .eq
@@ -122,7 +124,9 @@ package extension ChoiceSequence {
             let position = pair.index
             let originalEntry = pair.entry
             guard let value = originalEntry.value else {
-                if policy == .requireWholeGroup { return nil }
+                if policy == .requireWholeGroup {
+                    return nil
+                }
                 entryOffset += 1
                 continue
             }
@@ -134,13 +138,17 @@ package extension ChoiceSequence {
                 let candidateFloat = currentFloat + signedDelta
                 guard let floatChoice = tag.floatingChoice(
                     from: candidateFloat
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 newChoice = floatChoice
             } else {
                 guard shiftUpward
                     ? UInt64.max - delta >= value.choice.bitPattern64
                     : value.choice.bitPattern64 >= delta
-                else { return nil }
+                else {
+                    return nil
+                }
 
                 let newBitPattern = shiftUpward
                     ? value.choice.bitPattern64 + delta
@@ -152,7 +160,9 @@ package extension ChoiceSequence {
             }
 
             guard value.isRangeExplicit == false || newChoice.fits(in: value.validRange) else {
-                if policy == .requireWholeGroup { return nil }
+                if policy == .requireWholeGroup {
+                    return nil
+                }
                 entryOffset += 1
                 continue
             }
@@ -164,7 +174,9 @@ package extension ChoiceSequence {
             ))
             let order = newEntry.shortLexCompare(originalEntry)
             guard order != .eq else {
-                if policy == .requireWholeGroup { return nil }
+                if policy == .requireWholeGroup {
+                    return nil
+                }
                 entryOffset += 1
                 continue
             }
@@ -177,7 +189,9 @@ package extension ChoiceSequence {
             entryOffset += 1
         }
 
-        guard hasDifference else { return nil }
+        guard hasDifference else {
+            return nil
+        }
         return (candidate, firstDifferenceOrder)
     }
 }

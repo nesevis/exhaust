@@ -18,7 +18,9 @@ struct BuggyCounterTests {
         )
         // The trace should end with a failing step
         #expect(result.trace.last.map { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         } == true)
 

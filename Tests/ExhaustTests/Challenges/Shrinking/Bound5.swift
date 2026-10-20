@@ -176,7 +176,9 @@ struct Bound5ShrinkingChallenge {
     func bound25() throws {
         let gen = #gen(Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen, Bound5Fixture.gen)
         let property: @Sendable (Bound5Fixture.Tuple) -> Bool = { tuple in
-            if tuple.arr.isEmpty { return true }
+            if tuple.arr.isEmpty {
+                return true
+            }
             return tuple.arr.dropFirst().reduce(tuple.arr[0], &+) < 5 * 256
         }
         var report: ExhaustReport?

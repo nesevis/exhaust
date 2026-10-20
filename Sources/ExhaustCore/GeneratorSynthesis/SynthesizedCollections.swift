@@ -18,7 +18,9 @@ package protocol SynthesizableCollection {
 extension Array: SynthesizableCollection {
     /// Returns ``Gen/arrayOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
     package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
+        guard let elementGen = resolveGenerator(for: Element.self) else {
+            return nil
+        }
         let typed: Generator<Element> = elementGen.map { $0 as! Element }
         return Gen.arrayOf(typed).erase()
     }
@@ -29,7 +31,9 @@ extension Dictionary: SynthesizableCollection {
     package static var synthesizedGenerator: AnyGenerator? {
         guard let keyGen = resolveGenerator(for: Key.self),
               let valueGen = resolveGenerator(for: Value.self)
-        else { return nil }
+        else {
+            return nil
+        }
         let typedKey: Generator<Key> = keyGen.map { $0 as! Key }
         let typedValue: Generator<Value> = valueGen.map { $0 as! Value }
         return Gen.dictionaryOf(typedKey, typedValue).erase()
@@ -39,7 +43,9 @@ extension Dictionary: SynthesizableCollection {
 extension Set: SynthesizableCollection {
     /// Returns ``Gen/setOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
     package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
+        guard let elementGen = resolveGenerator(for: Element.self) else {
+            return nil
+        }
         let typed: Generator<Element> = elementGen.map { $0 as! Element }
         return Gen.setOf(typed).erase()
     }
@@ -75,7 +81,9 @@ extension Array: DiscoverableCollection {
               let array = jsonValue as? [Any],
               let representativeElement = array.first,
               let elementGen = discoverElementGenerator(elementType, fromExample: representativeElement, codingPath: codingPath)
-        else { return nil }
+        else {
+            return nil
+        }
         let typed: Generator<Element> = elementGen.map { $0 as! Element }
         return Gen.arrayOf(typed).erase()
     }
@@ -87,7 +95,9 @@ extension Set: DiscoverableCollection {
               let array = jsonValue as? [Any],
               let representativeElement = array.first,
               let elementGen = discoverElementGenerator(elementType, fromExample: representativeElement, codingPath: codingPath)
-        else { return nil }
+        else {
+            return nil
+        }
         let typed: Generator<Element> = elementGen.map { $0 as! Element }
         return Gen.setOf(typed).erase()
     }
@@ -100,7 +110,9 @@ extension Dictionary: DiscoverableCollection {
               let valueType = Value.self as? any Decodable.Type,
               let valueGen = discoverElementGenerator(valueType, fromExample: representativeValue, codingPath: codingPath),
               let keyGen = resolveGenerator(for: Key.self)
-        else { return nil }
+        else {
+            return nil
+        }
         let typedKey: Generator<Key> = keyGen.map { $0 as! Key }
         let typedValue: Generator<Value> = valueGen.map { $0 as! Value }
         return Gen.dictionaryOf(typedKey, typedValue).erase()

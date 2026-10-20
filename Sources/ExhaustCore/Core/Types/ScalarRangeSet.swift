@@ -137,7 +137,9 @@ package struct ScalarRangeSet: @unchecked Sendable {
     public func scalar(at index: Int) -> Unicode.Scalar {
         let clamped = min(max(index, 0), scalarCount - 1)
         if let bottom = bottomCodepoint {
-            if clamped == 0 { return bottom }
+            if clamped == 0 {
+                return bottom
+            }
             let rangeIndex = clamped - 1
             return rangeScalar(at: rangeIndex)
         }
@@ -146,7 +148,9 @@ package struct ScalarRangeSet: @unchecked Sendable {
 
     /// Whether this range set contains the given scalar.
     public func contains(_ scalar: Unicode.Scalar) -> Bool {
-        if let bottom = bottomCodepoint, scalar == bottom { return true }
+        if let bottom = bottomCodepoint, scalar == bottom {
+            return true
+        }
         return rangeSet.contains(scalar.value)
     }
 
@@ -312,7 +316,9 @@ extension CharacterSet {
             }
 
             if byte == 0xFF {
-                if rangeStart == nil { rangeStart = scalarBase }
+                if rangeStart == nil {
+                    rangeStart = scalarBase
+                }
                 rangeEnd = scalarBase + 7
                 continue
             }
@@ -320,7 +326,9 @@ extension CharacterSet {
             for bit in 0 ..< UInt32(8) {
                 let scalar = scalarBase + bit
                 if byte & (1 << bit) != 0 {
-                    if rangeStart == nil { rangeStart = scalar }
+                    if rangeStart == nil {
+                        rangeStart = scalar
+                    }
                     rangeEnd = scalar
                 } else if let start = rangeStart {
                     rangeSet.insert(contentsOf: start ..< rangeEnd + 1)

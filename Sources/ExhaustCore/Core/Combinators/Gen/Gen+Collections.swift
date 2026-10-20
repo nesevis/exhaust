@@ -210,7 +210,9 @@ package extension Gen {
         _ gen: Generator<some Collection<Element>>
     ) -> Generator<[Element]> {
         gen.boundForwardOnly { array in
-            guard array.count > 1 else { return .pure(Array(array)) }
+            guard array.count > 1 else {
+                return .pure(Array(array))
+            }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
                 exactly: UInt64(array.count)

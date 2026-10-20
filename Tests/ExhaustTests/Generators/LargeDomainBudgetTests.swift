@@ -70,7 +70,9 @@ struct LargeDomainBudgetTests {
         // Property: if eventEnd > eventStart, the duration is positive
         // (This is trivially true but exercises the 2-param covering array)
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end in
-            guard end > start else { return true }
+            guard end > start else {
+                return true
+            }
             return end.timeIntervalSince(start) > 0
         }
 
@@ -113,7 +115,9 @@ struct LargeDomainBudgetTests {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
             let gap = calendar.dateComponents([.day, .hour, .minute, .second], from: date1, to: date2)
-            guard gap.day == 7, gap.hour == 0, gap.minute == 0, gap.second == 0 else { return true }
+            guard gap.day == 7, gap.hour == 0, gap.minute == 0, gap.second == 0 else {
+                return true
+            }
             let weekday1 = calendar.component(.weekday, from: date1)
             let weekday2 = calendar.component(.weekday, from: date2)
             return weekday1 == weekday2
@@ -134,7 +138,9 @@ struct LargeDomainBudgetTests {
 
         // Property: date comparison is transitive (a < b && b < c → a < c)
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, c in
-            guard a < b, b < c else { return true }
+            guard a < b, b < c else {
+                return true
+            }
             return a < c
         }
 
@@ -159,7 +165,9 @@ struct LargeDomainBudgetTests {
             let first = sorted[0], mid = sorted[1], last = sorted[2]
             let startFirst = calendar.startOfDay(for: first)
             let startLast = calendar.startOfDay(for: last)
-            guard startFirst == startLast else { return true } // different days, skip
+            guard startFirst == startLast else { // different days, skip
+                return true
+            }
             let startMid = calendar.startOfDay(for: mid)
             return startMid == startFirst
         }
@@ -225,8 +233,12 @@ struct LargeDomainBudgetTests {
 
         // Property: createdDate <= modifiedDate (treating params as: start, end, modified, created, due)
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end, modified, created, _ in
-            guard created <= modified else { return true } // precondition
-            guard start <= end else { return true } // precondition
+            guard created <= modified else { // precondition
+                return true
+            }
+            guard start <= end else { // precondition
+                return true
+            }
             // Trivially true — just exercising the covering array
             return created <= modified
         }
@@ -263,7 +275,9 @@ struct LargeDomainBudgetTests {
 
         // Property: dates preserve their relative ordering through Calendar
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date1, date2 in
-            guard date1 != date2 else { return true }
+            guard date1 != date2 else {
+                return true
+            }
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
             let comp = calendar.compare(date1, to: date2, toGranularity: .second)

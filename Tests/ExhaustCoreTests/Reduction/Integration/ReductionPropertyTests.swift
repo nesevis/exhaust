@@ -72,7 +72,9 @@ struct ReductionPropertyTests {
             let (value, tree) = try generate(gen, seed: seed)
 
             let property: ([[UInt64]]) -> Bool = { $0.flatMap(\.self).count < 3 }
-            guard property(value) == false else { continue }
+            guard property(value) == false else {
+                continue
+            }
             exercised += 1
 
             let (reduced, _) = try #require(

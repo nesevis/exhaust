@@ -22,7 +22,9 @@ struct NumericJointSearchCursor {
     init(groups: [NumericJointQuery.Group]) {
         let plans: [Plan] = groups.compactMap { group in
             let samples = group.samples
-            guard samples.allSatisfy({ $0.isEmpty == false }) else { return nil }
+            guard samples.allSatisfy({ $0.isEmpty == false }) else {
+                return nil
+            }
             return Plan(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.priorityProposals.map(\.probe.patterns)))
         }
         self.plans = plans
@@ -31,7 +33,9 @@ struct NumericJointSearchCursor {
                 (priority: priorityProposal.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: priorityProposal.probe.patterns))
             }
         }.sorted { first, second in
-            if first.priority != second.priority { return first.priority < second.priority }
+            if first.priority != second.priority {
+                return first.priority < second.priority
+            }
             return first.groupIndex < second.groupIndex
         }.map(\.proposal)
         let arity = groups.first?.leaves.count ?? 0
@@ -60,7 +64,9 @@ struct NumericJointSearchCursor {
     }
 
     mutating func next(into candidate: inout ChoiceSequence) -> Proposal? {
-        guard let proposal = next() else { return nil }
+        guard let proposal = next() else {
+            return nil
+        }
         proposal.write(into: &candidate)
         return proposal
     }
@@ -77,7 +83,9 @@ struct NumericJointSearchCursor {
                 let plan = plans[planIndex]
                 planIndex += 1
                 let indices = Array(repeating: coherentRank, count: plan.leaves.count)
-                if let proposal = proposal(plan: plan, indices: indices) { return proposal }
+                if let proposal = proposal(plan: plan, indices: indices) {
+                    return proposal
+                }
             }
             planIndex = 0
             coherentRank += 1
@@ -85,12 +93,16 @@ struct NumericJointSearchCursor {
         while true {
             if offsets == nil {
                 offsets = nextOffsets()
-                guard offsets != nil else { return nil }
+                guard offsets != nil else {
+                    return nil
+                }
             }
             while planIndex < plans.count {
                 let plan = plans[planIndex]
                 planIndex += 1
-                if let proposal = proposal(plan: plan, indices: offsets!) { return proposal }
+                if let proposal = proposal(plan: plan, indices: offsets!) {
+                    return proposal
+                }
             }
             planIndex = 0
             offsets = nil
@@ -98,9 +110,13 @@ struct NumericJointSearchCursor {
     }
 
     private func proposal(plan: Plan, indices: [Int]) -> Proposal? {
-        guard indices.indices.allSatisfy({ indices[$0] < plan.samples[$0].count }) else { return nil }
+        guard indices.indices.allSatisfy({ indices[$0] < plan.samples[$0].count }) else {
+            return nil
+        }
         let patterns = indices.indices.map { plan.samples[$0][indices[$0]] }
-        guard plan.ratioPatterns.contains(patterns) == false else { return nil }
+        guard plan.ratioPatterns.contains(patterns) == false else {
+            return nil
+        }
         return Proposal(leaves: plan.leaves, patterns: patterns)
     }
 
@@ -112,7 +128,9 @@ struct NumericJointSearchCursor {
             advancePrefix()
             guard indices.allSatisfy({ $0 == 0 }) == false,
                   indices.allSatisfy({ $0 == 1 }) == false
-            else { continue }
+            else {
+                continue
+            }
             return indices
         }
         return nil
@@ -121,7 +139,9 @@ struct NumericJointSearchCursor {
     private mutating func advancePrefix() {
         for index in prefix.indices.reversed() {
             var remaining = diagonal - prefix[..<index].reduce(0, +) - prefix[index] - 1
-            guard prefix[index] < maximumOffsets[index], (0 ... suffixCapacity[index + 1]).contains(remaining) else { continue }
+            guard prefix[index] < maximumOffsets[index], (0 ... suffixCapacity[index + 1]).contains(remaining) else {
+                continue
+            }
             prefix[index] += 1
             for following in (index + 1) ..< prefix.count {
                 prefix[following] = max(0, remaining - suffixCapacity[following + 1])
@@ -130,7 +150,9 @@ struct NumericJointSearchCursor {
             return
         }
         diagonal += 1
-        guard diagonal <= maximumDiagonal else { return }
+        guard diagonal <= maximumDiagonal else {
+            return
+        }
         var remaining = diagonal
         for index in prefix.indices {
             prefix[index] = max(0, remaining - suffixCapacity[index + 1])

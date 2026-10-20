@@ -305,7 +305,9 @@ private func sample<Value>(
 
 private func medianMagnitude(_ samples: [Int]) -> Double {
     let magnitudes = samples.map { abs(Double($0)) }.sorted()
-    guard magnitudes.isEmpty == false else { return 0 }
+    guard magnitudes.isEmpty == false else {
+        return 0
+    }
     return magnitudes[magnitudes.count / 2]
 }
 
@@ -313,8 +315,12 @@ private func signCounts(_ samples: [Int]) -> (negatives: Int, positives: Int) {
     var negatives = 0
     var positives = 0
     for value in samples {
-        if value < 0 { negatives += 1 }
-        if value > 0 { positives += 1 }
+        if value < 0 {
+            negatives += 1
+        }
+        if value > 0 {
+            positives += 1
+        }
     }
     return (negatives, positives)
 }
@@ -323,8 +329,12 @@ private func signCountsDouble(_ samples: [Double]) -> (negatives: Int, positives
     var negatives = 0
     var positives = 0
     for value in samples {
-        if value < 0 { negatives += 1 }
-        if value > 0 { positives += 1 }
+        if value < 0 {
+            negatives += 1
+        }
+        if value > 0 {
+            positives += 1
+        }
     }
     return (negatives, positives)
 }

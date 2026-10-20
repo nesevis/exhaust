@@ -177,7 +177,9 @@ struct MetamorphTests {
         var failingTree: ChoiceTree?
         var failingValue: [Any]?
         for _ in 0 ..< 200 {
-            guard let (value, tree) = try iterator.next() else { continue }
+            guard let (value, tree) = try iterator.next() else {
+                continue
+            }
             let original = value[0] as! Int
             if original > 100 {
                 failingTree = tree

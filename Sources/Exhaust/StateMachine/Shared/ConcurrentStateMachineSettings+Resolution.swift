@@ -72,7 +72,9 @@ extension ResolvedConcurrentConfig {
             line: UInt,
             column: UInt
         ) {
-            guard let requested = clampedCommandLimit else { return }
+            guard let requested = clampedCommandLimit else {
+                return
+            }
             Exhaust.reportWarning(
                 ".commandLimit(\(requested)) exceeds the supported maximum of \(ResolvedConcurrentConfig.maxCommandLimit) and was clamped. Covering-array construction cost grows superlinearly with sequence length, so longer sequences spend their budget building coverage rows instead of executing commands.",
                 fileID: fileID,
@@ -146,7 +148,11 @@ extension ResolvedConcurrentConfig {
         #if canImport(Testing)
             // Adopt a suite-level `.budget` trait when no inline `.budget` was passed, matching the sequential resolver. Without this, all three concurrent runners silently ignore a budget set via a Swift Testing trait.
             if let traitConfig = ExhaustTraitConfiguration.current {
-                let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                let hasInlineBudget = settings.contains { if case .budget = $0 {
+                    true
+                } else {
+                    false
+                } }
                 if hasInlineBudget == false, let traitBudget = traitConfig.budget {
                     config.budget = traitBudget
                 }

@@ -34,7 +34,9 @@ struct AsyncStateMachineTests {
         if let result {
             #expect(result.trace.isEmpty == false)
             let hasFailure = result.trace.contains { step in
-                if case .invariantFailed = step.outcome { return true }
+                if case .invariantFailed = step.outcome {
+                    return true
+                }
                 return false
             }
             #expect(hasFailure, "Trace should contain an invariant failure")
@@ -210,7 +212,9 @@ final class AsyncSkipSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard expected.isEmpty == false else { throw skip() }
+        guard expected.isEmpty == false else {
+            throw skip()
+        }
         expected.append(expected.last! - 1)
         await counter.decrement()
     }

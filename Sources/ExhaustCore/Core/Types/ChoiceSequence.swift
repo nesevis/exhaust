@@ -272,7 +272,9 @@ package extension ChoiceSequence {
             while otherIdx < other.count, other[otherIdx].value == nil {
                 otherIdx += 1
             }
-            guard selfIdx < count, otherIdx < other.count else { break }
+            guard selfIdx < count, otherIdx < other.count else {
+                break
+            }
             switch self[selfIdx].value!.shortLexCompare(other[otherIdx].value!) {
                 case .lt: return true
                 case .gt: return false

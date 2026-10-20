@@ -301,7 +301,9 @@ enum SequenceDecoder {
         probeHash: UInt64?,
         extra: @autoclosure () -> [String: String] = [:]
     ) {
-        guard ExhaustLog.isEnabled(.debug, for: .reducer) else { return }
+        guard ExhaustLog.isEnabled(.debug, for: .reducer) else {
+            return
+        }
         var metadata: [String: String] = ["reason": reason]
         if let probeHash {
             metadata["probe_hash"] = "\(probeHash)"
@@ -322,7 +324,9 @@ enum SequenceDecoder {
         from report: DecodingReport?,
         into accumulator: inout [UInt64: FilterObservation]
     ) {
-        guard let report, report.filterObservations.isEmpty == false else { return }
+        guard let report, report.filterObservations.isEmpty == false else {
+            return
+        }
         for (fingerprint, observation) in report.filterObservations {
             accumulator[fingerprint, default: FilterObservation()].merge(observation)
         }

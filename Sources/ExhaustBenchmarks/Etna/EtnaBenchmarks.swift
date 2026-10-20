@@ -80,7 +80,9 @@ private func runEtnaSeeds<Input>(
             return result
         }
 
-        guard let report = capturedReport else { continue }
+        guard let report = capturedReport else {
+            continue
+        }
         results.append(EtnaResult(
             seed: seed,
             solved: counterexample != nil,
@@ -465,8 +467,12 @@ private func registerEtnaRBTBenchmark(
     func insertDelete(_ insert: @escaping InsertFn, _ delete: @escaping DeleteFn) -> (ReflectiveGenerator<(EtnaRBT, Int, Int, Int)>, @Sendable ((EtnaRBT, Int, Int, Int)) -> Bool) {
         (etnaRBTInsertDeleteInputGen, { input in
             let (tree, key, otherKey, value) = input
-            guard case let .success(deleted) = delete(otherKey, tree) else { return false }
-            guard case let .success(deletedInserted) = delete(otherKey, insert(key, value, tree)) else { return false }
+            guard case let .success(deleted) = delete(otherKey, tree) else {
+                return false
+            }
+            guard case let .success(deletedInserted) = delete(otherKey, insert(key, value, tree)) else {
+                return false
+            }
             let lhs = insert(key, value, deleted)
             let rhs = key == otherKey ? insert(key, value, tree) : deletedInserted
             return bstListsEqual(rbtToList(lhs), rbtToList(rhs))
@@ -475,8 +481,12 @@ private func registerEtnaRBTBenchmark(
     func deleteInsert(_ insert: @escaping InsertFn, _ delete: @escaping DeleteFn) -> (ReflectiveGenerator<(EtnaRBT, Int, Int, Int)>, @Sendable ((EtnaRBT, Int, Int, Int)) -> Bool) {
         (etnaRBTInsertDeleteInputGen, { input in
             let (tree, key, otherKey, otherValue) = input
-            guard case let .success(lhs) = delete(key, insert(otherKey, otherValue, tree)) else { return false }
-            guard case let .success(deleted) = delete(key, tree) else { return false }
+            guard case let .success(lhs) = delete(key, insert(otherKey, otherValue, tree)) else {
+                return false
+            }
+            guard case let .success(deleted) = delete(key, tree) else {
+                return false
+            }
             let rhs = key == otherKey ? deleted : insert(otherKey, otherValue, deleted)
             return bstListsEqual(rbtToList(lhs), rbtToList(rhs))
         })
@@ -676,8 +686,12 @@ private func registerEtnaSTLCBenchmark(
             let singleResults = runEtnaSeeds(
                 refGen: etnaSTLCExprGenRust,
                 property: { @Sendable (expr: STLCExpr) -> Bool in
-                    guard let originalType = stlcGetType([], expr) else { return true }
-                    guard let stepped = stlcPstepImpl(expr, config: config) else { return true }
+                    guard let originalType = stlcGetType([], expr) else {
+                        return true
+                    }
+                    guard let stepped = stlcPstepImpl(expr, config: config) else {
+                        return true
+                    }
                     return stlcGetType([], stepped) == originalType
                 },
                 seedCount: seedCount, baseSeed: baseSeed,
@@ -691,8 +705,12 @@ private func registerEtnaSTLCBenchmark(
             let multiResults = runEtnaSeeds(
                 refGen: etnaSTLCExprGenRust,
                 property: { @Sendable (expr: STLCExpr) -> Bool in
-                    guard let originalType = stlcGetType([], expr) else { return true }
-                    guard let result = stlcMultistepImpl(40, expr, config: config) else { return true }
+                    guard let originalType = stlcGetType([], expr) else {
+                        return true
+                    }
+                    guard let result = stlcMultistepImpl(40, expr, config: config) else {
+                        return true
+                    }
                     return stlcGetType([], result) == originalType
                 },
                 seedCount: seedCount, baseSeed: baseSeed,

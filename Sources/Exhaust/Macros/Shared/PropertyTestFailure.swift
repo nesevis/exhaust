@@ -23,7 +23,9 @@ struct PropertyTestFailure<Output> {
 
     /// Produces the encoded replay string including the iteration for direct reproduction.
     var encodedReplaySeed: String? {
-        guard let seed else { return nil }
+        guard let seed else {
+            return nil
+        }
         return ReplaySeed.Resolved.sampling(seed: seed, iteration: iteration).encoded
     }
 

@@ -17,14 +17,22 @@ enum PermutationQuery {
 
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case .zip = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
+            guard case .zip = node.kind else {
+                continue
+            }
+            guard node.children.count >= 2 else {
+                continue
+            }
 
             var shapeGroups: [NodeShapeKey: [Int]] = [:]
             for childID in node.children {
-                guard graph.nodes[childID].positionRange != nil else { continue }
+                guard graph.nodes[childID].positionRange != nil else {
+                    continue
+                }
                 let annotation = graph.nodes[childID].scopeAnnotation
-                if annotation.isDepthControl || annotation.isLaneControl { continue }
+                if annotation.isDepthControl || annotation.isLaneControl {
+                    continue
+                }
                 let key = nodeShapeKey(graph.nodes[childID])
                 shapeGroups[key, default: []].append(childID)
             }
@@ -37,7 +45,9 @@ enum PermutationQuery {
                     return positionA < positionB
                 }
 
-            guard swappableGroups.isEmpty == false else { continue }
+            guard swappableGroups.isEmpty == false else {
+                continue
+            }
 
             scopes.append(PermutationScope(
                 parentNodeID: nodeID,
@@ -69,7 +79,9 @@ enum PermutationQuery {
             case .chooseBits:
                 return .value
             case let .sequence(metadata):
-                if metadata.elementCount == 0 { return .emptySequence }
+                if metadata.elementCount == 0 {
+                    return .emptySequence
+                }
                 return .sequence(elementCount: metadata.elementCount)
             case .zip:
                 return .zip(childCount: node.children.count)

@@ -115,7 +115,9 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                         collectDecodingReport: false
                     )
                 )
-                guard case .success = result else { continue }
+                guard case .success = result else {
+                    continue
+                }
             }
         }
     }
@@ -139,7 +141,9 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                         fallbackTree: fixture.tree
                     )
                 )
-                guard case .success = result else { fatalError("exact replay rejected") }
+                guard case .success = result else {
+                    fatalError("exact replay rejected")
+                }
             }
         }
     }
@@ -167,7 +171,9 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                         mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
                     )
                 )
-                guard case let .success(_, freshTree, _) = result else { continue }
+                guard case let .success(_, freshTree, _) = result else {
+                    continue
+                }
                 let sequence = ChoiceSequence.flatten(freshTree)
                 _ = ZobristHash.hash(of: sequence)
             }
@@ -198,7 +204,9 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                         mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
                     )
                 )
-                guard case let .success(_, sequence, _) = result else { continue }
+                guard case let .success(_, sequence, _) = result else {
+                    continue
+                }
                 _ = ZobristHash.hash(of: sequence)
             }
         }
@@ -229,7 +237,9 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                         skipTree: true
                     )
                 )
-                guard case .success = result else { continue }
+                guard case .success = result else {
+                    continue
+                }
             }
         }
     }

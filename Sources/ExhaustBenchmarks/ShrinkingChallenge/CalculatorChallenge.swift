@@ -8,7 +8,9 @@ indirect enum Expr: Equatable, CustomDebugStringConvertible, CustomStringConvert
     case div(Expr, Expr)
 
     var value: Int? {
-        guard case let .value(value) = self else { return nil }
+        guard case let .value(value) = self else {
+            return nil
+        }
         return value
     }
 
@@ -42,7 +44,9 @@ func eval(_ expr: Expr) throws -> Int {
             return try eval(lhs) &+ eval(rhs)
         case let .div(lhs, rhs):
             let denominator = try eval(rhs)
-            guard denominator != 0 else { throw EvalError.divisionByZero }
+            guard denominator != 0 else {
+                throw EvalError.divisionByZero
+            }
             // Int.min / -1 traps. Addition already wraps with &+, so division wraps to match.
             return try eval(lhs).dividedReportingOverflow(by: denominator).partialValue
     }
@@ -103,7 +107,9 @@ func calculatorExpressionGen(depth: Int) -> ReflectiveGenerator<Expr> {
 // MARK: - Property
 
 let calculatorProperty: @Sendable (Expr) -> Bool = { expr in
-    guard containsLiteralDivisionByZero(expr) == false else { return true }
+    guard containsLiteralDivisionByZero(expr) == false else {
+        return true
+    }
     do {
         _ = try eval(expr)
         return true

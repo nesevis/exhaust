@@ -25,13 +25,21 @@ enum DepthCollapseQuery {
 
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.scopeAnnotation.isDepthControl else { continue }
-            guard let positionRange = node.positionRange else { continue }
+            guard case let .chooseBits(metadata) = node.kind else {
+                continue
+            }
+            guard node.scopeAnnotation.isDepthControl else {
+                continue
+            }
+            guard let positionRange = node.positionRange else {
+                continue
+            }
 
             let current = metadata.value.bitPattern64
             let floor = metadata.value.reductionTarget(in: metadata.validRange)
-            guard current != floor else { continue }
+            guard current != floor else {
+                continue
+            }
 
             if let converged = graph.convergenceStore[nodeID], converged.bound == current {
                 continue
@@ -72,14 +80,18 @@ enum DepthCollapseQuery {
     /// The binary search's step count over the leaf's distance to its floor, at least one.
     static func estimatedProbes(of scope: MinimizationScope, graph: ChoiceGraph) -> Int {
         let distance = distanceToFloor(of: scope, graph: graph)
-        guard distance > 1 else { return 1 }
+        guard distance > 1 else {
+            return 1
+        }
         return Int.bitWidth - distance.leadingZeroBitCount
     }
 
     // MARK: - Private Helpers
 
     private static func leafNodeID(of scope: MinimizationScope) -> Int? {
-        guard case let .depthCollapse(valueScope) = scope else { return nil }
+        guard case let .depthCollapse(valueScope) = scope else {
+            return nil
+        }
         return valueScope.leaves.first?.nodeID
     }
 }

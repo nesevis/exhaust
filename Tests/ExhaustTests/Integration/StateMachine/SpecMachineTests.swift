@@ -489,7 +489,9 @@ private extension AnyStateMachineCandidateSource {
     ) -> AnyStateMachineCandidateSource {
         var exhausted = false
         return AnyStateMachineCandidateSource {
-            guard exhausted == false else { return nil }
+            guard exhausted == false else {
+                return nil
+            }
             exhausted = true
             return try computation()
         }

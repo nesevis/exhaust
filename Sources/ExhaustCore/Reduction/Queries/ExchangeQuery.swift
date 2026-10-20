@@ -54,8 +54,12 @@ enum ExchangeQuery {
         var leafGroups: [TypeTag: [Int]] = [:]
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl { continue }
+            guard case let .chooseBits(metadata) = node.kind else {
+                continue
+            }
+            if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl {
+                continue
+            }
             leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
 
@@ -95,7 +99,9 @@ enum ExchangeQuery {
                   node.scopeAnnotation.isDepthControl == false,
                   node.scopeAnnotation.isLaneControl == false,
                   let bindNodeID = node.scopeAnnotation.controllingBindNodeID
-            else { continue }
+            else {
+                continue
+            }
             bindInnersByBind[bindNodeID, default: []].append(nodeID)
         }
 
@@ -104,7 +110,9 @@ enum ExchangeQuery {
             let sourceIDs = (bindInnersByBind[bindNodeID] ?? []).filter { QueryHelpers.isOffTarget($0, graph: graph) }
             guard sourceIDs.isEmpty == false,
                   case let .bind(metadata) = graph.nodes[bindNodeID].kind
-            else { continue }
+            else {
+                continue
+            }
 
             var sinks: [(leafNodeID: Int, location: SinkLocation)] = []
             var seenBindFingerprints: Set<UInt64> = [metadata.fingerprint]
@@ -124,12 +132,16 @@ enum ExchangeQuery {
             }
 
             for sourceID in sourceIDs {
-                guard case let .chooseBits(sourceMetadata) = graph.nodes[sourceID].kind else { continue }
+                guard case let .chooseBits(sourceMetadata) = graph.nodes[sourceID].kind else {
+                    continue
+                }
                 for sink in sinks {
                     guard case let .chooseBits(sinkMetadata) = graph.nodes[sink.leafNodeID].kind,
                           sinkMetadata.typeTag == sourceMetadata.typeTag,
                           sinkMetadata.typeTag.isFloatingPoint == false
-                    else { continue }
+                    else {
+                        continue
+                    }
                     scopes.append(BoundExchangeScope(
                         sourceLeafNodeID: sourceID,
                         sinkLeafNodeID: sink.leafNodeID,
@@ -145,13 +157,17 @@ enum ExchangeQuery {
     private static func fixedShapeBoundLeaves(of bindNodeID: Int, graph: ChoiceGraph) -> [Int] {
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind,
               graph.nodes[bindNodeID].children.count > metadata.boundChildIndex
-        else { return [] }
+        else {
+            return []
+        }
 
         var leaves: [Int] = []
         var stack = [graph.nodes[bindNodeID].children[metadata.boundChildIndex]]
         while let nodeID = stack.popLast() {
             let node = graph.nodes[nodeID]
-            guard node.positionRange != nil else { continue }
+            guard node.positionRange != nil else {
+                continue
+            }
             switch node.kind {
                 case .bind, .pick, .sequence:
                     return []

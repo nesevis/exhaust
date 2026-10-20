@@ -276,7 +276,9 @@ package enum SamplingPhase {
                       deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true
                 {
                     let generateStart = MonotonicClock.nanoseconds()
-                    guard let (next, tree) = try interpreter.next() else { break }
+                    guard let (next, tree) = try interpreter.next() else {
+                        break
+                    }
                     guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                         break
                     }
@@ -332,7 +334,9 @@ package enum SamplingPhase {
                 while canceled.isCancelled == false,
                       deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true
                 {
-                    guard let next = try interpreter.nextValueOnly() else { break }
+                    guard let next = try interpreter.nextValueOnly() else {
+                        break
+                    }
                     guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
                         break
                     }

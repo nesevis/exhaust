@@ -67,7 +67,9 @@ let deletionGen = {
 let deletionProperty: @Sendable (([Int], Int)) -> Bool = { pair in
     var array = pair.0
     let element = pair.1
-    guard let index = array.firstIndex(of: element) else { return true }
+    guard let index = array.firstIndex(of: element) else {
+        return true
+    }
     array.remove(at: index)
     return array.contains(element) == false
 }

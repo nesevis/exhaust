@@ -15,7 +15,9 @@ struct MultiModelTests {
         #expect(result != nil, "Buggy insert should cause model/SUT divergence")
         if let result {
             let hasFailure = result.trace.contains { step in
-                if case .invariantFailed = step.outcome { return true }
+                if case .invariantFailed = step.outcome {
+                    return true
+                }
                 return false
             }
             #expect(hasFailure)
@@ -55,7 +57,9 @@ final class MultiModelSpec {
 
     @Command(weight: 2, .element(from: ["a", "b", "c"]))
     func remove(key: String) throws {
-        guard expectedKeys.contains(key) else { throw skip() }
+        guard expectedKeys.contains(key) else {
+            throw skip()
+        }
         expectedKeys.removeAll { $0 == key }
         expectedCount -= 1
         store.remove(key: key)

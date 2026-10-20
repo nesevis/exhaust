@@ -242,7 +242,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
             : rawBits
         let nextGen = try continuation(randomBits)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -252,7 +254,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
         let nextGen = try continuation(value)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -262,7 +266,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     ) throws -> Any? {
         let size = SharedInterpreterHelpers.currentSize(&context)
         let nextGen = try continuation(size)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -275,7 +281,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             return nil
         }
         let nextGen = try continuation(value)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -289,7 +297,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             return nil
         }
         let nextGen = try continuation(value)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -312,7 +322,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             return nil
         }
         let nextGen = try continuation(value)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -345,7 +357,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             winner = value
         }
         let nextGen = try continuation(winner!)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -444,7 +458,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         : rawBits)
                 }
                 let nextGen = try continuation(elementBatch.convert(bits))
-                if case let .pure(final) = nextGen { return final }
+                if case let .pure(final) = nextGen {
+                    return final
+                }
                 return try generateRecursiveAny(nextGen, context: &context)
             }
 
@@ -498,7 +514,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             }
         }
         let nextGen = try continuation(elements)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -518,7 +536,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             results.append(value)
         }
         let nextGen = try continuation(results)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -539,7 +559,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             return nil
         }
         let nextGen = try continuation(innerValue)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -583,13 +605,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         while attempts < GenerationContext.maxFilterRuns {
             guard let candidate = try generateRecursiveAny(
                 tunedGen, context: &context
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             let passed = predicate(candidate)
             filterAttempts += 1
-            if passed { filterPasses += 1 }
+            if passed {
+                filterPasses += 1
+            }
             if passed {
                 let nextGen = try continuation(candidate)
-                if case let .pure(final) = nextGen { return final }
+                if case let .pure(final) = nextGen {
+                    return final
+                }
                 return try generateRecursiveAny(nextGen, context: &context)
             }
             attempts += 1
@@ -614,7 +642,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
         }
         let nextGen = try continuation(value)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -672,7 +702,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 transformedValue = copies
         }
         let nextGen = try continuation(transformedValue)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 
@@ -739,7 +771,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             throw GeneratorError.uniqueBudgetExhausted
         }
         let nextGen = try continuation(value)
-        if case let .pure(final) = nextGen { return final }
+        if case let .pure(final) = nextGen {
+            return final
+        }
         return try generateRecursiveAny(nextGen, context: &context)
     }
 }

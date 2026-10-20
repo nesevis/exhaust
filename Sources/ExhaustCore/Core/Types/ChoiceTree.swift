@@ -214,7 +214,9 @@ package extension ChoiceTree {
                 let depthFactor: UInt64 = pickDepth >= 64 ? .max : 1 << pickDepth
                 let (here, overflow) = b.branchCount.multipliedReportingOverflow(by: depthFactor)
                 let deeper = b.choice.pickComplexityHelper(pickDepth: pickDepth + 1)
-                if overflow { return .max }
+                if overflow {
+                    return .max
+                }
                 return max(here, deeper)
             case let .sequence(elements, _):
                 return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
@@ -526,7 +528,9 @@ package struct ComplexityFeatures: Sendable {
     ///
     /// - Returns: `nil` when the scores array is empty.
     public static func from(_ scores: [Double]) -> ComplexityFeatures? {
-        guard scores.isEmpty == false else { return nil }
+        guard scores.isEmpty == false else {
+            return nil
+        }
         let sorted = scores.sorted()
         let count = sorted.count
         let medianValue: Double = count % 2 == 0

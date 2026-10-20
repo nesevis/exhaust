@@ -173,7 +173,9 @@ package struct FuzzFailureLineage {
     }
 
     private func append(_ text: String) {
-        guard let data = text.data(using: .utf8) else { return }
+        guard let data = text.data(using: .utf8) else {
+            return
+        }
         Self.appendLock.withLocking {
             if let handle = FileHandle(forWritingAtPath: path) {
                 handle.seekToEndOfFile()

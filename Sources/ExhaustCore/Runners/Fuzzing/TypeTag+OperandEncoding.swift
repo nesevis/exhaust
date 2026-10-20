@@ -17,13 +17,19 @@ package extension TypeTag {
             case .int, .int64:
                 return Int64(bitPattern: word).bitPattern64
             case .int32:
-                guard word <= UInt64(UInt32.max) else { return nil }
+                guard word <= UInt64(UInt32.max) else {
+                    return nil
+                }
                 return Int32(truncatingIfNeeded: word).bitPattern64
             case .int16:
-                guard word <= UInt64(UInt16.max) else { return nil }
+                guard word <= UInt64(UInt16.max) else {
+                    return nil
+                }
                 return Int16(truncatingIfNeeded: word).bitPattern64
             case .int8:
-                guard word <= UInt64(UInt8.max) else { return nil }
+                guard word <= UInt64(UInt8.max) else {
+                    return nil
+                }
                 return Int8(truncatingIfNeeded: word).bitPattern64
             case .double, .float, .float16, .date, .character, .depthControl, .laneControl:
                 return nil

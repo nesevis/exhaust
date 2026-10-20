@@ -84,7 +84,9 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
         return containsReturnWithValue(statements) == false
     }
 
-    guard let onlyStatement = statements.first else { return true }
+    guard let onlyStatement = statements.first else {
+        return true
+    }
 
     let item = onlyStatement.item
 
@@ -219,7 +221,9 @@ private func containsReturnWithValueRecursive(_ node: Syntax) -> Bool {
 private func isIssueRecordCall(_ node: FunctionCallExprSyntax) -> Bool {
     guard let memberAccess = node.calledExpression.as(MemberAccessExprSyntax.self),
           memberAccess.declName.baseName.text == "record"
-    else { return false }
+    else {
+        return false
+    }
 
     if let base = memberAccess.base?.as(DeclReferenceExprSyntax.self),
        base.baseName.text == "Issue"
@@ -384,7 +388,9 @@ final class SourceLocationRewriter: SyntaxRewriter {
     override func visit(_ node: ClosureExprSyntax) -> ExprSyntax {
         closureDepth += 1
         defer { closureDepth -= 1 }
-        if closureDepth > 1 { return ExprSyntax(node) }
+        if closureDepth > 1 {
+            return ExprSyntax(node)
+        }
         return super.visit(node)
     }
 
@@ -394,7 +400,9 @@ final class SourceLocationRewriter: SyntaxRewriter {
         }
         // Check if sourceLocation: is already specified
         let hasSourceLocation = node.arguments.contains { $0.label?.text == "sourceLocation" }
-        if hasSourceLocation { return ExprSyntax(node) }
+        if hasSourceLocation {
+            return ExprSyntax(node)
+        }
 
         guard let location = context.location(of: node, at: .afterLeadingTrivia, filePathMode: .filePath) else {
             // If location is unavailable, pass through unchanged.

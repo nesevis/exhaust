@@ -190,7 +190,9 @@ extension Materializer {
     static func decomposeNonGroupFallback(
         _ tree: ChoiceTree?
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
-        guard let tree else { return (nil, nil) }
+        guard let tree else {
+            return (nil, nil)
+        }
         if case let .group(children, _, isZip: false) = tree, children.count == 2 {
             // A tagged zip is one callee, and two branch alternatives are one pick. Neither shape is the untagged callee/continuation pair emitted by runContinuation.
             if case .branch = children[0], case .branch = children[1] {

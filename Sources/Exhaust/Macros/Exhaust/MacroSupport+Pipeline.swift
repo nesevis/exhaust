@@ -116,7 +116,9 @@ package extension __ExhaustRuntime {
         _ observations: [UInt64: FilterObservation],
         suppressIssueReporting: Bool
     ) {
-        guard suppressIssueReporting == false else { return }
+        guard suppressIssueReporting == false else {
+            return
+        }
         for (_, observation) in observations where observation.attempts >= 20 {
             if observation.validityRate < 0.02, let location = observation.sourceLocation {
                 reportWarning(

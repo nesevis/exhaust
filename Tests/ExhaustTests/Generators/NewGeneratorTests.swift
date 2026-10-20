@@ -218,11 +218,15 @@ struct ResultGeneratorTests {
         let values = try #example(gen, count: 50, seed: 42)
 
         let hasSuccess = values.contains { result in
-            if case .success = result { return true }
+            if case .success = result {
+                return true
+            }
             return false
         }
         let hasFailure = values.contains { result in
-            if case .failure = result { return true }
+            if case .failure = result {
+                return true
+            }
             return false
         }
 

@@ -84,7 +84,9 @@ private func runRejection<Value: Hashable>(
     let timer = BenchmarkTimer()
     print("=== \(label) ===")
     while nextMilestone < milestones.count, timer.elapsedSeconds < wallClockCapSeconds {
-        guard let value = try iterator.next() else { break }
+        guard let value = try iterator.next() else {
+            break
+        }
         total += 1
         if predicate(value), unique.insert(value).inserted {
             if unique.count >= milestones[nextMilestone] {
@@ -116,7 +118,9 @@ private func runOnlineCGS<Value: Hashable>(
     let timer = BenchmarkTimer()
     print("=== \(label) ===")
     while nextMilestone < milestones.count, timer.elapsedSeconds < wallClockCapSeconds {
-        guard let value = try iterator.next() else { break }
+        guard let value = try iterator.next() else {
+            break
+        }
         total += 1
         if predicate(value), unique.insert(value).inserted {
             if unique.count >= milestones[nextMilestone] {
@@ -151,7 +155,9 @@ private func runTunedPipeline(
 
     var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: 42, maxRuns: .max)
     while nextMilestone < milestones.count, timer.elapsedSeconds < wallClockCapSeconds {
-        guard let value = try iterator.nextValueOnly() else { break }
+        guard let value = try iterator.nextValueOnly() else {
+            break
+        }
         total += 1
         if predicate(value), unique.insert(value).inserted {
             if unique.count >= milestones[nextMilestone] {

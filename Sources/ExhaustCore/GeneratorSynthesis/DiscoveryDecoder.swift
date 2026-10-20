@@ -146,7 +146,9 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     }
 
     func decodeNil(forKey key: Key) throws -> Bool {
-        guard let value = dictionary[key.stringValue] else { return true }
+        guard let value = dictionary[key.stringValue] else {
+            return true
+        }
         return value is NSNull
     }
 
@@ -354,7 +356,9 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     var currentIndex: Int = 0
 
     mutating func decodeNil() throws -> Bool {
-        guard currentIndex < array.count else { return true }
+        guard currentIndex < array.count else {
+            return true
+        }
         if array[currentIndex] is NSNull {
             currentIndex += 1
             return true

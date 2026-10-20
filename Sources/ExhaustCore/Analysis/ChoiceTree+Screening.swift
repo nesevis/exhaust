@@ -36,9 +36,15 @@ extension ChoiceTree {
     func screeningShape(in scope: ScreeningScope) -> ScreeningShape {
         switch self {
             case let .choice(value, metadata):
-                guard metadata.isPinnedToSize == false, value.tag != .depthControl else { return .preserved }
-                guard metadata.validRange != nil else { return .invalid }
-                if case .root = scope, case .laneControl = value.tag { return .preserved }
+                guard metadata.isPinnedToSize == false, value.tag != .depthControl else {
+                    return .preserved
+                }
+                guard metadata.validRange != nil else {
+                    return .invalid
+                }
+                if case .root = scope, case .laneControl = value.tag {
+                    return .preserved
+                }
                 return .choice(value, metadata)
             case .just, .getSize, .group(_, isOpaque: true, _):
                 return .preserved
@@ -46,7 +52,9 @@ extension ChoiceTree {
                 let isPick = children.isEmpty == false
                     && children.contains(where: \.isSelected)
                     && children.allSatisfy { $0.isSelected || $0.isBranch }
-                guard isPick else { return .group(children, isZip: isZip) }
+                guard isPick else {
+                    return .group(children, isZip: isZip)
+                }
                 if children.count == 1, case let .branch(branch) = children[0], branch.branchCount == 1 {
                     return .singleton(branch, isZip: isZip)
                 }
@@ -55,11 +63,17 @@ extension ChoiceTree {
                 return .resize(size, children)
             case let .bind(fingerprint, inner, bound):
                 let visitsBound = inner.isScreeningContext
-                if case .element = scope, visitsBound == false { return .preserved }
+                if case .element = scope, visitsBound == false {
+                    return .preserved
+                }
                 return .bind(fingerprint, inner: inner, bound: bound, visitsBound: visitsBound)
             case let .sequence(elements, metadata):
-                guard metadata.validRange != nil else { return .invalid }
-                if case .element = scope { return .preserved }
+                guard metadata.validRange != nil else {
+                    return .invalid
+                }
+                if case .element = scope {
+                    return .preserved
+                }
                 return .sequence(elements, metadata)
             case .branch:
                 return .invalid

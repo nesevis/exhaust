@@ -93,7 +93,9 @@ package struct ChoiceValue: Comparable, Hashable, Sendable {
     /// Returns whether this value's bit pattern falls within the given range.
     @inline(__always)
     func fits(in range: ClosedRange<UInt64>?) -> Bool {
-        guard let range else { return true }
+        guard let range else {
+            return true
+        }
         return range.contains(bitPattern64)
     }
 

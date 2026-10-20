@@ -138,7 +138,9 @@ struct LargeDomainCoveringArrayReplayUnitTests {
             let profile = try #require(analyzeLargeDomain(gen))
 
             let hasPickParam = profile.parameters.contains { param in
-                if case .pick = param.kind { return true }
+                if case .pick = param.kind {
+                    return true
+                }
                 return false
             }
             #expect(hasPickParam, "Profile must contain a .pick parameter")

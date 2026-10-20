@@ -392,7 +392,9 @@ package extension MetaFuzz {
             },
             onExample: { output, tree, _ in
                 exampleCount += 1
-                guard firstViolation == nil else { return }
+                guard firstViolation == nil else {
+                    return
+                }
                 do {
                     guard let replayed = try Interpreters.replay(generator, using: tree) else {
                         firstViolation = MetaFuzzScreeningViolation(

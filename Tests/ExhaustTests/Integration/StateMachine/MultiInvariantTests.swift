@@ -15,7 +15,9 @@ struct MultiInvariantTests {
         #expect(result != nil, "Should find a failure")
         if let result {
             let failedInvariants = result.trace.compactMap { step -> String? in
-                if case let .invariantFailed(name) = step.outcome { return name }
+                if case let .invariantFailed(name) = step.outcome {
+                    return name
+                }
                 return nil
             }
             #expect(failedInvariants.isEmpty == false, "Should have at least one invariant failure")

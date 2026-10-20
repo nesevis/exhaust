@@ -35,11 +35,15 @@ struct StrictlyIncreasingRunChallenge {
         let gen = #gen(.uint64(in: 0 ... 10000)).array(length: 1 ... 50)
 
         let property: @Sendable ([UInt64]) -> Bool = { arr in
-            guard arr.count >= 3 else { return true }
+            guard arr.count >= 3 else {
+                return true
+            }
             return arr
                 .dropFirst()
                 .reduce(into: (count: 1, last: arr[0], valid: true)) { acc, n in
-                    guard acc.valid else { return }
+                    guard acc.valid else {
+                        return
+                    }
                     acc.count = n > acc.last ? acc.count + 1 : 1
                     acc.last = n
                     acc.valid = acc.count < 3

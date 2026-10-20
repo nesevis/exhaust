@@ -79,7 +79,9 @@ extension GeneratorTuning {
 
                     guard let innerValue = try ValueInterpreter<Any>.generate(
                         choices[choiceIdx].generator, maxRuns: 1, using: &rng
-                    ) else { continue }
+                    ) else {
+                        continue
+                    }
 
                     let success: Bool
                     var output: Output?
@@ -109,10 +111,14 @@ extension GeneratorTuning {
             totalSampled = batchEnd
 
             // Trivial picks (single choice) are converged by definition
-            if isTrivial, totalSampled >= effectiveMinSamples { break }
+            if isTrivial, totalSampled >= effectiveMinSamples {
+                break
+            }
 
             // All checks below require the minimum sample floor
-            guard totalSampled >= effectiveMinSamples else { continue }
+            guard totalSampled >= effectiveMinSamples else {
+                continue
+            }
 
             // Unambiguous early exit: if one choice has ≥80% success rate and another has 0%, the signal is clear — stop without waiting for the second convergence check (which needs one more batch to see the shift stabilize).
             if isTrivial == false {
@@ -125,7 +131,9 @@ extension GeneratorTuning {
 
             // All-zero successes: skip convergence, keep sampling to the cap
             let totalSuccesses = successCounts.reduce(0, +)
-            guard totalSuccesses > 0 else { continue }
+            guard totalSuccesses > 0 else {
+                continue
+            }
 
             // Compute normalized success distribution
             let normalized = successCounts.map {
@@ -263,7 +271,9 @@ extension GeneratorTuning {
         if totalWeight > 0 {
             let floor = max(UInt64(1), UInt64(Double(totalWeight) * weightFloorFraction))
             tunedChoices = ContiguousArray(tunedChoices.map { choice in
-                guard choice.weight < floor else { return choice }
+                guard choice.weight < floor else {
+                    return choice
+                }
                 return ReflectiveOperation.PickTuple(
                     fingerprint: choice.fingerprint, id: choice.id,
                     weight: floor,

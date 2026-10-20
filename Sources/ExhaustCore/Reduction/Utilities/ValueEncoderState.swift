@@ -32,12 +32,20 @@ struct ValueEncoderState {
     func buildLeafValuesMutation(candidate: ChoiceSequence) -> ProjectedMutation {
         var changes: [LeafChange] = []
         for sequenceIndex in leafLookup.keys.sorted() {
-            guard let info = leafLookup[sequenceIndex] else { continue }
-            guard sequenceIndex < candidate.count, sequenceIndex < sequence.count else { continue }
+            guard let info = leafLookup[sequenceIndex] else {
+                continue
+            }
+            guard sequenceIndex < candidate.count, sequenceIndex < sequence.count else {
+                continue
+            }
             guard let candidateChoice = candidate[sequenceIndex].value?.choice,
                   let baselineChoice = sequence[sequenceIndex].value?.choice
-            else { continue }
-            guard candidateChoice != baselineChoice else { continue }
+            else {
+                continue
+            }
+            guard candidateChoice != baselineChoice else {
+                continue
+            }
             changes.append(LeafChange(
                 leafNodeID: info.nodeID,
                 newValue: candidateChoice,

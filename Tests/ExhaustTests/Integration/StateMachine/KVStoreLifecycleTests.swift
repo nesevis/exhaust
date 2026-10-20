@@ -64,20 +64,26 @@ final class KVStoreLifecycleSpec {
 
     @Invariant
     func countMatchesWhenOpen() -> Bool {
-        guard isOpen else { return true }
+        guard isOpen else {
+            return true
+        }
         return store.count == contents.count
     }
 
     @Command(weight: 2)
     func open() throws {
-        guard isOpen == false else { throw skip() }
+        guard isOpen == false else {
+            throw skip()
+        }
         isOpen = true
         store.open()
     }
 
     @Command(weight: 2)
     func close() throws {
-        guard isOpen else { throw skip() }
+        guard isOpen else {
+            throw skip()
+        }
         isOpen = false
         contents = [:]
         store.close()
@@ -85,14 +91,18 @@ final class KVStoreLifecycleSpec {
 
     @Command(weight: 4, .int(in: 0 ... 3), .int(in: 0 ... 99))
     func put(key: Int, value: Int) throws {
-        guard isOpen else { throw skip() }
+        guard isOpen else {
+            throw skip()
+        }
         contents[key] = value
         store.put(key, value)
     }
 
     @Command(weight: 3, .int(in: 0 ... 3))
     func get(key: Int) throws {
-        guard isOpen else { throw skip() }
+        guard isOpen else {
+            throw skip()
+        }
         let actual = store.get(key)
         let expected = contents[key]
         try check(actual == expected, "get must return value matching model")

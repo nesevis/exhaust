@@ -94,8 +94,12 @@ package struct ChoiceGraph: Sendable {
         var valueMotion = 0
         var valueMotionNodeIDs: Set<Int> = []
         for (nodeID, origin) in records {
-            guard nodeID < nodes.count else { continue }
-            guard case .chooseBits = nodes[nodeID].kind else { continue }
+            guard nodeID < nodes.count else {
+                continue
+            }
+            guard case .chooseBits = nodes[nodeID].kind else {
+                continue
+            }
             let existing = convergenceStore[nodeID]
             let tagged = ConvergedOrigin(
                 bound: origin.bound,
@@ -126,8 +130,12 @@ package struct ChoiceGraph: Sendable {
     /// Clears convergence records for all leaf nodes whose position falls within the given range.
     mutating func clearConvergence(inPositionRange range: ClosedRange<Int>) {
         for nodeID in leafNodes {
-            guard let nodeRange = nodes[nodeID].positionRange else { continue }
-            guard range.contains(nodeRange.lowerBound) else { continue }
+            guard let nodeRange = nodes[nodeID].positionRange else {
+                continue
+            }
+            guard range.contains(nodeRange.lowerBound) else {
+                continue
+            }
             convergenceStore.removeValue(forKey: nodeID)
         }
     }

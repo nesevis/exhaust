@@ -37,7 +37,9 @@ struct BindBoundMaterializationProbe {
             .mapped(
                 forward: { SimpleExp.leaf($0) },
                 backward: {
-                    if case let .leaf(n) = $0 { return n }
+                    if case let .leaf(n) = $0 {
+                        return n
+                    }
                     return 0
                 }
             )
@@ -56,7 +58,9 @@ struct BindBoundMaterializationProbe {
                 .mapped(
                     forward: { lhs, rhs in SimpleExp.add(lhs, rhs) },
                     backward: {
-                        if case let .add(lhs, rhs) = $0 { return (lhs, rhs) }
+                        if case let .add(lhs, rhs) = $0 {
+                            return (lhs, rhs)
+                        }
                         return (.leaf(0), .leaf(0))
                     }
                 )

@@ -22,7 +22,9 @@ struct CharacterSetRangeExtractionTests {
         // versions disagree between built-in control membership and that bitmap.
         var memberCount = 0
         for value in UInt32(0) ... 0x10FFFF {
-            guard let scalar = Unicode.Scalar(value) else { continue }
+            guard let scalar = Unicode.Scalar(value) else {
+                continue
+            }
             let expected = reference.contains(scalar)
             let actual = srs.rangeSet.contains(value)
             if expected != actual {
@@ -32,7 +34,9 @@ struct CharacterSetRangeExtractionTests {
                 )
                 return
             }
-            if expected { memberCount += 1 }
+            if expected {
+                memberCount += 1
+            }
         }
 
         #expect(srs.scalarCount == memberCount, "Scalar count mismatch for \(fixture.name)")
@@ -111,7 +115,9 @@ struct CharacterSetRangeExtractionTests {
         try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree)
-            else { return false }
+            else {
+                return false
+            }
             return replayed == value
         }
     }
@@ -124,10 +130,14 @@ struct CharacterSetRangeExtractionTests {
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 100)
         while let (value, tree) = try iterator.next() {
-            guard property(value) == false else { continue }
+            guard property(value) == false else {
+                continue
+            }
             guard case let .reduced(_, _, shrunk) = Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-            ) else { continue }
+            ) else {
+                continue
+            }
             // Shrunk value should be '5' (the smallest digit failing the property)
             #expect(shrunk == "5", "Expected shrunk digit to be '5', got '\(shrunk)'")
             return

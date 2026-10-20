@@ -101,7 +101,9 @@ final class BuggyHashMapBench: @unchecked Sendable {
 
         func compareAndSwapStatus(expected: SlotStatus, desired: SlotStatus) -> Bool {
             lock.withLock {
-                guard _status == expected else { return false }
+                guard _status == expected else {
+                    return false
+                }
                 _status = desired
                 return true
             }
@@ -138,8 +140,12 @@ final class BuggyHashMapBench: @unchecked Sendable {
         let slot = slots[index]
         while true {
             let current = slot.status
-            if current == .updating { continue }
-            if slot.compareAndSwapStatus(expected: current, desired: .updating) { break }
+            if current == .updating {
+                continue
+            }
+            if slot.compareAndSwapStatus(expected: current, desired: .updating) {
+                break
+            }
         }
         slot.key = key
         slot.value = value
@@ -149,7 +155,9 @@ final class BuggyHashMapBench: @unchecked Sendable {
     @_optimize(none)
     func delete(key: Int) {
         let index = abs(key) % slots.count
-        guard slots[index].key == key else { return }
+        guard slots[index].key == key else {
+            return
+        }
         slots[index].status = .deleted
     }
 

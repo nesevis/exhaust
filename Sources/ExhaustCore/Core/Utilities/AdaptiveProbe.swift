@@ -37,7 +37,9 @@ package enum AdaptiveProbe {
             let (doubled, overflow) = high.multipliedReportingOverflow(by: 2)
             if overflow {
                 high = T.max
-                if predicate(high) == false { break }
+                if predicate(high) == false {
+                    break
+                }
                 return high
             }
             high = doubled
@@ -79,7 +81,9 @@ package enum AdaptiveProbe {
         if guess == low {
             let upLimit = high - low
             return low + findInteger { n in
-                guard n < upLimit else { return false }
+                guard n < upLimit else {
+                    return false
+                }
                 return predicate(low + n) == good
             }
         }
@@ -88,14 +92,18 @@ package enum AdaptiveProbe {
             // Our guess was equivalent to low, so we want to find some point after it.
             let upLimit = high - guess
             return guess + findInteger { n in
-                guard n < upLimit else { return false }
+                guard n < upLimit else {
+                    return false
+                }
                 return predicate(guess + n) == good
             }
         } else {
             // Our guess was equivalent to high, so we want to find some point before it.
             let downLimit = guess - low
             return guess - findInteger { n in
-                guard n <= downLimit else { return false }
+                guard n <= downLimit else {
+                    return false
+                }
                 return predicate(guess - n) != good
             } - 1
         }

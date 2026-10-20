@@ -77,7 +77,9 @@ struct ReflectAndFlattenTests {
         let tree = try Interpreters.reflect(gen, with: value)
 
         #expect(tree != nil)
-        guard let tree else { return }
+        guard let tree else {
+            return
+        }
 
         // Flatten the reflected tree
         let flattened = ChoiceSequence.flatten(tree)
@@ -200,7 +202,9 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
-            if case let .value(v) = element { return v }
+            if case let .value(v) = element {
+                return v
+            }
             return nil
         }
         let firstChoice = try #require(valueChoices.first)
@@ -284,7 +288,9 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         let groupCount = flattened.count(where: { element in
-            if case .group = element { return true }
+            if case .group = element {
+                return true
+            }
             return false
         })
         #expect(groupCount % 2 == 0)
@@ -308,7 +314,9 @@ struct ReflectAndFlattenTests {
         let tree = try Interpreters.reflect(gen, with: value)
 
         #expect(tree != nil)
-        guard let tree else { return }
+        guard let tree else {
+            return
+        }
 
         // Flatten the reflected tree
         var flattened = ChoiceSequence.flatten(tree)

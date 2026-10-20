@@ -18,7 +18,9 @@ enum CalculatorFixture {
         case div(Expr, Expr)
 
         var value: Int? {
-            guard case let .value(value) = self else { return nil }
+            guard case let .value(value) = self else {
+                return nil
+            }
             return value
         }
 
@@ -51,7 +53,9 @@ enum CalculatorFixture {
                 return try eval(lhs) &+ eval(rhs)
             case let .div(lhs, rhs):
                 let denominator = try eval(rhs)
-                guard denominator != 0 else { throw EvalError.divisionByZero }
+                guard denominator != 0 else {
+                    throw EvalError.divisionByZero
+                }
                 return try eval(lhs) / denominator
         }
     }
@@ -72,7 +76,9 @@ enum CalculatorFixture {
 
     /// The challenge property: the expression has no literal division by zero AND evaluates without runtime error.
     static func property(_ expr: Expr) -> Bool {
-        guard containsLiteralDivisionByZero(expr) == false else { return true }
+        guard containsLiteralDivisionByZero(expr) == false else {
+            return true
+        }
         do {
             _ = try eval(expr)
             return true

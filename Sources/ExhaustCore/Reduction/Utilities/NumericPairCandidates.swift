@@ -34,7 +34,9 @@ enum NumericPairCandidates {
             // Separate halves keep the midpoint finite even near the largest representable magnitude.
             samples.append(tag.floatingBitPattern(from: current / 2 + target / 2))
             for magnitude in [1.0, 2.0, 3.0] {
-                guard samples.isFull == false else { return samples.candidates }
+                guard samples.isFull == false else {
+                    return samples.candidates
+                }
                 samples.append(tag.floatingBitPattern(from: magnitude))
                 samples.append(tag.floatingBitPattern(from: -magnitude))
             }
@@ -51,10 +53,16 @@ enum NumericPairCandidates {
         let upper = max(current, samples.target)
         samples.append(lower + (upper - lower) / 2)
         for magnitude: UInt64 in [1, 2, 3] {
-            guard samples.isFull == false else { return samples.candidates }
+            guard samples.isFull == false else {
+                return samples.candidates
+            }
             let (positive, overflow) = zero.addingReportingOverflow(magnitude)
-            if overflow == false { samples.append(positive) }
-            if leaf.choice.tag.isSigned, zero >= magnitude { samples.append(zero - magnitude) }
+            if overflow == false {
+                samples.append(positive)
+            }
+            if leaf.choice.tag.isSigned, zero >= magnitude {
+                samples.append(zero - magnitude)
+            }
         }
         samples.appendNeighbors()
         samples.appendIntegerMagnitudes()
@@ -112,7 +120,9 @@ private struct CandidateSamples {
     /// Bit-pattern steps of one, two, and four in each direction.
     mutating func appendNeighbors() {
         for delta: UInt64 in [1, 2, 4] {
-            guard isFull == false else { return }
+            guard isFull == false else {
+                return
+            }
             let (raised, overflow) = current.addingReportingOverflow(delta)
             if overflow == false {
                 append(raised)
@@ -151,7 +161,9 @@ private struct CandidateSamples {
         let zero = tag.simplestBitPattern
         for exponent in 0 ..< 8 {
             for magnitude in [(UInt64(1) << exponent) - 1, UInt64(1) << exponent] {
-                guard isFull == false else { return }
+                guard isFull == false else {
+                    return
+                }
                 let (positive, overflow) = zero.addingReportingOverflow(magnitude)
                 if overflow == false {
                     append(positive)

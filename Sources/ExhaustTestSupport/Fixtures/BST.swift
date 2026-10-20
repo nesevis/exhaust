@@ -45,8 +45,12 @@ package enum BST: Equatable, Hashable, CustomStringConvertible {
             case .leaf:
                 return true
             case let .node(left, value, right):
-                if let min, value <= min { return false }
-                if let max, value >= max { return false }
+                if let min, value <= min {
+                    return false
+                }
+                if let max, value >= max {
+                    return false
+                }
                 return left.isValidBST(min: min, max: value) &&
                     right.isValidBST(min: value, max: max)
         }

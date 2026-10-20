@@ -24,14 +24,18 @@ struct ChoiceGraphTests {
         #expect(graph.nodes.count == 3)
 
         let zipNodes = graph.nodes.filter {
-            if case .zip = $0.kind { return true }
+            if case .zip = $0.kind {
+                return true
+            }
             return false
         }
         #expect(zipNodes.count == 1)
         #expect(zipNodes[0].children.count == 2)
 
         let leafNodes = graph.nodes.filter {
-            if case .chooseBits = $0.kind { return true }
+            if case .chooseBits = $0.kind {
+                return true
+            }
             return false
         }
         #expect(leafNodes.count == 2)
@@ -47,7 +51,9 @@ struct ChoiceGraphTests {
         let graph = ChoiceGraph.build(from: tree)
 
         let bindNodes = graph.nodes.filter {
-            if case .bind = $0.kind { return true }
+            if case .bind = $0.kind {
+                return true
+            }
             return false
         }
         #expect(bindNodes.count == 1)
@@ -75,7 +81,9 @@ struct ChoiceGraphTests {
         let graph = ChoiceGraph.build(from: outerBind)
 
         let bindNodes = graph.nodes.filter {
-            if case .bind = $0.kind { return true }
+            if case .bind = $0.kind {
+                return true
+            }
             return false
         }
         #expect(bindNodes.count == 2)
@@ -99,7 +107,9 @@ struct ChoiceGraphTests {
         let graph = ChoiceGraph.build(from: tree)
 
         let pickNodes = graph.nodes.filter {
-            if case .pick = $0.kind { return true }
+            if case .pick = $0.kind {
+                return true
+            }
             return false
         }
         #expect(pickNodes.count == 1)
@@ -132,7 +142,9 @@ struct ChoiceGraphTests {
         let graph = ChoiceGraph.build(from: tree)
 
         let sequenceNodes = graph.nodes.filter {
-            if case .sequence = $0.kind { return true }
+            if case .sequence = $0.kind {
+                return true
+            }
             return false
         }
         #expect(sequenceNodes.count == 1)
@@ -155,14 +167,18 @@ struct ChoiceGraphTests {
 
         // No bind node should exist — getSize-bind is transparent.
         let bindNodes = graph.nodes.filter {
-            if case .bind = $0.kind { return true }
+            if case .bind = $0.kind {
+                return true
+            }
             return false
         }
         #expect(bindNodes.isEmpty)
 
         // The bound content should appear directly as a chooseBits leaf.
         let leafNodes = graph.nodes.filter {
-            if case .chooseBits = $0.kind { return true }
+            if case .chooseBits = $0.kind {
+                return true
+            }
             return false
         }
         #expect(leafNodes.count == 1)
@@ -177,7 +193,9 @@ struct ChoiceGraphTests {
         let graph = ChoiceGraph.build(from: tree)
 
         let zipNodes = graph.nodes.filter {
-            if case .zip = $0.kind { return true }
+            if case .zip = $0.kind {
+                return true
+            }
             return false
         }
         #expect(zipNodes.count == 1)

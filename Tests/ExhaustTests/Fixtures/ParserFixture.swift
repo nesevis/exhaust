@@ -221,7 +221,9 @@ enum ParserFixture {
             .mapped(
                 forward: { Exp.int($0) },
                 backward: { value in
-                    if case let .int(inner) = value { return inner }
+                    if case let .int(inner) = value {
+                        return inner
+                    }
                     return 0
                 }
             )
@@ -229,7 +231,9 @@ enum ParserFixture {
             .mapped(
                 forward: { Exp.bool($0) },
                 backward: { value in
-                    if case let .bool(inner) = value { return inner }
+                    if case let .bool(inner) = value {
+                        return inner
+                    }
                     return false
                 }
             )
@@ -244,7 +248,9 @@ enum ParserFixture {
             .mapped(
                 forward: { Exp.not($0) },
                 backward: { value in
-                    if case let .not(inner) = value { return inner }
+                    if case let .not(inner) = value {
+                        return inner
+                    }
                     return .int(0)
                 }
             )
@@ -257,34 +263,48 @@ enum ParserFixture {
                 .mapped(
                     forward: { lhs, rhs in constructor(lhs, rhs) },
                     backward: { value in
-                        if let pair = destructor(value) { return pair }
+                        if let pair = destructor(value) {
+                            return pair
+                        }
                         return (.int(0), .int(0))
                     }
                 )
         }
 
         let addExp = binaryExp(Exp.add) {
-            guard case let .add(lhs, rhs) = $0 else { return nil }
+            guard case let .add(lhs, rhs) = $0 else {
+                return nil
+            }
             return (lhs, rhs)
         }
         let subExp = binaryExp(Exp.sub) {
-            guard case let .sub(lhs, rhs) = $0 else { return nil }
+            guard case let .sub(lhs, rhs) = $0 else {
+                return nil
+            }
             return (lhs, rhs)
         }
         let mulExp = binaryExp(Exp.mul) {
-            guard case let .mul(lhs, rhs) = $0 else { return nil }
+            guard case let .mul(lhs, rhs) = $0 else {
+                return nil
+            }
             return (lhs, rhs)
         }
         let divExp = binaryExp(Exp.div) {
-            guard case let .div(lhs, rhs) = $0 else { return nil }
+            guard case let .div(lhs, rhs) = $0 else {
+                return nil
+            }
             return (lhs, rhs)
         }
         let andExp = binaryExp(Exp.and) {
-            guard case let .and(lhs, rhs) = $0 else { return nil }
+            guard case let .and(lhs, rhs) = $0 else {
+                return nil
+            }
             return (lhs, rhs)
         }
         let orExp = binaryExp(Exp.or) {
-            guard case let .or(lhs, rhs) = $0 else { return nil }
+            guard case let .or(lhs, rhs) = $0 else {
+                return nil
+            }
             return (lhs, rhs)
         }
 
@@ -305,7 +325,9 @@ enum ParserFixture {
             .mapped(
                 forward: { variable, expression in Stmt.assign(variable, expression) },
                 backward: { stmt in
-                    if case let .assign(variable, expression) = stmt { return (variable, expression) }
+                    if case let .assign(variable, expression) = stmt {
+                        return (variable, expression)
+                    }
                     return (Var(name: "a"), .int(0))
                 }
             )
@@ -313,7 +335,9 @@ enum ParserFixture {
             .mapped(
                 forward: { variable, expression in Stmt.alloc(variable, expression) },
                 backward: { stmt in
-                    if case let .alloc(variable, expression) = stmt { return (variable, expression) }
+                    if case let .alloc(variable, expression) = stmt {
+                        return (variable, expression)
+                    }
                     return (Var(name: "a"), .int(0))
                 }
             )
@@ -321,7 +345,9 @@ enum ParserFixture {
             .mapped(
                 forward: { Stmt.ret($0) },
                 backward: { stmt in
-                    if case let .ret(expression) = stmt { return expression }
+                    if case let .ret(expression) = stmt {
+                        return expression
+                    }
                     return .int(0)
                 }
             )

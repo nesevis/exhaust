@@ -272,7 +272,9 @@ final class YieldingCounterSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         await counter.decrement()
     }
@@ -303,8 +305,12 @@ final class TokenDrawSpec {
 
     @Command(weight: 2)
     func withdraw() async throws {
-        guard let token = tokens.first else { throw skip() }
-        guard let index = model.firstIndex(of: token) else { throw skip() }
+        guard let token = tokens.first else {
+            throw skip()
+        }
+        guard let index = model.firstIndex(of: token) else {
+            throw skip()
+        }
         model.remove(at: index)
         await store.withdraw(token)
     }

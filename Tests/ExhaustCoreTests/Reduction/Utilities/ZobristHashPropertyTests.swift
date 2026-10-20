@@ -91,7 +91,9 @@ struct ZobristHashPropertyTests {
                 seqA.append(i == 0 ? entry : filler)
                 seqB.append(i == length - 1 ? entry : filler)
             }
-            if entry == filler { return true }
+            if entry == filler {
+                return true
+            }
             return ZobristHash.hash(of: seqA) != ZobristHash.hash(of: seqB)
         }
     }

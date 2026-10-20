@@ -49,7 +49,9 @@ enum MutationArmRepertoire {
         }
         var sequenceKeyCounts: [FuzzMutator.TwinKey: Int] = [:]
         for node in graph.nodes {
-            guard case .sequence = node.kind, let key = FuzzMutator.twinKey(of: node, in: graph) else { continue }
+            guard case .sequence = node.kind, let key = FuzzMutator.twinKey(of: node, in: graph) else {
+                continue
+            }
             sequenceKeyCounts[key, default: 0] += 1
         }
         if sequenceKeyCounts.values.contains(where: { $0 >= 2 }) {
@@ -68,12 +70,16 @@ enum MutationArmRepertoire {
             sighted.insert(.valueReseed)
         }
         if graph.nodes.contains(where: { node in
-            guard node.scopeAnnotation.isBindInner == false else { return false }
+            guard node.scopeAnnotation.isBindInner == false else {
+                return false
+            }
             switch node.kind {
                 case let .chooseBits(metadata):
                     guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false,
                           let range = metadata.validRange
-                    else { return false }
+                    else {
+                        return false
+                    }
                     return MutationTargets.smallDomainSize(of: range) != nil
                 default:
                     return false

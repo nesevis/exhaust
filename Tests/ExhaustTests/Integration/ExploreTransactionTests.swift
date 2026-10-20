@@ -107,7 +107,9 @@ private func dipsAndRecovers(_ transactions: [Int]) -> Bool {
     var dipped = false
     for transaction in transactions {
         balance += transaction
-        if balance < 0 { dipped = true }
+        if balance < 0 {
+            dipped = true
+        }
     }
     return dipped && balance >= 0
 }

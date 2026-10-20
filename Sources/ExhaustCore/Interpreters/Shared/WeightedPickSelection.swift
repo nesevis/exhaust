@@ -29,7 +29,9 @@ package enum WeightedPickSelection {
         totalWeight: UInt64,
         using prng: inout Xoshiro256
     ) -> Int? {
-        guard totalWeight > 0 else { return nil }
+        guard totalWeight > 0 else {
+            return nil
+        }
         var roll = prng.next(upperBound: totalWeight) &+ 1
         for index in 0 ..< choices.count {
             let weight = choices[index].weight

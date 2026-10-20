@@ -38,7 +38,9 @@ struct SliceCombinatorTests {
             if sub.isEmpty == false {
                 let found = source.indices.contains { start in
                     let end = start + sub.count
-                    guard end <= source.count else { return false }
+                    guard end <= source.count else {
+                        return false
+                    }
                     return Array(source[start ..< end]) == sub
                 }
                 #expect(found, "Subsequence \(sub) not found contiguously in \(source)")

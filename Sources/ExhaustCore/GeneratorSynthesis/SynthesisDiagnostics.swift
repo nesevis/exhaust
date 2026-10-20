@@ -37,7 +37,9 @@ package enum SynthesisDiagnostics {
         // Keep the logging call outside the critical section — only the insert-and-check needs the lock.
         let isFirstFire = warnedSites.withValue { $0.insert(site).inserted }
 
-        guard isFirstFire else { return }
+        guard isFirstFire else {
+            return
+        }
 
         let location = path.isEmpty ? "the root value" : "\"\(path)\""
         ExhaustLog.warning(

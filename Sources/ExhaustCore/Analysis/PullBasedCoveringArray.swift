@@ -226,7 +226,9 @@ package final class PullBasedCoveringArrayGenerator {
 
     /// Returns the next row that greedily maximizes new t-tuple coverage, or `nil` if all t-tuples are already covered.
     public func next() -> CoveringArrayRow? {
-        if totalRemaining == 0 { return nil }
+        if totalRemaining == 0 {
+            return nil
+        }
 
         switch strength {
             case 2: fillRow2()
@@ -256,7 +258,9 @@ package final class PullBasedCoveringArrayGenerator {
     private func evaluatePartialCoverage(column: Int, candidate: UInt16) -> Double {
         let partialRefs = partialSlicesByColumn[column]
         let partialCount = partialRefs.count
-        if partialCount == 0 { return 0 }
+        if partialCount == 0 {
+            return 0
+        }
 
         var density = 0.0
         var refPos = 0
@@ -487,7 +491,9 @@ private struct PullBitVector {
         let bit = index & 63
         let mask: UInt64 = 1 &<< bit
         let old = storage[word]
-        if old & mask != 0 { return false }
+        if old & mask != 0 {
+            return false
+        }
         storage[word] = old | mask
         return true
     }
@@ -495,7 +501,9 @@ private struct PullBitVector {
     /// Counts unset bits in the range [`start`, `start` + `count`).
     @inline(__always)
     func countUnsetInRange(from start: UInt32, count: Int) -> Int {
-        if count == 0 { return 0 }
+        if count == 0 {
+            return 0
+        }
         var unset = 0
         let end = start &+ UInt32(count)
         let firstWord = Int(start &>> 6)

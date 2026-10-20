@@ -152,11 +152,17 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         guard state.chargePrefixReplay() else {
             return false
         }
-        guard await replayPrefix() else { return false }
+        guard await replayPrefix() else {
+            return false
+        }
         for index in 0 ..< depth {
-            guard state.chargeReplay() else { return false }
+            guard state.chargeReplay() else {
+                return false
+            }
             let placed = state.currentOrdering[index]
-            guard await replayCommand(placed.laneIndex, placed.commandIndex) != nil else { return false }
+            guard await replayCommand(placed.laneIndex, placed.commandIndex) != nil else {
+                return false
+            }
         }
         return true
     }
@@ -168,12 +174,16 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         replayCommand: (Int, Int) async -> ReplayResponse?,
         checkOracle: () async -> Bool
     ) async -> Bool {
-        guard state.abandoned == false else { return false }
+        guard state.abandoned == false else {
+            return false
+        }
         let depth = state.currentOrdering.count
 
         if depth == totalCommands {
             if depth == 0 {
-                guard await replayPrefix() else { return false }
+                guard await replayPrefix() else {
+                    return false
+                }
             }
             let oraclePassed = await checkOracle()
             if oraclePassed == false {
@@ -186,14 +196,20 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
         for laneIndex in 0 ..< laneOutcomes.count {
             let cursor = state.cursors[laneIndex]
-            guard cursor < laneOutcomes[laneIndex].count else { continue }
-            guard candidateRespectsRealTime(laneIndex: laneIndex, cursor: cursor, cursors: state.cursors) else { continue }
+            guard cursor < laneOutcomes[laneIndex].count else {
+                continue
+            }
+            guard candidateRespectsRealTime(laneIndex: laneIndex, cursor: cursor, cursors: state.cursors) else {
+                continue
+            }
 
             let observed = laneOutcomes[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
                 guard await replayToDepth(depth, state: &state, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
-                    if state.abandoned { return false }
+                    if state.abandoned {
+                        return false
+                    }
                     continue
                 }
             }
@@ -201,7 +217,9 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
             let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
-            guard state.chargeReplay() else { return false }
+            guard state.chargeReplay() else {
+                return false
+            }
             guard let replay = await replayCommand(laneIndex, cursor) else {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
@@ -231,7 +249,9 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             state.currentOrdering.removeLast()
             state.cursors[laneIndex] -= 1
 
-            if found { return true }
+            if found {
+                return true
+            }
         }
 
         return false
@@ -250,7 +270,9 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         }
         for otherLane in 0 ..< laneIntervals.count where otherLane != laneIndex {
             let otherCursor = cursors[otherLane]
-            guard otherCursor < laneIntervals[otherLane].count else { continue }
+            guard otherCursor < laneIntervals[otherLane].count else {
+                continue
+            }
             if let otherReturn = laneIntervals[otherLane][otherCursor]?.returnTime, otherReturn < candidateCall {
                 return false
             }

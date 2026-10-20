@@ -41,3 +41,4 @@
 --enable isEmpty
 # --enable noGuardInTests
 --enable preferFinalClasses
+--enable wrapConditionalBodies

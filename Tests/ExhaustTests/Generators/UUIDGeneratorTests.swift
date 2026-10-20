@@ -17,7 +17,9 @@ struct UUIDGeneratorTests {
             let str = uuid.uuidString
             // Version nibble (character at index 14) must be '4'
             let versionChar = str[str.index(str.startIndex, offsetBy: 14)]
-            guard versionChar == "4" else { return false }
+            guard versionChar == "4" else {
+                return false
+            }
             // Variant nibble (character at index 19) must be 8, 9, A, or B
             let variantChar = str[str.index(str.startIndex, offsetBy: 19)]
             return "89AB".contains(variantChar)
@@ -32,7 +34,9 @@ struct UUIDGeneratorTests {
 
         let counterExample = #exhaust(gen) { uuid in
             let str = uuid.uuidString
-            guard let parsed = UUID(uuidString: str) else { return false }
+            guard let parsed = UUID(uuidString: str) else {
+                return false
+            }
             return parsed == uuid
         }
 

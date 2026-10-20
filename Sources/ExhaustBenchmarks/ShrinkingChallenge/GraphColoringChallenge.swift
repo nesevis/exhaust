@@ -53,7 +53,9 @@ let graphColoringGen: ReflectiveGenerator<GraphColoringGraph> = {
                 var edges: [GraphColoringEdge] = []
                 for pair in idxPairs {
                     let (i, j) = pair
-                    guard i != j else { continue }
+                    guard i != j else {
+                        continue
+                    }
                     let edge = GraphColoringEdge(vertices[i], vertices[j])
                     if seen.insert(edge).inserted {
                         edges.append(edge)
@@ -68,7 +70,9 @@ let graphColoringGen: ReflectiveGenerator<GraphColoringGraph> = {
 
 /// Maximum vertex degree in the graph.
 private func graphColoringMaxDegree(_ graph: GraphColoringGraph) -> Int {
-    guard graph.edges.isEmpty == false else { return 0 }
+    guard graph.edges.isEmpty == false else {
+        return 0
+    }
     var degree: [Int: Int] = [:]
     for edge in graph.edges {
         degree[edge.lower, default: 0] += 1
@@ -82,7 +86,9 @@ private func graphColoringMaxDegree(_ graph: GraphColoringGraph) -> Int {
 /// Tries `k = 1 ... |V|` in ascending order, returning the first `k` that admits a proper coloring. Small graph sizes make this exhaustive search tractable; the benchmark caps vertex counts well below the factorial wall.
 private func graphColoringChromaticNumber(_ graph: GraphColoringGraph) -> Int {
     let vertices = graph.distinctVertices
-    if vertices.isEmpty { return 0 }
+    if vertices.isEmpty {
+        return 0
+    }
     var adjacency: [Int: Set<Int>] = [:]
     for edge in graph.edges {
         adjacency[edge.lower, default: []].insert(edge.upper)
@@ -104,7 +110,9 @@ private func graphColoringTryColor(
     adjacency: [Int: Set<Int>],
     assignment: inout [Int: Int]
 ) -> Bool {
-    if index == vertices.count { return true }
+    if index == vertices.count {
+        return true
+    }
     let vertex = vertices[index]
     let neighbors = adjacency[vertex] ?? []
     for color in 0 ..< k {
@@ -126,9 +134,15 @@ private func graphColoringTryColor(
 ///
 /// SUT: a buggy Brooks's-theorem-style upper bound claiming χ(G) ≤ Δ(G), dropping the `+1` correction term. Brooks's theorem actually says χ(G) ≤ Δ(G) + 1, with equality reached by complete graphs `K_n` and odd cycles `C_(2k+1)`. The filter (`chromatic ≥ 3`) excludes trivial bipartite cases, so surviving counterexamples sit in one of three basins: K_3, K_4, or C_5. A single-axis reducer cannot bridge these basins; K_4 → K_3 requires coordinated vertex + edge removals.
 let graphColoringProperty: @Sendable (GraphColoringGraph) -> Bool = { graph in
-    guard graph.edges.isEmpty == false else { return true }
-    guard graph.distinctVertices.count >= 3 else { return true }
+    guard graph.edges.isEmpty == false else {
+        return true
+    }
+    guard graph.distinctVertices.count >= 3 else {
+        return true
+    }
     let chromatic = graphColoringChromaticNumber(graph)
-    guard chromatic >= 3 else { return true }
+    guard chromatic >= 3 else {
+        return true
+    }
     return graphColoringMaxDegree(graph) >= chromatic
 }

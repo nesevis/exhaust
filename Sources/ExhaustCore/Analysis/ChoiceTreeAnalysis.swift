@@ -99,7 +99,9 @@ package enum ChoiceTreeAnalysis {
                 }
                 return false
             }
-            if hasIncompleteSequence == false { break }
+            if hasIncompleteSequence == false {
+                break
+            }
         }
 
         guard let parameters = bestParameters, parameters.isEmpty == false else {
@@ -207,7 +209,9 @@ package enum ChoiceTreeAnalysis {
                         compositeThreshold: compositeThreshold,
                         scope: scope,
                         parameters: &parameters
-                    ) else { return false }
+                    ) else {
+                        return false
+                    }
                 }
                 return true
             case let .bind(_, inner, bound, visitsBound):
@@ -217,9 +221,13 @@ package enum ChoiceTreeAnalysis {
                     compositeThreshold: compositeThreshold,
                     scope: scope,
                     parameters: &parameters
-                ) else { return false }
+                ) else {
+                    return false
+                }
                 // A bound subtree screening does not visit contributes no parameters. Its contents are the materializer's to fill, so there is nothing here to accept or reject.
-                guard visitsBound else { return true }
+                guard visitsBound else {
+                    return true
+                }
                 return walkTree(
                     bound,
                     expandSequencePairs: expandSequencePairs,
@@ -300,12 +308,16 @@ package enum ChoiceTreeAnalysis {
         parameters: inout [ScreeningParameter]
     ) -> Bool {
         let domainSize = UInt64(children.count)
-        guard domainSize <= enumerableDomainThreshold else { return false }
+        guard domainSize <= enumerableDomainThreshold else {
+            return false
+        }
 
         // Create synthetic PickTuples from branch metadata for replay compatibility
         var pickTuples = ContiguousArray<ReflectiveOperation.PickTuple>()
         for child in children {
-            guard case let .branch(b) = child else { return false }
+            guard case let .branch(b) = child else {
+                return false
+            }
             pickTuples.append(ReflectiveOperation.PickTuple(
                 fingerprint: b.fingerprint,
                 id: b.id,
@@ -459,7 +471,9 @@ package enum ChoiceTreeAnalysis {
 
     /// Splits each element slot's problematic values between positions: slot 0 gets the first half, slot 1 gets the second half.
     static func halveElementSlotParams(_ params: [[ScreeningParameter]]) -> [[ScreeningParameter]] {
-        guard params.count >= 2 else { return params }
+        guard params.count >= 2 else {
+            return params
+        }
         var result = params
         let pairCount = min(result[0].count, result[1].count)
         for paramIndex in 0 ..< pairCount {

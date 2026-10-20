@@ -168,7 +168,9 @@ package extension __ExhaustRuntime {
             } catch {
                 let outcome = commandRunOutcome(for: error)
                 trace.append(TraceStep(index: step, command: description, outcome: outcome))
-                if case .skipped = outcome { continue }
+                if case .skipped = outcome {
+                    continue
+                }
                 return (trace, true)
             }
 
@@ -249,7 +251,9 @@ package extension __ExhaustRuntime {
             } catch {
                 let outcome = commandRunOutcome(for: error)
                 trace.append(TraceStep(index: step, command: description, outcome: outcome))
-                if case .skipped = outcome { continue }
+                if case .skipped = outcome {
+                    continue
+                }
                 return (trace, true)
             }
 

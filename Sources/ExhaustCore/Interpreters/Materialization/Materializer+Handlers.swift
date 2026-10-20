@@ -21,7 +21,9 @@ extension Materializer {
         let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursive(
             nextGen, with: inputValue, context: &context, fallbackTree: calleeFallback
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, inputValue: inputValue,
@@ -47,7 +49,9 @@ extension Materializer {
         let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursive(
             nextGen, with: wrappedValue, context: &context, fallbackTree: calleeFallback
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, inputValue: inputValue,
@@ -279,7 +283,9 @@ extension Materializer {
                 selectedChoice = choices.first
         }
 
-        guard let selectedChoice else { return nil }
+        guard let selectedChoice else {
+            return nil
+        }
 
         // Decompose branch choice tree for selected branch fallback.
         let (branchBodyFallback, branchContFallback) = decomposeNonGroupFallback(
@@ -298,13 +304,17 @@ extension Materializer {
             guard let (result, _) = try generateRecursive(
                 selectedChoice.generator, with: inputValue, context: &context,
                 fallbackTree: branchBodyFallback
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             guard let continued = try runContinuation(
                 result: result, calleeChoiceTree: .just, calleeStart: branchBodyStart,
                 continuation: continuation, inputValue: inputValue,
                 context: &context,
                 continuationFallback: branchContFallback ?? continuationFallback
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             context.emitFlat(.group(false))
             return continued
         }
@@ -316,7 +326,9 @@ extension Materializer {
             guard let (result, branchTree) = try generateRecursive(
                 selectedChoice.generator, with: inputValue, context: &context,
                 fallbackTree: branchBodyFallback
-            ) else { return nil }
+            ) else {
+                return nil
+            }
 
             guard let (continuationValue, continuationTree) = try runContinuation(
                 result: result,
@@ -326,7 +338,9 @@ extension Materializer {
                 inputValue: inputValue,
                 context: &context,
                 continuationFallback: branchContFallback ?? continuationFallback
-            ) else { return nil }
+            ) else {
+                return nil
+            }
 
             return (continuationValue, .group([.branch(
                 fingerprint: fingerprint,
@@ -353,7 +367,9 @@ extension Materializer {
                 guard let (result, branchTree) = try generateRecursive(
                     choice.generator, with: inputValue, context: &context,
                     fallbackTree: branchBodyFallback
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
 
                 guard let (continuationValue, continuationTree) = try runContinuation(
                     result: result,
@@ -363,7 +379,9 @@ extension Materializer {
                     inputValue: inputValue,
                     context: &context,
                     continuationFallback: branchContFallback ?? continuationFallback
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
 
                 finalValue = continuationValue
                 branches.append(.branch(
@@ -388,7 +406,9 @@ extension Materializer {
             choiceIndex += 1
         }
 
-        guard let value = finalValue else { return nil }
+        guard let value = finalValue else {
+            return nil
+        }
         return (value, .group(branches))
     }
 
@@ -475,17 +495,23 @@ extension Materializer {
                     throw RejectionError()
                 }
                 let exactIndex = Int(prefixBranch.id)
-                guard exactIndex < choices.count else { return nil }
+                guard exactIndex < choices.count else {
+                    return nil
+                }
                 pendingArm = choices[exactIndex]
 
             case .guided:
                 if let prefixBranch = context.cursor.tryConsumeBranch() {
                     let guidedIndex = Int(prefixBranch.id)
-                    guard guidedIndex < choices.count else { return nil }
+                    guard guidedIndex < choices.count else {
+                        return nil
+                    }
                     pendingArm = choices[guidedIndex]
                 } else if let fbBranchId {
                     let fallbackIndex = Int(fbBranchId)
-                    guard fallbackIndex < choices.count else { return nil }
+                    guard fallbackIndex < choices.count else {
+                        return nil
+                    }
                     pendingArm = choices[fallbackIndex]
                 }
 
@@ -532,7 +558,9 @@ extension Materializer {
                     fallbackTree: branchBodyFallback
                 )
             }
-            guard let (value, tree) = armResult else { return nil }
+            guard let (value, tree) = armResult else {
+                return nil
+            }
             if StructuralEquality.isNilOptional(value), BacktrackAudition.isAbsentArm(arm, in: choices) == false {
                 context.restore(snapshot)
                 continue
@@ -547,7 +575,9 @@ extension Materializer {
                 continuation: continuation, inputValue: inputValue,
                 context: &context,
                 continuationFallback: branchContFallback ?? continuationFallback
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             context.emitFlat(.group(false))
             return continued
         }
@@ -557,7 +587,9 @@ extension Materializer {
             continuation: continuation, inputValue: inputValue,
             context: &context,
             continuationFallback: branchContFallback ?? continuationFallback
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         let selectedBranch = ChoiceTree.branch(
             fingerprint: fingerprint, weight: arm.weight,
             id: arm.id, branchCount: branchCount, choice: contTree,
@@ -664,7 +696,9 @@ extension Materializer {
                     erasedLengthGen, with: inputValue, context: &context
                 )
             }
-            guard let (freshLength, _) = lengthResult else { return nil }
+            guard let (freshLength, _) = lengthResult else {
+                return nil
+            }
             // swiftlint:disable:next force_cast
             length = freshLength as! UInt64
             lengthMeta = try extractLengthMetadata(lengthGen)
@@ -767,7 +801,9 @@ extension Materializer {
                     context: &context, calleeFallback: elementCalleeFallback,
                     continuationFallback: elementContinuationFallback
                 )
-                guard let (innerResult, innerTree) = elementOutcome else { return nil }
+                guard let (innerResult, innerTree) = elementOutcome else {
+                    return nil
+                }
                 let result: Any
                 let element: ChoiceTree
                 let wrappedResult = try wrapperForward?(innerResult) ?? innerResult
@@ -776,7 +812,9 @@ extension Materializer {
                         result: wrappedResult, calleeChoiceTree: innerTree, calleeStart: elementStart,
                         continuation: contramapContinuation, inputValue: inputValue,
                         context: &context, continuationFallback: nil
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     (result, element) = continued
                 } else {
                     (result, element) = (innerResult, innerTree)
@@ -796,7 +834,9 @@ extension Materializer {
                 }
                 guard let (result, element) = try generateRecursive(
                     elementGen, with: inputValue, context: &context, fallbackTree: elFB
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 results.append(result)
                 if context.skipTree == false {
                     elements.append(element)
@@ -841,7 +881,9 @@ extension Materializer {
         let fallbackChildren: [ChoiceTree]? = calleeFallback.flatMap { fallback -> [ChoiceTree]? in
             guard case let .group(children, _, _) = fallback,
                   children.count == generators.count
-            else { return nil }
+            else {
+                return nil
+            }
             return children
         }
 
@@ -862,7 +904,9 @@ extension Materializer {
         var childScopeStart = (context.cursor.zipOpenIndex ?? context.cursor.position) + 1
 
         // Advance the cursor past transparent markers so it is ready for the first child's consume calls (tryConsumeBranch / tryConsumeValue).
-        if canScope { context.cursor.skipGroups() }
+        if canScope {
+            context.cursor.skipGroups()
+        }
 
         // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
         var zipIndex = 0
@@ -929,7 +973,9 @@ extension Materializer {
         let innerFallback: ChoiceTree? = calleeFallback.flatMap { fallback -> ChoiceTree? in
             guard case let .resize(_, choices) = fallback,
                   let inner = choices.first
-            else { return nil }
+            else {
+                return nil
+            }
             return inner
         }
         let previousSizeOverride = context.sizeOverride
@@ -947,7 +993,9 @@ extension Materializer {
                 fallbackTree: innerFallback
             )
         }
-        guard let innerResult else { return nil }
+        guard let innerResult else {
+            return nil
+        }
         context.emitFlat(.group(false))
         let calleeTree: ChoiceTree = context.skipTree
             ? .just
@@ -989,7 +1037,9 @@ extension Materializer {
                 let calleeStart = context.flatCount
                 guard let (innerValue, innerTree) = try generateRecursive(
                     inner, with: inputValue, context: &context, fallbackTree: calleeFallback
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 let result = try forward(innerValue)
                 return try runContinuation(
                     result: result, calleeChoiceTree: innerTree, calleeStart: calleeStart,
@@ -1007,7 +1057,9 @@ extension Materializer {
                 let calleeStart = context.flatCount
                 guard let (innerValue, innerTree) = try generateRecursive(
                     inner, with: inputValue, context: &context, fallbackTree: innerFallback
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
 
                 // The marker kind depends on the inner's shape, which is only known after the inner walk, so the open marker is retro-inserted before the inner's span (empty for a getSize inner). Matches flatten's getSize-bind group rewrite.
                 let isGetSizeBind = innerTree.isGetSize
@@ -1027,7 +1079,9 @@ extension Materializer {
                             fallbackTree: boundFallback
                         )
                         context.boundDepth -= 1
-                        guard let (boundValue, boundTree) = boundResult else { return nil }
+                        guard let (boundValue, boundTree) = boundResult else {
+                            return nil
+                        }
                         context.emitFlat(isGetSizeBind ? .group(false) : .bind(false))
                         let calleeTree: ChoiceTree = context.skipTree
                             ? .just
@@ -1053,7 +1107,9 @@ extension Materializer {
                             fallbackTree: boundFallback
                         )
                         context.boundDepth -= 1
-                        guard let (boundValue, boundTree) = boundResult else { return nil }
+                        guard let (boundValue, boundTree) = boundResult else {
+                            return nil
+                        }
                         context.emitFlat(isGetSizeBind ? .group(false) : .bind(false))
                         let calleeTree: ChoiceTree = context.skipTree
                             ? .just
@@ -1071,7 +1127,9 @@ extension Materializer {
                         let boundResult = try generateRecursive(
                             boundGen, with: inputValue, context: &context, fallbackTree: nil
                         )
-                        guard let (boundValue, boundTree) = boundResult else { return nil }
+                        guard let (boundValue, boundTree) = boundResult else {
+                            return nil
+                        }
                         context.emitFlat(isGetSizeBind ? .group(false) : .bind(false))
                         let calleeTree: ChoiceTree = context.skipTree
                             ? .just
@@ -1108,7 +1166,9 @@ extension Materializer {
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
                 for transform in transforms {
-                    guard let copy = try Interpreters.replay(inner, using: innerTree) else { return nil }
+                    guard let copy = try Interpreters.replay(inner, using: innerTree) else {
+                        return nil
+                    }
                     try results.append(transform(copy))
                 }
                 let calleeTree: ChoiceTree = context.skipTree ? .just : innerTree
@@ -1147,7 +1207,9 @@ extension Materializer {
             let reportBeforeAttempt = context.decodingReport
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: calleeFallback
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             let passed = predicate(result)
             context.filterObservations[fingerprint, default: FilterObservation(sourceLocation: sourceLocation, filterType: filterType)]
                 .recordAttempt(passed: passed)
@@ -1197,7 +1259,9 @@ extension Materializer {
         let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursive(
             gen, with: inputValue, context: &context, fallbackTree: calleeFallback
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, inputValue: inputValue,

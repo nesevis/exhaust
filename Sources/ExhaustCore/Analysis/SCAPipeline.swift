@@ -95,7 +95,9 @@ package struct SCADomain {
             branchProfiles: branchProfiles
         )
         let hasArgumentDomains = branchProfiles.contains {
-            if case .analyzed = $0 { return true }
+            if case .analyzed = $0 {
+                return true
+            }
             return false
         }
         let maxStrength = hasArgumentDomains ? min(2, strengthCap) : strengthCap

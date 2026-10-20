@@ -226,27 +226,41 @@ private func generateTree(
 
 private func firstActiveBindNodeID(in graph: ChoiceGraph) -> Int? {
     for node in graph.nodes {
-        guard case .bind = node.kind else { continue }
-        guard node.positionRange != nil else { continue }
+        guard case .bind = node.kind else {
+            continue
+        }
+        guard node.positionRange != nil else {
+            continue
+        }
         return node.id
     }
     return nil
 }
 
 private func innerLeafNodeID(ofBind bindNodeID: Int, in graph: ChoiceGraph) -> Int? {
-    guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return nil }
-    guard graph.nodes[bindNodeID].children.count > metadata.innerChildIndex else { return nil }
+    guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+        return nil
+    }
+    guard graph.nodes[bindNodeID].children.count > metadata.innerChildIndex else {
+        return nil
+    }
     let innerChildID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
-    guard case .chooseBits = graph.nodes[innerChildID].kind else { return nil }
+    guard case .chooseBits = graph.nodes[innerChildID].kind else {
+        return nil
+    }
     return innerChildID
 }
 
 private func bindClassification(at bindNodeID: Int, in graph: ChoiceGraph) -> BindClassification? {
-    guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return nil }
+    guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+        return nil
+    }
     return metadata.classification
 }
 
 private func chooseBitsMetadata(ofNodeID nodeID: Int, in graph: ChoiceGraph) -> ChooseBitsMetadata? {
-    guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { return nil }
+    guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+        return nil
+    }
     return metadata
 }

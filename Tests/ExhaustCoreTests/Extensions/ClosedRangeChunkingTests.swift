@@ -59,9 +59,15 @@ struct ClosedRangeChunkingTests {
     func subRangesAreContiguousAndCoverOriginalRange() throws {
         try exhaustCheck(rangeAndChunksGen) { range, chunks in
             let result = range.split(into: chunks)
-            guard result.isEmpty == false else { return true }
-            guard result.first?.lowerBound == range.lowerBound else { return false }
-            guard result.last?.upperBound == range.upperBound else { return false }
+            guard result.isEmpty == false else {
+                return true
+            }
+            guard result.first?.lowerBound == range.lowerBound else {
+                return false
+            }
+            guard result.last?.upperBound == range.upperBound else {
+                return false
+            }
             return zip(result, result.dropFirst()).allSatisfy { current, next in
                 next.lowerBound == current.upperBound &+ 1
             }
@@ -79,7 +85,9 @@ struct ClosedRangeChunkingTests {
     func subRangesAreBalanced() throws {
         try exhaustCheck(rangeAndChunksGen) { range, chunks in
             let result = range.split(into: chunks)
-            guard result.count >= 2 else { return true }
+            guard result.count >= 2 else {
+                return true
+            }
             // Use upperBound - lowerBound as a proxy for size - 1 to avoid overflow
             // on full-range sub-ranges. The balance invariant holds either way.
             let proxySizes = result.map { $0.upperBound - $0.lowerBound }

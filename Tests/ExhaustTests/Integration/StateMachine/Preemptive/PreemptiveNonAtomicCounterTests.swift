@@ -93,7 +93,9 @@ final class PreemptiveCounterSpec {
 
     @Command(weight: 2)
     func decrement() throws {
-        guard counter.value > 0 else { throw skip() }
+        guard counter.value > 0 else {
+            throw skip()
+        }
         counter.decrement()
     }
 

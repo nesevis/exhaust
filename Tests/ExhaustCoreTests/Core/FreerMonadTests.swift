@@ -101,7 +101,9 @@ struct PartialMonadicProfunctorLawTests {
         let g: (Int) -> String? = { num in num > 0 ? "length-\(num)" : nil }
 
         let composed: (String) -> String? = { str in
-            guard let intermediate = f(str) else { return nil }
+            guard let intermediate = f(str) else {
+                return nil
+            }
             return g(intermediate)
         }
 

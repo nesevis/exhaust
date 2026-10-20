@@ -148,7 +148,9 @@ struct ReductionMaterializerTests {
 
         let refreshedSequence = ChoiceSequence(tree)
         let refreshedBranches: [ChoiceSequenceValue.Branch] = refreshedSequence.compactMap { element in
-            guard case let .branch(branch) = element else { return nil }
+            guard case let .branch(branch) = element else {
+                return nil
+            }
             return branch
         }
         let refreshedBranch = try #require(refreshedBranches.first)
@@ -699,7 +701,9 @@ struct ReductionMaterializerTests {
     private func replacingControl(in tree: ChoiceTree, with control: UInt64) -> ChoiceSequence {
         var candidate = ChoiceSequence(tree)
         let position = candidate.firstIndex { entry in
-            if case .value = entry { return true }
+            if case .value = entry {
+                return true
+            }
             return false
         }!
         candidate[position] = .value(.init(choice: ChoiceValue(control, tag: .uint64), validRange: 1 ... 5, isRangeExplicit: true))

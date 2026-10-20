@@ -241,16 +241,24 @@ struct NumericPairSearchTests {
         var proposals = [target, half, min(current, target) + (max(current, target) - min(current, target)) / 2]
         func appendMagnitude(_ magnitude: UInt64) {
             let (positive, overflow) = zero.addingReportingOverflow(magnitude)
-            if overflow == false { proposals.append(positive) }
-            if leaf.choice.tag.isSigned, zero >= magnitude { proposals.append(zero - magnitude) }
+            if overflow == false {
+                proposals.append(positive)
+            }
+            if leaf.choice.tag.isSigned, zero >= magnitude {
+                proposals.append(zero - magnitude)
+            }
         }
         for magnitude: UInt64 in [1, 2, 3] {
             appendMagnitude(magnitude)
         }
         for delta: UInt64 in [1, 2, 4] {
             let (raised, overflow) = current.addingReportingOverflow(delta)
-            if overflow == false { proposals.append(raised) }
-            if current >= delta { proposals.append(current - delta) }
+            if overflow == false {
+                proposals.append(raised)
+            }
+            if current >= delta {
+                proposals.append(current - delta)
+            }
         }
         for exponent in 0 ..< 8 {
             appendMagnitude((UInt64(1) << exponent) - 1)

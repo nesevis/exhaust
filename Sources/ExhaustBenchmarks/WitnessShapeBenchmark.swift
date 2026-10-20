@@ -90,7 +90,9 @@ private func measure<Output: Hashable & Sendable>(
         if let found = outcome.attempts {
             attempts.append(found)
             seconds.append(outcome.seconds)
-            if outcome.inMutation { mutationSolves += 1 }
+            if outcome.inMutation {
+                mutationSolves += 1
+            }
         }
     }
     let sortedAttempts = attempts.sorted()
@@ -277,7 +279,9 @@ private let listsGen: Generator<WitnessLists> = Gen.zip(
 extension [WitnessOp] {
     /// Whether `run` appears contiguously in this list.
     func containsRun(_ run: [WitnessOp]) -> Bool {
-        guard run.isEmpty == false, count >= run.count else { return false }
+        guard run.isEmpty == false, count >= run.count else {
+            return false
+        }
         for start in 0 ... (count - run.count) where Array(self[start ..< start + run.count]) == run {
             return true
         }
@@ -302,7 +306,9 @@ extension [WitnessOp] {
                 found = true
                 break
             }
-            if found { longest = length; break }
+            if found {
+                longest = length; break
+            }
         }
     }
     edges.append((edge: 60 + longest, hitCount: 1))

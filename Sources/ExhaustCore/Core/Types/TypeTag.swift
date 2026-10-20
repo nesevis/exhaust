@@ -143,16 +143,22 @@ package extension TypeTag {
     func floatingChoice(from value: Double, allowNonFinite: Bool = false) -> ChoiceValue? {
         switch self {
             case .double:
-                guard allowNonFinite || value.isFinite else { return nil }
+                guard allowNonFinite || value.isFinite else {
+                    return nil
+                }
                 return ChoiceValue(value, tag: .double)
             case .float:
                 let narrowed = Float(value)
-                guard allowNonFinite || narrowed.isFinite else { return nil }
+                guard allowNonFinite || narrowed.isFinite else {
+                    return nil
+                }
                 return ChoiceValue(narrowed, tag: .float)
             case .float16:
                 let encoded = Float16Emulation.encodedBitPattern(from: value)
                 let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
-                guard allowNonFinite || reconstructed.isFinite else { return nil }
+                guard allowNonFinite || reconstructed.isFinite else {
+                    return nil
+                }
                 return ChoiceValue(encoded, tag: .float16)
             default:
                 return nil
@@ -197,7 +203,9 @@ package extension TypeTag {
     /// - Returns: A bit pattern whose decoded float is uniformly distributed in `[numericLower, numericUpper]`.
     func linearlyDistributed(rawBits: UInt64, in range: ClosedRange<UInt64>) -> UInt64 {
         let width = range.upperBound &- range.lowerBound
-        guard width > 0 else { return rawBits }
+        guard width > 0 else {
+            return rawBits
+        }
         var lower = numericDoubleValue(forBitPattern: range.lowerBound)
         var upper = numericDoubleValue(forBitPattern: range.upperBound)
         if lower.isNaN || lower.isInfinite {
@@ -207,7 +215,9 @@ package extension TypeTag {
             upper = greatestFiniteDoubleMagnitude
         }
         // When the numeric endpoints are equal (for example ±0.0), the lerp collapses to a single point. Fall back to raw bits so bit-pattern-level distinctions are preserved.
-        guard lower != upper else { return rawBits }
+        guard lower != upper else {
+            return rawBits
+        }
         let fraction = Double(rawBits &- range.lowerBound) / Double(width)
         let value = lower * (1.0 - fraction) + upper * fraction
         return floatingBitPattern(from: value)
@@ -217,7 +227,9 @@ package extension TypeTag {
     @inline(__always)
     func clampBits(_ bitPattern: UInt64, min: UInt64, max: UInt64) -> UInt64 {
         let clamped = Swift.min(Swift.max(bitPattern, min), max)
-        if clamped != bitPattern, isFloatingPoint { return bitPattern }
+        if clamped != bitPattern, isFloatingPoint {
+            return bitPattern
+        }
         return clamped
     }
 

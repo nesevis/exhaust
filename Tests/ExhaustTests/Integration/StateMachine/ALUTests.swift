@@ -21,7 +21,9 @@ struct ALUTests {
         )
 
         #expect(result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         })
     }

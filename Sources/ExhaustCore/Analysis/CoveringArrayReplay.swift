@@ -6,10 +6,14 @@ package enum CoveringArrayReplay {
         if let tree = profile.template?.substitutionTemplate {
             return rebuild(tree, row: row, parameters: parameters)
         }
-        guard parameters.accepts(row) else { return nil }
+        guard parameters.accepts(row) else {
+            return nil
+        }
         var trees: [ChoiceTree] = []
         for (parameter, valueIndex) in zip(profile.parameters, row.values) {
-            guard let tree = buildParameterTree(param: parameter, valueIndex: valueIndex) else { return nil }
+            guard let tree = buildParameterTree(param: parameter, valueIndex: valueIndex) else {
+                return nil
+            }
             trees.append(tree)
         }
         return trees.count == 1 ? trees[0] : .group(trees)
@@ -21,7 +25,9 @@ package enum CoveringArrayReplay {
         if let tree = profile.originalTree {
             return rebuild(tree, row: row, parameters: parameters)
         }
-        guard parameters.accepts(row) else { return nil }
+        guard parameters.accepts(row) else {
+            return nil
+        }
         return buildTreeFlat(row: row, profile: profile)
     }
 
@@ -38,7 +44,9 @@ package enum CoveringArrayReplay {
         }
 
         func accepts(_ row: CoveringArrayRow) -> Bool {
-            guard row.values.count == count else { return false }
+            guard row.values.count == count else {
+                return false
+            }
             switch self {
                 case let .enumerable(parameters):
                     return zip(parameters, row.values).allSatisfy { $1 < $0.domainSize }
@@ -55,7 +63,9 @@ package enum CoveringArrayReplay {
         parameters: Parameters,
         scope: ScreeningScope = .root
     ) -> ChoiceTree? {
-        guard parameters.accepts(row) else { return nil }
+        guard parameters.accepts(row) else {
+            return nil
+        }
         var parameterIndex = 0
         guard let result = substituteParameters(
             in: tree,
@@ -63,7 +73,9 @@ package enum CoveringArrayReplay {
             parameters: parameters,
             parameterIndex: &parameterIndex,
             scope: scope
-        ), parameterIndex == parameters.count else { return nil }
+        ), parameterIndex == parameters.count else {
+            return nil
+        }
         return result
     }
 
@@ -80,7 +92,9 @@ package enum CoveringArrayReplay {
             case .invalid:
                 return nil
             case let .choice(value, metadata):
-                guard parameterIndex < parameters.count else { return nil }
+                guard parameterIndex < parameters.count else {
+                    return nil
+                }
                 defer { parameterIndex += 1 }
                 return substituteChoice(
                     value,
@@ -90,15 +104,21 @@ package enum CoveringArrayReplay {
                     valueIndex: row.values[parameterIndex]
                 )
             case .pick:
-                guard parameterIndex < parameters.count else { return nil }
+                guard parameterIndex < parameters.count else {
+                    return nil
+                }
                 defer { parameterIndex += 1 }
                 switch parameters {
                     case let .enumerable(factors):
-                        guard case .pick = factors[parameterIndex].kind else { return nil }
+                        guard case .pick = factors[parameterIndex].kind else {
+                            return nil
+                        }
                         return buildParameterTree(param: factors[parameterIndex], valueIndex: row.values[parameterIndex])
                     case let .large(factors):
                         let parameter = factors[parameterIndex]
-                        guard case let .pick(choices) = parameter.kind else { return nil }
+                        guard case let .pick(choices) = parameter.kind else {
+                            return nil
+                        }
                         return buildPickTree(param: parameter, valueIndex: row.values[parameterIndex], choices: choices)
                 }
             case let .singleton(branch, isZip):
@@ -108,7 +128,9 @@ package enum CoveringArrayReplay {
                     parameters: parameters,
                     parameterIndex: &parameterIndex,
                     scope: scope
-                ) else { return nil }
+                ) else {
+                    return nil
+                }
                 return .group([.branch(
                     fingerprint: branch.fingerprint,
                     weight: branch.weight,
@@ -118,18 +140,30 @@ package enum CoveringArrayReplay {
                     isSelected: branch.isSelected
                 )], isZip: isZip)
             case let .group(children, isZip):
-                guard let rebuilt = substituteChildren(children, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else { return nil }
+                guard let rebuilt = substituteChildren(children, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else {
+                    return nil
+                }
                 return .group(rebuilt, isZip: isZip)
             case let .resize(size, children):
-                guard let rebuilt = substituteChildren(children, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else { return nil }
+                guard let rebuilt = substituteChildren(children, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else {
+                    return nil
+                }
                 return .resize(newSize: size, choices: rebuilt)
             case let .bind(fingerprint, inner, bound, visitsBound):
-                guard let rebuiltInner = substituteParameters(in: inner, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else { return nil }
-                guard visitsBound else { return .bind(fingerprint: fingerprint, inner: rebuiltInner, bound: bound) }
-                guard let rebuiltBound = substituteParameters(in: bound, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else { return nil }
+                guard let rebuiltInner = substituteParameters(in: inner, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else {
+                    return nil
+                }
+                guard visitsBound else {
+                    return .bind(fingerprint: fingerprint, inner: rebuiltInner, bound: bound)
+                }
+                guard let rebuiltBound = substituteParameters(in: bound, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else {
+                    return nil
+                }
                 return .bind(fingerprint: fingerprint, inner: rebuiltInner, bound: rebuiltBound)
             case let .sequence(elements, metadata):
-                guard case let .large(factors) = parameters else { return nil }
+                guard case let .large(factors) = parameters else {
+                    return nil
+                }
                 return substituteSequence(elements, metadata: metadata, row: row, parameters: factors, parameterIndex: &parameterIndex)
         }
     }
@@ -143,7 +177,9 @@ package enum CoveringArrayReplay {
     ) -> [ChoiceTree]? {
         var result: [ChoiceTree] = []
         for child in children {
-            guard let rebuilt = substituteParameters(in: child, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else { return nil }
+            guard let rebuilt = substituteParameters(in: child, row: row, parameters: parameters, parameterIndex: &parameterIndex, scope: scope) else {
+                return nil
+            }
             result.append(rebuilt)
         }
         return result
@@ -161,13 +197,18 @@ package enum CoveringArrayReplay {
             case let .enumerable(factors):
                 let parameter = factors[index]
                 guard case let .chooseBits(range, tag) = parameter.kind,
-                      range == metadata.validRange, tag == value.tag else { return nil }
+                      range == metadata.validRange, tag == value.tag
+                else {
+                    return nil
+                }
                 return buildParameterTree(param: parameter, valueIndex: valueIndex)
             case let .large(factors):
                 let parameter = factors[index]
                 switch parameter.kind {
                     case let .chooseBits(range, tag), let .enumerableChooseBits(range, tag), let .sequenceElement(_, range, tag):
-                        guard range == metadata.validRange, tag == value.tag else { return nil }
+                        guard range == metadata.validRange, tag == value.tag else {
+                            return nil
+                        }
                         return buildChooseBitsTree(param: parameter, valueIndex: valueIndex, range: range, tag: tag)
                     default:
                         return nil
@@ -182,47 +223,65 @@ package enum CoveringArrayReplay {
         parameters: [ScreeningParameter],
         parameterIndex: inout Int
     ) -> ChoiceTree? {
-        guard parameterIndex < parameters.count else { return nil }
+        guard parameterIndex < parameters.count else {
+            return nil
+        }
         let parameter = parameters[parameterIndex]
         let valueIndex = row.values[parameterIndex]
         parameterIndex += 1
         switch parameter.kind {
             case let .compositeSequence(range, slotParameters, halvedPairs, lengthSlots):
                 guard range == metadata.validRange,
-                      let slot = findLengthSlot(for: valueIndex, in: lengthSlots) else { return nil }
+                      let slot = findLengthSlot(for: valueIndex, in: lengthSlots)
+                else {
+                    return nil
+                }
                 let effective = (halvedPairs && slot.activeElementCount >= 2)
                     ? ChoiceTreeAnalysis.halveElementSlotParams(slotParameters) : slotParameters
                 guard slot.activeElementCount <= effective.count,
                       slot.activeElementCount <= elements.count,
-                      effective.prefix(slot.activeElementCount).allSatisfy({ $0.allSatisfy { $0.domainSize > 0 } }) else { return nil }
+                      effective.prefix(slot.activeElementCount).allSatisfy({ $0.allSatisfy { $0.domainSize > 0 } })
+                else {
+                    return nil
+                }
                 let values = decomposeCompositeIndex(valueIndex - slot.flatOffset, activeSlotParams: Array(effective.prefix(slot.activeElementCount)))
                 var result: [ChoiceTree] = []
                 var offset = 0
                 for (index, element) in elements.enumerated() {
-                    guard UInt64(index) < slot.length else { break }
+                    guard UInt64(index) < slot.length else {
+                        break
+                    }
                     guard index < slot.activeElementCount else {
                         result.append(element)
                         continue
                     }
                     let factors = effective[index]
                     let subRow = CoveringArrayRow(values: Array(values[offset ..< offset + factors.count]))
-                    guard let rebuilt = rebuild(element, row: subRow, parameters: .large(factors), scope: .element(index)) else { return nil }
+                    guard let rebuilt = rebuild(element, row: subRow, parameters: .large(factors), scope: .element(index)) else {
+                        return nil
+                    }
                     result.append(rebuilt)
                     offset += factors.count
                 }
                 return .sequence(elements: result, metadata: metadata)
             case let .sequenceLength(range):
-                guard range == metadata.validRange, valueIndex < UInt64(parameter.values.count) else { return nil }
+                guard range == metadata.validRange, valueIndex < UInt64(parameter.values.count) else {
+                    return nil
+                }
                 let length = parameter.values[Int(valueIndex)]
                 let analyzedSlots = min(2, elements.count, Int(clamping: range.upperBound))
                 var result: [ChoiceTree] = []
                 for (index, element) in elements.enumerated() {
-                    guard UInt64(index) < length else { break }
+                    guard UInt64(index) < length else {
+                        break
+                    }
                     guard index < analyzedSlots else {
                         result.append(element)
                         continue
                     }
-                    guard let rebuilt = substituteParameters(in: element, row: row, parameters: .large(parameters), parameterIndex: &parameterIndex, scope: .element(index)) else { return nil }
+                    guard let rebuilt = substituteParameters(in: element, row: row, parameters: .large(parameters), parameterIndex: &parameterIndex, scope: .element(index)) else {
+                        return nil
+                    }
                     result.append(rebuilt)
                 }
                 return .sequence(elements: result, metadata: metadata)
@@ -237,14 +296,18 @@ package enum CoveringArrayReplay {
     ) -> ChoiceTree? {
         switch param.kind {
             case let .chooseBits(range, tag):
-                guard valueIndex <= range.upperBound - range.lowerBound else { return nil }
+                guard valueIndex <= range.upperBound - range.lowerBound else {
+                    return nil
+                }
                 let bitPattern = range.lowerBound + valueIndex
                 let choiceValue = ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)
                 let metadata = ChoiceMetadata(validRange: range, isRangeExplicit: true)
                 return .choice(choiceValue, metadata)
 
             case let .pick(choices):
-                guard valueIndex < choices.count else { return nil }
+                guard valueIndex < choices.count else {
+                    return nil
+                }
                 let chosen = choices[Int(valueIndex)]
 
                 // Build the sub-tree for the chosen branch's generator
@@ -286,7 +349,9 @@ package enum CoveringArrayReplay {
                         valueIndex: valueIndex,
                         range: range,
                         tag: tag
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     trees.append(tree)
                     i += 1
 
@@ -297,7 +362,9 @@ package enum CoveringArrayReplay {
                         lengthRange: lengthRange,
                         remainingParams: Array(profile.parameters.dropFirst(i + 1)),
                         remainingValues: Array(row.values.dropFirst(i + 1))
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     trees.append(tree)
                     i += 1 + consumed
 
@@ -337,7 +404,9 @@ package enum CoveringArrayReplay {
                         param: param,
                         valueIndex: valueIndex,
                         choices: choices
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     trees.append(tree)
                     i += 1
             }
@@ -360,7 +429,9 @@ package enum CoveringArrayReplay {
         range: ClosedRange<UInt64>,
         tag: TypeTag
     ) -> ChoiceTree? {
-        guard valueIndex < UInt64(param.values.count) else { return nil }
+        guard valueIndex < UInt64(param.values.count) else {
+            return nil
+        }
         let bitPattern = param.values[Int(valueIndex)]
         let choiceValue = ChoiceValue(tag.makeConvertible(bitPattern64: bitPattern), tag: tag)
         let metadata = ChoiceMetadata(validRange: range, isRangeExplicit: true)
@@ -374,19 +445,25 @@ package enum CoveringArrayReplay {
         remainingParams: [ScreeningParameter],
         remainingValues: [UInt64]
     ) -> (tree: ChoiceTree, consumedParams: Int)? {
-        guard lengthValueIndex < UInt64(lengthParam.values.count) else { return nil }
+        guard lengthValueIndex < UInt64(lengthParam.values.count) else {
+            return nil
+        }
         let length = lengthParam.values[Int(lengthValueIndex)]
 
         var elementParamCount = 0
         for param in remainingParams {
-            guard case .sequenceElement = param.kind else { break }
+            guard case .sequenceElement = param.kind else {
+                break
+            }
             elementParamCount += 1
         }
 
         var elementTrees: [ChoiceTree] = []
         for elementIdx in 0 ..< min(Int(length), elementParamCount) {
             let param = remainingParams[elementIdx]
-            guard elementIdx < remainingValues.count else { return nil }
+            guard elementIdx < remainingValues.count else {
+                return nil
+            }
             let valueIndex = remainingValues[elementIdx]
 
             switch param.kind {
@@ -396,7 +473,9 @@ package enum CoveringArrayReplay {
                         valueIndex: valueIndex,
                         range: range,
                         tag: tag
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     elementTrees.append(tree)
 
                 default:
@@ -414,7 +493,9 @@ package enum CoveringArrayReplay {
         valueIndex: UInt64,
         choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> ChoiceTree? {
-        guard valueIndex < choices.count else { return nil }
+        guard valueIndex < choices.count else {
+            return nil
+        }
         let chosen = choices[Int(valueIndex)]
 
         guard let subTree = buildSubTree(for: chosen.generator) else {
@@ -440,7 +521,9 @@ package enum CoveringArrayReplay {
         in slots: [SequenceLengthSlot]
     ) -> SequenceLengthSlot? {
         for slot in slots.reversed() where compositeIndex >= slot.flatOffset {
-            guard compositeIndex - slot.flatOffset < slot.contribution else { return nil }
+            guard compositeIndex - slot.flatOffset < slot.contribution else {
+                return nil
+            }
             return slot
         }
         return nil
@@ -452,7 +535,9 @@ package enum CoveringArrayReplay {
         activeSlotParams: [[ScreeningParameter]]
     ) -> [UInt64] {
         let flatParams = activeSlotParams.flatMap { $0 }
-        guard flatParams.isEmpty == false else { return [] }
+        guard flatParams.isEmpty == false else {
+            return []
+        }
         var indices = [UInt64](repeating: 0, count: flatParams.count)
         var remainder = localIndex
         for idx in (0 ..< flatParams.count).reversed() {

@@ -5,7 +5,9 @@ package extension ChoiceTree {
     ///
     /// Returns `nil` if no `.sequence` node is found.
     func perElementSegments() -> [ChoiceSequence]? {
-        guard let elements = Self.findSequenceElements(in: self) else { return nil }
+        guard let elements = Self.findSequenceElements(in: self) else {
+            return nil
+        }
         return elements.map { ChoiceSequence.flatten($0) }
     }
 
@@ -17,12 +19,16 @@ package extension ChoiceTree {
                 return findSequenceElements(in: inner) ?? findSequenceElements(in: bound)
             case let .group(children, _, _):
                 for child in children {
-                    if let found = findSequenceElements(in: child) { return found }
+                    if let found = findSequenceElements(in: child) {
+                        return found
+                    }
                 }
                 return nil
             case let .resize(_, choices):
                 for child in choices {
-                    if let found = findSequenceElements(in: child) { return found }
+                    if let found = findSequenceElements(in: child) {
+                        return found
+                    }
                 }
                 return nil
             case .choice, .just, .branch, .getSize:

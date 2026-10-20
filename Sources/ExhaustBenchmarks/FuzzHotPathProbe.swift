@@ -60,7 +60,9 @@ private func probeShape<Output: Hashable>(
     var originLine = "  origins:"
     for origin in CandidateOrigin.allCases {
         let total = counts.attempts.count(origin: origin)
-        guard total > 0 else { continue }
+        guard total > 0 else {
+            continue
+        }
         let duplicates = counts.attempts.count(origin: origin, outcome: .duplicate)
         let rejected = counts.attempts.count(origin: origin, outcome: .rejectedByMaterializer)
         originLine += " \(origin)=\(total)(dup \(duplicates), rej \(rejected))"
@@ -70,7 +72,9 @@ private func probeShape<Output: Hashable>(
     var armLine = "  arms:"
     for arm in MutationArm.allCases {
         let draws = counts.mutationArms.draws(arm: arm)
-        guard draws > 0 else { continue }
+        guard draws > 0 else {
+            continue
+        }
         armLine += " \(arm)=\(draws)/m\(counts.mutationArms.misses(arm: arm))/a\(counts.mutationArms.admissions(arm: arm))"
     }
     print(armLine)

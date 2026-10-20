@@ -14,7 +14,9 @@ struct BalancedCoveringArrayTests {
         var count = 0
         while generator.next() != nil {
             count += 1
-            if count > 100 { break }
+            if count > 100 {
+                break
+            }
         }
 
         #expect(generator.next() == nil)

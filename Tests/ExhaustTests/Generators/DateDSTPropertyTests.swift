@@ -119,7 +119,9 @@ struct DateDSTPropertyTests {
             let startOfNow = calendar.startOfDay(for: now)
             let startOfTarget = calendar.startOfDay(for: target)
             let correctDayDiff = calendar.dateComponents([.day], from: startOfNow, to: startOfTarget).day!
-            guard correctDayDiff == 0 else { return true }
+            guard correctDayDiff == 0 else {
+                return true
+            }
 
             // BUG: assumes every day is exactly 86400 seconds from midnight
             let buggyDayDiff = Int(floor(target.timeIntervalSince(startOfNow) / 86400))
@@ -151,7 +153,9 @@ struct DateDSTPropertyTests {
             let startOfNow = calendar.startOfDay(for: now)
             let startOfTarget = calendar.startOfDay(for: target)
             let correctDayDiff = calendar.dateComponents([.day], from: startOfNow, to: startOfTarget).day!
-            guard correctDayDiff == 0 else { return true } // skip cross-day pairs
+            guard correctDayDiff == 0 else { // skip cross-day pairs
+                return true
+            }
 
             // BUG: assumes every day is exactly 86400 seconds from midnight
             let buggyDayDiff = Int(floor(target.timeIntervalSince(startOfNow) / 86400))
