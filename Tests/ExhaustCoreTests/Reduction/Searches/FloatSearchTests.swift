@@ -140,4 +140,17 @@ struct FloatSearchTests {
         #expect(buffer[positions[0]].value?.choice.decodedDoubleValue == 0)
         #expect(buffer[positions[1]].value?.choice.decodedDoubleValue == 2)
     }
+
+    @Test("Float search offers positive counterparts for integral and fractional values", arguments: [-1.0, -1.5])
+    func floatReductionPrefersPositive(initial: Double) throws {
+        let generator = Gen.choose(in: -2.0 ... 2.0)
+        let output = try reduceFromReflection(
+            generator,
+            startingAt: initial,
+            config: .init(maxStalls: 2, enabledEncoders: [.floatSearch])
+        ) { value in
+            value.magnitude != initial.magnitude
+        }
+        #expect(output == initial.magnitude)
+    }
 }

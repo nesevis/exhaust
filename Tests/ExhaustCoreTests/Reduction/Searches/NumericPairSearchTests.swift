@@ -202,6 +202,36 @@ struct NumericPairSearchTests {
         #expect(Set(values).count == values.count)
     }
 
+    @Test("Numeric candidate admission shares the positive-first ordering", arguments: [TypeTag.int64, .double, .float, .float16])
+    func numericCandidateSigns(tag: TypeTag) throws {
+        let positive: ChoiceValue = switch tag {
+            case .int64:
+                ChoiceValue(Int64(1), tag: tag)
+            default:
+                try #require(tag.floatingChoice(from: 1))
+        }
+        let negative: ChoiceValue = switch tag {
+            case .int64:
+                ChoiceValue(Int64(-1), tag: tag)
+            default:
+                try #require(tag.floatingChoice(from: -1))
+        }
+        for current in [positive, negative] {
+            let leaf = ReductionLeaf(
+                nodeID: 0,
+                position: 0,
+                path: [],
+                choice: current,
+                range: tag.bitPatternRange,
+                bindFingerprints: [],
+                mayReshapeOnAcceptance: false
+            )
+            let candidates = NumericPairCandidates.jointValues(for: leaf, simplifying: true)
+            #expect(candidates.contains(positive.bitPattern64) == (current == negative))
+            #expect(candidates.contains(negative.bitPattern64) == false)
+        }
+    }
+
     /// Reconstructs the original proposal stream, applying the six-value cap only after admission and deduplication.
     private static func uncappedJointValues(for leaf: ReductionLeaf, simplifying: Bool) -> [UInt64] {
         let zero = leaf.choice.tag.simplestBitPattern

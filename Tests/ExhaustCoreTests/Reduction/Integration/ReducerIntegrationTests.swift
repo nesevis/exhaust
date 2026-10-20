@@ -44,4 +44,12 @@ struct ReducerIntegrationTests {
         #expect(result.stats.cycles > 0)
         #expect(result.stats.totalMaterializations > 0)
     }
+
+    @Test("Positive preference respects negative-only domains")
+    func negativeOnlyRanges() throws {
+        let integer = try reduceFromReflection(Gen.choose(in: -10 ... -1), startingAt: -10) { _ in false }
+        let floating = try reduceFromReflection(Gen.choose(in: -10.0 ... -1.0), startingAt: -10.0) { _ in false }
+        #expect(integer == -1)
+        #expect(floating == -1)
+    }
 }

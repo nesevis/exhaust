@@ -94,6 +94,81 @@ struct StagedJointEncoderTests {
         #expect(interrupted.report.searchCounts == Array(completed))
         #expect(interrupted.report.counts.emitted == emissions)
     }
+
+    @Test("A stalled pair flips mixed signs while an unrelated positive value stays unchanged", arguments: [true, false])
+    func reducerIntegration(acceptsSignFlip: Bool) throws {
+        let generator = Gen.arrayOf(Gen.choose(in: -100 ... 100), within: 3 ... 3)
+        let values = [-3, 5, 17]
+        let signFlipped = [3, -5, 17]
+        let tree = try #require(try Interpreters.reflect(generator, with: values))
+        var tuning = ReductionTuning()
+        tuning.stagedJointProbeBudget = 1
+        let result = Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: tree,
+            output: values,
+            config: .init(maxStalls: 2, enabledEncoders: [.valueSearch, .stagedJointSearch], tuning: tuning),
+            property: { candidate in candidate != values && (acceptsSignFlip == false || candidate != signFlipped) }
+        )
+        #expect(result.outcome.counterexample?.1 == (acceptsSignFlip ? signFlipped : values))
+        #expect(result.stats.encoderCounts[.stagedJointSearch]?.accepted == (acceptsSignFlip ? 1 : 0))
+    }
+
+    @Test("Replay rejects a sign flip that violates a generator filter")
+    func generatorFilter() throws {
+        let generator = Gen.filter(
+            Gen.arrayOf(Gen.choose(in: -100 ... 100), within: 2 ... 2),
+            type: .rejectionSampling,
+            predicate: { $0.allSatisfy { $0 < 0 } },
+            sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+        )
+        let values = [-3, -5]
+        let tree = try #require(try Interpreters.reflect(generator, with: values))
+        var tuning = ReductionTuning()
+        tuning.stagedJointProbeBudget = 1
+        let result = Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: tree,
+            output: values,
+            config: .init(maxStalls: 2, enabledEncoders: [.valueSearch, .stagedJointSearch], tuning: tuning),
+            property: { $0 != values }
+        )
+        #expect(result.outcome.counterexample?.1 == values)
+        #expect(result.stats.encoderCounts[.stagedJointSearch]?.propertyInvocations == 0)
+        #expect(result.stats.encoderCounts[.stagedJointSearch]?.accepted == 0)
+    }
+
+    @Test("A pair whose signs cannot be flipped does not suppress another pair and sampled sign flips are not repeated")
+    func selectedPairsAndDeduplication() throws {
+        let values = [Int8.min, -1, 1].map { ChoiceValue($0, tag: .int8) }
+        let members = leaves(values)
+        let pairs = [
+            NumericPairQuery.Pair(source: members[0], sink: members[1]),
+            NumericPairQuery.Pair(source: members[1], sink: members[2]),
+        ]
+        var search = StagedJointSearch(pairs: pairs, base: [], probeBudget: 10000)
+        var buffer: ChoiceSequence = []
+        let first = try #require(search.next(.initial, into: &buffer))
+        guard case let .sparse(signFlip, _, _) = first else {
+            Issue.record("Expected a sparse sign flip")
+            return
+        }
+        #expect(signFlip.leaves.map(\.position) == [1, 2])
+        #expect(signFlip.patterns == [Int8(1).bitPattern64, Int8(-1).bitPattern64])
+        while let candidate = search.next(.rejected(.propertyPassed), into: &buffer) {
+            guard case let .sparse(probe, _, _) = candidate else {
+                Issue.record("Expected sparse joint proposals")
+                return
+            }
+            #expect(probe != signFlip)
+        }
+    }
+
+    private func leaves(_ values: [ChoiceValue], range: ClosedRange<UInt64>? = nil) -> [ReductionLeaf] {
+        values.enumerated().map { index, value in
+            ReductionLeaf(nodeID: index, position: index, path: [], choice: value, range: range ?? value.tag.bitPatternRange, bindFingerprints: [], mayReshapeOnAcceptance: false)
+        }
+    }
 }
 
 // MARK: - Fixture
