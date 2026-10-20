@@ -6,6 +6,19 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-10-20
+
+### Changed
+
+- Reduction now prefers positive values to negative values of the same magnitude. Signed integers simplify in the order 0, 1, −1, 2, −2, including when reduction tries every combination of a few small-range values, and a floating-point value reduces to its positive counterpart when its sign does not affect the failure.
+- Floating-point reduction reaches finer binary fractions and tries the values next to 0 and 1, so failures caused by rounding, such as cancellation in `(a + b) - b == a`, reduce to the boundary values that trigger them.
+- Reduction can now flip the signs of linked numeric values together, so failures that depend on values having opposite signs reduce further.
+
+### Fixed
+
+- After simplifying one floating-point value, reduction could probe the next value with candidates prepared for the previous one instead of its own.
+- Final numeric reordering could accept an order that changed other parts of the counterexample, leaving it larger.
+
 ## [1.7.2] - 2026-10-18
 
 ### Changed
