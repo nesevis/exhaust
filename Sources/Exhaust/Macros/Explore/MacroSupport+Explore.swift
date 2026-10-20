@@ -74,7 +74,11 @@ public extension __ExhaustRuntime {
 
         #if canImport(Testing)
             if let traitConfig = ExhaustTraitConfiguration.current {
-                let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                let hasInlineBudget = settings.contains { if case .budget = $0 {
+                    true
+                } else {
+                    false
+                } }
                 if hasInlineBudget == false, let traitBudget = traitConfig.budget {
                     budget = traitBudget
                 }
@@ -257,7 +261,9 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt
     ) {
-        guard report.result == nil else { return }
+        guard report.result == nil else {
+            return
+        }
 
         if report.propertyInvocations == 0 {
             reportError(
@@ -270,7 +276,9 @@ public extension __ExhaustRuntime {
             return
         }
 
-        guard suppressIssueReporting == false else { return }
+        guard suppressIssueReporting == false else {
+            return
+        }
 
         let uncoveredNames = report.directionCoverage
             .filter { $0.outcome == .uncovered }
@@ -286,7 +294,11 @@ public extension __ExhaustRuntime {
         }
 
         let tuningFailedNames = report.directionCoverage
-            .filter { if case .tuningFailed = $0.outcome { true } else { false } }
+            .filter { if case .tuningFailed = $0.outcome {
+                true
+            } else {
+                false
+            } }
             .map(\.name)
         if tuningFailedNames.isEmpty == false {
             reportWarning(
@@ -349,7 +361,9 @@ public extension __ExhaustRuntime {
             }
 
             let suppressIssueReporting = settings.contains { setting in
-                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                if case let .suppress(option) = setting, option == .issueReporting || option == .all {
+                    return true
+                }
                 return false
             }
             if let counterexample = report.result {
@@ -493,7 +507,9 @@ public extension __ExhaustRuntime {
 
         // The diagnostic rerun and issue reporting run on the test task after the hop: issue recording resolves the current test from task-locals, so an #expect failure from the rerun records with the counterexample against the right test instead of «unknown».
         let suppressIssueReporting = settings.contains { setting in
-            if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+            if case let .suppress(option) = setting, option == .issueReporting || option == .all {
+                return true
+            }
             return false
         }
         if let counterexample = report.result {

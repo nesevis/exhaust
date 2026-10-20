@@ -331,7 +331,9 @@ extension Interpreters {
         // Each generator consumes its lane. If the next choice is a non-branch group, it's a per-lane subtree — unwrap it so the generator consumes from within. Otherwise consume directly.
         var subResults = [Any]()
         for gen in generators {
-            guard choices.isEmpty == false else { return nil }
+            guard choices.isEmpty == false else {
+                return nil
+            }
 
             if case let .group(laneChoices, _, _) = choices[choices.startIndex],
                laneChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
@@ -522,7 +524,9 @@ extension Interpreters {
             case let .filter(gen, _, _, predicate, _):
                 guard let inner = try replayRecursive(gen, with: script),
                       predicate(inner)
-                else { return nil }
+                else {
+                    return nil
+                }
                 return inner as? Output
             case let .classify(gen, _, _), let .unique(gen, _, _):
                 // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value when `Output == Any`.

@@ -89,19 +89,25 @@ struct STLCConfig {
 func stlcGetType(_ context: [STLCType], _ expr: STLCExpr) -> STLCType? {
     switch expr {
         case let .variable(index):
-            guard index >= 0, index < context.count else { return nil }
+            guard index >= 0, index < context.count else {
+                return nil
+            }
             return context[index]
         case .boolean:
             return .bool
         case let .abstraction(paramType, body):
-            guard let bodyType = stlcGetType([paramType] + context, body) else { return nil }
+            guard let bodyType = stlcGetType([paramType] + context, body) else {
+                return nil
+            }
             return .function(paramType, bodyType)
         case let .application(function, argument):
             guard let funcType = stlcGetType(context, function),
                   case let .function(paramType, returnType) = funcType,
                   let argType = stlcGetType(context, argument),
                   paramType == argType
-            else { return nil }
+            else {
+                return nil
+            }
             return returnType
     }
 }
@@ -263,7 +269,9 @@ func stlcPstepImpl(_ expr: STLCExpr, config: STLCConfig) -> STLCExpr? {
         case let .application(function, argument):
             let funcStep = stlcPstepImpl(function, config: config)
             let argStep = stlcPstepImpl(argument, config: config)
-            if funcStep == nil, argStep == nil { return nil }
+            if funcStep == nil, argStep == nil {
+                return nil
+            }
             return .application(funcStep ?? function, argStep ?? argument)
 
         default:
@@ -281,8 +289,12 @@ func stlcPstepImpl(_ expr: STLCExpr, config: STLCConfig) -> STLCExpr? {
 //     Just e' -> multistep (fuel - 1) step e'
 
 func stlcMultistepImpl(_ fuel: Int, _ expr: STLCExpr, config: STLCConfig) -> STLCExpr? {
-    if fuel == 0 { return nil }
-    guard let stepped = stlcPstepImpl(expr, config: config) else { return expr }
+    if fuel == 0 {
+        return nil
+    }
+    guard let stepped = stlcPstepImpl(expr, config: config) else {
+        return expr
+    }
     return stlcMultistepImpl(fuel - 1, stepped, config: config)
 }
 
@@ -497,7 +509,9 @@ private func stlcTermOfTypeRust(
 ) -> ReflectiveGenerator<STLCExpr> {
     let matchingIndices = context.enumerated().compactMap { $0.element == type ? $0.offset : nil }
     let isFunctionType: (STLCType, STLCType)? = {
-        if case let .function(param, ret) = type { return (param, ret) }
+        if case let .function(param, ret) = type {
+            return (param, ret)
+        }
         return nil
     }()
 
@@ -506,9 +520,13 @@ private func stlcTermOfTypeRust(
     var optionCount = 1
     if depth > 0 {
         optionCount += 1 // genApp
-        if isFunctionType != nil { optionCount += 1 }
+        if isFunctionType != nil {
+            optionCount += 1
+        }
     }
-    if matchingIndices.isEmpty == false { optionCount += 1 }
+    if matchingIndices.isEmpty == false {
+        optionCount += 1
+    }
 
     if optionCount == 1 {
         return stlcGenOne(type, context: context)

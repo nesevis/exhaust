@@ -14,7 +14,9 @@ enum EagerExchangeReference {
                   annotationB.isDepthControl == false,
                   annotationA.isLaneControl == false,
                   annotationB.isLaneControl == false
-            else { continue }
+            else {
+                continue
+            }
 
             guard case let .chooseBits(metadataA) = graph.nodes[edge.nodeA].kind,
                   case let .chooseBits(metadataB) = graph.nodes[edge.nodeB].kind

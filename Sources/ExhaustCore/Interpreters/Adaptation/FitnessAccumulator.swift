@@ -58,7 +58,9 @@ package final class FitnessAccumulator {
         var currentShares: [UInt64: [UInt64: Double]] = [:]
         for (fingerprint, choices) in siteFitnesses {
             let total = choices.reduce(0.0) { $0 + $1.fitness }
-            guard total > 0 else { continue }
+            guard total > 0 else {
+                continue
+            }
             var shares: [UInt64: Double] = [:]
             for (choiceID, fitness) in choices {
                 shares[choiceID] = fitness / total
@@ -69,10 +71,14 @@ package final class FitnessAccumulator {
         defer { previousSiteShares = currentShares }
 
         // First snapshot — can't compare yet
-        guard let previous = previousSiteShares, currentShares.isEmpty == false else { return false }
+        guard let previous = previousSiteShares, currentShares.isEmpty == false else {
+            return false
+        }
 
         for (fingerprint, shares) in currentShares {
-            guard let prevShares = previous[fingerprint] else { return false }
+            guard let prevShares = previous[fingerprint] else {
+                return false
+            }
             for (choiceID, share) in shares where abs(share - (prevShares[choiceID] ?? 0)) > threshold {
                 return false
             }

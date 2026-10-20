@@ -60,7 +60,9 @@ struct StringAnagramChallenge {
         let gen = #gen(charGen, charGen)
 
         let property: @Sendable (String, String) -> Bool = { a, b in
-            guard a != b, a.count == b.count else { return true }
+            guard a != b, a.count == b.count else {
+                return true
+            }
             return a.sorted() != b.sorted()
         }
 

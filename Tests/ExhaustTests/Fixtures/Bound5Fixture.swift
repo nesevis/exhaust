@@ -40,7 +40,9 @@ enum Bound5Fixture {
     /// Property: the sum of all values across the five lists is less than `5 × 256`. False because of `Int16` wraparound.
     @Sendable
     static func property(_ tuple: Tuple) -> Bool {
-        if tuple.arr.isEmpty { return true }
+        if tuple.arr.isEmpty {
+            return true
+        }
         return tuple.arr.dropFirst().reduce(tuple.arr[0], &+) < 5 * 256
     }
 }

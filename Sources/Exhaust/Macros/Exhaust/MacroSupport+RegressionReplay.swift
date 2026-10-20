@@ -24,7 +24,9 @@ extension __ExhaustRuntime {
             collectsReductionStats: Bool,
             property: @escaping @Sendable (Output) -> Bool
         ) -> (counterexample: Output, replaySeed: String, report: ExhaustReport)? {
-            guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
+            guard let traitConfig = ExhaustTraitConfiguration.current else {
+                return nil
+            }
             for encodedSeed in traitConfig.regressions {
                 guard ReplaySeed.Resolved.decode(encodedSeed) != nil
                 else {
@@ -39,7 +41,9 @@ extension __ExhaustRuntime {
                 }
                 var replayReport = ExhaustReport()
                 var replaySettings = settings.filter { setting in
-                    if case .replay = setting { return false }
+                    if case .replay = setting {
+                        return false
+                    }
                     return true
                 }
                 replaySettings.append(.replay(.encoded(encodedSeed)))

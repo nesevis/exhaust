@@ -124,7 +124,11 @@ struct ElementRunOperatorTests {
             #expect(cut.reseedRanges.count == 1, "exactly the trailing leaf should be reseeded, got \(cut.reseedRanges)")
             let trailing = try #require(cut.reseedRanges.first)
             // The trailing leaf is the last value entry; the zip's close marker follows it.
-            let lastValueIndex = try #require(cut.candidate.lastIndex { if case .value = $0 { return true } else { return false } })
+            let lastValueIndex = try #require(cut.candidate.lastIndex { if case .value = $0 {
+                return true
+            } else {
+                return false
+            } })
             #expect(trailing == lastValueIndex ... lastValueIndex)
             guard case let .success(_, child, _) = Materializer.materializeAnyFlat(
                 gen.erase(),
@@ -189,7 +193,9 @@ private enum RunFixtureError: Error {
 
 private func values(of sequence: ChoiceSequence) -> [UInt64] {
     sequence.compactMap { entry in
-        if case let .value(value) = entry { return value.choice.bitPattern64 }
+        if case let .value(value) = entry {
+            return value.choice.bitPattern64
+        }
         return nil
     }
 }
@@ -210,7 +216,9 @@ private func markersBalanced(_ sequence: ChoiceSequence) -> Bool {
                 depth += 1
             case .group(false), .zip(false), .bind(false), .sequence(false, _, _):
                 depth -= 1
-                if depth < 0 { return false }
+                if depth < 0 {
+                    return false
+                }
             default:
                 break
         }

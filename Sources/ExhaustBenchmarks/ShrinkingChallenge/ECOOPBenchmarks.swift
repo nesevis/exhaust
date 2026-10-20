@@ -186,7 +186,9 @@ private func registerECOOPChallenge<Output>(
                 }
             } catch {}
             let genEnd = MonotonicClock.nanoseconds()
-            guard let value = failingValue, let tree = failingTree else { continue }
+            guard let value = failingValue, let tree = failingTree else {
+                continue
+            }
             let generationMs = Double(genEnd - genStart) / 1_000_000.0
 
             var invocationCount = 0
@@ -507,7 +509,9 @@ private func printMigrationDemotionReport(name: String, allDispatchLogs: [[Dispa
     let cycleComponents = migrationAcceptingByCycle.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
     print("[\(name) ECOOP] migration_demotion (n=\(migrationDispatches), accepting dispatches by cycle: \(cycleComponents.isEmpty ? "none" : cycleComponents)):")
     for threshold in 1 ... 5 {
-        guard let outcome = outcomesByThreshold[threshold] else { continue }
+        guard let outcome = outcomesByThreshold[threshold] else {
+            continue
+        }
         print("  k=\(threshold): lost_accepts=\(outcome.lostAcceptingDispatches) skipped=\(outcome.skippedDispatches) saved_probes=\(outcome.savedProbes) saved_rejDec=\(outcome.savedDecoderRejects)")
     }
 }

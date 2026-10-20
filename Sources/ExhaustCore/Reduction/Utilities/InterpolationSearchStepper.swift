@@ -80,7 +80,9 @@ struct InterpolationSearchStepper {
 
     /// Advances the search given feedback on the previous probe.
     mutating func advance(lastAccepted: Bool) -> UInt64? {
-        guard converged == false else { return nil }
+        guard converged == false else {
+            return nil
+        }
 
         switch direction {
             case .findSmallest:
@@ -90,7 +92,9 @@ struct InterpolationSearchStepper {
                     divisor = interpolationDivisor
                 } else {
                     lo = lastProbe + 1
-                    if divisor > 2 { divisor /= 2 }
+                    if divisor > 2 {
+                        divisor /= 2
+                    }
                 }
                 guard lo < hi else {
                     converged = true
@@ -113,7 +117,9 @@ struct InterpolationSearchStepper {
                         return nil
                     }
                     hi = lastProbe - 1
-                    if divisor > 2 { divisor /= 2 }
+                    if divisor > 2 {
+                        divisor /= 2
+                    }
                 }
                 guard lo <= hi else {
                     converged = true

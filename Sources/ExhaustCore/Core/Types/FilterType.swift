@@ -102,7 +102,9 @@ public struct FilterObservation: Sendable {
     /// Records a single predicate evaluation.
     public mutating func recordAttempt(passed: Bool) {
         attempts += 1
-        if passed { passes += 1 }
+        if passed {
+            passes += 1
+        }
     }
 
     /// Whether any recorded attempt failed the predicate.
@@ -114,6 +116,8 @@ public struct FilterObservation: Sendable {
     public mutating func merge(_ other: FilterObservation) {
         attempts += other.attempts
         passes += other.passes
-        if sourceLocation == nil { sourceLocation = other.sourceLocation }
+        if sourceLocation == nil {
+            sourceLocation = other.sourceLocation
+        }
     }
 }

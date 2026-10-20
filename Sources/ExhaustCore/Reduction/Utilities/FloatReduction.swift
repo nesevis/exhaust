@@ -69,7 +69,9 @@ package enum FloatReduction {
                 return integerRatio(value)
             case .float, .float16:
                 let narrowed = Float(value)
-                guard narrowed.isFinite else { return nil }
+                guard narrowed.isFinite else {
+                    return nil
+                }
                 return integerRatio(narrowed)
             default:
                 return nil
@@ -80,15 +82,21 @@ package enum FloatReduction {
     package static func integerRatio(
         _ value: Double
     ) -> (numerator: Int64, denominator: UInt64)? {
-        guard value.isFinite else { return nil }
-        guard value != 0 else { return (0, 1) }
+        guard value.isFinite else {
+            return nil
+        }
+        guard value != 0 else {
+            return (0, 1)
+        }
 
         let sign: Int64 = value.sign == .minus ? -1 : 1
         let bits = value.magnitude.bitPattern
         let exponentBits = Int((bits >> doubleMantissaBits) & FloatShortlex.exponentMask)
         let mantissa = bits & FloatShortlex.mantissaMask
 
-        guard exponentBits != Int(FloatShortlex.exponentMask) else { return nil }
+        guard exponentBits != Int(FloatShortlex.exponentMask) else {
+            return nil
+        }
 
         let significand: UInt64
         let exponent: Int
@@ -107,15 +115,21 @@ package enum FloatReduction {
     package static func integerRatio(
         _ value: Float
     ) -> (numerator: Int64, denominator: UInt64)? {
-        guard value.isFinite else { return nil }
-        guard value != 0 else { return (0, 1) }
+        guard value.isFinite else {
+            return nil
+        }
+        guard value != 0 else {
+            return (0, 1)
+        }
 
         let sign: Int64 = value.sign == .minus ? -1 : 1
         let bits = value.magnitude.bitPattern
         let exponentBits = Int((bits >> floatMantissaBits) & floatExponentMask)
         let mantissa = bits & floatMantissaMask
 
-        guard exponentBits != Int(floatExponentMask) else { return nil }
+        guard exponentBits != Int(floatExponentMask) else {
+            return nil
+        }
 
         let significand: UInt64
         let exponent: Int
@@ -138,19 +152,27 @@ package enum FloatReduction {
         significand: UInt64,
         exponent: Int
     ) -> (numerator: Int64, denominator: UInt64)? {
-        guard significand > 0 else { return (0, 1) }
+        guard significand > 0 else {
+            return (0, 1)
+        }
         var numerator = significand
         var denominator: UInt64 = 1
 
         if exponent >= 0 {
-            guard exponent < 64 else { return nil }
+            guard exponent < 64 else {
+                return nil
+            }
             let (shifted, overflow) = numerator
                 .multipliedReportingOverflow(by: UInt64(1) << exponent)
-            guard overflow == false else { return nil }
+            guard overflow == false else {
+                return nil
+            }
             numerator = shifted
         } else {
             let shift = -exponent
-            guard shift < 64 else { return nil }
+            guard shift < 64 else {
+                return nil
+            }
             denominator = UInt64(1) << shift
         }
 
@@ -161,7 +183,9 @@ package enum FloatReduction {
         numerator >>= commonZeros
         denominator >>= commonZeros
 
-        guard numerator <= UInt64(Int64.max) else { return nil }
+        guard numerator <= UInt64(Int64.max) else {
+            return nil
+        }
         let magnitude = Int64(numerator)
         return (sign >= 0 ? magnitude : -magnitude, denominator)
     }

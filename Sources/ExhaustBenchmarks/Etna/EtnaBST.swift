@@ -156,7 +156,9 @@ func bstToList(_ tree: EtnaBST) -> [(Int, Int)] {
 }
 
 private func bstToListAccum(_ tree: EtnaBST, into result: inout [(Int, Int)]) {
-    guard case let .node(left, key, value, right) = tree else { return }
+    guard case let .node(left, key, value, right) = tree else {
+        return
+    }
     bstToListAccum(left, into: &result)
     result.append((key, value))
     bstToListAccum(right, into: &result)
@@ -167,9 +169,15 @@ func bstIsBST(_ tree: EtnaBST) -> Bool {
 }
 
 private func bstIsBSTHelper(_ tree: EtnaBST, min: Int?, max: Int?) -> Bool {
-    guard case let .node(left, key, _, right) = tree else { return true }
-    if let min, key <= min { return false }
-    if let max, key >= max { return false }
+    guard case let .node(left, key, _, right) = tree else {
+        return true
+    }
+    if let min, key <= min {
+        return false
+    }
+    if let max, key >= max {
+        return false
+    }
     return bstIsBSTHelper(left, min: min, max: key)
         && bstIsBSTHelper(right, min: key, max: max)
 }
@@ -182,7 +190,9 @@ func bstStructurallyEqual(_ lhs: EtnaBST, _ rhs: EtnaBST) -> Bool {
 }
 
 func bstListsEqual(_ lhs: [(Int, Int)], _ rhs: [(Int, Int)]) -> Bool {
-    guard lhs.count == rhs.count else { return false }
+    guard lhs.count == rhs.count else {
+        return false
+    }
     return zip(lhs, rhs).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
 }
 

@@ -98,7 +98,9 @@ struct ExamineTests {
             report = gen.gen.validate(samples: 50, seed: 99)
         }
         let lowValidityFailures = report.failures.compactMap { failure -> Double? in
-            if case let .lowFilterValidityRate(_, rate, _) = failure { return rate }
+            if case let .lowFilterValidityRate(_, rate, _) = failure {
+                return rate
+            }
             return nil
         }
         #expect(lowValidityFailures.count == 1)

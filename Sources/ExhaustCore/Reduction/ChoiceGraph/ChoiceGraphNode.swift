@@ -95,23 +95,43 @@ package struct ScopeAnnotation: Sendable {
     static let `default` = ScopeAnnotation(bindRole: .independent, controlKind: .standard)
 
     package var isBindInner: Bool {
-        if case .bindInner = bindRole { true } else { false }
+        if case .bindInner = bindRole {
+            true
+        } else {
+            false
+        }
     }
 
     package var controllingBindNodeID: Int? {
-        if case let .bindInner(nodeID, _) = bindRole { nodeID } else { nil }
+        if case let .bindInner(nodeID, _) = bindRole {
+            nodeID
+        } else {
+            nil
+        }
     }
 
     package var controllingBindDepth: Int? {
-        if case let .bindInner(_, depth) = bindRole { depth } else { nil }
+        if case let .bindInner(_, depth) = bindRole {
+            depth
+        } else {
+            nil
+        }
     }
 
     package var isDepthControl: Bool {
-        if case .depthControl = controlKind { true } else { false }
+        if case .depthControl = controlKind {
+            true
+        } else {
+            false
+        }
     }
 
     package var isLaneControl: Bool {
-        if case .laneControl = controlKind { true } else { false }
+        if case .laneControl = controlKind {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -159,7 +179,9 @@ package struct ChooseBitsMetadata: Sendable {
     }
 
     package var characterDomain: CharacterDomain? {
-        guard case let .character(_, _, domain) = typeTagPayload else { return nil }
+        guard case let .character(_, _, domain) = typeTagPayload else {
+            return nil
+        }
         return domain
     }
 }

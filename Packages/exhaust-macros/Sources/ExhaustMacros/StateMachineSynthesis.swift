@@ -347,7 +347,9 @@ func typealiasCompatibleType(_ type: String) -> String {
 ///
 /// Array and dictionary sugar (`[Int]`, `[Key: Value]`) qualifies. Otherwise the final dot-separated component must begin with an uppercase character — `BoundedQueue<Int>` and `Module.Queue` qualify; `makeQueue` and `factory.make` do not.
 func isPlausiblyTypeName(_ expression: String) -> Bool {
-    if expression.hasPrefix("[") { return true }
+    if expression.hasPrefix("[") {
+        return true
+    }
     let lastComponent = expression.split(separator: ".").last.map(String.init) ?? expression
     return lastComponent.first?.isUppercase ?? false
 }

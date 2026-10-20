@@ -52,7 +52,9 @@ final class AsyncOracleRacyCounterSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard await counter.snapshot() > 0 else { throw skip() }
+        guard await counter.snapshot() > 0 else {
+            throw skip()
+        }
         await counter.decrement()
     }
 

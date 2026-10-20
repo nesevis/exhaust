@@ -11,7 +11,9 @@ enum NumericCommonDivisorProposal {
 
     /// Visits the primitive tuple, scales two through four, up to eight successive halvings of the current scale, and its three nearest smaller scales. A checkpoint still has one shared probe budget, and each group has at most 15 distinct proposals.
     static func rescalings(for leaves: [ReductionLeaf]) -> [Rescaling] {
-        guard let normalization = normalize(leaves) else { return [] }
+        guard let normalization = normalize(leaves) else {
+            return []
+        }
         var scales: [UInt64] = [1, 2, 3, 4]
         var geometric = normalization.divisor
         for _ in 0 ..< maximumGeometricSteps {
@@ -25,7 +27,9 @@ enum NumericCommonDivisorProposal {
         return scales.enumerated().compactMap { priority, scale in
             guard scale > 0, scale < normalization.divisor, seen.insert(scale).inserted,
                   let patterns = normalization.patterns(scale: scale, leaves: leaves)
-            else { return nil }
+            else {
+                return nil
+            }
             return Rescaling(priority: priority, patterns: patterns)
         }
     }
@@ -49,7 +53,9 @@ enum NumericCommonDivisorProposal {
                 // scale is smaller than the original divisor, so the magnitude and its signed encoding cannot overflow.
                 let magnitude = primitiveMagnitudes[index] * scale
                 let pattern = leaf.choice.bitPattern64 >= zero ? zero + magnitude : zero - magnitude
-                guard leaf.range.contains(pattern) else { return nil }
+                guard leaf.range.contains(pattern) else {
+                    return nil
+                }
                 patterns.append(pattern)
             }
             guard ChoiceValue(patterns[0], tag: leaves[0].choice.tag).shortLexCompare(leaves[0].choice) == .lt else {
@@ -68,14 +74,18 @@ enum NumericCommonDivisorProposal {
                 default:
                     false
             }
-        }) else { return nil }
+        }) else {
+            return nil
+        }
         let magnitudes = leaves.map { leaf in
             let zero = leaf.choice.tag.simplestBitPattern
             let pattern = leaf.choice.bitPattern64
             return pattern >= zero ? pattern - zero : zero - pattern
         }
         let divisor = magnitudes.reduce(0, ReductionIntegerMath.greatestCommonDivisor)
-        guard divisor > 1 else { return nil }
+        guard divisor > 1 else {
+            return nil
+        }
         return Normalization(divisor: divisor, primitiveMagnitudes: magnitudes.map { $0 / divisor })
     }
 }

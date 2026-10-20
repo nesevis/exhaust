@@ -149,7 +149,9 @@ package extension Sequence<OpenPBTStatsLine> {
         encoder.outputFormatting = .sortedKeys
         encoder.keyEncodingStrategy = .convertToSnakeCase
         return compactMap { line in
-            guard let data = try? encoder.encode(line) else { return nil }
+            guard let data = try? encoder.encode(line) else {
+                return nil
+            }
             return String(data: data, encoding: .utf8)
         }.joined(separator: "\n")
     }
@@ -199,8 +201,12 @@ package final class OpenPBTStatsAccumulator {
         var timing: [String: Double]?
         if generateSeconds != nil || testSeconds != nil {
             var timingDict: [String: Double] = [:]
-            if let generateSeconds { timingDict["generate"] = generateSeconds }
-            if let testSeconds { timingDict["test"] = testSeconds }
+            if let generateSeconds {
+                timingDict["generate"] = generateSeconds
+            }
+            if let testSeconds {
+                timingDict["test"] = testSeconds
+            }
             timing = timingDict
         }
 
@@ -252,7 +258,9 @@ package final class OpenPBTStatsAccumulator {
 
     /// Records synthetic "gave_up" lines for filter rejections.
     package func recordDiscards(count: Int, phase: OpenPBTStatsPhase) {
-        guard count > 0 else { return }
+        guard count > 0 else {
+            return
+        }
 
         let features = OpenPBTStatsFeatures(
             phase: phase,

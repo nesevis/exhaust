@@ -98,19 +98,25 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
 
     /// The fraction of generated values that survived reflection round-trip.
     public var reflectionSuccessRate: Double {
-        guard valuesGenerated > 0 else { return 0 }
+        guard valuesGenerated > 0 else {
+            return 0
+        }
         return Double(reflectionRoundTripSuccesses) / Double(valuesGenerated)
     }
 
     /// The fraction of generated values with distinct choice sequences.
     public var uniquenessRate: Double {
-        guard valuesGenerated > 0 else { return 0 }
+        guard valuesGenerated > 0 else {
+            return 0
+        }
         return Double(uniqueChoiceSequences) / Double(valuesGenerated)
     }
 
     /// Average generation time per sample, in seconds. Does not include correctness checks.
     public var averageTimePerSample: Double {
-        guard valuesGenerated > 0 else { return 0 }
+        guard valuesGenerated > 0 else {
+            return 0
+        }
         return generationTime / Double(valuesGenerated)
     }
 
@@ -204,7 +210,9 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     ///
     /// The compact ``description`` omits the tree. Use this property when you want to inspect the generator's structural shape.
     public var treeDescription: String {
-        guard let tree = representativeTree else { return description }
+        guard let tree = representativeTree else {
+            return description
+        }
         var lines = [description, "  Example:"]
         for treeLine in tree.debugDescription.split(separator: "\n", omittingEmptySubsequences: false) {
             lines.append("    \(treeLine)")
@@ -420,7 +428,9 @@ private extension Generator where Operation == ReflectiveOperation {
 
         for sampleIndex in 0 ..< samples {
             let genStart = MonotonicClock.nanoseconds()
-            guard let (value, tree) = try? iterator.next() else { continue }
+            guard let (value, tree) = try? iterator.next() else {
+                continue
+            }
             generationNanoseconds += MonotonicClock.nanoseconds() - genStart
             report.valuesGenerated += 1
             storedTrees.append(tree)
@@ -436,7 +446,9 @@ private extension Generator where Operation == ReflectiveOperation {
                     forwardOnlyDetected: &forwardOnlyDetected,
                     failures: &report.failures
                 )
-                if success { report.reflectionRoundTripSuccesses += 1 }
+                if success {
+                    report.reflectionRoundTripSuccesses += 1
+                }
             }
 
             if let replayCheck, report.failures.count < maxFailures {
@@ -446,7 +458,9 @@ private extension Generator where Operation == ReflectiveOperation {
                     replayCheck: replayCheck,
                     failures: &report.failures
                 )
-                if replayPassed { replaySuccesses += 1 }
+                if replayPassed {
+                    replaySuccesses += 1
+                }
             }
         }
         report.replayDeterminismSuccesses = replayCheck != nil ? replaySuccesses : nil
@@ -501,7 +515,9 @@ private extension Generator where Operation == ReflectiveOperation {
                     .error
             }
 
-            guard let issueSeverity = examineSeverity.issueSeverity else { continue }
+            guard let issueSeverity = examineSeverity.issueSeverity else {
+                continue
+            }
 
             switch failure {
                 case let .lowFilterValidityRate(fingerprint, _, _):
@@ -621,7 +637,9 @@ private extension Generator where Operation == ReflectiveOperation {
     }
 
     static func medianComplexityTree(from trees: [ChoiceTree]) -> ChoiceTree? {
-        guard trees.isEmpty == false else { return nil }
+        guard trees.isEmpty == false else {
+            return nil
+        }
         let scored = trees.enumerated().map { (index: $0.offset, complexity: $0.element.complexity) }
         let sorted = scored.sorted { $0.complexity < $1.complexity }
         return trees[sorted[sorted.count / 2].index]

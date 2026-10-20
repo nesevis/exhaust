@@ -166,7 +166,9 @@ struct ReducerReduceValuesTests {
         outer: for seed: UInt64 in 0 ... 20 {
             var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
             for _ in 0 ..< 50 {
-                guard let (value, tree) = try iterator.next() else { break }
+                guard let (value, tree) = try iterator.next() else {
+                    break
+                }
                 if value > 1.0 {
                     foundTree = tree
                     break outer
@@ -194,7 +196,9 @@ struct ReducerReduceValuesTests {
 
         // Property fails when the array has 3 elements and at least one >= 100.
         let property: ([UInt64]) -> Bool = { arr in
-            guard arr.count == 3 else { return true }
+            guard arr.count == 3 else {
+                return true
+            }
             return arr.allSatisfy { $0 < 100 }
         }
 

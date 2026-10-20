@@ -172,8 +172,12 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
         ///
         /// True when the range is size-derived (``isRangeExplicit`` is `false`, so the user's real domain is the natural type range and the materializer's clamp at ``Materializer`` handles any narrowing) or when an explicit range equals the natural type range. False when an explicit narrow range is in effect, where the encoder must validate each candidate against ``validRange``.
         public var allowsModularArithmetic: Bool {
-            if isRangeExplicit == false { return true }
-            guard let validRange else { return true }
+            if isRangeExplicit == false {
+                return true
+            }
+            guard let validRange else {
+                return true
+            }
             return validRange == choice.tag.bitPatternRange
         }
 

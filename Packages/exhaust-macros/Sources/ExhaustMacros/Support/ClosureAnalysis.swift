@@ -226,11 +226,15 @@ private func extractCaseName(from callee: ExprSyntax) -> String? {
         ? String(rawMember.dropFirst().dropLast())
         : rawMember
     // Exclude explicit .init calls — those are struct/class initializers
-    guard member != "init" else { return nil }
+    guard member != "init" else {
+        return nil
+    }
     // Uppercase members are qualified type initializers (ABI.VersionNumber(...)),
     // not enum cases (Pet.cat(...)). Macros lack type info, so we rely on Swift
     // naming convention: types are UpperCamelCase, cases are lowerCamelCase.
-    guard let first = member.first, first.isLowercase else { return nil }
+    guard let first = member.first, first.isLowercase else {
+        return nil
+    }
     return member
 }
 

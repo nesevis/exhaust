@@ -11,7 +11,8 @@ package func chooseBitsBitPattern(_ result: Any) throws -> UInt64 {
     if let bits = result as? UInt64 {
         return bits
     }
-    if let convertible = result as? any BitPatternConvertible { return convertible.bitPattern64
+    if let convertible = result as? any BitPatternConvertible {
+        return convertible.bitPattern64
     }
     throw GeneratorError.typeMismatch(
         expected: "UInt64 or any BitPatternConvertible",

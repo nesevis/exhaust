@@ -194,7 +194,9 @@ package struct DateGrid: Hashable, Sendable {
     }
 
     private static func makeCalendar(for form: Form, timeZoneID: String) -> Calendar? {
-        guard case .calendar = form else { return nil }
+        guard case .calendar = form else {
+            return nil
+        }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: timeZoneID) ?? TimeZone(identifier: "GMT")!
         return calendar

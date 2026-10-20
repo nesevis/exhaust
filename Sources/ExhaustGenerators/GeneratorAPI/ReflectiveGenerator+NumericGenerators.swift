@@ -54,7 +54,9 @@ import ExhaustCore
             let lower = Float16(range.lowerBound)
             let upper = Float16(range.upperBound)
             guard lower.isFinite, upper.isFinite
-            else { preconditionFailure("Range bounds must fit inside \(Float16.self)") }
+            else {
+                preconditionFailure("Range bounds must fit inside \(Float16.self)")
+            }
             return float16(in: lower ... upper, scaling: scaling)
         }
 
@@ -155,7 +157,9 @@ public extension ReflectiveGenerator {
         let lower = Float(range.lowerBound)
         let upper = Float(range.upperBound)
         guard lower.isFinite, upper.isFinite
-        else { preconditionFailure("Range bounds must fit inside \(Float.self)") }
+        else {
+            preconditionFailure("Range bounds must fit inside \(Float.self)")
+        }
         return float(in: lower ... upper, scaling: scaling)
     }
 
@@ -388,7 +392,9 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Int8> {
         guard let lower = Int8(exactly: range.lowerBound),
               let upper = Int8(exactly: range.upperBound)
-        else { preconditionFailure("Range bounds must fit inside \(Int8.self)") }
+        else {
+            preconditionFailure("Range bounds must fit inside \(Int8.self)")
+        }
         return int8(in: lower ... upper, scaling: scaling)
     }
 
@@ -414,7 +420,9 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Int16> {
         guard let lower = Int16(exactly: range.lowerBound),
               let upper = Int16(exactly: range.upperBound)
-        else { preconditionFailure("Range bounds must fit inside \(Int16.self)") }
+        else {
+            preconditionFailure("Range bounds must fit inside \(Int16.self)")
+        }
         return int16(in: lower ... upper, scaling: scaling)
     }
 
@@ -440,7 +448,9 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Int32> {
         guard let lower = Int32(exactly: range.lowerBound),
               let upper = Int32(exactly: range.upperBound)
-        else { preconditionFailure("Range bounds must fit inside \(Int32.self)") }
+        else {
+            preconditionFailure("Range bounds must fit inside \(Int32.self)")
+        }
         return int32(in: lower ... upper, scaling: scaling)
     }
 

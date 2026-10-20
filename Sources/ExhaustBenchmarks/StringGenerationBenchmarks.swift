@@ -65,7 +65,9 @@ func registerStringGenerationBenchmarks() {
     let haystackTree = try? Interpreters.reflect(reductionGen, with: longStringHaystack)
 
     benchmark("String: long reduction") {
-        guard let haystackTree else { fatalError("haystack failed to reflect") }
+        guard let haystackTree else {
+            fatalError("haystack failed to reflect")
+        }
         _ = Interpreters.choiceGraphReduce(
             gen: reductionGen,
             tree: haystackTree,

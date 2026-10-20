@@ -13,7 +13,9 @@ struct ElementTransplantTests {
         var prng = Xoshiro256(seed: 3)
         var grown = 0
         for seed in UInt64(1) ... 40 {
-            guard let child = FuzzMutator.transplantElementRun(parent, targets: targets, mode: .copy, prng: &prng) else { continue }
+            guard let child = FuzzMutator.transplantElementRun(parent, targets: targets, mode: .copy, prng: &prng) else {
+                continue
+            }
             let before = try #require(lists(gen, parent, tree, seed: seed))
             let after = try #require(lists(gen, child, tree, seed: seed))
             let total = before.0.count + before.1.count
@@ -34,14 +36,18 @@ struct ElementTransplantTests {
         var prng = Xoshiro256(seed: 5)
         var moved = 0
         for seed in UInt64(1) ... 40 {
-            guard let child = FuzzMutator.transplantElementRun(parent, targets: targets, mode: .move, prng: &prng) else { continue }
+            guard let child = FuzzMutator.transplantElementRun(parent, targets: targets, mode: .move, prng: &prng) else {
+                continue
+            }
             let before = try #require(lists(gen, parent, tree, seed: seed))
             let after = try #require(lists(gen, child, tree, seed: seed))
             #expect(after.0.count + after.1.count == before.0.count + before.1.count, "move changed the element total")
             #expect((after.0 + after.1).sorted() == (before.0 + before.1).sorted(), "move changed the multiset of elements")
             #expect(after.0.count <= 4 && after.1.count <= 4)
             #expect(markersBalanced(child))
-            if after.0.count != before.0.count { moved += 1 }
+            if after.0.count != before.0.count {
+                moved += 1
+            }
         }
         #expect(moved > 0)
     }
@@ -108,7 +114,9 @@ private func markersBalanced(_ sequence: ChoiceSequence) -> Bool {
                 depth += 1
             case .group(false), .zip(false), .bind(false), .sequence(false, _, _):
                 depth -= 1
-                if depth < 0 { return false }
+                if depth < 0 {
+                    return false
+                }
             default:
                 break
         }

@@ -43,8 +43,12 @@ package extension ChoiceGraph {
 
     /// Rewrites a single leaf's ``ChooseBitsMetadata/value`` in place.
     mutating func applyLeafValueWrite(_ change: LeafChange) {
-        guard change.leafNodeID < nodes.count else { return }
-        guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else { return }
+        guard change.leafNodeID < nodes.count else {
+            return
+        }
+        guard case let .chooseBits(metadata) = nodes[change.leafNodeID].kind else {
+            return
+        }
         let updatedMetadata = ChooseBitsMetadata(
             typeTag: metadata.typeTag,
             validRange: metadata.validRange,

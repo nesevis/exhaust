@@ -23,7 +23,9 @@ struct OptionalTests {
             } else {
                 sawSome = true
             }
-            if sawNil, sawSome { break }
+            if sawNil, sawSome {
+                break
+            }
         }
 
         #expect(sawNil, "Expected at least one nil value")
@@ -83,7 +85,9 @@ struct OptionalTests {
                 case .some(.some):
                     sawSomeSome = true
             }
-            if sawNone, sawSomeNone, sawSomeSome { break }
+            if sawNone, sawSomeNone, sawSomeSome {
+                break
+            }
         }
 
         #expect(sawNone, "Expected .none")

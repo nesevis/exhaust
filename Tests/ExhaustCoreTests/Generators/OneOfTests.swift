@@ -22,7 +22,9 @@ struct OneOfTests {
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         for _ in 0 ..< 200 {
-            guard let value = try iterator.next() else { break }
+            guard let value = try iterator.next() else {
+                break
+            }
             seen.insert(value)
         }
         #expect(seen.count == 3, "Expected all three branches, saw \(seen)")
@@ -39,7 +41,9 @@ struct OneOfTests {
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         for _ in 0 ..< 200 {
-            guard let value = try iterator.next() else { break }
+            guard let value = try iterator.next() else {
+                break
+            }
             seen.insert(value)
         }
         #expect(seen.count == 2, "Expected both branches, saw \(seen)")

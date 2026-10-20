@@ -64,7 +64,9 @@ private func registerBound5() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Bound5 (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Bound5 (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -87,7 +89,9 @@ private func registerBinaryHeap() {
                 failingPairs: failingPairs,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "BinaryHeap (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "BinaryHeap (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -110,7 +114,9 @@ private func registerCalculator() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Calculator (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Calculator (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -133,7 +139,9 @@ private func registerCoupling() {
                 failingPairs: failingPairs,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Coupling (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Coupling (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -156,7 +164,9 @@ private func registerDeletion() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Deletion (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Deletion (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -184,7 +194,9 @@ private func registerDifferenceMustNotBeZero() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Difference: Must Not Be Zero (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Difference: Must Not Be Zero (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -212,7 +224,9 @@ private func registerDifferenceMustNotBeSmall() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Difference: Must Not Be Small (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Difference: Must Not Be Small (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -240,7 +254,9 @@ private func registerDifferenceMustNotBeOne() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Difference: Must Not Be One (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Difference: Must Not Be One (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -263,7 +279,9 @@ private func registerDistinct() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Distinct (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Distinct (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -286,7 +304,9 @@ private func registerLargeUnionList() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "LargeUnionList (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "LargeUnionList (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -309,7 +329,9 @@ private func registerLengthList() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "LengthList (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "LengthList (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -332,7 +354,9 @@ private func registerNestedLists() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "NestedLists (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "NestedLists (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -372,7 +396,9 @@ private func registerParser() {
                     }
                 }
             } catch {}
-            guard let value = failingValue, let tree = failingTree else { continue }
+            guard let value = failingValue, let tree = failingTree else {
+                continue
+            }
 
             // Reflect and reduce.
             var invocationCount = 0
@@ -440,7 +466,9 @@ private func registerReplacement() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Replacement (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Replacement (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -463,7 +491,9 @@ private func registerReverse() {
                 failingValues: failingValues,
                 config: strategy.config
             )
-            if enableReport { printChallengeReport(name: "Reverse (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail) }
+            if enableReport {
+                printChallengeReport(name: "Reverse (\(strategy.name))", results: results, foundWithScreening: screeningFinds, iterationsToFirstFailure: iterToFail)
+            }
         }
     }
 }
@@ -600,7 +630,9 @@ private func screeningFindsFailure<Output>(
     property: @escaping (Output) -> Bool
 ) -> Bool {
     let result = ScreeningPhase.run(gen, screeningBudget: 200, coveringSeed: 0, property: property)
-    if case .failure = result { return true }
+    if case .failure = result {
+        return true
+    }
     return false
 }
 
@@ -642,7 +674,9 @@ struct ReductionResult {
 private func median(_ values: [Double]) -> Double {
     let sorted = values.sorted()
     let count = sorted.count
-    guard count > 0 else { return 0 }
+    guard count > 0 else {
+        return 0
+    }
     if count % 2 == 0 {
         return (sorted[count / 2 - 1] + sorted[count / 2]) / 2.0
     }
@@ -650,7 +684,9 @@ private func median(_ values: [Double]) -> Double {
 }
 
 private func mean(_ values: [Double]) -> Double {
-    guard values.isEmpty == false else { return 0 }
+    guard values.isEmpty == false else {
+        return 0
+    }
     return values.reduce(0, +) / Double(values.count)
 }
 

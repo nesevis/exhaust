@@ -20,7 +20,9 @@ struct StructuralReplacementTests {
         let scopes = replacementScopes(graph: fixture.graph)
 
         let pivotScopes = scopes.filter {
-            if case .branchPivot = $0 { return true }
+            if case .branchPivot = $0 {
+                return true
+            }
             return false
         }
         #expect(pivotScopes.isEmpty, "Branch with more leaves should be filtered by leaf-count gate")
@@ -42,7 +44,9 @@ struct StructuralReplacementTests {
         let scopes = replacementScopes(graph: fixture.graph)
 
         let selfSimilarScopes = scopes.filter {
-            if case .selfSimilar = $0 { return true }
+            if case .selfSimilar = $0 {
+                return true
+            }
             return false
         }
         #expect(selfSimilarScopes.isEmpty, "Single pick site cannot self-similar substitute with itself")
@@ -59,11 +63,15 @@ struct StructuralReplacementTests {
         let incrementalScopes = replacementScopes(graph: fixture.graph, previousGraph: fixture.graph)
 
         let fullSelfSimilar = fullScopes.filter {
-            if case .selfSimilar = $0 { return true }
+            if case .selfSimilar = $0 {
+                return true
+            }
             return false
         }
         let incrementalSelfSimilar = incrementalScopes.filter {
-            if case .selfSimilar = $0 { return true }
+            if case .selfSimilar = $0 {
+                return true
+            }
             return false
         }
 
@@ -76,7 +84,9 @@ struct StructuralReplacementTests {
         let scopes = replacementScopes(graph: fixture.graph)
 
         let promotionScopes = scopes.filter {
-            if case .descendantPromotion = $0 { return true }
+            if case .descendantPromotion = $0 {
+                return true
+            }
             return false
         }
         #expect(promotionScopes.isEmpty == false, "Nested same-fingerprint picks should produce descendant promotion scopes")

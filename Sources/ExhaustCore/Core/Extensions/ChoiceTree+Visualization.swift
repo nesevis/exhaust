@@ -126,7 +126,9 @@ private enum TreeVisualization {
     }
 
     static func buildRenderTree(from tree: ChoiceTree) -> RenderTree? {
-        guard tree.hasVisibleContent else { return nil }
+        guard tree.hasVisibleContent else {
+            return nil
+        }
         return buildRenderNode(from: tree)
     }
 
@@ -305,7 +307,9 @@ private enum TreeVisualization {
 
         // Place visible node symbols
         for node in nodes {
-            guard let symbol = node.symbol else { continue }
+            guard let symbol = node.symbol else {
+                continue
+            }
             let row = (maxDepth - node.depth) * rowsPerLevel
             placeChar(&grid, row: row, col: node.column, char: symbol, width: width)
         }
@@ -392,7 +396,9 @@ private enum TreeVisualization {
         _ grid: inout [[Character]],
         spec: ConnectionSpec
     ) {
-        guard spec.parentRow > spec.childRow + 1 else { return }
+        guard spec.parentRow > spec.childRow + 1 else {
+            return
+        }
 
         // Single child: vertical stem only, no branch bar
         if spec.childCols.count == 1 {
@@ -444,7 +450,9 @@ private enum TreeVisualization {
         char: Character,
         width: Int
     ) {
-        guard row >= 0, row < grid.count, col >= 0, col < width else { return }
+        guard row >= 0, row < grid.count, col >= 0, col < width else {
+            return
+        }
         if grid[row][col] == " " {
             grid[row][col] = char
         }

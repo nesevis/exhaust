@@ -73,7 +73,9 @@ final class AsyncRacyCounterSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard counter.value > 0 else { throw skip() }
+        guard counter.value > 0 else {
+            throw skip()
+        }
         await counter.decrement()
     }
 

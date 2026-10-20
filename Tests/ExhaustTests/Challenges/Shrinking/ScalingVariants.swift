@@ -62,7 +62,9 @@ struct BinaryHeapScalingVariant {
         let scaling: SizeScaling<Int> = variant.scaling()
         let gen = Self.heapGen(depth: 6, scaling: scaling)
         let property: @Sendable (Heap) -> Bool = { heap in
-            guard BinaryHeapFixture.invariant(heap) else { return true }
+            guard BinaryHeapFixture.invariant(heap) else {
+                return true
+            }
             let xs = BinaryHeapFixture.toSortedList(heap)
             let sorted = BinaryHeapFixture.toList(heap).sorted()
             return sorted == xs.sorted() && xs == xs.sorted()

@@ -359,7 +359,9 @@ struct ChoiceGraphBuilder {
             childIndex += 1
         }
 
-        if isActive { consumed += 1 }
+        if isActive {
+            consumed += 1
+        }
 
         nodes[nodeID] = ChoiceGraphNode(
             id: nodeID,
@@ -430,7 +432,9 @@ struct ChoiceGraphBuilder {
             branchIndex += 1
         }
 
-        if isActive { consumed += 1 } // group close
+        if isActive {
+            consumed += 1
+        } // group close
 
         if case let .pick(metadata) = nodes[nodeID].kind {
             nodes[nodeID] = ChoiceGraphNode(
@@ -605,12 +609,18 @@ struct ChoiceGraphBuilder {
     ///
     /// Returns nil for empty sequences, single-element sequences where the child is neither chooseBits nor a homogeneous sequence, or when the first two children disagree.
     func deriveElementTypeTag(childIDs: [Int]) -> TypeTag? {
-        guard let firstID = childIDs.first else { return nil }
+        guard let firstID = childIDs.first else {
+            return nil
+        }
         let firstTag = leafTypeTag(of: firstID)
-        guard let tag = firstTag else { return nil }
+        guard let tag = firstTag else {
+            return nil
+        }
         if childIDs.count >= 2 {
             let secondTag = leafTypeTag(of: childIDs[1])
-            guard secondTag == tag else { return nil }
+            guard secondTag == tag else {
+                return nil
+            }
         }
         return tag
     }
@@ -663,8 +673,12 @@ struct ChoiceGraphBuilder {
         var allDependencyEdges = dependencyEdges
         var stack: [Int] = []
         for nodeID in nodes.indices {
-            guard case let .bind(metadata) = nodes[nodeID].kind else { continue }
-            guard nodes[nodeID].children.count >= 2 else { continue }
+            guard case let .bind(metadata) = nodes[nodeID].kind else {
+                continue
+            }
+            guard nodes[nodeID].children.count >= 2 else {
+                continue
+            }
             let innerChildID = nodes[nodeID].children[metadata.innerChildIndex]
             let boundChildID = nodes[nodeID].children[metadata.boundChildIndex]
 
@@ -673,7 +687,9 @@ struct ChoiceGraphBuilder {
             stack.removeAll(keepingCapacity: true)
             stack.append(boundChildID)
             while let current = stack.popLast() {
-                guard current < nodes.count else { continue }
+                guard current < nodes.count else {
+                    continue
+                }
                 switch nodes[current].kind {
                     case .bind, .pick:
                         if current != boundChildID {
@@ -689,8 +705,12 @@ struct ChoiceGraphBuilder {
         // Self-similarity groups: active pick nodes indexed by fingerprint.
         var selfSimilarityGroups: [UInt64: [Int]] = [:]
         for nodeID in nodes.indices {
-            guard case let .pick(metadata) = nodes[nodeID].kind else { continue }
-            guard nodes[nodeID].positionRange != nil else { continue }
+            guard case let .pick(metadata) = nodes[nodeID].kind else {
+                continue
+            }
+            guard nodes[nodeID].positionRange != nil else {
+                continue
+            }
             selfSimilarityGroups[metadata.fingerprint, default: []].append(nodeID)
         }
 
@@ -701,7 +721,9 @@ struct ChoiceGraphBuilder {
         leafNodes.reserveCapacity(liveNodeIDs.count)
         var characterLeafNodes: [Int] = []
         for nodeID in liveNodeIDs {
-            guard case let .chooseBits(metadata) = nodes[nodeID].kind else { continue }
+            guard case let .chooseBits(metadata) = nodes[nodeID].kind else {
+                continue
+            }
             leafNodes.append(nodeID)
             if metadata.typeTag == .character, metadata.characterDomain != nil {
                 characterLeafNodes.append(nodeID)

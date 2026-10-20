@@ -194,7 +194,9 @@ package final class BalancedCoveringArrayGenerator {
 
                 search: for offset in 0 ..< paramCount {
                     let param = (startParam &+ offset) % paramCount
-                    guard filled[param] == false else { continue }
+                    guard filled[param] == false else {
+                        continue
+                    }
                     let domain = domainSizes[param]
 
                     fillGains(
@@ -217,13 +219,17 @@ package final class BalancedCoveringArrayGenerator {
                                 bestGain = gain
                                 bestParam = param
                                 bestValue = value
-                                if gain >= exitThreshold { break search }
+                                if gain >= exitThreshold {
+                                    break search
+                                }
                             }
                         }
                     }
                 }
 
-                guard bestParam >= 0 else { break }
+                guard bestParam >= 0 else {
+                    break
+                }
                 row[bestParam] = UInt64(bestValue)
                 filled[bestParam] = true
             }
@@ -288,7 +294,9 @@ package final class BalancedCoveringArrayGenerator {
         for sliceIndex in slicesByParam[param] {
             let slice = sliceBuffer[sliceIndex]
             // A fully covered slice contributes zero on both the exact and marginal branches.
-            if slice.remaining == 0 { continue }
+            if slice.remaining == 0 {
+                continue
+            }
 
             if slice.paramA == param {
                 if filled[slice.paramB] {
@@ -383,7 +391,9 @@ private struct BalancedBitVector {
         let bit = index & 63
         let mask: UInt64 = 1 &<< bit
         let old = storage[word]
-        if old & mask != 0 { return false }
+        if old & mask != 0 {
+            return false
+        }
         storage[word] = old | mask
         return true
     }

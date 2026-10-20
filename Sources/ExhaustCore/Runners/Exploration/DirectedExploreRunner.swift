@@ -146,10 +146,14 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                 .filter { coveredDirections.contains($0) == false }
                 .max(by: { state.hits[$0] < state.hits[$1] })
 
-            guard let targetDirection = nextDirection else { break }
+            guard let targetDirection = nextDirection else {
+                break
+            }
 
             let passBudget = min(maxAttemptsPerDirection, state.remainingPool)
-            guard passBudget > 0 else { break }
+            guard passBudget > 0 else {
+                break
+            }
 
             let tunedGen: Generator<Output>
             if let existing = tunedGenerators[targetDirection] {
@@ -231,7 +235,9 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                     seed: regressionSeed,
                     maxRuns: 1
                 )
-                guard let (value, tunedTree) = try regressionInterpreter.next() else { continue }
+                guard let (value, tunedTree) = try regressionInterpreter.next() else {
+                    continue
+                }
 
                 let matching = classify(value)
                 state.coOccurrence.recordSample(matchingDirections: matching)

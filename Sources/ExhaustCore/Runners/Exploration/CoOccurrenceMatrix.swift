@@ -84,21 +84,29 @@ public struct CoOccurrenceMatrix: Sendable {
     /// Computes pairwise mutual information normalized by the entropy of direction A. Returns pairs where `MI(A, B) / H(A) >= threshold`, sorted by descending normalized MI.
     package func entangledPairs(threshold: Double = 0.5) -> [(directionA: Int, directionB: Int, normalizedMutualInformation: Double)] {
         let totalSamples = totalSampleCount
-        guard totalSamples > 0 else { return [] }
+        guard totalSamples > 0 else {
+            return []
+        }
 
         var results: [(directionA: Int, directionB: Int, normalizedMutualInformation: Double)] = []
         let total = Double(totalSamples)
 
         for indexA in 0 ..< directionCount {
             let countA = cells[indexA * directionCount + indexA]
-            guard countA > 0 else { continue }
+            guard countA > 0 else {
+                continue
+            }
             let probabilityA = Double(countA) / total
             let entropyA = -probabilityA * log2(probabilityA) - (1.0 - probabilityA) * log2(1.0 - probabilityA)
-            guard entropyA > 1e-10 else { continue }
+            guard entropyA > 1e-10 else {
+                continue
+            }
 
             for indexB in (indexA + 1) ..< directionCount {
                 let countB = cells[indexB * directionCount + indexB]
-                guard countB > 0 else { continue }
+                guard countB > 0 else {
+                    continue
+                }
                 let countAB = cells[indexA * directionCount + indexB]
                 let mutualInformation = computeMutualInformation(
                     countA: countA,
@@ -118,7 +126,9 @@ public struct CoOccurrenceMatrix: Sendable {
 
     /// Returns direction pairs with zero co-occurrence and their rule-of-three upper bounds on joint reach probability.
     package func infeasibleConjunctionEvidence(totalWarmupSamples: Int) -> [(directionA: Int, directionB: Int, ruleOfThreeUpperBound: Double)] {
-        guard totalWarmupSamples > 0 else { return [] }
+        guard totalWarmupSamples > 0 else {
+            return []
+        }
         var results: [(directionA: Int, directionB: Int, ruleOfThreeUpperBound: Double)] = []
 
         for indexA in 0 ..< directionCount {

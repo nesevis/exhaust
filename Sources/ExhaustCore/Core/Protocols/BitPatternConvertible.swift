@@ -3,21 +3,47 @@
 /// Attempts to cast the value to each ``BitPatternConvertible`` conformer and compares its ``BitPatternConvertible/bitPattern64`` against ``TypeTag/simplestBitPattern``. Returns `nil` when the value is not a recognized ``BitPatternConvertible`` type.
 package func isAtSemanticSimplest(_ value: Any) -> Bool? {
     func check<T: BitPatternConvertible>(_ value: Any, as _: T.Type) -> Bool? {
-        guard let typed = value as? T else { return nil }
+        guard let typed = value as? T else {
+            return nil
+        }
         return typed.bitPattern64 == T.tag.simplestBitPattern
     }
-    if let result = check(value, as: Int.self) { return result }
-    if let result = check(value, as: Int8.self) { return result }
-    if let result = check(value, as: Int16.self) { return result }
-    if let result = check(value, as: Int32.self) { return result }
-    if let result = check(value, as: Int64.self) { return result }
-    if let result = check(value, as: UInt.self) { return result }
-    if let result = check(value, as: UInt8.self) { return result }
-    if let result = check(value, as: UInt16.self) { return result }
-    if let result = check(value, as: UInt32.self) { return result }
-    if let result = check(value, as: UInt64.self) { return result }
-    if let result = check(value, as: Double.self) { return result }
-    if let result = check(value, as: Float.self) { return result }
+    if let result = check(value, as: Int.self) {
+        return result
+    }
+    if let result = check(value, as: Int8.self) {
+        return result
+    }
+    if let result = check(value, as: Int16.self) {
+        return result
+    }
+    if let result = check(value, as: Int32.self) {
+        return result
+    }
+    if let result = check(value, as: Int64.self) {
+        return result
+    }
+    if let result = check(value, as: UInt.self) {
+        return result
+    }
+    if let result = check(value, as: UInt8.self) {
+        return result
+    }
+    if let result = check(value, as: UInt16.self) {
+        return result
+    }
+    if let result = check(value, as: UInt32.self) {
+        return result
+    }
+    if let result = check(value, as: UInt64.self) {
+        return result
+    }
+    if let result = check(value, as: Double.self) {
+        return result
+    }
+    if let result = check(value, as: Float.self) {
+        return result
+    }
     return nil
 }
 

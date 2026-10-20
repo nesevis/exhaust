@@ -7,7 +7,9 @@ struct SparseEncoderProbe: Equatable {
     var mutation: ProjectedMutation {
         .leafValues(leaves.indices.compactMap { index in
             let leaf = leaves[index]
-            guard patterns[index] != leaf.choice.bitPattern64 else { return nil }
+            guard patterns[index] != leaf.choice.bitPattern64 else {
+                return nil
+            }
             return LeafChange(
                 leafNodeID: leaf.nodeID,
                 newValue: ChoiceValue(patterns[index], tag: leaf.choice.tag),

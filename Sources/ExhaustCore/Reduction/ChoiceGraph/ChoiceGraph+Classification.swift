@@ -27,9 +27,15 @@ extension ChoiceGraph {
         fallbackTree: ChoiceTree,
         upstreamLeafNodeID: Int
     ) -> Int {
-        guard bindNodeID < nodes.count else { return 0 }
-        guard case let .bind(bindMetadata) = nodes[bindNodeID].kind else { return 0 }
-        if bindMetadata.classification != nil { return 0 }
+        guard bindNodeID < nodes.count else {
+            return 0
+        }
+        guard case let .bind(bindMetadata) = nodes[bindNodeID].kind else {
+            return 0
+        }
+        if bindMetadata.classification != nil {
+            return 0
+        }
 
         let verdict = computeClassification(
             bindNodeID: bindNodeID,
@@ -121,7 +127,9 @@ extension ChoiceGraph {
         bindPath: ChoicePath,
         materializations: inout Int
     ) -> ChoiceTree? {
-        guard upstreamIndex < baseSequence.count else { return nil }
+        guard upstreamIndex < baseSequence.count else {
+            return nil
+        }
         var candidate = baseSequence
         let newChoice = ChoiceValue(
             leafMetadata.typeTag.makeConvertible(bitPattern64: bitPattern),
@@ -175,22 +183,38 @@ extension ChoiceGraph {
     mutating func observeBindTopologies(tree: ChoiceTree) {
         for nodeID in liveNodeIDs {
             let node = nodes[nodeID]
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard metadata.isStructurallyConstant == false else { continue }
-            if bindClassifications[metadata.fingerprint] != nil { continue }
-            guard node.children.count >= 2 else { continue }
+            guard case let .bind(metadata) = node.kind else {
+                continue
+            }
+            guard metadata.isStructurallyConstant == false else {
+                continue
+            }
+            if bindClassifications[metadata.fingerprint] != nil {
+                continue
+            }
+            guard node.children.count >= 2 else {
+                continue
+            }
 
             let innerChildID = node.children[metadata.innerChildIndex]
-            guard innerChildID < nodes.count else { continue }
-            guard case let .chooseBits(leafMetadata) = nodes[innerChildID].kind else { continue }
+            guard innerChildID < nodes.count else {
+                continue
+            }
+            guard case let .chooseBits(leafMetadata) = nodes[innerChildID].kind else {
+                continue
+            }
 
             let boundChildID = node.children[metadata.boundChildIndex]
-            guard boundChildID < nodes.count else { continue }
+            guard boundChildID < nodes.count else {
+                continue
+            }
 
             guard let boundSubtree = Self.extractBoundSubtree(
                 from: tree,
                 matchingPath: metadata.bindPath
-            ) else { continue }
+            ) else {
+                continue
+            }
 
             let upstreamBitPattern = leafMetadata.value.bitPattern64
             let downstreamFingerprint = Self.subtreeFingerprint(boundSubtree)
@@ -250,7 +274,9 @@ extension ChoiceGraph {
         }
         let low = max(range.lowerBound, clampLow)
         let high = min(range.upperBound, clampHigh)
-        guard low <= high else { return nil }
+        guard low <= high else {
+            return nil
+        }
         return (low, high)
     }
 
@@ -286,7 +312,9 @@ extension ChoiceGraph {
             case let (.bind(_, lowInner, lowBound), .bind(_, highInner, highBound)):
                 return sameTopology(lowInner, highInner) && sameTopology(lowBound, highBound)
             case let (.group(lowArray, _, _), .group(highArray, _, _)):
-                if lowArray.count != highArray.count { return false }
+                if lowArray.count != highArray.count {
+                    return false
+                }
                 var index = 0
                 while index < lowArray.count {
                     if sameTopology(lowArray[index], highArray[index]) == false {
@@ -296,7 +324,9 @@ extension ChoiceGraph {
                 }
                 return true
             case let (.resize(_, lowChoices), .resize(_, highChoices)):
-                if lowChoices.count != highChoices.count { return false }
+                if lowChoices.count != highChoices.count {
+                    return false
+                }
                 var index = 0
                 while index < lowChoices.count {
                     if sameTopology(lowChoices[index], highChoices[index]) == false {

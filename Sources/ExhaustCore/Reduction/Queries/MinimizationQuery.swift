@@ -47,11 +47,15 @@ enum MinimizationQuery {
 
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
+            guard case let .chooseBits(metadata) = node.kind else {
+                continue
+            }
 
             let currentBitPattern = metadata.value.bitPattern64
             let targetBitPattern = metadata.value.reductionTarget(in: metadata.validRange)
-            guard currentBitPattern != targetBitPattern else { continue }
+            guard currentBitPattern != targetBitPattern else {
+                continue
+            }
 
             if let converged = graph.convergenceStore[nodeID],
                converged.bound == currentBitPattern
@@ -75,7 +79,9 @@ enum MinimizationQuery {
         var partition = LeafPartition()
         for nodeID in integerLeafNodeIDs {
             let annotation = graph.nodes[nodeID].scopeAnnotation
-            if annotation.isDepthControl || annotation.isLaneControl { continue }
+            if annotation.isDepthControl || annotation.isLaneControl {
+                continue
+            }
             let entry = LeafEntry(
                 nodeID: nodeID,
                 mayReshapeOnAcceptance: annotation.isBindInner,
@@ -136,11 +142,17 @@ enum MinimizationQuery {
         // Bound value and bind pivot: one scope per bind node with an active inner child, and one bind pivot per alternative branch of every pick in the inner subtree, ungated.
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
+            guard case let .bind(metadata) = node.kind else {
+                continue
+            }
+            guard node.children.count >= 2 else {
+                continue
+            }
             let innerChildID = node.children[metadata.innerChildIndex]
             let boundChildID = node.children[metadata.boundChildIndex]
-            guard graph.nodes[innerChildID].positionRange != nil else { continue }
+            guard graph.nodes[innerChildID].positionRange != nil else {
+                continue
+            }
 
             let boundSubtreeSize = graph.nodes[boundChildID].positionRange?.count ?? 0
             if boundSubtreeSize > 0 {
@@ -270,9 +282,15 @@ enum MinimizationQuery {
         graph: ChoiceGraph
     ) -> Int {
         let annotation = graph.nodes[leafNodeID].scopeAnnotation
-        guard let bindNodeID = annotation.controllingBindNodeID else { return 0 }
-        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return 0 }
-        guard graph.nodes[bindNodeID].children.count >= 2 else { return 0 }
+        guard let bindNodeID = annotation.controllingBindNodeID else {
+            return 0
+        }
+        guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+            return 0
+        }
+        guard graph.nodes[bindNodeID].children.count >= 2 else {
+            return 0
+        }
         let boundChildID = graph.nodes[bindNodeID].children[metadata.boundChildIndex]
         return graph.nodes[boundChildID].positionRange?.count ?? 0
     }

@@ -32,7 +32,9 @@ struct DetectionBoundaryTests {
             )
         )
         let hasFailure = result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(hasFailure, "Race with Task.yield() at the interleaving point should be detected")
@@ -52,7 +54,9 @@ struct DetectionBoundaryTests {
             )
         )
         let hasFailure = result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(hasFailure, "Three concurrent increments with yield should lose updates")
@@ -72,7 +76,9 @@ struct DetectionBoundaryTests {
             )
         )
         let hasFailure = result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(hasFailure, "Four concurrent increments with yield should lose updates")

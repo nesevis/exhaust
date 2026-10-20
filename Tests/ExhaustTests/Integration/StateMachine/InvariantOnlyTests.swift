@@ -18,7 +18,9 @@ struct InvariantOnlyTests {
         )
 
         #expect(result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         })
     }
@@ -35,7 +37,9 @@ struct InvariantOnlyTests {
         )
 
         #expect(result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         })
     }
@@ -62,7 +66,9 @@ final class CircularBufferSpec {
 
     @Command(weight: 2)
     func read() throws {
-        guard buffer.isEmpty == false else { throw skip() }
+        guard buffer.isEmpty == false else {
+            throw skip()
+        }
         _ = buffer.read()
     }
 
@@ -94,7 +100,9 @@ final class SortedBackingSpec {
 
     @Command(weight: 2)
     func dequeue() throws {
-        guard queue.isEmpty == false else { throw skip() }
+        guard queue.isEmpty == false else {
+            throw skip()
+        }
         _ = queue.dequeue()
     }
 
@@ -128,7 +136,9 @@ struct CircularBuffer {
     }
 
     mutating func read() -> Int? {
-        guard count > 0 else { return nil } // swiftlint:disable:this empty_count
+        guard count > 0 else { // swiftlint:disable:this empty_count
+            return nil
+        }
         let value = storage[head]
         head = (head + 1) % capacity
         count -= 1
@@ -168,7 +178,9 @@ struct BuggyPriorityQueue {
     }
 
     mutating func dequeue() -> Int? {
-        guard elements.isEmpty == false else { return nil }
+        guard elements.isEmpty == false else {
+            return nil
+        }
         // Finds and removes the minimum — correct behavior, but the
         // invariant checks sorted order of the backing store.
         if let minIndex = elements.indices.min(by: { elements[$0] < elements[$1] }) {

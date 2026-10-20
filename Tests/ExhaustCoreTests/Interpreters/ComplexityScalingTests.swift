@@ -139,7 +139,9 @@ private func generateUnsigned(
 }
 
 private func averageMagnitude(_ values: [Double]) -> Double {
-    guard values.isEmpty == false else { return 0 }
+    guard values.isEmpty == false else {
+        return 0
+    }
     return values.reduce(0, +) / Double(values.count)
 }
 

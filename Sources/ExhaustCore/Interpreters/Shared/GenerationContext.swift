@@ -286,8 +286,12 @@ package extension GenerationContext {
         predicate: @escaping (Any) -> Bool,
         type: FilterType
     ) -> AnyGenerator {
-        if type == .rejectionSampling { return generator }
-        if let cached = tunedFilterCache.value[fingerprint] { return cached }
+        if type == .rejectionSampling {
+            return generator
+        }
+        if let cached = tunedFilterCache.value[fingerprint] {
+            return cached
+        }
         let tuned = Gen.tuneFilter(generator, predicate: predicate, type: type, seed: fingerprint)
         tunedFilterCache.withValue { $0[fingerprint] = tuned }
         return tuned
@@ -300,8 +304,12 @@ package extension GenerationContext {
         predicate: @escaping (Any) -> Bool,
         type: FilterType
     ) -> AnyGenerator {
-        if type == .rejectionSampling { return generator }
-        if let local = resolvedTunedFilters[fingerprint] { return local }
+        if type == .rejectionSampling {
+            return generator
+        }
+        if let local = resolvedTunedFilters[fingerprint] {
+            return local
+        }
         let resolved = Self.resolveTunedFilter(
             fingerprint: fingerprint,
             generator: generator,

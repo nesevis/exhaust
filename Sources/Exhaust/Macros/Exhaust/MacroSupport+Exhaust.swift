@@ -331,7 +331,11 @@ public extension __ExhaustRuntime {
         return ExhaustLog.withConfiguration(logConfiguration) {
             #if canImport(Testing)
                 if let traitConfig = ExhaustTraitConfiguration.current {
-                    let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                    let hasInlineBudget = settings.contains { if case .budget = $0 {
+                        true
+                    } else {
+                        false
+                    } }
                     if hasInlineBudget == false, let traitBudget = traitConfig.budget {
                         budget = traitBudget
                     }
@@ -554,7 +558,9 @@ public extension __ExhaustRuntime {
     ) {
         let skipped = ledger.totalSkips
 
-        guard report.generationErrorOccurred == false else { return }
+        guard report.generationErrorOccurred == false else {
+            return
+        }
 
         if totalPropertyCalls == 0 {
             report.pointlessRunFailure = "The property was never invoked: the screening and sampling budgets are both zero, so this test asserts nothing."
@@ -603,7 +609,9 @@ public extension __ExhaustRuntime {
         column: UInt
     ) {
         let failures = absorbed.expectationFailures
-        guard failures.isEmpty == false else { return }
+        guard failures.isEmpty == false else {
+            return
+        }
 
         let plural = failures.count == 1 ? "" : "s"
         let origin = failures.compactMap(\.location).first.map { " The first is at \($0)." } ?? ""
@@ -706,7 +714,9 @@ public extension __ExhaustRuntime {
                 // When suppress(.issueReporting) is set, the caller is asserting on the return value.
                 // Skip the final re-run and replay message.
                 let suppressIssueReporting = settings.contains { setting in
-                    if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                    if case let .suppress(option) = setting, option == .issueReporting || option == .all {
+                        return true
+                    }
                     return false
                 }
 
@@ -993,7 +1003,9 @@ public extension __ExhaustRuntime {
             }
 
             let suppressIssueReporting = settings.contains { setting in
-                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                if case let .suppress(option) = setting, option == .issueReporting || option == .all {
+                    return true
+                }
                 return false
             }
 

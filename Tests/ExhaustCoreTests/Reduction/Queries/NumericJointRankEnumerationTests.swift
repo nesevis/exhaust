@@ -58,11 +58,17 @@ struct NumericJointRankEnumerationTests {
         }
         var result = rescalings.map { Snapshot(nodeIDs: groups[$0.index].leaves.map(\.nodeID), patterns: $0.patterns) }
         let plans = groups.filter { $0.samples.allSatisfy { $0.isEmpty == false } }
-        guard let arity = plans.first?.leaves.count else { return result }
+        guard let arity = plans.first?.leaves.count else {
+            return result
+        }
         func append(_ indices: [Int], group: NumericJointQuery.Group) {
-            guard indices.indices.allSatisfy({ indices[$0] < group.samples[$0].count }) else { return }
+            guard indices.indices.allSatisfy({ indices[$0] < group.samples[$0].count }) else {
+                return
+            }
             let patterns = indices.indices.map { group.samples[$0][indices[$0]] }
-            guard group.priorityProposals.contains(where: { $0.probe.patterns == patterns }) == false else { return }
+            guard group.priorityProposals.contains(where: { $0.probe.patterns == patterns }) == false else {
+                return
+            }
             result.append(.init(nodeIDs: group.leaves.map(\.nodeID), patterns: patterns))
         }
         for rank in 0 ... 1 {

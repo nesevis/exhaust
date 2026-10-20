@@ -44,7 +44,9 @@ struct ReducerSimplifyValuesTests {
         var evaluationCount = 0
         let property: ([UInt64]) -> Bool = { arr in
             evaluationCount += 1
-            guard arr.count == 5 else { return true }
+            guard arr.count == 5 else {
+                return true
+            }
             return arr[2] == 0
         }
 

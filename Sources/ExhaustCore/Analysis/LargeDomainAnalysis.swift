@@ -169,8 +169,12 @@ package enum ProblematicValues {
         tag: TypeTag
     ) -> [UInt64] {
         var values: Set<UInt64> = [min, max]
-        if min < max { values.insert(min + 1) }
-        if max > min { values.insert(max - 1) }
+        if min < max {
+            values.insert(min + 1)
+        }
+        if max > min {
+            values.insert(max - 1)
+        }
         values.insert(min + (max - min) / 2)
 
         if let zero = zeroBitPatternFor(tag: tag), zero >= min, zero <= max {
@@ -352,9 +356,13 @@ package enum ProblematicValues {
         /// Convert a real-seconds value to a step index.
         /// Returns nil if the seconds value falls outside the range.
         func toStep(_ seconds: Int64) -> Int64? {
-            guard seconds >= lowerSeconds, seconds <= upperSeconds else { return nil }
+            guard seconds >= lowerSeconds, seconds <= upperSeconds else {
+                return nil
+            }
             let step = grid.stepIndex(flooring: seconds)
-            guard step >= minStep, step <= maxStep else { return nil }
+            guard step >= minStep, step <= maxStep else {
+                return nil
+            }
             return step
         }
 
@@ -367,10 +375,16 @@ package enum ProblematicValues {
 
         /// Insert a step and its ±1 step neighbors.
         func insertWithNeighbors(_ seconds: Int64) {
-            guard let step = toStep(seconds) else { return }
+            guard let step = toStep(seconds) else {
+                return
+            }
             values.insert(step.bitPattern64)
-            if step + 1 <= maxStep { values.insert((step + 1).bitPattern64) }
-            if step - 1 >= minStep { values.insert((step - 1).bitPattern64) }
+            if step + 1 <= maxStep {
+                values.insert((step + 1).bitPattern64)
+            }
+            if step - 1 >= minStep {
+                values.insert((step - 1).bitPattern64)
+            }
         }
 
         // 1. Domain edges
@@ -378,8 +392,12 @@ package enum ProblematicValues {
         values.insert(maxStep.bitPattern64)
 
         // 2. BVA ±1 in the step domain
-        if minStep + 1 <= maxStep { values.insert((minStep + 1).bitPattern64) }
-        if maxStep - 1 >= minStep { values.insert((maxStep - 1).bitPattern64) }
+        if minStep + 1 <= maxStep {
+            values.insert((minStep + 1).bitPattern64)
+        }
+        if maxStep - 1 >= minStep {
+            values.insert((maxStep - 1).bitPattern64)
+        }
 
         // 3. Midpoint step
         let midStep = minStep + (maxStep - minStep) / 2
@@ -436,7 +454,9 @@ package enum DSTTransitions {
     ///
     /// Only the first and last transitions within [lower, upper] are included to keep problematic value counts small for large ranges. Each transition includes the transition moment itself, the start and end of its calendar day, and the day's true midpoint (which differs from hour 12 on non-24-hour days).
     package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
-        guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
+        guard let zone = TimeZone(identifier: timeZoneID) else {
+            return []
+        }
 
         let startDate = Date(timeIntervalSinceReferenceDate: TimeInterval(lower))
         let endDate = Date(timeIntervalSinceReferenceDate: TimeInterval(upper))
@@ -447,14 +467,20 @@ package enum DSTTransitions {
         while let next = zone.nextDaylightSavingTimeTransition(after: cursor),
               next <= endDate
         {
-            if first == nil { first = next }
+            if first == nil {
+                first = next
+            }
             last = next
             cursor = next
         }
 
         var picked = [Date]()
-        if let first { picked.append(first) }
-        if let last, last != first { picked.append(last) }
+        if let first {
+            picked.append(first)
+        }
+        if let last, last != first {
+            picked.append(last)
+        }
 
         var transitions = [Int64]()
         for transition in picked {
@@ -586,7 +612,9 @@ package enum CalendarBoundaries {
         for boundary in divergenceBoundaries {
             var divergentDayStarts = [Int64]()
             for dayOffset in -3 ... 2 {
-                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: boundary) else { continue }
+                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: boundary) else {
+                    continue
+                }
                 let dayStart = calendar.startOfDay(for: day)
                 let weekYear = isoCalendar.component(.yearForWeekOfYear, from: dayStart)
                 let calendarYear = calendar.component(.year, from: dayStart)
@@ -610,7 +638,9 @@ package enum CalendarBoundaries {
         var monthCursor = endDate
         for _ in 0 ..< 12 {
             guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: monthCursor)
-            else { break }
+            else {
+                break
+            }
             let daysInMonth = calendar.range(of: .day, in: .month, for: previousMonth)!.count
             if seenMonthLengths.insert(daysInMonth).inserted {
                 let year = calendar.component(.year, from: previousMonth)
@@ -623,7 +653,9 @@ package enum CalendarBoundaries {
                 }
             }
             monthCursor = previousMonth
-            if seenMonthLengths.count >= 4 { break }
+            if seenMonthLengths.count >= 4 {
+                break
+            }
         }
 
         return results

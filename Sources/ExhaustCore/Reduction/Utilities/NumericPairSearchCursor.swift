@@ -47,7 +47,9 @@ struct NumericPairSearchCursor {
 
     /// Writes exactly two values into a buffer reset to the checkpoint by the caller.
     mutating func next(into candidate: inout ChoiceSequence) -> Proposal? {
-        guard let proposal = next() else { return nil }
+        guard let proposal = next() else {
+            return nil
+        }
         proposal.write(into: &candidate)
         return proposal
     }

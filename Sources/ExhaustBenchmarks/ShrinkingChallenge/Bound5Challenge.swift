@@ -37,6 +37,8 @@ let bound5Gen = {
 // MARK: - Property
 
 let bound5Property: @Sendable (Bound5) -> Bool = { bound5 in
-    if bound5.arr.isEmpty { return true }
+    if bound5.arr.isEmpty {
+        return true
+    }
     return bound5.arr.dropFirst().reduce(bound5.arr[0], &+) < 5 * 256
 }

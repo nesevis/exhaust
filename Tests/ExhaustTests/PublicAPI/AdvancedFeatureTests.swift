@@ -57,7 +57,9 @@ struct AdvancedFeatureTests {
 
             /// Validate tree structure
             func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {
-                if maxDepth <= 0 { return tree.children.isEmpty }
+                if maxDepth <= 0 {
+                    return tree.children.isEmpty
+                }
                 return tree.children.allSatisfy { validateDepth($0, maxDepth: maxDepth - 1) }
             }
 

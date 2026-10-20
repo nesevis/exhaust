@@ -70,7 +70,9 @@ struct ExamGraderTests {
             let hasBlanks = answers.contains(where: { $0 == nil })
 
             // Only check the interesting case: some correct answers + some blanks
-            guard nonBlankCorrect, hasAttempted, hasBlanks else { return true }
+            guard nonBlankCorrect, hasAttempted, hasBlanks else {
+                return true
+            }
             return score == 1.0
         }
 
@@ -106,13 +108,17 @@ final class ExamGraderSpec {
 
     @Command(weight: 3, #gen(.int(in: 0 ... 6)))
     func submitAnswers(answerCount: Int) throws {
-        guard grader.exams["exam"] != nil else { throw skip() }
+        guard grader.exams["exam"] != nil else {
+            throw skip()
+        }
         grader.submitAnswers(student: "student", examName: "exam", answers: Array(repeating: answerCount, count: answerCount))
     }
 
     @Command(weight: 1)
     func gradeLatest() throws {
-        guard let latest = grader.submissions.last else { throw skip() }
+        guard let latest = grader.submissions.last else {
+            throw skip()
+        }
         let score = grader.grade(latest)
         // Postcondition: if every non-blank answer matches the key, the score must be perfect. A correct grader excludes blanks from the denominator, so skipping questions never penalizes a student who answered every attempted question correctly.
         let nonBlankCorrect = zip(latest.answers, latest.exam.answerKey)
@@ -186,7 +192,9 @@ struct BuggyExamGrader {
     }
 
     mutating func submitAnswers(student: String, examName: String, answers: [Int?]) {
-        guard let exam = exams[examName] else { return }
+        guard let exam = exams[examName] else {
+            return
+        }
         // Bug 1: no length validation — accepts any answer count
         submissions.append(ExamInstance(student: student, exam: exam, answers: answers))
     }
@@ -194,7 +202,9 @@ struct BuggyExamGrader {
     func grade(_ instance: ExamInstance) -> Double {
         // Bug 2: denominator is answerKey.count (all questions), not the count of non-nil answers. Blanks inflate the denominator, making partial attempts score lower than they should.
         let total = instance.exam.answerKey.count
-        guard total > 0 else { return 1.0 }
+        guard total > 0 else {
+            return 1.0
+        }
         let correct = zip(instance.answers, instance.exam.answerKey)
             .count(where: { $0.0 == $0.1 })
 

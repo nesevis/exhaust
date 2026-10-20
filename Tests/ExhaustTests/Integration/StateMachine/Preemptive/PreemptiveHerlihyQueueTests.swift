@@ -121,7 +121,9 @@ final class BuggyHerlihyQueue: @unchecked Sendable, CustomDebugStringConvertible
     @_optimize(none)
     func enqueue(_ value: Int) {
         let index = backLock.withLock { _back }
-        guard index < capacity else { return }
+        guard index < capacity else {
+            return
+        }
         backLock.withLock { _back = index + 1 }
         slots[index].store(value)
     }
@@ -131,7 +133,9 @@ final class BuggyHerlihyQueue: @unchecked Sendable, CustomDebugStringConvertible
     func dequeue() -> Int? {
         for _ in 0 ..< 5 {
             let range = backLock.withLock { _back }
-            guard range > 0 else { return nil }
+            guard range > 0 else {
+                return nil
+            }
             for index in 0 ..< range {
                 if let value = slots[index].swap(nil) {
                     return value

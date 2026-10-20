@@ -239,7 +239,9 @@ struct BacktrackTests {
             return
         }
         let markers = sequence.compactMap { entry -> ChoiceSequenceValue.Branch? in
-            guard case let .branch(branch) = entry else { return nil }
+            guard case let .branch(branch) = entry else {
+                return nil
+            }
             return branch
         }
         #expect(markers.count == 1)
@@ -308,7 +310,9 @@ struct BacktrackTests {
         let (_, tree) = try #require(try iterator.next())
         let graph = ChoiceGraph.build(from: tree)
         let picks = graph.nodes.compactMap { node -> PickMetadata? in
-            guard case let .pick(metadata) = node.kind else { return nil }
+            guard case let .pick(metadata) = node.kind else {
+                return nil
+            }
             return metadata
         }
         #expect(picks.count == 1)
@@ -344,7 +348,9 @@ struct BacktrackTests {
         var hits = 0
         var total = 0
         while let value = try iterator.next() {
-            if predicate(value) { hits += 1 }
+            if predicate(value) {
+                hits += 1
+            }
             total += 1
         }
         #expect(total == 400)
@@ -404,7 +410,9 @@ private func expectUntouched(_ gen: Generator<Int>) throws {
 }
 
 private func backtrackChoices(of gen: Generator<Int>) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
-    guard case let .impure(operation: .transform(_, inner), _) = gen else { return nil }
+    guard case let .impure(operation: .transform(_, inner), _) = gen else {
+        return nil
+    }
     return firstPickChoices(in: inner)
 }
 
@@ -432,7 +440,9 @@ private func firstPickChoices(in gen: AnyGenerator) -> ContiguousArray<Reflectiv
 /// The selected branch markers of `tree`, in flattening order.
 private func branches(in tree: ChoiceTree) -> [ChoiceSequenceValue.Branch] {
     ChoiceSequence.flatten(tree).compactMap { entry in
-        guard case let .branch(branch) = entry else { return nil }
+        guard case let .branch(branch) = entry else {
+            return nil
+        }
         return branch
     }
 }
@@ -444,7 +454,9 @@ private func selectedBranchIDs(in tree: ChoiceTree, fingerprint: UInt64) -> [UIn
         guard line.contains("✅branch(fingerprint: \(shortFingerprint),") else {
             return nil
         }
-        guard let idRange = line.range(of: "id: ") else { return nil }
+        guard let idRange = line.range(of: "id: ") else {
+            return nil
+        }
         let digits = line[idRange.upperBound...].prefix { $0.isNumber }
         return UInt64(digits)
     }
@@ -454,7 +466,9 @@ private func selectedBranchIDs(in tree: ChoiceTree, fingerprint: UInt64) -> [UIn
 private func pivotingBranch(in sequence: ChoiceSequence, to id: UInt64) throws -> ChoiceSequence {
     var rewritten = sequence
     let index = try #require(rewritten.firstIndex { entry in
-        if case .branch = entry { return true }
+        if case .branch = entry {
+            return true
+        }
         return false
     })
     guard case let .branch(branch) = rewritten[index] else {

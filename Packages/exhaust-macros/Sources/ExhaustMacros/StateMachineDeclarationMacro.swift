@@ -273,7 +273,9 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         let hasUserInit = members.contains { member in
-            guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
+            guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else {
+                return false
+            }
             return initDecl.signature.parameterClause.parameters.isEmpty
                 && initDecl.optionalMark == nil
         }

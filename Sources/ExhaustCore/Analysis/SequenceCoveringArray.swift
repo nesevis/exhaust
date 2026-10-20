@@ -59,14 +59,20 @@ package enum SequenceCoveringArray {
         profile: EnumerableDomainProfile,
         sequenceLengthRange: ClosedRange<UInt64>
     ) -> ChoiceTree? {
-        guard row.values.count == profile.parameters.count else { return nil }
+        guard row.values.count == profile.parameters.count else {
+            return nil
+        }
 
         var elementTrees: [ChoiceTree] = []
         elementTrees.reserveCapacity(row.values.count)
 
         for (param, valueIndex) in zip(profile.parameters, row.values) {
-            guard case let .pick(choices) = param.kind else { return nil }
-            guard valueIndex < choices.count else { return nil }
+            guard case let .pick(choices) = param.kind else {
+                return nil
+            }
+            guard valueIndex < choices.count else {
+                return nil
+            }
 
             let chosen = choices[Int(valueIndex)]
 
@@ -101,7 +107,9 @@ package enum SequenceCoveringArray {
         laneConfig: SCALaneConfig,
         sequenceLengthRange: ClosedRange<UInt64>
     ) -> ChoiceTree? {
-        guard row.values.count == profile.parameters.count else { return nil }
+        guard row.values.count == profile.parameters.count else {
+            return nil
+        }
 
         let laneCount = laneConfig.laneCount
         let branchCount = laneConfig.pickChoices.count
@@ -113,7 +121,9 @@ package enum SequenceCoveringArray {
             let branchIndex = Int(flatValue) / laneCount
             let laneValue = Int(flatValue) % laneCount
 
-            guard branchIndex < branchCount else { return nil }
+            guard branchIndex < branchCount else {
+                return nil
+            }
 
             let chosen = laneConfig.pickChoices[branchIndex]
 
@@ -261,7 +271,9 @@ package enum SequenceCoveringArray {
         mapping: SCADomainMapping,
         sequenceLengthRange: ClosedRange<UInt64>
     ) -> ChoiceTree? {
-        guard row.values.count == profile.parameters.count else { return nil }
+        guard row.values.count == profile.parameters.count else {
+            return nil
+        }
 
         var elementTrees: [ChoiceTree] = []
         elementTrees.reserveCapacity(row.values.count)
@@ -282,7 +294,9 @@ package enum SequenceCoveringArray {
                     guard let argTree = buildArgTree(
                         localIndex: localIndex,
                         params: params
-                    ) else { return nil }
+                    ) else {
+                        return nil
+                    }
                     subTree = argTree
             }
 
@@ -384,14 +398,22 @@ package enum SequenceCoveringArray {
         for value: UInt64,
         in slots: [SCADomainSlot]
     ) -> SCADomainSlot? {
-        guard slots.isEmpty == false else { return nil }
-        guard value >= slots[0].flatOffset else { return nil }
+        guard slots.isEmpty == false else {
+            return nil
+        }
+        guard value >= slots[0].flatOffset else {
+            return nil
+        }
 
         let lastIdx = slots.count - 1
         let lastSlot = slots[lastIdx]
-        guard value < lastSlot.flatOffset &+ lastSlot.contribution else { return nil }
+        guard value < lastSlot.flatOffset &+ lastSlot.contribution else {
+            return nil
+        }
 
-        if slots.count == 1 { return slots[0] }
+        if slots.count == 1 {
+            return slots[0]
+        }
 
         // Linear interpolation guess: assume roughly uniform contribution sizes.
         let totalDomain = lastSlot.flatOffset &+ lastSlot.contribution

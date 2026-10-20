@@ -45,7 +45,9 @@ struct PalindromeChallenge {
     func stringPalindrome() throws {
         let generator = #gen(.string(from: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz")))
         let property: @Sendable (String) -> Bool = { text in
-            guard Set(text).count >= 2, text.count.isMultiple(of: 2) == false else { return true }
+            guard Set(text).count >= 2, text.count.isMultiple(of: 2) == false else {
+                return true
+            }
             return text.elementsEqual(text.reversed()) == false
         }
         let result = #exhaust(
@@ -62,7 +64,9 @@ struct PalindromeChallenge {
 }
 
 private func palindromeProperty(_ text: String) -> Bool {
-    guard Set(text).count >= 2, text.count.isMultiple(of: 2) == false else { return true }
+    guard Set(text).count >= 2, text.count.isMultiple(of: 2) == false else {
+        return true
+    }
     return text.elementsEqual(text.reversed()) == false
 }
 

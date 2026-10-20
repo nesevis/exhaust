@@ -119,7 +119,9 @@ struct ReducerFloatShrinkingTests {
         config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
         property: (Output) -> Bool
     ) throws -> Output? {
-        guard try (Interpreters.reflect(gen, with: value)) != nil else { return nil }
+        guard try (Interpreters.reflect(gen, with: value)) != nil else {
+            return nil
+        }
         return try reduceFromReflection(gen, startingAt: value, config: config, property: property)
     }
 }

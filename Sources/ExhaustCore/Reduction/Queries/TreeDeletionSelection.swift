@@ -38,7 +38,9 @@ enum TreeDeletionSelection {
                 let nodeID = examinedNodeCount
                 examinedNodeCount += 1
                 let node = graph.nodes[nodeID]
-                guard let extent = node.positionRange else { continue }
+                guard let extent = node.positionRange else {
+                    continue
+                }
                 if case let .bind(metadata) = node.kind {
                     if node.children.indices.contains(metadata.boundChildIndex),
                        let boundStart = graph.nodes[node.children[metadata.boundChildIndex]].positionRange?.lowerBound,
@@ -52,17 +54,25 @@ enum TreeDeletionSelection {
                 guard case let .sequence(metadata) = node.kind,
                       node.children.isEmpty == false,
                       selected.contains(where: { edit in edit.removedRanges.contains { $0.lowerBound <= extent.lowerBound && $0.upperBound >= extent.upperBound } }) == false
-                else { continue }
+                else {
+                    continue
+                }
 
                 let deletable = metadata.elementCount - Int(metadata.lengthConstraint?.lowerBound ?? 0)
-                guard deletable > 0 else { continue }
+                guard deletable > 0 else {
+                    continue
+                }
                 let firstRemovedChildIndex = max(0, node.children.count - deletable)
                 let removedRanges = removalRanges(children: node.children, startingAt: firstRemovedChildIndex, metadata: metadata)
-                guard removedRanges.isEmpty == false else { continue }
+                guard removedRanges.isEmpty == false else {
+                    continue
+                }
                 let invalidatedRanges = bindRegions.compactMap { regions -> ClosedRange<Int>? in
                     guard removedRanges.contains(where: { $0.overlaps(regions.inner) }),
                           removedRanges.contains(where: { $0.lowerBound <= regions.bound.lowerBound && $0.upperBound >= regions.bound.upperBound }) == false
-                    else { return nil }
+                    else {
+                        return nil
+                    }
                     return regions.bound
                 }
                 let edit = Edit(removedRanges: removedRanges, invalidatedRanges: invalidatedRanges)
@@ -70,7 +80,9 @@ enum TreeDeletionSelection {
                     Self.overlaps(edit.removedRanges, existing.removedRanges) == false
                         && Self.overlaps(edit.removedRanges, existing.invalidatedRanges) == false
                         && Self.overlaps(edit.invalidatedRanges, existing.removedRanges) == false
-                }) else { continue }
+                }) else {
+                    continue
+                }
                 selected.append(edit)
 
                 let yield = node.children[firstRemovedChildIndex...].reduce(0) { total, childID in
@@ -91,7 +103,9 @@ enum TreeDeletionSelection {
                     default:
                         graph.nodes[nodeID].positionRange
                 }
-                guard let extent else { continue }
+                guard let extent else {
+                    continue
+                }
                 if let previous = ranges.last, extent.lowerBound <= previous.upperBound + 1 {
                     ranges[ranges.count - 1] = previous.lowerBound ... max(previous.upperBound, extent.upperBound)
                 } else {

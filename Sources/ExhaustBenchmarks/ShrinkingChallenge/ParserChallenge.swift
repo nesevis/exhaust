@@ -125,29 +125,49 @@ func parserParse(_ input: String) -> ParserLang? {
 }
 
 private func parserParseLang(_ cursor: inout Substring) -> ParserLang? {
-    guard parserConsume("Lang", from: &cursor) else { return nil }
-    guard let modsStr = parserParseParenGroup(&cursor) else { return nil }
-    guard let funcsStr = parserParseParenGroup(&cursor) else { return nil }
+    guard parserConsume("Lang", from: &cursor) else {
+        return nil
+    }
+    guard let modsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
+    guard let funcsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
     let mods = parserParseSemicolonSeparated(modsStr) { parserParseMod(&$0) }
     let fns = parserParseSemicolonSeparated(funcsStr) { parserParseFunc(&$0) }
     return ParserLang(modules: mods, funcs: fns)
 }
 
 private func parserParseMod(_ cursor: inout Substring) -> ParserMod? {
-    guard parserConsume("Mod", from: &cursor) else { return nil }
-    guard let impsStr = parserParseParenGroup(&cursor) else { return nil }
-    guard let expsStr = parserParseParenGroup(&cursor) else { return nil }
+    guard parserConsume("Mod", from: &cursor) else {
+        return nil
+    }
+    guard let impsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
+    guard let expsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
     let imps = parserParseColonSeparated(impsStr).map { ParserVar(name: String($0)) }
     let exps = parserParseColonSeparated(expsStr).map { ParserVar(name: String($0)) }
     return ParserMod(imports: imps, exports: exps)
 }
 
 private func parserParseFunc(_ cursor: inout Substring) -> ParserFunc? {
-    guard parserConsume("Func", from: &cursor) else { return nil }
+    guard parserConsume("Func", from: &cursor) else {
+        return nil
+    }
     parserSkipSpaces(&cursor)
-    guard let name = parserParseWord(&cursor) else { return nil }
-    guard let argsStr = parserParseParenGroup(&cursor) else { return nil }
-    guard let stmtsStr = parserParseParenGroup(&cursor) else { return nil }
+    guard let name = parserParseWord(&cursor) else {
+        return nil
+    }
+    guard let argsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
+    guard let stmtsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
     let args = parserParseCommaSeparated(argsStr) { parserParseExp(&$0) }
     let stmts = parserParseCommaSeparated(stmtsStr) { parserParseStmt(&$0) }
     return ParserFunc(name: ParserVar(name: String(name)), args: args, body: stmts)
@@ -157,22 +177,38 @@ private func parserParseStmt(_ cursor: inout Substring) -> ParserStmt? {
     parserSkipSpaces(&cursor)
     if parserConsume("Assign", from: &cursor) {
         parserSkipSpaces(&cursor)
-        guard let name = parserParseWord(&cursor) else { return nil }
-        guard let expStr = parserParseParenGroup(&cursor) else { return nil }
+        guard let name = parserParseWord(&cursor) else {
+            return nil
+        }
+        guard let expStr = parserParseParenGroup(&cursor) else {
+            return nil
+        }
         var expCursor = expStr
-        guard let expression = parserParseExp(&expCursor) else { return nil }
+        guard let expression = parserParseExp(&expCursor) else {
+            return nil
+        }
         return .assign(ParserVar(name: String(name)), expression)
     } else if parserConsume("Alloc", from: &cursor) {
         parserSkipSpaces(&cursor)
-        guard let name = parserParseWord(&cursor) else { return nil }
-        guard let expStr = parserParseParenGroup(&cursor) else { return nil }
+        guard let name = parserParseWord(&cursor) else {
+            return nil
+        }
+        guard let expStr = parserParseParenGroup(&cursor) else {
+            return nil
+        }
         var expCursor = expStr
-        guard let expression = parserParseExp(&expCursor) else { return nil }
+        guard let expression = parserParseExp(&expCursor) else {
+            return nil
+        }
         return .alloc(ParserVar(name: String(name)), expression)
     } else if parserConsume("Return", from: &cursor) {
-        guard let expStr = parserParseParenGroup(&cursor) else { return nil }
+        guard let expStr = parserParseParenGroup(&cursor) else {
+            return nil
+        }
         var expCursor = expStr
-        guard let expression = parserParseExp(&expCursor) else { return nil }
+        guard let expression = parserParseExp(&expCursor) else {
+            return nil
+        }
         return .ret(expression)
     }
     return nil
@@ -182,12 +218,18 @@ private func parserParseExp(_ cursor: inout Substring) -> ParserExp? {
     parserSkipSpaces(&cursor)
     if parserConsume("Int", from: &cursor) {
         parserSkipSpaces(&cursor)
-        guard let value = parserParseInt(&cursor) else { return nil }
+        guard let value = parserParseInt(&cursor) else {
+            return nil
+        }
         return .int(value)
     } else if parserConsume("Bool", from: &cursor) {
         parserSkipSpaces(&cursor)
-        if parserConsume("true", from: &cursor) { return .bool(true) }
-        if parserConsume("false", from: &cursor) { return .bool(false) }
+        if parserConsume("true", from: &cursor) {
+            return .bool(true)
+        }
+        if parserConsume("false", from: &cursor) {
+            return .bool(false)
+        }
         return nil
     } else if parserConsume("Add", from: &cursor) {
         return parserParseBinaryExp(&cursor) { .add($0, $1) }
@@ -198,9 +240,13 @@ private func parserParseExp(_ cursor: inout Substring) -> ParserExp? {
     } else if parserConsume("Div", from: &cursor) {
         return parserParseBinaryExp(&cursor) { .div($0, $1) }
     } else if parserConsume("Not", from: &cursor) {
-        guard let innerStr = parserParseParenGroup(&cursor) else { return nil }
+        guard let innerStr = parserParseParenGroup(&cursor) else {
+            return nil
+        }
         var innerCursor = innerStr
-        guard let inner = parserParseExp(&innerCursor) else { return nil }
+        guard let inner = parserParseExp(&innerCursor) else {
+            return nil
+        }
         return .not(inner)
     } else if parserConsume("And", from: &cursor) {
         // BUG 1: operands are swapped
@@ -216,12 +262,20 @@ private func parserParseBinaryExp(
     _ cursor: inout Substring,
     constructor: (ParserExp, ParserExp) -> ParserExp
 ) -> ParserExp? {
-    guard let lhsStr = parserParseParenGroup(&cursor) else { return nil }
-    guard let rhsStr = parserParseParenGroup(&cursor) else { return nil }
+    guard let lhsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
+    guard let rhsStr = parserParseParenGroup(&cursor) else {
+        return nil
+    }
     var lhsCursor = lhsStr
     var rhsCursor = rhsStr
-    guard let lhs = parserParseExp(&lhsCursor) else { return nil }
-    guard let rhs = parserParseExp(&rhsCursor) else { return nil }
+    guard let lhs = parserParseExp(&lhsCursor) else {
+        return nil
+    }
+    guard let rhs = parserParseExp(&rhsCursor) else {
+        return nil
+    }
     return constructor(lhs, rhs)
 }
 
@@ -240,7 +294,9 @@ private func parserConsume(_ prefix: String, from cursor: inout Substring) -> Bo
 
 private func parserParseWord(_ cursor: inout Substring) -> Substring? {
     let word = cursor.prefix(while: { $0.isLetter || $0.isNumber })
-    guard word.isEmpty == false else { return nil }
+    guard word.isEmpty == false else {
+        return nil
+    }
     cursor = cursor.dropFirst(word.count)
     return word
 }
@@ -252,7 +308,9 @@ private func parserParseInt(_ cursor: inout Substring) -> Int? {
         cursor = cursor.dropFirst()
     }
     let digits = cursor.prefix(while: { $0.isNumber })
-    guard digits.isEmpty == false else { return nil }
+    guard digits.isEmpty == false else {
+        return nil
+    }
     numStr.append(contentsOf: digits)
     cursor = cursor.dropFirst(digits.count)
     return Int(numStr)
@@ -260,7 +318,9 @@ private func parserParseInt(_ cursor: inout Substring) -> Int? {
 
 private func parserParseParenGroup(_ cursor: inout Substring) -> Substring? {
     parserSkipSpaces(&cursor)
-    guard cursor.first == "(" else { return nil }
+    guard cursor.first == "(" else {
+        return nil
+    }
     cursor = cursor.dropFirst()
     var depth = 1
     var endIndex = cursor.startIndex
@@ -284,7 +344,9 @@ private func parserParseSemicolonSeparated<Result>(
     _ input: Substring,
     parser: (inout Substring) -> Result?
 ) -> [Result] {
-    guard input.isEmpty == false else { return [] }
+    guard input.isEmpty == false else {
+        return []
+    }
     return input.split(separator: ";").compactMap { part in
         var cursor = part[...]
         return parser(&cursor)
@@ -295,7 +357,9 @@ private func parserParseCommaSeparated<Result>(
     _ input: Substring,
     parser: (inout Substring) -> Result?
 ) -> [Result] {
-    guard input.isEmpty == false else { return [] }
+    guard input.isEmpty == false else {
+        return []
+    }
     return parserSplitTopLevel(input, separator: ",").compactMap { part in
         var cursor = part[...]
         return parser(&cursor)
@@ -303,7 +367,9 @@ private func parserParseCommaSeparated<Result>(
 }
 
 private func parserParseColonSeparated(_ input: Substring) -> [Substring] {
-    guard input.isEmpty == false else { return [] }
+    guard input.isEmpty == false else {
+        return []
+    }
     return input.split(separator: ":")
 }
 
@@ -377,12 +443,16 @@ func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
     let intLeaf = #gen(.int(in: -10 ... 10))
         .mapped(
             forward: { ParserExp.int($0) },
-            backward: { if case let .int(inner) = $0 { return inner }; return 0 }
+            backward: { if case let .int(inner) = $0 {
+                return inner
+            }; return 0 }
         )
     let boolLeaf = #gen(.bool())
         .mapped(
             forward: { ParserExp.bool($0) },
-            backward: { if case let .bool(inner) = $0 { return inner }; return false }
+            backward: { if case let .bool(inner) = $0 {
+                return inner
+            }; return false }
         )
 
     guard depth > 0 else {
@@ -394,7 +464,9 @@ func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
     let notExp = #gen(child)
         .mapped(
             forward: { ParserExp.not($0) },
-            backward: { if case let .not(inner) = $0 { return inner }; return .int(0) }
+            backward: { if case let .not(inner) = $0 {
+                return inner
+            }; return .int(0) }
         )
 
     func binaryExp(
@@ -409,27 +481,39 @@ func parserExpGen(depth: UInt64) -> ReflectiveGenerator<ParserExp> {
     }
 
     let addExp = binaryExp(ParserExp.add) {
-        guard case let .add(lhs, rhs) = $0 else { return nil }
+        guard case let .add(lhs, rhs) = $0 else {
+            return nil
+        }
         return (lhs, rhs)
     }
     let subExp = binaryExp(ParserExp.sub) {
-        guard case let .sub(lhs, rhs) = $0 else { return nil }
+        guard case let .sub(lhs, rhs) = $0 else {
+            return nil
+        }
         return (lhs, rhs)
     }
     let mulExp = binaryExp(ParserExp.mul) {
-        guard case let .mul(lhs, rhs) = $0 else { return nil }
+        guard case let .mul(lhs, rhs) = $0 else {
+            return nil
+        }
         return (lhs, rhs)
     }
     let divExp = binaryExp(ParserExp.div) {
-        guard case let .div(lhs, rhs) = $0 else { return nil }
+        guard case let .div(lhs, rhs) = $0 else {
+            return nil
+        }
         return (lhs, rhs)
     }
     let andExp = binaryExp(ParserExp.and) {
-        guard case let .and(lhs, rhs) = $0 else { return nil }
+        guard case let .and(lhs, rhs) = $0 else {
+            return nil
+        }
         return (lhs, rhs)
     }
     let orExp = binaryExp(ParserExp.or) {
-        guard case let .or(lhs, rhs) = $0 else { return nil }
+        guard case let .or(lhs, rhs) = $0 else {
+            return nil
+        }
         return (lhs, rhs)
     }
 
@@ -450,7 +534,9 @@ var parserStmtGen: ReflectiveGenerator<ParserStmt> {
         .mapped(
             forward: { variable, expression in ParserStmt.assign(variable, expression) },
             backward: { stmt in
-                if case let .assign(variable, expression) = stmt { return (variable, expression) }
+                if case let .assign(variable, expression) = stmt {
+                    return (variable, expression)
+                }
                 return (ParserVar(name: "a"), .int(0))
             }
         )
@@ -458,7 +544,9 @@ var parserStmtGen: ReflectiveGenerator<ParserStmt> {
         .mapped(
             forward: { variable, expression in ParserStmt.alloc(variable, expression) },
             backward: { stmt in
-                if case let .alloc(variable, expression) = stmt { return (variable, expression) }
+                if case let .alloc(variable, expression) = stmt {
+                    return (variable, expression)
+                }
                 return (ParserVar(name: "a"), .int(0))
             }
         )
@@ -466,7 +554,9 @@ var parserStmtGen: ReflectiveGenerator<ParserStmt> {
         .mapped(
             forward: { ParserStmt.ret($0) },
             backward: { stmt in
-                if case let .ret(expression) = stmt { return expression }
+                if case let .ret(expression) = stmt {
+                    return expression
+                }
                 return .int(0)
             }
         )

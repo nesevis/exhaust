@@ -49,17 +49,25 @@ struct SparseModularZigzagChallenge {
         let (m, n, arr) = input
 
         // Constraint 1: zigzag coupling
-        guard abs(Int(m) - Int(n)) <= 1 else { return true }
+        guard abs(Int(m) - Int(n)) <= 1 else {
+            return true
+        }
 
         // Constraint 2: blocks trivial zeroing
-        guard m >= 15 else { return true }
+        guard m >= 15 else {
+            return true
+        }
 
         // Constraint 3: sparse modular filter (~10% of pairs)
-        guard (m * n) % 31 < 3 else { return true }
+        guard (m * n) % 31 < 3 else {
+            return true
+        }
 
         // Constraint 4: array elements must be positive (guaranteed by range)
         // and sum must reach m
-        guard arr.reduce(0, +) >= m else { return true }
+        guard arr.reduce(0, +) >= m else {
+            return true
+        }
 
         // All constraints met — property fails
         return false

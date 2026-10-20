@@ -12,13 +12,17 @@ final class LeakyBucket: @unchecked Sendable, CustomStringConvertible {
     }
 
     func refill() async {
-        guard _tokens < _capacity else { return }
+        guard _tokens < _capacity else {
+            return
+        }
         _tokens += 1
     }
 
     func tryConsume() async {
         let current = _tokens
-        guard current > 0 else { return }
+        guard current > 0 else {
+            return
+        }
         await Task.yield()
         _tokens = current - 1
     }

@@ -372,7 +372,9 @@ struct HypothesisShrinkQualityParityTests {
             for gap in -10 ... 10 {
                 let lhs = min(10, max(-10, 10 - gap))
                 let rhs = lhs + gap
-                guard (-10 ... 10).contains(rhs) else { continue }
+                guard (-10 ... 10).contains(rhs) else {
+                    continue
+                }
                 let property: ((Int, String, Float16, Int)) -> Bool = { tuple in
                     tuple.0 + gap != tuple.3
                 }

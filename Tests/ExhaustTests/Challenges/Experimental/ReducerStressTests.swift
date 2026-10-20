@@ -199,9 +199,13 @@ struct ReducerStressTests {
         let value = Array(0 ..< 300)
 
         let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
-            guard arr.count >= 10 else { return true }
+            guard arr.count >= 10 else {
+                return true
+            }
             for index in arr.indices.dropLast() {
-                guard arr[index + 1] - arr[index] == 1 else { return true }
+                guard arr[index + 1] - arr[index] == 1 else {
+                    return true
+                }
             }
             return false
         }
@@ -215,9 +219,13 @@ struct ReducerStressTests {
         let value = Array(0 ..< 5000)
 
         let output = #exhaust(gen, reflecting: value, .suppress(.issueReporting)) { arr in
-            guard arr.count >= 10 else { return true }
+            guard arr.count >= 10 else {
+                return true
+            }
             for index in arr.indices.dropLast() {
-                guard arr[index + 1] - arr[index] == 1 else { return true }
+                guard arr[index + 1] - arr[index] == 1 else {
+                    return true
+                }
             }
             return false
         }

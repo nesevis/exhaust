@@ -66,7 +66,9 @@ struct BinarySearchStepper {
 
     /// Advances the search given feedback on the previous probe.
     mutating func advance(lastAccepted: Bool) -> UInt64? {
-        guard converged == false else { return nil }
+        guard converged == false else {
+            return nil
+        }
 
         switch direction {
             case .findSmallest:

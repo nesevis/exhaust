@@ -285,20 +285,28 @@ struct WindowRemovalScope {
 
     /// Expands a search step into complete element targets, rejecting steps beyond capacity before computing their size.
     func removalNodeIDs(step: Int) -> [Int]? {
-        guard step > 0 else { return nil }
+        guard step > 0 else {
+            return nil
+        }
         switch growth {
             case .rightward:
-                guard step <= elementNodeIDs.count else { return nil }
+                guard step <= elementNodeIDs.count else {
+                    return nil
+                }
                 return Array(elementNodeIDs[..<step])
             case .outward:
                 let centerCount = elementNodeIDs.count.isMultiple(of: 2) ? 2 : 1
                 let capacity = elementNodeIDs.count / 2 + elementNodeIDs.count % 2
-                guard step <= capacity else { return nil }
+                guard step <= capacity else {
+                    return nil
+                }
                 let count = centerCount + 2 * (step - 1)
                 let start = (elementNodeIDs.count - count) / 2
                 return Array(elementNodeIDs[start ..< start + count])
             case .symmetric:
-                guard step <= elementNodeIDs.count / 2 else { return nil }
+                guard step <= elementNodeIDs.count / 2 else {
+                    return nil
+                }
                 return Array(elementNodeIDs.prefix(step)) + Array(elementNodeIDs.suffix(step))
         }
     }

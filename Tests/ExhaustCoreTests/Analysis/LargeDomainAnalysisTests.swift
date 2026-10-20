@@ -302,7 +302,9 @@ struct ChoiceTreeAnalysisTests {
         }
         #expect(profile.parameters.count >= 1)
         let hasCompositeSequence = profile.parameters.contains { param in
-            if case .compositeSequence = param.kind { return true }
+            if case .compositeSequence = param.kind {
+                return true
+            }
             return false
         }
         #expect(hasCompositeSequence, "The outer sequence should produce a compositeSequence parameter")
@@ -818,13 +820,17 @@ struct CharacterProblematicIndicesTests {
                 strength: 2
             )
             while let row = generator.next(), rowsTested < 2000 {
-                guard let tree = profile.buildTree(from: row) else { continue }
+                guard let tree = profile.buildTree(from: row) else {
+                    continue
+                }
                 let mode = Materializer.Mode.guided(seed: UInt64(rowsTested), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
                     gen, context: .init(
                         prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
                     )
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 for char in chars {
                     for scalar in char.unicodeScalars {
                         #expect(
@@ -838,13 +844,17 @@ struct CharacterProblematicIndicesTests {
         } else if profile.parameterCount == 1 {
             for i in 0 ..< min(Int(domainSizes[0]), 2000) {
                 let row = CoveringArrayRow(values: [UInt64(i)])
-                guard let tree = profile.buildTree(from: row) else { continue }
+                guard let tree = profile.buildTree(from: row) else {
+                    continue
+                }
                 let mode = Materializer.Mode.guided(seed: UInt64(i), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
                     gen, context: .init(
                         prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
                     )
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 for char in chars {
                     for scalar in char.unicodeScalars {
                         #expect(

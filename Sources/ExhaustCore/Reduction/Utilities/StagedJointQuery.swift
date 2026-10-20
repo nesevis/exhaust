@@ -258,7 +258,9 @@ enum StagedJointQuery {
                         let secondNode = leaves[second].nodeID
                         if graph.couplingDependents[firstNode]?.contains(secondNode) == true
                             || graph.couplingDependents[secondNode]?.contains(firstNode) == true
-                        { couplingCount += 1 }
+                        {
+                            couplingCount += 1
+                        }
                         if graph.nodes[firstNode].parent == graph.nodes[secondNode].parent {
                             sharedContextCount += 1
                         }

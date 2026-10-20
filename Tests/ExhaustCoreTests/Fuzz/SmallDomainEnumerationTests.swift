@@ -95,7 +95,9 @@ extension SmallDomainEnumerationTests {
         var rewritten = 0
         for _ in 0 ..< 400 where enumerations < 10 {
             let draw = runner.nextCandidate(from: entry, parentIndex: index)
-            guard draw.isEnumeration else { continue }
+            guard draw.isEnumeration else {
+                continue
+            }
             enumerations += 1
             let differing = draw.candidate.indices.filter { draw.candidate[$0] != parent[$0] }
             if differing.count != 1 {
@@ -141,7 +143,9 @@ private func materializedParent(_ gen: AnyGenerator) throws -> (ChoiceSequence, 
         let (_, tree) = try #require(try interpreter.next())
         let sequence = ChoiceSequence.flatten(tree)
         let smallValues = sequence.compactMap { entry -> UInt64? in
-            if case let .value(value) = entry, let range = value.validRange, range.count <= FuzzTunables.smallDomainLimit { return value.choice.bitPattern64 }
+            if case let .value(value) = entry, let range = value.validRange, range.count <= FuzzTunables.smallDomainLimit {
+                return value.choice.bitPattern64
+            }
             return nil
         }
         if smallValues.count < 2 || smallValues[0] != smallValues[1] {

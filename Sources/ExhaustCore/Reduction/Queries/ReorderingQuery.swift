@@ -28,17 +28,27 @@ enum ReorderingQuery {
 
             switch node.kind {
                 case let .sequence(metadata):
-                    guard metadata.elementCount >= 2 else { continue }
-                    guard metadata.childPositionRanges.count >= 2 else { continue }
+                    guard metadata.elementCount >= 2 else {
+                        continue
+                    }
+                    guard metadata.childPositionRanges.count >= 2 else {
+                        continue
+                    }
                     childRanges = metadata.childPositionRanges
                     childKinds = node.children.map { graph.nodes[$0].kind }
 
                 case .zip:
-                    guard node.children.count >= 2 else { continue }
+                    guard node.children.count >= 2 else {
+                        continue
+                    }
                     let childNodes = node.children.map { graph.nodes[$0] }
-                    guard childNodes.allSatisfy({ $0.positionRange != nil }) else { continue }
+                    guard childNodes.allSatisfy({ $0.positionRange != nil }) else {
+                        continue
+                    }
                     childRanges = childNodes.compactMap { $0.positionRange }
-                    guard childRanges.count >= 2 else { continue }
+                    guard childRanges.count >= 2 else {
+                        continue
+                    }
                     childKinds = childNodes.map { $0.kind }
 
                 default:
@@ -50,17 +60,23 @@ enum ReorderingQuery {
             var byCategory: [SiblingGroupKey: [ClosedRange<Int>]] = [:]
             for (childID, (range, kind)) in Swift.zip(node.children, Swift.zip(childRanges, childKinds)) {
                 let annotation = graph.nodes[childID].scopeAnnotation
-                if annotation.isDepthControl || annotation.isLaneControl { continue }
+                if annotation.isDepthControl || annotation.isLaneControl {
+                    continue
+                }
                 byCategory[siblingGroupKey(kind), default: []].append(range)
             }
 
             for (_, ranges) in byCategory where ranges.count >= 2 {
-                guard noBindInnerContainment(ranges, bindInnerRanges: bindInnerRanges) else { continue }
+                guard noBindInnerContainment(ranges, bindInnerRanges: bindInnerRanges) else {
+                    continue
+                }
                 groups.append(ReorderableGroup(depth: depth, ranges: ranges))
             }
         }
 
-        guard groups.isEmpty == false else { return nil }
+        guard groups.isEmpty == false else {
+            return nil
+        }
 
         let sorted = groups.sorted { lhs, rhs in
             if lhs.depth != rhs.depth {
@@ -77,8 +93,12 @@ enum ReorderingQuery {
     private static func collectBindInnerRanges(graph: ChoiceGraph) -> [ClosedRange<Int>] {
         var result: [ClosedRange<Int>] = []
         for node in graph.nodes {
-            guard case let .bind(metadata) = node.kind else { continue }
-            guard node.children.count >= 2 else { continue }
+            guard case let .bind(metadata) = node.kind else {
+                continue
+            }
+            guard node.children.count >= 2 else {
+                continue
+            }
             let innerChildID = node.children[metadata.innerChildIndex]
             if let innerRange = graph.nodes[innerChildID].positionRange {
                 result.append(innerRange)
@@ -94,7 +114,9 @@ enum ReorderingQuery {
         _ childRanges: [ClosedRange<Int>],
         bindInnerRanges: [ClosedRange<Int>]
     ) -> Bool {
-        guard bindInnerRanges.isEmpty == false else { return true }
+        guard bindInnerRanges.isEmpty == false else {
+            return true
+        }
         let sorted = bindInnerRanges.sorted { $0.lowerBound < $1.lowerBound }
         for siblingRange in childRanges {
             var low = 0
@@ -113,7 +135,9 @@ enum ReorderingQuery {
             var candidate = low - 1
             while candidate >= 0 {
                 let innerRange = sorted[candidate]
-                if innerRange.upperBound < siblingRange.lowerBound { break }
+                if innerRange.upperBound < siblingRange.lowerBound {
+                    break
+                }
                 if siblingRange.upperBound <= innerRange.upperBound {
                     return false
                 }

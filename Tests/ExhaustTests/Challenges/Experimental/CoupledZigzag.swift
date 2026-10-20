@@ -38,8 +38,12 @@ struct CoupledZigzagChallenge {
 
         let property: @Sendable ((Int, Int)) -> Bool = { pair in
             let (m, n) = pair
-            guard abs(Int(m) - Int(n)) <= 1 else { return true }
-            guard m >= 10 else { return true }
+            guard abs(Int(m) - Int(n)) <= 1 else {
+                return true
+            }
+            guard m >= 10 else {
+                return true
+            }
             return false
         }
 
@@ -81,8 +85,12 @@ struct CoupledZigzagChallenge {
 
         let property: @Sendable ((Int, Int)) -> Bool = { pair in
             let (m, n) = pair
-            guard abs(Int(m) - Int(n)) <= 1 else { return true }
-            guard m >= 10 else { return true }
+            guard abs(Int(m) - Int(n)) <= 1 else {
+                return true
+            }
+            guard m >= 10 else {
+                return true
+            }
             return false
         }
 

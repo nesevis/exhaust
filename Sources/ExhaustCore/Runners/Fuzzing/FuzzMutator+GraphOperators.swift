@@ -179,7 +179,9 @@ package struct MutationTargets: Sendable {
         var copyable: [Int] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .sequence(metadata) = node.kind else { continue }
+            guard case let .sequence(metadata) = node.kind else {
+                continue
+            }
             if metadata.elementCount >= 2 {
                 copyable.append(nodeID)
             }
@@ -195,10 +197,14 @@ package struct MutationTargets: Sendable {
         var siteNodeIDs: [Int] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard node.positionRange != nil, node.scopeAnnotation.isBindInner == false else { continue }
+            guard node.positionRange != nil, node.scopeAnnotation.isBindInner == false else {
+                continue
+            }
             switch node.kind {
                 case .chooseBits:
-                    guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false else { continue }
+                    guard node.scopeAnnotation.isDepthControl == false, node.scopeAnnotation.isLaneControl == false else {
+                        continue
+                    }
                 case .pick:
                     break
                 default:
@@ -237,7 +243,9 @@ package struct MutationTargets: Sendable {
             guard let position = sitePosition(of: site, in: sequence),
                   case let .value(entry) = sequence[position],
                   let range = entry.validRange, smallDomainSize(of: range) != nil
-            else { continue }
+            else {
+                continue
+            }
             enumerable.append(index)
         }
         return enumerable
@@ -248,14 +256,20 @@ package struct MutationTargets: Sendable {
         var emptyUntagged: [Int] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .sequence(metadata) = node.kind, node.positionRange != nil, metadata.childPositionRanges.count == metadata.elementCount else { continue }
+            guard case let .sequence(metadata) = node.kind, node.positionRange != nil, metadata.childPositionRanges.count == metadata.elementCount else {
+                continue
+            }
             if let key = FuzzMutator.twinKey(of: node, in: graph) {
                 sequencesByKey[key, default: []].append(nodeID)
             } else if metadata.elementTypeTag == nil, node.children.isEmpty {
                 emptyUntagged.append(nodeID)
             }
         }
-        let pickSequenceKeys = sequencesByKey.keys.filter { if case .pickSequence = $0 { return true } else { return false } }
+        let pickSequenceKeys = sequencesByKey.keys.filter { if case .pickSequence = $0 {
+            return true
+        } else {
+            return false
+        } }
         if pickSequenceKeys.count == 1, let key = pickSequenceKeys.first {
             sequencesByKey[key, default: []].append(contentsOf: emptyUntagged)
         }
@@ -744,9 +758,13 @@ package extension FuzzMutator {
         var ranges: [ClosedRange<Int>] = []
         for index in targets.maximalReseedSiteIndices {
             let range = targets.reseedSites[index].range
-            guard range.lowerBound > removed.upperBound else { continue }
+            guard range.lowerBound > removed.upperBound else {
+                continue
+            }
             let shifted = (range.lowerBound - shift) ... (range.upperBound - shift)
-            guard shifted.upperBound < result.count else { continue }
+            guard shifted.upperBound < result.count else {
+                continue
+            }
             ranges.append(shifted)
         }
         return (result, ranges)
@@ -845,9 +863,15 @@ package extension FuzzMutator {
                 ) else {
                     break
                 }
-                if chosen.contains(pick) { continue }
-                if sites[pick].containingSiteIndices.contains(where: { chosen.contains($0) }) { continue }
-                if chosen.contains(where: { sites[$0].containingSiteIndices.contains(pick) }) { continue }
+                if chosen.contains(pick) {
+                    continue
+                }
+                if sites[pick].containingSiteIndices.contains(where: { chosen.contains($0) }) {
+                    continue
+                }
+                if chosen.contains(where: { sites[$0].containingSiteIndices.contains(pick) }) {
+                    continue
+                }
                 chosen.append(pick)
             }
         }
@@ -855,7 +879,9 @@ package extension FuzzMutator {
         ranges.reserveCapacity(chosen.count)
         for index in chosen.sorted() {
             let range = sites[index].range
-            guard range.upperBound < candidate.count else { continue }
+            guard range.upperBound < candidate.count else {
+                continue
+            }
             ranges.append(range)
         }
         return ranges.isEmpty ? nil : ranges

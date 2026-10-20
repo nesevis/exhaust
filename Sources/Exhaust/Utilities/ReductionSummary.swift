@@ -53,8 +53,12 @@ private struct ReductionChangeCollector {
     }
 
     private func joinPath(_ base: String, _ component: String) -> String {
-        if base.isEmpty { return component }
-        if component.hasPrefix(".") { return "\(base)\(component)" }
+        if base.isEmpty {
+            return component
+        }
+        if component.hasPrefix(".") {
+            return "\(base)\(component)"
+        }
         return "\(base).\(component)"
     }
 
@@ -63,7 +67,9 @@ private struct ReductionChangeCollector {
     mutating func walk(_ original: Any, _ reduced: Any, path: String, depth: Int = 0) {
         if type(of: original) is AnyClass {
             let identifier = ObjectIdentifier(original as AnyObject)
-            if visited.contains(identifier) { return }
+            if visited.contains(identifier) {
+                return
+            }
             visited.insert(identifier)
         }
 
@@ -181,7 +187,10 @@ private struct ReductionChangeCollector {
 
             for key in sharedKeys {
                 guard let originalValue = originalByKey[key],
-                      let reducedValue = reducedByKey[key] else { continue }
+                      let reducedValue = reducedByKey[key]
+                else {
+                    continue
+                }
                 walk(originalValue, reducedValue, path: "\(path)[\"\(key)\"]", depth: depth + 1)
             }
         }
@@ -194,7 +203,9 @@ private struct ReductionChangeCollector {
             }
             let pairMirror = Mirror(reflecting: child.value)
             let children = Array(pairMirror.children)
-            guard children.count >= 2 else { return nil }
+            guard children.count >= 2 else {
+                return nil
+            }
             return (key: "\(children[0].value)", value: children[1].value)
         }
     }
@@ -264,7 +275,9 @@ private struct ReductionChangeCollector {
         }
 
         for child in originalChildren {
-            guard let label = child.label else { continue }
+            guard let label = child.label else {
+                continue
+            }
             let childPath = joinPath(path, label)
 
             guard let reducedValue = reducedByLabel[label] else {
@@ -315,7 +328,9 @@ private struct ReductionChangeCollector {
         let totalChanges = removed.count + simplified.count + simplifiedToFloor.count +
             collectionReductions.count + dictionaryChanges.count + unchangedNonTrivial.count
 
-        if totalChanges == 0 { return nil }
+        if totalChanges == 0 {
+            return nil
+        }
 
         var sentences: [String] = []
 
@@ -373,7 +388,9 @@ private struct ReductionChangeCollector {
             }
         }
 
-        if sentences.isEmpty { return nil }
+        if sentences.isEmpty {
+            return nil
+        }
         return sentences.joined(separator: "\n")
     }
 
@@ -399,7 +416,9 @@ private struct ReductionChangeCollector {
     }
 
     private func backticked(_ path: String) -> String {
-        if path.isEmpty { return path }
+        if path.isEmpty {
+            return path
+        }
         return "`\(path)`"
     }
 }
@@ -407,10 +426,18 @@ private struct ReductionChangeCollector {
 // MARK: - Helpers
 
 private func shouldInclude(_ child: Mirror.Child) -> Bool {
-    guard let label = child.label else { return false }
-    if label.hasPrefix("$__lazy_storage_$_") { return false }
-    if label.hasPrefix("_$") { return false }
-    if "\(child.value)" == "(Function)" { return false }
+    guard let label = child.label else {
+        return false
+    }
+    if label.hasPrefix("$__lazy_storage_$_") {
+        return false
+    }
+    if label.hasPrefix("_$") {
+        return false
+    }
+    if "\(child.value)" == "(Function)" {
+        return false
+    }
     return true
 }
 

@@ -26,10 +26,16 @@ enum RemovalQuery {
 
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard let parentID = node.parent else { continue }
-            guard case let .sequence(metadata) = graph.nodes[parentID].kind else { continue }
+            guard let parentID = node.parent else {
+                continue
+            }
+            guard case let .sequence(metadata) = graph.nodes[parentID].kind else {
+                continue
+            }
             let minLength = metadata.lengthConstraint?.lowerBound ?? 0
-            guard UInt64(metadata.elementCount) > minLength else { continue }
+            guard UInt64(metadata.elementCount) > minLength else {
+                continue
+            }
             parentGroups[parentID, default: []].append(nodeID)
         }
 
@@ -71,21 +77,31 @@ enum RemovalQuery {
         var scopes: [CoveringAlignedRemovalScope] = []
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case .zip = node.kind else { continue }
+            guard case .zip = node.kind else {
+                continue
+            }
 
             let allSequenceChildren = node.children.compactMap { childID -> CoveringAlignedRemovalScope.AlignedSibling? in
-                guard let sequenceNodeID = QueryHelpers.findSequenceBeneath(childID, graph: graph) else { return nil }
+                guard let sequenceNodeID = QueryHelpers.findSequenceBeneath(childID, graph: graph) else {
+                    return nil
+                }
                 let sequenceNode = graph.nodes[sequenceNodeID]
-                guard case let .sequence(metadata) = sequenceNode.kind else { return nil }
+                guard case let .sequence(metadata) = sequenceNode.kind else {
+                    return nil
+                }
                 let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
                 let deletable = metadata.elementCount - minLength
-                guard deletable > 0 else { return nil }
+                guard deletable > 0 else {
+                    return nil
+                }
                 return CoveringAlignedRemovalScope.AlignedSibling(
                     sequenceNodeID: sequenceNodeID,
                     elementNodeIDs: sequenceNode.children
                 )
             }
-            guard allSequenceChildren.count >= 2 else { continue }
+            guard allSequenceChildren.count >= 2 else {
+                continue
+            }
 
             // Each sibling becomes a parameter with domain = elementCount + 1.
             // The extra value (= elementCount) encodes "skip this sibling."

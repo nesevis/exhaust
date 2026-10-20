@@ -75,7 +75,9 @@ package struct ResolvedConcurrentConfig {
     ///
     /// A deadline already saturated at ``UInt64/max`` stays there, and a run with no deadline is unaffected.
     package mutating func postponeDeadline(by nanoseconds: UInt64) {
-        guard let deadline = deadlineNanoseconds else { return }
+        guard let deadline = deadlineNanoseconds else {
+            return
+        }
         let (postponed, overflow) = deadline.addingReportingOverflow(nanoseconds)
         deadlineNanoseconds = overflow ? .max : postponed
     }

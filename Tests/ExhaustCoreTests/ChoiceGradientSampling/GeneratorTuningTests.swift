@@ -281,7 +281,9 @@ struct GeneratorTuningTests {
         let sampleSize = 2000
         var iterator = ValueInterpreter(tuned, seed: 99, maxRuns: UInt64(sampleSize))
         while let value = try iterator.next() {
-            if predicate(value) { validCount += 1 }
+            if predicate(value) {
+                validCount += 1
+            }
         }
 
         let validityRate = Double(validCount) / Double(sampleSize)

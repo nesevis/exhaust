@@ -759,7 +759,9 @@ func rbtToList(_ tree: EtnaRBT) -> [(Int, Int)] {
 }
 
 private func rbtToListAccum(_ tree: EtnaRBT, into result: inout [(Int, Int)]) {
-    guard case let .node(_, left, key, value, right) = tree else { return }
+    guard case let .node(_, left, key, value, right) = tree else {
+        return
+    }
     rbtToListAccum(left, into: &result)
     result.append((key, value))
     rbtToListAccum(right, into: &result)
@@ -791,8 +793,12 @@ extension EtnaRBT {
             case .empty:
                 return true
             case let .node(_, left, key, _, right):
-                if let min, key <= min { return false }
-                if let max, key >= max { return false }
+                if let min, key <= min {
+                    return false
+                }
+                if let max, key >= max {
+                    return false
+                }
                 return left.isValidBSTHelper(min: min, max: key)
                     && right.isValidBSTHelper(min: key, max: max)
         }
@@ -875,7 +881,9 @@ func logRBTFeederGenerator() {
     let feederGen = #gen(.int(in: -100 ... 100), .int(in: -100 ... 100))
         .array(length: 1 ... 100, scaling: .constant)
 
-    guard let arrays = try? #example(feederGen, count: 100) else { return }
+    guard let arrays = try? #example(feederGen, count: 100) else {
+        return
+    }
     for (index, array) in arrays.enumerated() {
         let keys = array.map(\.0)
         let uniqueKeys = Set(keys)

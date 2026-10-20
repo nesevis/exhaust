@@ -50,7 +50,9 @@ final class RacyAccountSpec {
 
     @Command(weight: 2, .int(in: 1 ... 5))
     func withdraw(amount: Int) throws -> Int {
-        guard account.balance >= amount else { throw skip() }
+        guard account.balance >= amount else {
+            throw skip()
+        }
         account.withdraw(amount)
         return amount
     }

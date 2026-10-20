@@ -109,7 +109,9 @@ struct PullBasedCoveringArrayTests {
         var count = 0
         while generator.next() != nil {
             count += 1
-            if count > totalTuples { break }
+            if count > totalTuples {
+                break
+            }
         }
 
         #expect(generator.totalRemaining == 0)
@@ -167,7 +169,9 @@ private func generateAll(domainSizes: [UInt64], strength: Int) -> [CoveringArray
     var rows: [CoveringArrayRow] = []
     while let row = generator.next() {
         rows.append(row)
-        if rows.count > upperBound { break }
+        if rows.count > upperBound {
+            break
+        }
     }
     return rows
 }
@@ -217,7 +221,9 @@ private func verifyTWayCoverage(rows: [CoveringArrayRow], domainSizes: [UInt64],
 }
 
 private func allCombinations(of n: Int, choose k: Int) -> [[Int]] {
-    guard k <= n, k > 0 else { return [] }
+    guard k <= n, k > 0 else {
+        return []
+    }
     var result: [[Int]] = []
     var current: [Int] = []
     current.reserveCapacity(k)

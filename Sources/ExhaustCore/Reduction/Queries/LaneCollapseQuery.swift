@@ -17,10 +17,18 @@ enum LaneCollapseQuery {
 
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard case let .chooseBits(metadata) = node.kind else { continue }
-            guard node.scopeAnnotation.isLaneControl else { continue }
-            guard metadata.value.bitPattern64 != 0 else { continue }
-            guard let positionRange = node.positionRange else { continue }
+            guard case let .chooseBits(metadata) = node.kind else {
+                continue
+            }
+            guard node.scopeAnnotation.isLaneControl else {
+                continue
+            }
+            guard metadata.value.bitPattern64 != 0 else {
+                continue
+            }
+            guard let positionRange = node.positionRange else {
+                continue
+            }
 
             entries.append((
                 position: positionRange.lowerBound,
@@ -28,7 +36,9 @@ enum LaneCollapseQuery {
             ))
         }
 
-        guard entries.isEmpty == false else { return nil }
+        guard entries.isEmpty == false else {
+            return nil
+        }
 
         entries.sort { $0.position < $1.position }
 

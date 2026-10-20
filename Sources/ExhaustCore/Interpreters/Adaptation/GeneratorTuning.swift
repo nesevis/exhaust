@@ -89,7 +89,9 @@ package enum GeneratorTuning {
             maxComplexity = max(maxComplexity, tree.pickComplexity)
         }
 
-        guard maxComplexity > 0 else { return generator }
+        guard maxComplexity > 0 else {
+            return generator
+        }
 
         var samples = min(maxSamples, minPerChoice * maxComplexity)
 
@@ -283,7 +285,9 @@ package enum GeneratorTuning {
                             predicate: predicate
                         )
                         let innerPredicate: (Any) -> Bool = { innerValue in
-                            guard let transformed = try? forward(innerValue) else { return false }
+                            guard let transformed = try? forward(innerValue) else {
+                                return false
+                            }
                             return composed(transformed)
                         }
                         let tunedInner = try measureAndTune(

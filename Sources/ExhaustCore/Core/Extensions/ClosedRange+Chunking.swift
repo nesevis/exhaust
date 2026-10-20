@@ -10,8 +10,12 @@ package extension ClosedRange where Bound == UInt64 {
 
     /// Splits the range into `chunks` roughly equal sub-ranges, distributing any remainder across the leading sub-ranges.
     func split(into chunks: Int) -> [ClosedRange<UInt64>] {
-        guard chunks > 0 else { return [] }
-        guard chunks > 1 else { return [self] }
+        guard chunks > 0 else {
+            return []
+        }
+        guard chunks > 1 else {
+            return [self]
+        }
 
         // Compute totalSize = upperBound - lowerBound + 1 with overflow detection.
         // The only case that overflows is 0...UInt64.max (size = 2^64, not representable).
@@ -44,13 +48,17 @@ package extension ClosedRange where Bound == UInt64 {
         for i in 0 ..< chunks {
             let extra: UInt64 = UInt64(i) < chunkRemainder ? 1 : 0
             let size = chunkSize + extra
-            guard size > 0 else { break }
+            guard size > 0 else {
+                break
+            }
             // Compute end = start + (size - 1) to avoid the overflow that (start + size) - 1 can cause when start + size exceeds UInt64.max.
             let (tentativeEnd, overflow) = start.addingReportingOverflow(size - 1)
             let end = (overflow || tentativeEnd > upperBound) ? upperBound : tentativeEnd
 
             result.append(start ... end)
-            guard end < upperBound else { break }
+            guard end < upperBound else {
+                break
+            }
             start = end + 1 // Safe: end < upperBound guarantees end + 1 <= upperBound.
         }
 

@@ -372,7 +372,9 @@ struct MaterializeTests {
         let (_, tree) = try #require(matIter4.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         let minimized = flattened.map { element -> ChoiceSequenceValue in
-            guard case .value = element else { return element }
+            guard case .value = element else {
+                return element
+            }
             return .value(.init(choice: ChoiceValue(UInt64(0), tag: .uint64), validRange: nil))
         }
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
@@ -453,7 +455,9 @@ private func materializeViaReflection<Output>(
     _ gen: Generator<Output>,
     _ value: Output
 ) -> Output? {
-    guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
+    guard let tree = try? Interpreters.reflect(gen, with: value) else {
+        return nil
+    }
     let sequence = ChoiceSequence.flatten(tree)
     switch Materializer.materialize(gen, context: .init(
         prefix: sequence, mode: .exact, fallbackTree: tree

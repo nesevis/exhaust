@@ -80,7 +80,9 @@ package enum AdaptiveSmoothing {
                     let total = Double(totalWeight)
                     entropy = -choices.reduce(into: 0.0) { sum, choice in
                         let p = Double(choice.weight) / total
-                        if p > 0 { sum += p * log2(p) }
+                        if p > 0 {
+                            sum += p * log2(p)
+                        }
                     }
                 } else {
                     entropy = log2(Double(choices.count))

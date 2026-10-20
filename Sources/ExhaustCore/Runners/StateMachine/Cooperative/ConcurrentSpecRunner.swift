@@ -402,8 +402,12 @@ package extension CooperativeScheduler {
                 }
                 if failed.value == nil {
                     for command in prefixCommands {
-                        guard Task.isCancelled == false else { break }
-                        guard failed.value == nil else { break }
+                        guard Task.isCancelled == false else {
+                            break
+                        }
+                        guard failed.value == nil else {
+                            break
+                        }
                         let recorder = LaneTraceRecorder(
                             trace: trace,
                             isRecording: recordTrace,
@@ -494,8 +498,12 @@ package extension CooperativeScheduler {
                 defer { runQueue.markComplete(lane: lane) }
                 let traceLane = TraceEvent.Lane.lane(lane)
                 for command in commands {
-                    guard Task.isCancelled == false else { return }
-                    guard failed.value == nil else { return }
+                    guard Task.isCancelled == false else {
+                        return
+                    }
+                    guard failed.value == nil else {
+                        return
+                    }
                     commandIndex.value += 1
                     let label: String
                     if recordTrace {

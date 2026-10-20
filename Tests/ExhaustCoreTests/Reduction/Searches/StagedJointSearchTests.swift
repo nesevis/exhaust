@@ -80,7 +80,9 @@ struct StagedJointSearchTests {
         var observed: Set<[UInt64]> = []
         for _ in 0 ..< 100 {
             var candidate = base
-            guard let proposal = cursor.next(into: &candidate) else { break }
+            guard let proposal = cursor.next(into: &candidate) else {
+                break
+            }
             #expect(proposal.leaves.count == arity)
             #expect(candidate.shortLexPrecedes(base))
             #expect(observed.insert(proposal.patterns).inserted)
@@ -166,7 +168,9 @@ struct StagedJointSearchTests {
         var emitted = 0
         for _ in 0 ... bounded.estimatedWork {
             var candidate = base
-            guard cursor.next(into: &candidate) != nil else { break }
+            guard cursor.next(into: &candidate) != nil else {
+                break
+            }
             #expect(candidate.shortLexPrecedes(base))
             emitted += 1
         }
@@ -217,7 +221,9 @@ struct StagedJointSearchTests {
 
     private func markConverged(_ graph: inout ChoiceGraph) {
         for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+                continue
+            }
             graph.convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
         }
     }

@@ -1190,7 +1190,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursiveAny(
             innerGen, context: &context
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, context: &context
@@ -1206,7 +1208,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursiveAny(
             innerGen, context: &context
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, context: &context
@@ -1231,7 +1235,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 context: &context
             )
         }
-        guard let innerResult else { return nil }
+        guard let innerResult else {
+            return nil
+        }
         context.emitFlat(.group(false))
         let calleeTree: ChoiceTree = context.emitsFlat
             ? .just
@@ -1283,10 +1289,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             let calleeStart = context.flatCount
             guard let (result, tree) = try Self.generateRecursiveAny(
                 filteredGen, context: &context
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             let passed = predicate(result)
             filterAttempts += 1
-            if passed { filterPasses += 1 }
+            if passed {
+                filterPasses += 1
+            }
             if passed {
                 return try runContinuation(
                     result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
@@ -1311,7 +1321,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursiveAny(
             classifyGen, context: &context
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         for (label, classifier) in classifiers where classifier(result) {
             context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
         }
@@ -1333,7 +1345,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             let calleeStart = context.flatCount
             guard let (result, tree) = try Self.generateRecursiveAny(
                 uniqueGen, context: &context
-            ) else { return nil }
+            ) else {
+                return nil
+            }
             let accepted: Bool
             if let keyExtractor {
                 let key = keyExtractor(result)

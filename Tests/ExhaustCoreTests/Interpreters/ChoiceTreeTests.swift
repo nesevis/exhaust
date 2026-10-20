@@ -124,7 +124,9 @@ struct ChoiceTreeTests {
         private func probeContainsPicks(_ generator: Generator<some Any>) throws -> Bool {
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 42, maxRuns: 10)
             while let (_, tree) = try iterator.next() {
-                if tree.containsPicks { return true }
+                if tree.containsPicks {
+                    return true
+                }
             }
             return false
         }
@@ -173,7 +175,9 @@ struct ChoiceTreeTests {
         func transformsLeaf() {
             let tree = ChoiceTree.just
             let result = tree.map { node in
-                if case .just = node { return .getSize(99) }
+                if case .just = node {
+                    return .getSize(99)
+                }
                 return node
             }
             #expect(result.hasSameRepresentation(as: .getSize(99)))
@@ -183,7 +187,9 @@ struct ChoiceTreeTests {
         func transformsGroupChildren() {
             let tree = ChoiceTree.group([.just, .just])
             let result = tree.map { node in
-                if case .just = node { return .getSize(0) }
+                if case .just = node {
+                    return .getSize(0)
+                }
                 return node
             }
             #expect(result.hasSameRepresentation(as: .group([.getSize(0), .getSize(0)])))
@@ -194,7 +200,9 @@ struct ChoiceTreeTests {
             let meta = ChoiceMetadata(validRange: 0 ... 5)
             let tree = ChoiceTree.sequence(elements: [.just], metadata: meta)
             let result = tree.map { node in
-                if case .just = node { return .getSize(1) }
+                if case .just = node {
+                    return .getSize(1)
+                }
                 return node
             }
             if case let .sequence(elements, _) = result {
@@ -211,7 +219,9 @@ struct ChoiceTreeTests {
                 choice: .just, isSelected: true
             )
             let result = tree.map { node in
-                if case .just = node { return .getSize(2) }
+                if case .just = node {
+                    return .getSize(2)
+                }
                 return node
             }
             #expect(
@@ -226,7 +236,9 @@ struct ChoiceTreeTests {
         func transformsResize() {
             let tree = ChoiceTree.resize(newSize: 50, choices: [.just])
             let result = tree.map { node in
-                if case .just = node { return .getSize(3) }
+                if case .just = node {
+                    return .getSize(3)
+                }
                 return node
             }
             if case let .resize(size, choices) = result {

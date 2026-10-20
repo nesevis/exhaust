@@ -144,7 +144,9 @@ private var sortedProblem: UniquenessProblem<[UInt]> {
         name: "SORTED(\(sortedLength))",
         generator: Gen.arrayOf(Gen.choose(in: 0 ... 9 as ClosedRange<UInt>), exactly: sortedLength),
         predicate: { list in
-            guard list.count == sortedLength else { return false }
+            guard list.count == sortedLength else {
+                return false
+            }
             return zip(list, list.dropFirst()).allSatisfy { $0 <= $1 }
         },
         qualityBucket: { Set($0).count },

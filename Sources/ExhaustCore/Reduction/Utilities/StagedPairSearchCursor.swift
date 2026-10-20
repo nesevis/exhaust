@@ -35,7 +35,9 @@ struct StagedPairSearchCursor {
             ranked.append((signFlip.priority, pairs.count + offset, Self.pairProposal(signFlip.probe)))
         }
         rescalingProposals = ranked.sorted { first, second in
-            if first.priority != second.priority { return first.priority < second.priority }
+            if first.priority != second.priority {
+                return first.priority < second.priority
+            }
             return first.pairIndex < second.pairIndex
         }.map(\.proposal)
 
@@ -44,7 +46,9 @@ struct StagedPairSearchCursor {
 
     /// Writes only the returned proposal; skipped grid points cannot leak edits into another pair's candidate.
     mutating func next(into candidate: inout ChoiceSequence) -> NumericPairSearchCursor.Proposal? {
-        guard let proposal = next() else { return nil }
+        guard let proposal = next() else {
+            return nil
+        }
         proposal.write(into: &candidate)
         return proposal
     }
@@ -56,9 +60,13 @@ struct StagedPairSearchCursor {
             rescalingIndex += 1
             return proposal
         }
-        guard rescalingKeys.isEmpty == false else { return cursor.next() }
+        guard rescalingKeys.isEmpty == false else {
+            return cursor.next()
+        }
         while let proposal = cursor.next() {
-            guard rescalingKeys.contains(ProposalKey(proposal)) == false else { continue }
+            guard rescalingKeys.contains(ProposalKey(proposal)) == false else {
+                continue
+            }
             return proposal
         }
         return nil

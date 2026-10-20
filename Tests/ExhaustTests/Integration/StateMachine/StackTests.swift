@@ -39,7 +39,9 @@ final class StackSpec {
 
     @Command(weight: 2)
     func pop() throws {
-        guard expected.isEmpty == false else { throw skip() }
+        guard expected.isEmpty == false else {
+            throw skip()
+        }
         let modelValue = expected.removeLast()
         let sutValue = stack.removeLast()
         try check(modelValue == sutValue, "pop values should match")

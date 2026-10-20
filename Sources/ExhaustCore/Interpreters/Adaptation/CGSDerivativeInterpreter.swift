@@ -133,7 +133,9 @@ package enum CGSDerivativeInterpreter {
     ) throws -> Output? {
         guard let result = try generateRecursive(
             nextGen, with: inputValue, rng: &rng, size: size
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result, continuation,
             inputValue: inputValue, rng: &rng, size: size
@@ -155,7 +157,9 @@ package enum CGSDerivativeInterpreter {
         }
         guard let result = try generateRecursive(
             nextGen, with: wrappedValue, rng: &rng, size: size
-        ) else { return nil }
+        ) else {
+            return nil
+        }
         return try runContinuation(
             result, continuation,
             inputValue: inputValue, rng: &rng, size: size

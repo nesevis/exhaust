@@ -107,7 +107,9 @@ package struct Xoshiro256: ~Copyable {
     @inline(__always)
     public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
         let width = range.upperBound &- range.lowerBound
-        if width == UInt64.max { return next() }
+        if width == UInt64.max {
+            return next()
+        }
         return range.lowerBound &+ next(upperBound: width &+ 1)
     }
 

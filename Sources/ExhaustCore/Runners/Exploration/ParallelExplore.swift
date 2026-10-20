@@ -244,7 +244,9 @@ extension __ExhaustRuntime {
         while canceled.value == false, result.hits[targetDirection] < hitsPerDirection {
             let value: Output
             do {
-                guard let next = try interpreter.nextValueOnly() else { break }
+                guard let next = try interpreter.nextValueOnly() else {
+                    break
+                }
                 value = next
             } catch {
                 result.error = error

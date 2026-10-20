@@ -89,7 +89,9 @@ struct NumericCommonDivisorTests {
         var observed: Set<[UInt64]> = []
         for _ in 0 ..< 28 {
             var candidate = base
-            guard let proposal = cursor.next(into: &candidate) else { break }
+            guard let proposal = cursor.next(into: &candidate) else {
+                break
+            }
             let changed = candidate.indices.filter { candidate[$0] != base[$0] }
             #expect(changed == [proposal.pair.source.position, proposal.pair.sink.position])
             #expect(candidate.shortLexPrecedes(base))
@@ -165,7 +167,9 @@ struct NumericCommonDivisorTests {
         var observed: Set<[UInt64]> = [expected]
         for _ in 0 ... scope.estimatedWork {
             candidate = base
-            guard let proposal = cursor.next(into: &candidate) else { break }
+            guard let proposal = cursor.next(into: &candidate) else {
+                break
+            }
             #expect(candidate.shortLexPrecedes(base))
             #expect(observed.insert(proposal.patterns).inserted)
         }
@@ -187,7 +191,9 @@ struct NumericCommonDivisorTests {
 
     private func markConverged(_ graph: inout ChoiceGraph) {
         for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
+            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+                continue
+            }
             graph.convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
         }
     }

@@ -33,7 +33,9 @@ package enum PickBranchResolution {
         in choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> AnyGenerator? {
         let index = Int(id)
-        guard index < choices.count else { return nil }
+        guard index < choices.count else {
+            return nil
+        }
         return choices[index].generator
     }
 

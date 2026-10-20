@@ -98,7 +98,9 @@ public enum ReplaySeed: Sendable {
             }
             return (seed: seed, iteration: iteration)
         }
-        guard let seed = decode(string) else { return nil }
+        guard let seed = decode(string) else {
+            return nil
+        }
         return (seed: seed, iteration: nil)
     }
 
@@ -114,19 +116,27 @@ public enum ReplaySeed: Sendable {
     ///
     /// Returns `nil` unless the string is a Base32 seed, a dash, `U`, a positive row number, and optionally `L` followed by a positive tier length.
     package static func decodeScreeningRow(_ string: String) -> (seed: UInt64, row: Int, tierLength: Int?)? {
-        guard let dashIndex = string.lastIndex(of: "-") else { return nil }
+        guard let dashIndex = string.lastIndex(of: "-") else {
+            return nil
+        }
         let seedPart = String(string[string.startIndex ..< dashIndex])
         var rowPart = String(string[string.index(after: dashIndex)...])
-        guard let marker = rowPart.first, marker == "U" || marker == "u" else { return nil }
+        guard let marker = rowPart.first, marker == "U" || marker == "u" else {
+            return nil
+        }
         rowPart = String(rowPart.dropFirst())
         var tierLength: Int?
         if let tierMarkerIndex = rowPart.firstIndex(where: { $0 == "L" || $0 == "l" }) {
             let tierPart = String(rowPart[rowPart.index(after: tierMarkerIndex)...])
-            guard let length = Int(tierPart), length >= 1 else { return nil }
+            guard let length = Int(tierPart), length >= 1 else {
+                return nil
+            }
             tierLength = length
             rowPart = String(rowPart[..<tierMarkerIndex])
         }
-        guard let seed = decode(seedPart), let row = Int(rowPart), row >= 1 else { return nil }
+        guard let seed = decode(seedPart), let row = Int(rowPart), row >= 1 else {
+            return nil
+        }
         return (seed: seed, row: row - 1, tierLength: tierLength)
     }
 
@@ -141,7 +151,9 @@ public enum ReplaySeed: Sendable {
 
     /// Encodes a `UInt64` as a Crockford Base32 string with no padding and no leading zeros.
     package static func encode(_ value: UInt64) -> String {
-        if value == 0 { return "0" }
+        if value == 0 {
+            return "0"
+        }
         var characters: [Character] = []
         characters.reserveCapacity(13)
         var remaining = value
@@ -159,14 +171,22 @@ public enum ReplaySeed: Sendable {
     /// Case-insensitive. Maps `I` and `L` to `1`, and `O` to `0` per the Crockford spec.
     /// Returns `nil` on invalid characters, empty input, or overflow.
     package static func decode(_ string: String) -> UInt64? {
-        if string.isEmpty { return nil }
+        if string.isEmpty {
+            return nil
+        }
         var result: UInt64 = 0
         for character in string {
-            guard let digitValue = decodeCharacter(character) else { return nil }
+            guard let digitValue = decodeCharacter(character) else {
+                return nil
+            }
             let (shifted, shiftOverflow) = result.multipliedReportingOverflow(by: 32)
-            if shiftOverflow { return nil }
+            if shiftOverflow {
+                return nil
+            }
             let (added, addOverflow) = shifted.addingReportingOverflow(UInt64(digitValue))
-            if addOverflow { return nil }
+            if addOverflow {
+                return nil
+            }
             result = added
         }
         return result

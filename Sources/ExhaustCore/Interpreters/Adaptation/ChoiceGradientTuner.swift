@@ -109,10 +109,14 @@ package enum ChoiceGradientTuner<FinalOutput> {
             while try iterator.next() != nil {}
 
             completedRuns += runsThisBatch
-            guard completedRuns < warmupRuns else { break }
+            guard completedRuns < warmupRuns else {
+                break
+            }
 
             if completedRuns >= minWarmupRuns {
-                if accumulator.hasConverged(threshold: 0.05) { break }
+                if accumulator.hasConverged(threshold: 0.05) {
+                    break
+                }
                 currentGen = bakeWeights(subdivided, from: accumulator, strategy: weightingStrategy)
             }
         }
@@ -460,9 +464,13 @@ package enum ChoiceGradientTuner<FinalOutput> {
     ) -> Generator<Output>? {
         let maxWeight = choices.max(by: { $0.weight < $1.weight })!.weight
         let minWeight = choices.min(by: { $0.weight < $1.weight })!.weight
-        guard minWeight > 0 else { return nil }
+        guard minWeight > 0 else {
+            return nil
+        }
         let ratio = Double(maxWeight) / Double(minWeight)
-        guard ratio < 1.5 else { return nil }
+        guard ratio < 1.5 else {
+            return nil
+        }
 
         var globalMin: UInt64 = .max
         var globalMax: UInt64 = .min
@@ -481,7 +489,9 @@ package enum ChoiceGradientTuner<FinalOutput> {
                 innerContinuation = choiceContinuation
             }
             if let existingTag = tag {
-                guard existingTag == choiceTag else { return nil }
+                guard existingTag == choiceTag else {
+                    return nil
+                }
             } else {
                 tag = choiceTag
                 isRangeExplicit = choiceExplicit
@@ -489,7 +499,9 @@ package enum ChoiceGradientTuner<FinalOutput> {
             }
         }
 
-        guard let tag, let isRangeExplicit, let innerContinuation else { return nil }
+        guard let tag, let isRangeExplicit, let innerContinuation else {
+            return nil
+        }
 
         return .impure(
             operation: .chooseBits(

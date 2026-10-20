@@ -136,7 +136,9 @@ struct CollectionGeneratorTests {
                 for key in dict.keys {
                     #expect(0 ... 2 ~= key)
                 }
-                if dict.count == 3 { sawFullKeySpace = true }
+                if dict.count == 3 {
+                    sawFullKeySpace = true
+                }
                 generated += 1
             }
             #expect(generated > 0)
@@ -294,7 +296,9 @@ struct CollectionGeneratorTests {
             var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
             while let value = try iterator.next() {
                 seen.insert(value)
-                if seen.count == CollectionDirection.allCases.count { break }
+                if seen.count == CollectionDirection.allCases.count {
+                    break
+                }
             }
 
             #expect(seen.count == CollectionDirection.allCases.count, "Expected all 4 directions, got \(seen)")
@@ -308,8 +312,14 @@ struct CollectionGeneratorTests {
 
             var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 50)
             while let value = try iterator.next() {
-                if value { sawTrue = true } else { sawFalse = true }
-                if sawTrue, sawFalse { break }
+                if value {
+                    sawTrue = true
+                } else {
+                    sawFalse = true
+                }
+                if sawTrue, sawFalse {
+                    break
+                }
             }
 
             #expect(sawTrue, "Expected at least one true")

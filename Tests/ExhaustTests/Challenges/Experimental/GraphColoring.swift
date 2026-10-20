@@ -123,7 +123,9 @@ struct GraphColoringChallenge {
     }
 
     private func printMetric(_ label: String, values: [some BinaryInteger]) {
-        guard values.isEmpty == false else { return }
+        guard values.isEmpty == false else {
+            return
+        }
         let mean = Double(values.reduce(0, +)) / Double(values.count)
         let sorted = values.sorted()
         let median = sorted[sorted.count / 2]
@@ -131,7 +133,9 @@ struct GraphColoringChallenge {
     }
 
     private func printMetric(_ label: String, values: [Double], format: String) {
-        guard values.isEmpty == false else { return }
+        guard values.isEmpty == false else {
+            return
+        }
         let mean = values.reduce(0, +) / Double(values.count)
         let sorted = values.sorted()
         let median = sorted[sorted.count / 2]
@@ -250,7 +254,9 @@ struct GraphColoringChallenge {
                     var edges: [Edge] = []
                     for pair in idxPairs {
                         let (i, j) = pair
-                        guard i != j else { continue }
+                        guard i != j else {
+                            continue
+                        }
                         let edge = Edge(vertices[i], vertices[j])
                         if seen.insert(edge).inserted {
                             edges.append(edge)
@@ -277,7 +283,9 @@ struct GraphColoringChallenge {
     /// `k`-coloring at each step. Returns the first `k` that succeeds.
     static func chromaticNumber(_ graph: Graph) -> Int {
         let vertices = graph.distinctVertices
-        if vertices.isEmpty { return 0 }
+        if vertices.isEmpty {
+            return 0
+        }
         var adjacency: [Int: Set<Int>] = [:]
         for edge in graph.edges {
             adjacency[edge.lower, default: []].insert(edge.upper)
@@ -299,7 +307,9 @@ struct GraphColoringChallenge {
         adjacency: [Int: Set<Int>],
         assignment: inout [Int: Int]
     ) -> Bool {
-        if index == vertices.count { return true }
+        if index == vertices.count {
+            return true
+        }
         let vertex = vertices[index]
         let neighbors = adjacency[vertex] ?? []
         for color in 0 ..< k {
@@ -316,10 +326,16 @@ struct GraphColoringChallenge {
     }
 
     static let property: @Sendable (Graph) -> Bool = { graph in
-        guard graph.edges.isEmpty == false else { return true }
-        guard graph.distinctVertices.count >= 3 else { return true }
+        guard graph.edges.isEmpty == false else {
+            return true
+        }
+        guard graph.distinctVertices.count >= 3 else {
+            return true
+        }
         let chromatic = chromaticNumber(graph)
-        guard chromatic >= 3 else { return true }
+        guard chromatic >= 3 else {
+            return true
+        }
         return maxDegree(graph) >= chromatic
     }
 

@@ -56,7 +56,9 @@ package struct DecodingReport: Sendable {
     /// Exact carry-forward scores 1.0, fallback tree scores 0.5, PRNG scores 0.0. Returns 0.0 when no coordinates have been recorded (empty lift).
     package var fidelity: Double {
         let total = totalCount
-        guard total > 0 else { return 0.0 }
+        guard total > 0 else {
+            return 0.0
+        }
         let score = Double(exactCarryForwardCount) + 0.5 * Double(fallbackTreeCount)
         return score / Double(total)
     }
@@ -71,7 +73,9 @@ package struct DecodingReport: Sendable {
     /// Returns 0.0 when no coordinates have been recorded.
     package var convergence: Double {
         let total = totalCount
-        guard total > 0 else { return 0.0 }
+        guard total > 0 else {
+            return 0.0
+        }
         return Double(exactCarryForwardCount + fallbackTreeCount + reseededCount) / Double(total)
     }
 

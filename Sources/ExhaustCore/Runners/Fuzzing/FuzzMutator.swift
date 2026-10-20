@@ -158,7 +158,9 @@ package enum FuzzMutator {
     private static func harvestPayloads(_ tree: ChoiceTree, into payloads: inout [CatalogKey: TypeTagPayload]) {
         switch tree {
             case let .choice(value, metadata):
-                guard let payload = metadata.typeTagPayload else { return }
+                guard let payload = metadata.typeTagPayload else {
+                    return
+                }
                 let range = metadata.validRange ?? value.tag.bitPatternRange
                 let key = CatalogKey(min: range.lowerBound, max: range.upperBound, tag: value.tag)
                 payloads[key] = payload

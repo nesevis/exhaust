@@ -102,7 +102,9 @@ struct ChoiceGraphScopeQueryTests {
         let scopes = MinimizationQuery.build(graph: graph)
 
         let integerScopes = scopes.filter {
-            if case .valueLeaves = $0 { return true }
+            if case .valueLeaves = $0 {
+                return true
+            }
             return false
         }
         #expect(integerScopes.count == 1)
@@ -123,7 +125,9 @@ struct ChoiceGraphScopeQueryTests {
 
         // Both leaves are at their reduction target (0) — no minimization scope.
         let integerScopes = scopes.filter {
-            if case .valueLeaves = $0 { return true }
+            if case .valueLeaves = $0 {
+                return true
+            }
             return false
         }
         #expect(integerScopes.isEmpty)
@@ -165,9 +169,15 @@ struct ChoiceGraphScopeQueryTests {
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
 
-        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind {
+            true
+        } else {
+            false
+        } }?.id
         #expect(bindNodeID != nil)
-        guard let bindNodeID else { return }
+        guard let bindNodeID else {
+            return
+        }
 
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
             Issue.record("Expected the located node to carry bind metadata")
@@ -196,9 +206,15 @@ struct ChoiceGraphScopeQueryTests {
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
         let graph = ChoiceGraph.build(from: tree)
 
-        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind {
+            true
+        } else {
+            false
+        } }?.id
         #expect(bindNodeID != nil)
-        guard let bindNodeID else { return }
+        guard let bindNodeID else {
+            return
+        }
 
         guard case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
             Issue.record("Expected the located node to carry bind metadata")
@@ -239,13 +255,23 @@ struct ChoiceGraphScopeQueryTests {
         let graph = ChoiceGraph.build(from: tree)
 
         let scopes = MinimizationQuery.build(graph: graph)
-        guard case let .valueLeaves(integerScope) = scopes.first(where: { if case .valueLeaves = $0 { true } else { false } }) else {
+        guard case let .valueLeaves(integerScope) = scopes.first(where: { if case .valueLeaves = $0 {
+            true
+        } else {
+            false
+        } }) else {
             Issue.record("Expected integer-leaves scope")
             return
         }
 
-        let bindNodeID = graph.nodes.first { if case .bind = $0.kind { true } else { false } }?.id
-        guard let bindNodeID, case let .bind(metadata) = graph.nodes[bindNodeID].kind else { return }
+        let bindNodeID = graph.nodes.first { if case .bind = $0.kind {
+            true
+        } else {
+            false
+        } }?.id
+        guard let bindNodeID, case let .bind(metadata) = graph.nodes[bindNodeID].kind else {
+            return
+        }
         let innerContainerID = graph.nodes[bindNodeID].children[metadata.innerChildIndex]
         var innerLeafIDs: Set<Int> = []
         var stack = [innerContainerID]
@@ -273,11 +299,15 @@ struct ChoiceGraphScopeQueryTests {
         let graph = ChoiceGraph.build(from: outerBind)
 
         let bindIDs = graph.nodes.compactMap { node -> Int? in
-            if case .bind = node.kind { return node.id }
+            if case .bind = node.kind {
+                return node.id
+            }
             return nil
         }
         #expect(bindIDs.count == 2)
-        guard bindIDs.count == 2 else { return }
+        guard bindIDs.count == 2 else {
+            return
+        }
         let outerBindID = bindIDs[0]
         let innerBindID = bindIDs[1]
 

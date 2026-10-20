@@ -75,7 +75,9 @@ struct ConcurrentTraceTests {
         ]
         let steps = __ExhaustRuntime.buildTrace(events)
         let failedStep = steps.first { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(failedStep != nil)
@@ -109,7 +111,9 @@ struct ConcurrentTraceTests {
         ]
         let steps = __ExhaustRuntime.buildTrace(events)
         let failedStep = steps.first { step in
-            if case .checkFailed = step.outcome { return true }
+            if case .checkFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(failedStep != nil, "check() failure should render as checkFailed, not invariantFailed")

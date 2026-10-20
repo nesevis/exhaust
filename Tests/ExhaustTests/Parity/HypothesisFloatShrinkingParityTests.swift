@@ -161,7 +161,9 @@ struct HypothesisFloatEncodingParityTests {
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         while let value = try iterator.next() {
             let (a, b) = value
-            guard a < b else { continue }
+            guard a < b else {
+                continue
+            }
             #expect(FloatShortlex.shortlexKey(for: Double(a)) < FloatShortlex.shortlexKey(for: Double(b)))
         }
     }

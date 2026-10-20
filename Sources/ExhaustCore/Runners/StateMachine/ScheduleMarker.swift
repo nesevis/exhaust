@@ -24,9 +24,13 @@ package struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, 
     }
 
     package var description: String {
-        if rawValue == 0 { return "prefix" }
+        if rawValue == 0 {
+            return "prefix"
+        }
         let index = rawValue - 1
-        if index < 26 { return String(UnicodeScalar(UInt8(ascii: "a") + index)) }
+        if index < 26 {
+            return String(UnicodeScalar(UInt8(ascii: "a") + index))
+        }
         return "lane\(index)"
     }
 }
