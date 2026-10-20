@@ -25,38 +25,6 @@ package extension ChoiceValue {
         }
     }
 
-    /// Reverses the signed-integer search key, preserving the full key range even for the unpaired minimum value.
-    ///
-    /// Other tags retain their existing bit-pattern interpretation, except date steps, which retain their legacy zigzag decoding. Float magnitude keys discard sign and cannot be inverted through this method.
-    static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
-        switch tag {
-            case .int, .int8, .int16, .int32, .int64:
-                if key == tag.bitPatternRange.upperBound {
-                    return ChoiceValue(UInt64(0), tag: tag)
-                }
-                let magnitude = Int64(bitPattern: (key >> 1) + (key & 1))
-                let decoded = key & 1 == 0 ? -magnitude : magnitude
-                let bitPattern: UInt64 = switch tag {
-                    case .int8:
-                        Int8(truncatingIfNeeded: decoded).bitPattern64
-                    case .int16:
-                        Int16(truncatingIfNeeded: decoded).bitPattern64
-                    case .int32:
-                        Int32(truncatingIfNeeded: decoded).bitPattern64
-                    case .int:
-                        Int(truncatingIfNeeded: decoded).bitPattern64
-                    default:
-                        decoded.bitPattern64
-                }
-                return ChoiceValue(bitPattern, tag: tag)
-            case .date:
-                let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
-                return ChoiceValue(decoded.bitPattern64, tag: tag)
-            default:
-                return ChoiceValue(key, tag: tag)
-        }
-    }
-
     /// Applies the reducer's complete value order, including positive-first float ties and deterministic ordering of NaN payloads.
     ///
     /// Float signs come from the order-preserving encoding so half-precision NaN signs survive comparison even when decoding through ``Float16Emulation`` would discard them. Numeric search admission and sequence comparison must use this same order.

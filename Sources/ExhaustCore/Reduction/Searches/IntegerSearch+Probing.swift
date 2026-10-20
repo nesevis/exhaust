@@ -721,7 +721,7 @@ extension IntegerSearch {
             let probeKey = crossZero.nextKey
             crossZero.nextKey += 1
 
-            let probeChoice = ChoiceValue.fromShortlexKey(probeKey, tag: crossZero.tag)
+            let probeChoice = simplestSignedValue(rank: probeKey, tag: crossZero.tag)
 
             // The materializer rejects a probe outside an explicit range, so skip it rather than spend a probe.
             if crossZero.isRangeExplicit,
@@ -754,11 +754,22 @@ extension IntegerSearch {
 
         var candidate = state.sequence
         candidate[crossZero.sequenceIndex] = .value(.init(
-            choice: ChoiceValue.fromShortlexKey(key, tag: crossZero.tag),
+            choice: simplestSignedValue(rank: key, tag: crossZero.tag),
             validRange: crossZero.validRange,
             isRangeExplicit: crossZero.isRangeExplicit
         ))
         return candidate
+    }
+
+    /// The signed value at `rank` in the order 0, 1, −1, 2, −2, and so on, which is the rank ``ChoiceValue/shortlexKey`` assigns it.
+    ///
+    /// Defined for every rank below the type's unpaired minimum, the one value without a negation. Cross-zero never reaches that rank: it walks at most 16 ranks and otherwise probes only a positive counterpart.
+    private static func simplestSignedValue(rank: UInt64, tag: TypeTag) -> ChoiceValue {
+        let positive = ChoiceValue(tag.simplestBitPattern + rank / 2 + rank % 2, tag: tag)
+        guard rank.isMultiple(of: 2), let negative = positive.signFlipped else {
+            return positive
+        }
+        return negative
     }
 }
 
@@ -780,7 +791,7 @@ extension IntegerSearch.State {
 
     /// Records an accepted cross-zero probe as the leaf's binary search bound.
     mutating func recordCrossZeroAcceptance(_ acceptedKey: UInt64, tag: TypeTag, nodeID: Int) {
-        let acceptedChoice = ChoiceValue.fromShortlexKey(acceptedKey, tag: tag)
+        let acceptedChoice = IntegerSearch.simplestSignedValue(rank: acceptedKey, tag: tag)
         convergenceStore[nodeID] = ConvergedOrigin(
             bound: acceptedChoice.bitPattern64,
             signal: .monotoneConvergence,

@@ -111,7 +111,7 @@ struct IntegerSearch: ReductionSearch {
 
     /// State for the cross-zero phase of per-leaf minimization.
     ///
-    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key decodes via ``ChoiceValue/fromShortlexKey(_:tag:)`` to a signed value, closing the gap that bit-pattern binary search cannot bridge (for example, reducing value `-1` to value `0` or `1`).
+    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key is the rank of a signed value in the order 0, 1, −1, 2, −2, and so on, closing the gap that bit-pattern binary search cannot bridge (for example, reducing value `-1` to value `0` or `1`).
     ///
     /// The walk covers only the keys nearest zero, so a negative value whose positive counterpart lies beyond it probes that counterpart once the walk ends. The counterpart's key exceeds every walked key and precedes the current value's, so the first accepted probe is still the simplest value this phase can reach and any later acceptance would be less simple. The phase therefore exits on its first acceptance.
     struct CrossZeroState {

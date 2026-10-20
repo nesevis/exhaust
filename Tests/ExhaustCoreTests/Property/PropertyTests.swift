@@ -210,20 +210,10 @@ private func assertReplayMaterializerEquivalence<Output>(
     }
 }
 
-// MARK: - shortlexKey / fromShortlexKey Properties
+// MARK: - shortlexKey Properties
 
-@Suite("ShortlexKey Roundtrip")
+@Suite("ShortlexKey Properties")
 struct ShortlexKeyPropertyTests {
-    @Test("fromShortlexKey inverts shortlexKey for signed integers")
-    func signedShortlexRoundtrip() throws {
-        try exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
-            let value = ChoiceValue(rawValue, tag: .int64)
-            let key = value.shortlexKey
-            let recovered = ChoiceValue.fromShortlexKey(key, tag: .int64)
-            return recovered == value
-        }
-    }
-
     @Test("shortlexKey orders signed integers by proximity to zero")
     func signedShortlexOrdering() throws {
         try exhaustCheck(Gen.zip(

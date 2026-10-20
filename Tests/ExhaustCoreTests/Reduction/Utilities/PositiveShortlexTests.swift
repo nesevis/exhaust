@@ -4,24 +4,10 @@ import Testing
 
 @Suite("Positive-first shortlex")
 struct PositiveShortlexTests {
-    @Test("Every narrow signed key round-trips without gaps", arguments: [TypeTag.int8, .int16])
-    func exhaustiveSignedKeys(tag: TypeTag) {
-        let maximum = tag.bitPatternRange.upperBound
-        for key in UInt64(0) ... maximum {
-            let choice = ChoiceValue.fromShortlexKey(key, tag: tag)
-            #expect(choice.shortlexKey == key)
-            #expect(choice.bitPattern64 <= maximum)
-        }
-    }
-
-    @Test("Signed endpoints and zero retain reversible keys", arguments: [TypeTag.int8, .int16, .int32, .int64, .int])
+    @Test("Signed endpoints and zero take positive-first keys", arguments: [TypeTag.int8, .int16, .int32, .int64, .int])
     func signedEndpoints(tag: TypeTag) {
         let maximum = tag.bitPatternRange.upperBound
         let zero = tag.simplestBitPattern
-        for pattern in [0, 1, zero - 1, zero, zero + 1, maximum - 1, maximum] {
-            let choice = ChoiceValue(pattern, tag: tag)
-            #expect(ChoiceValue.fromShortlexKey(choice.shortlexKey, tag: tag) == choice)
-        }
         #expect(ChoiceValue(UInt64(0), tag: tag).shortlexKey == maximum)
         #expect(ChoiceValue(maximum, tag: tag).shortlexKey == maximum - 2)
         #expect(ChoiceValue(UInt64(1), tag: tag).shortlexKey == maximum - 1)
