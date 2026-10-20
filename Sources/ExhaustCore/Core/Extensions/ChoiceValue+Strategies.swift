@@ -25,10 +25,14 @@ package extension ChoiceValue {
         }
     }
 
-    /// Applies the reducer's complete value order, including positive-first float ties and deterministic ordering of NaN payloads.
+    /// Applies the reducer's complete value order, including positive-first ties and deterministic ordering of NaN payloads.
     ///
-    /// Float signs come from the order-preserving encoding so half-precision NaN signs survive comparison even when decoding through ``Float16Emulation`` would discard them. Numeric search admission and sequence comparison must use this same order.
+    /// Every pair of values compares the same lexicographic key, the ``shortlexKey``, then the sign with positive first, then the bit pattern, so the order stays transitive when sequence comparison aligns values of different tags. Float signs come from the order-preserving encoding so half-precision NaN signs survive comparison even when decoding through ``Float16Emulation`` would discard them. Numeric search admission and sequence comparison must use this same order.
     func shortLexCompare(_ other: ChoiceValue) -> ShortlexOrder {
+        // Sequence comparison mostly aligns identical values; answering those before computing either key keeps the common case cheap.
+        if tag == other.tag, bitPattern64 == other.bitPattern64 {
+            return .eq
+        }
         let key = shortlexKey
         let otherKey = other.shortlexKey
         if key < otherKey {
@@ -37,12 +41,10 @@ package extension ChoiceValue {
         if key > otherKey {
             return .gt
         }
-        if tag.isFloatingPoint, other.tag.isFloatingPoint {
-            let isNegative = hasNegativeSign
-            let otherIsNegative = other.hasNegativeSign
-            if isNegative != otherIsNegative {
-                return isNegative ? .gt : .lt
-            }
+        let isNegative = hasNegativeSign
+        let otherIsNegative = other.hasNegativeSign
+        if isNegative != otherIsNegative {
+            return isNegative ? .gt : .lt
         }
         if bitPattern64 < other.bitPattern64 {
             return .lt

@@ -70,4 +70,54 @@ struct PositiveShortlexTests {
             return true
         }
     }
+
+    @Test("Shortlex comparison stays antisymmetric and transitive across mixed tags")
+    func mixedTagOrderingLaws() throws {
+        // Sequence comparison aligns values of different tags. Small magnitudes are where keys tie across tags, so every triple of them is checked exhaustively.
+        let values = try Self.smallMixedValues()
+        var violations: [String] = []
+        for first in values {
+            for second in values {
+                let forward = first.shortLexCompare(second)
+                let backward = second.shortLexCompare(first)
+                let isAntisymmetric = switch forward {
+                    case .lt:
+                        backward == .gt
+                    case .gt:
+                        backward == .lt
+                    case .eq:
+                        backward == .eq
+                }
+                if isAntisymmetric == false {
+                    violations.append("\(first) vs \(second)")
+                }
+                guard forward == .lt else {
+                    continue
+                }
+                for third in values where second.shortLexCompare(third) == .lt && first.shortLexCompare(third) != .lt {
+                    violations.append("\(first) < \(second) < \(third)")
+                }
+            }
+        }
+        #expect(violations.isEmpty, "\(violations.prefix(5))")
+    }
+
+    /// Zero, one, and two in both signs for each signed and floating tag, including negative zero, and their nonnegative counterparts for an unsigned tag.
+    private static func smallMixedValues() throws -> [ChoiceValue] {
+        var values: [ChoiceValue] = []
+        for tag in [TypeTag.int8, .int64] {
+            for magnitude in Int64(-2) ... 2 {
+                values.append(ChoiceValue(tag.simplestBitPattern &+ UInt64(bitPattern: magnitude), tag: tag))
+            }
+        }
+        for magnitude in UInt64(0) ... 2 {
+            values.append(ChoiceValue(magnitude, tag: .uint64))
+        }
+        for tag in [TypeTag.double, .float, .float16] {
+            for magnitude in [0.0, -0.0, 1.0, -1.0, 2.0, -2.0] {
+                try values.append(#require(tag.floatingChoice(from: magnitude)))
+            }
+        }
+        return values
+    }
 }
