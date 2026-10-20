@@ -11,7 +11,8 @@ enum NumericJointQuery {
     struct Group {
         let leaves: [ReductionLeaf]
         let samples: [[UInt64]]
-        let ratioProposals: [NumericCommonDivisorProposal.Rescaling]
+        /// Built once during discovery: the group's sign flip and ratio-preserving rescalings, which the cursor tries before the grid and the grid skips.
+        let priorityProposals: [StagedJointQuery.PriorityProposal]
         let estimatedWork: Int
         let residualVolume: UInt64
         let stalledCount: Int

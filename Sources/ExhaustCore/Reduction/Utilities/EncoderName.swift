@@ -24,7 +24,7 @@ package enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Tries selecting a different branch at a pick site. Builds a candidate by replacing the selected branch content with a minimized version of an alternative branch, using the graph's position range to locate and replace the relevant entries in the sequence.
     case branchPivot
 
-    /// Replaces a subtree with a smaller one from the same recursive generator (self-similar substitution) or promotes a descendant pick to replace its ancestor (descendant promotion). Both use the graph's self-similarity groups to identify structurally exchangeable sites.
+    /// Replaces a subtree with a smaller one at a matching pick site (self-similar substitution) or promotes a descendant pick to replace its ancestor (descendant promotion). Both use the graph's self-similarity groups to identify candidates by source-location fingerprint; materialization and property evaluation determine whether a replacement is accepted.
     case substitution
 
     /// Swaps adjacent sibling elements within a sequence to improve shortlex ordering. Tries each pair once and extends rightward on success. Produces cosmetic improvements that do not change the counterexample's meaning but make it easier to read.
@@ -36,7 +36,11 @@ package enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Reduces a pair of values jointly along their inferred rational relation. Fires only when both values have converged above their targets with nothing else accepting, which is the signature of a multiplicative coupling (for example, one value always twice another) that per-value search, common-delta lockstep, and sum-conserving redistribution all break. The reduced ratio of the current values is held fixed while their shared scale factor is searched downward.
     case relationSearch
 
-    /// Searches numeric groups after cheaper reduction has stalled. Sampled-work limits unlock sequential three- and four-way stages after two-way search stalls, sharing one checkpoint budget.
+    /// Searches coupled numeric values after cheaper reduction has stalled, starting with pairs and widening to groups of three and then four if no candidate is accepted. Simplifies an earlier value while allowing later values to compensate in either direction.
+    ///
+    /// Each stage first tries flipping every sign in each selected group while preserving magnitudes, then ratio-preserving rescalings, then combinations of sampled values. Wider groups try all-target and all-halved combinations before exploring mixed sample ranks. Samples include reduction targets, nearby values, simple magnitudes, and domain boundaries; this is a bounded search, not an exhaustive enumeration.
+    ///
+    /// All stages share one checkpoint probe budget, reserving half the remaining probes when a wider stage is feasible. Group discovery has separate calculation, scope, and work limits. Stops at the first acceptance because the groups and samples belong to the original checkpoint; candidate admission requires the proposed values to replay exactly.
     case stagedJointSearch
 
     /// Lowers a bind inner and raises a value its bind determines by the same amount, lifting each candidate through the generator so the raised value is placed within the range the lowered bind inner produces. Fires only once the bind inner has stalled above its target, which is the signature of factors that must trade magnitude, such as the bind inners of a nested chain of binds.

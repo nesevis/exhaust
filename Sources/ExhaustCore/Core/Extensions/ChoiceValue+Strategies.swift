@@ -6,41 +6,53 @@
 //
 
 package extension ChoiceValue {
-    /// Key for shortlex ordering where values closer to zero are smaller.
-    /// - Signed integers: zigzag encoding (0 → 0, -1 → 1, 1 → 2, -2 → 3, ...)
-    /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
-    /// - Unsigned integers: identical to `bitPattern64`
+    /// Ranks signed integers as `0, 1, -1, 2, -2, …`, with the unpaired minimum value last within each type's width.
+    ///
+    /// Floats use the magnitude-based ``FloatShortlex`` key; ``shortLexCompare(_:)`` resolves equal keys by preferring positive signs. Unsigned integers use their stored bit patterns directly. These search coordinates do not change the numeric encoding used for range checks and replay.
     @inline(__always)
     var shortlexKey: UInt64 {
         if tag.isFloatingPoint {
             return FloatShortlex.shortlexKey(for: decodedDoubleValue)
         } else if tag.isSigned {
             let value = decodedSignedValue
-            return UInt64(bitPattern: (value << 1) ^ (value >> 63))
+            let zigzag = UInt64(bitPattern: (value << 1) ^ (value >> 63))
+            guard zigzag != 0, bitPattern64 != 0 else {
+                return zigzag
+            }
+            return zigzag & 1 == 0 ? zigzag - 1 : zigzag + 1
         } else {
             return bitPattern64
         }
     }
 
-    /// Constructs a ``ChoiceValue`` from a shortlex key, reversing `shortlexKey`.
+    /// Applies the reducer's complete value order, including positive-first ties and deterministic ordering of NaN payloads.
     ///
-    /// - For signed integers: zigzag decodes the key back to a signed value.
-    /// - For unsigned integers and floats: the key equals the bit pattern.
-    static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
-        switch tag {
-            case .int, .int8, .int16, .int32, .int64, .date:
-                let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
-                let bp: UInt64 = switch tag {
-                    case .int8: Int8(truncatingIfNeeded: decoded).bitPattern64
-                    case .int16: Int16(truncatingIfNeeded: decoded).bitPattern64
-                    case .int32: Int32(truncatingIfNeeded: decoded).bitPattern64
-                    case .int: Int(truncatingIfNeeded: decoded).bitPattern64
-                    default: decoded.bitPattern64
-                }
-                return ChoiceValue(bp, tag: tag)
-            default:
-                return ChoiceValue(key, tag: tag)
+    /// Every pair of values compares the same lexicographic key, the ``shortlexKey``, then the sign with positive first, then the bit pattern, so the order stays transitive when sequence comparison aligns values of different tags. Float signs come from the order-preserving encoding so half-precision NaN signs survive comparison even when decoding through ``Float16Emulation`` would discard them. Numeric search admission and sequence comparison must use this same order.
+    func shortLexCompare(_ other: ChoiceValue) -> ShortlexOrder {
+        // Sequence comparison mostly aligns identical values; answering those before computing either key keeps the common case cheap.
+        if tag == other.tag, bitPattern64 == other.bitPattern64 {
+            return .eq
         }
+        let key = shortlexKey
+        let otherKey = other.shortlexKey
+        if key < otherKey {
+            return .lt
+        }
+        if key > otherKey {
+            return .gt
+        }
+        let isNegative = hasNegativeSign
+        let otherIsNegative = other.hasNegativeSign
+        if isNegative != otherIsNegative {
+            return isNegative ? .gt : .lt
+        }
+        if bitPattern64 < other.bitPattern64 {
+            return .lt
+        }
+        if bitPattern64 > other.bitPattern64 {
+            return .gt
+        }
+        return .eq
     }
 
     /// The bit pattern of the ideal reduction target for this value type.
@@ -58,7 +70,9 @@ package extension ChoiceValue {
             return floatingTarget
         }
 
-        guard let range else { return target }
+        guard let range else {
+            return target
+        }
 
         var bestBound = range.lowerBound
         var bestDistance = target > bestBound
@@ -80,16 +94,17 @@ package extension ChoiceValue {
         in range: ClosedRange<UInt64>?,
         tag: TypeTag
     ) -> UInt64? {
-        guard let range else { return nil }
+        guard let range else {
+            return nil
+        }
 
-        var best: (key: UInt64, bitPattern: UInt64)?
+        var best: ChoiceValue?
         func consider(_ bitPattern: UInt64) {
-            let value = tag.numericDoubleValue(forBitPattern: bitPattern)
-            let key = FloatShortlex.shortlexKey(for: value)
-            if let currentBest = best, currentBest.key <= key {
+            let candidate = ChoiceValue(bitPattern, tag: tag)
+            if let currentBest = best, candidate.shortLexCompare(currentBest) != .lt {
                 return
             }
-            best = (key, bitPattern)
+            best = candidate
         }
 
         consider(range.lowerBound)
@@ -119,11 +134,10 @@ package extension ChoiceValue {
             }
         }
 
-        return best?.bitPattern
+        return best?.bitPattern64
     }
 
     func fits(in range: ClosedRange<UInt64>?, bitPattern: UInt64) -> Bool {
-        guard let range else { return true }
-        return range.contains(bitPattern)
+        range?.contains(bitPattern) ?? true
     }
 }

@@ -37,7 +37,7 @@ package struct ChoiceGraph: Sendable {
     /// Dependency edges from bind-inner nodes to structural nodes in their bound subtrees.
     package let dependencyEdges: [DependencyEdge]
 
-    /// Active pick nodes grouped by fingerprint. Picks in the same group are structurally exchangeable — any pair is a candidate for self-similar replacement. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
+    /// Active pick nodes grouped by source-location fingerprint. Any pair in a group is a candidate for self-similar replacement, but the shared site does not prove structural or domain compatibility; candidates still require materialization and property evaluation. Stored as a group index (O(P) space) instead of a materialized all-pairs edge array (O(P^2) space). Consumers derive edges on demand from the group members' position ranges.
     package let selfSimilarityGroups: [UInt64: [Int]]
 
     /// IDs of active nodes (those with non-nil position ranges). Computed eagerly during graph assembly.

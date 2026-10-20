@@ -628,7 +628,7 @@ extension IntegerSearch {
     ///
     /// Returns `true` when the leaf is signed and its shortlex key is above zero, so a simpler value exists. ``State/crossZero`` is then set, and the per-leaf loop emits the first probe on its next iteration.
     ///
-    /// The walk covers at most `⌈log₂(key + 1)⌉ + 4` keys, capped at 16. Bit-pattern search has already covered large magnitudes, so cross-zero only needs the keys nearest zero: a small key gets every key below it, a large key the simplest 16.
+    /// The walk covers at most `⌈log₂(key + 1)⌉ + 4` keys, capped at 16. Bit-pattern search has already covered large magnitudes on the current side of zero, so cross-zero only needs the keys nearest zero: a small key gets every key below it, a large key the simplest 16. A negative value's positive counterpart lies on the other side, so it adds one probe when the walk stops short of it.
     static func tryEnterCrossZero(state: inout State) -> Bool {
         let leaf = state.leafPositions[state.leafIndex]
         guard leaf.typeTag.isSigned else {
@@ -650,10 +650,12 @@ extension IntegerSearch {
             if range.contains(zeroBitPattern) == false {
                 return false
             }
-            // Skip cross-zero when the leaf sits on a boundary of its explicit range. Binary search has already rejected everything between that boundary and the target, which is where cross-zero's simpler candidates lie.
+            // Retain the endpoint shortcut unless an admissible positive counterpart exists. A negative lower bound can improve by changing sign; a type's unpaired minimum has no counterpart.
             let currentBitPattern = currentEntry.choice.bitPattern64
             if currentBitPattern == range.lowerBound || currentBitPattern == range.upperBound {
-                return false
+                guard positiveCounterpart(of: currentEntry) != nil else {
+                    return false
+                }
             }
         }
 
@@ -662,6 +664,12 @@ extension IntegerSearch {
         let budget = min(bitLength + 4, 16)
         let endKey = min(currentKey, budget)
 
+        var counterpartKey = positiveCounterpart(of: currentEntry)?.shortlexKey
+        if let key = counterpartKey, key < endKey {
+            // The walk reaches it.
+            counterpartKey = nil
+        }
+
         state.crossZero = CrossZeroState(
             sequenceIndex: leaf.sequenceIndex,
             tag: leaf.typeTag,
@@ -669,9 +677,21 @@ extension IntegerSearch {
             isRangeExplicit: currentEntry.isRangeExplicit,
             nextKey: 0,
             endKey: endKey,
+            counterpartKey: counterpartKey,
             lastEmittedKey: nil
         )
         return true
+    }
+
+    /// The positive value with the magnitude of a negative entry, when the entry's explicit range admits it.
+    private static func positiveCounterpart(of entry: ChoiceSequenceValue.Value) -> ChoiceValue? {
+        guard entry.choice.hasNegativeSign,
+              let counterpart = entry.choice.signFlipped,
+              entry.isRangeExplicit == false || counterpart.fits(in: entry.validRange)
+        else {
+            return nil
+        }
+        return counterpart
     }
 
     /// Drives the cross-zero phase for the current leaf.
@@ -701,7 +721,7 @@ extension IntegerSearch {
             let probeKey = crossZero.nextKey
             crossZero.nextKey += 1
 
-            let probeChoice = ChoiceValue.fromShortlexKey(probeKey, tag: crossZero.tag)
+            let probeChoice = simplestSignedValue(rank: probeKey, tag: crossZero.tag)
 
             // The materializer rejects a probe outside an explicit range, so skip it rather than spend a probe.
             if crossZero.isRangeExplicit,
@@ -710,20 +730,46 @@ extension IntegerSearch {
                 continue
             }
 
-            crossZero.lastEmittedKey = probeKey
-            state.crossZero = crossZero
+            return emitCrossZeroProbe(key: probeKey, crossZero: &crossZero, state: &state)
+        }
 
-            var candidate = state.sequence
-            candidate[crossZero.sequenceIndex] = .value(.init(
-                choice: probeChoice,
-                validRange: crossZero.validRange,
-                isRangeExplicit: crossZero.isRangeExplicit
-            ))
-            return candidate
+        // Range admission was checked when the phase was armed.
+        if let counterpartKey = crossZero.counterpartKey {
+            crossZero.counterpartKey = nil
+            return emitCrossZeroProbe(key: counterpartKey, crossZero: &crossZero, state: &state)
         }
 
         state.crossZero = crossZero
         return nil
+    }
+
+    /// Records `key` as the outstanding probe and returns the sequence with the leaf set to its decoded value.
+    private static func emitCrossZeroProbe(
+        key: UInt64,
+        crossZero: inout CrossZeroState,
+        state: inout State
+    ) -> ChoiceSequence {
+        crossZero.lastEmittedKey = key
+        state.crossZero = crossZero
+
+        var candidate = state.sequence
+        candidate[crossZero.sequenceIndex] = .value(.init(
+            choice: simplestSignedValue(rank: key, tag: crossZero.tag),
+            validRange: crossZero.validRange,
+            isRangeExplicit: crossZero.isRangeExplicit
+        ))
+        return candidate
+    }
+
+    /// The signed value at `rank` in the order 0, 1, −1, 2, −2, and so on, which is the rank ``ChoiceValue/shortlexKey`` assigns it.
+    ///
+    /// Defined for every rank below the type's unpaired minimum, the one value without a negation. Cross-zero never reaches that rank: it walks at most 16 ranks and otherwise probes only a positive counterpart.
+    private static func simplestSignedValue(rank: UInt64, tag: TypeTag) -> ChoiceValue {
+        let positive = ChoiceValue(tag.simplestBitPattern + rank / 2 + rank % 2, tag: tag)
+        guard rank.isMultiple(of: 2), let negative = positive.signFlipped else {
+            return positive
+        }
+        return negative
     }
 }
 
@@ -745,7 +791,7 @@ extension IntegerSearch.State {
 
     /// Records an accepted cross-zero probe as the leaf's binary search bound.
     mutating func recordCrossZeroAcceptance(_ acceptedKey: UInt64, tag: TypeTag, nodeID: Int) {
-        let acceptedChoice = ChoiceValue.fromShortlexKey(acceptedKey, tag: tag)
+        let acceptedChoice = IntegerSearch.simplestSignedValue(rank: acceptedKey, tag: tag)
         convergenceStore[nodeID] = ConvergedOrigin(
             bound: acceptedChoice.bitPattern64,
             signal: .monotoneConvergence,

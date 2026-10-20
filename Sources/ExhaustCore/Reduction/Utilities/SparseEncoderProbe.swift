@@ -1,5 +1,5 @@
 /// Describes distinct leaf edits against an immutable checkpoint so a session can reject cached probes before copying or writing its candidate buffer.
-struct SparseEncoderProbe {
+struct SparseEncoderProbe: Equatable {
     let leaves: [ReductionLeaf]
     let patterns: [UInt64]
 

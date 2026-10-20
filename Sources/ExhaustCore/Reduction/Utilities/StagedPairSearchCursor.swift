@@ -1,4 +1,4 @@
-/// Tries ratio-preserving tactics in priority order across pairs before the ordinary pair grid.
+/// Tries each pair's sign flip and ratio-preserving tactics in priority order across pairs before the ordinary pair grid.
 struct StagedPairSearchCursor {
     /// Includes both addresses so equal values in different scopes do not suppress each other's proposals.
     private struct ProposalKey: Hashable {
@@ -21,18 +21,24 @@ struct StagedPairSearchCursor {
     private var rescalingIndex = 0
 
     /// Interleaves each tactic across scopes so one pair cannot spend the rescaling prefix before another pair reaches its primitive tuple.
-    init(pairs: [NumericPairQuery.Pair]) {
+    ///
+    /// Each of `signFlipProposals` belongs to a pair searched only by that flip: it ranks after the sampled pairs' proposals of the same priority, and its pair joins neither the rescalings nor the grid.
+    init(pairs: [NumericPairQuery.Pair], signFlipProposals: [StagedJointQuery.PriorityProposal] = []) {
         cursor = NumericPairSearchCursor(pairs: pairs)
         var ranked: [(priority: Int, pairIndex: Int, proposal: NumericPairSearchCursor.Proposal)] = []
         for (pairIndex, pair) in pairs.enumerated() {
-            for rescaling in NumericCommonDivisorProposal.rescalings(for: [pair.source, pair.sink]) {
-                ranked.append((rescaling.priority, pairIndex, .init(pair: pair, sourceBitPattern: rescaling.patterns[0], sinkBitPattern: rescaling.patterns[1])))
+            for priorityProposal in StagedJointQuery.priorityProposals(for: [pair.source, pair.sink]) {
+                ranked.append((priorityProposal.priority, pairIndex, Self.pairProposal(priorityProposal.probe)))
             }
+        }
+        for (offset, signFlip) in signFlipProposals.enumerated() {
+            ranked.append((signFlip.priority, pairs.count + offset, Self.pairProposal(signFlip.probe)))
         }
         rescalingProposals = ranked.sorted { first, second in
             if first.priority != second.priority { return first.priority < second.priority }
             return first.pairIndex < second.pairIndex
         }.map(\.proposal)
+
         rescalingKeys = Set(rescalingProposals.map(ProposalKey.init))
     }
 
@@ -56,5 +62,14 @@ struct StagedPairSearchCursor {
             return proposal
         }
         return nil
+    }
+
+    /// Reads a two-leaf probe as a pair proposal, whose first leaf is the source.
+    private static func pairProposal(_ probe: SparseEncoderProbe) -> NumericPairSearchCursor.Proposal {
+        NumericPairSearchCursor.Proposal(
+            pair: NumericPairQuery.Pair(source: probe.leaves[0], sink: probe.leaves[1]),
+            sourceBitPattern: probe.patterns[0],
+            sinkBitPattern: probe.patterns[1]
+        )
     }
 }

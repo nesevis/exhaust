@@ -7,7 +7,7 @@
 
 /// Reorders elements within type-homogeneous sibling groups into ascending numeric order, one group per probe, deepest first.
 ///
-/// Shortlex reduction produces counterexamples like `[0, -1, 1]` because zigzag encoding maps `-1` to shortlex key `1` and `1` to key `2`. This search reorders to `[-1, 0, 1]`, the ascending numeric order a user expects, and the property decides whether the failure survives. Groups already in natural order are skipped. Every accepted reordering requires a rebuild, which ends the pass, so every probe is built from the base sequence.
+/// Shortlex reduction prefers `[0, 1, -1]`, while ascending numeric order is `[-1, 0, 1]`. This presentation pass tries numeric order, and the property decides whether the failure survives. Groups already in natural order are skipped. Every accepted reordering requires a rebuild, which ends the pass, so every probe is built from the base sequence.
 struct ReorderSearch: ReductionSearch {
     private let groups: [ReorderableGroup]
     private var groupIndex = 0

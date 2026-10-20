@@ -202,6 +202,36 @@ struct NumericPairSearchTests {
         #expect(Set(values).count == values.count)
     }
 
+    @Test("Simplifying candidates never repeat the leaf's own sign flip", arguments: [TypeTag.int64, .double, .float, .float16])
+    func numericCandidateSigns(tag: TypeTag) throws {
+        let positive: ChoiceValue = switch tag {
+            case .int64:
+                ChoiceValue(Int64(1), tag: tag)
+            default:
+                try #require(tag.floatingChoice(from: 1))
+        }
+        let negative: ChoiceValue = switch tag {
+            case .int64:
+                ChoiceValue(Int64(-1), tag: tag)
+            default:
+                try #require(tag.floatingChoice(from: -1))
+        }
+        for current in [positive, negative] {
+            let leaf = ReductionLeaf(
+                nodeID: 0,
+                position: 0,
+                path: [],
+                choice: current,
+                range: tag.bitPatternRange,
+                bindFingerprints: [],
+                mayReshapeOnAcceptance: false
+            )
+            let candidates = NumericPairCandidates.jointValues(for: leaf, simplifying: true)
+            #expect(candidates.contains(positive.bitPattern64) == false)
+            #expect(candidates.contains(negative.bitPattern64) == false)
+        }
+    }
+
     /// Reconstructs the original proposal stream, applying the six-value cap only after admission and deduplication.
     private static func uncappedJointValues(for leaf: ReductionLeaf, simplifying: Bool) -> [UInt64] {
         let zero = leaf.choice.tag.simplestBitPattern
@@ -231,8 +261,8 @@ struct NumericPairSearchTests {
             let value = ChoiceValue(pattern, tag: leaf.choice.tag)
             return pattern != current && leaf.range.contains(pattern) && visited.insert(pattern).inserted
                 && (leaf.choice.tag.isFloatingPoint == false || value.decodedDoubleValue.isFinite)
-                && (simplifying == false || value.shortlexKey < leaf.choice.shortlexKey
-                    || (value.shortlexKey == leaf.choice.shortlexKey && pattern < current))
+                && (simplifying == false
+                    || (value.shortLexCompare(leaf.choice) == .lt && pattern != leaf.choice.signFlipped?.bitPattern64))
         }
         return Array(admitted.prefix(NumericPairCandidates.maximumJointSamples))
     }

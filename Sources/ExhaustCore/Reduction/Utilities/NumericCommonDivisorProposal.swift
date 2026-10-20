@@ -52,7 +52,9 @@ enum NumericCommonDivisorProposal {
                 guard leaf.range.contains(pattern) else { return nil }
                 patterns.append(pattern)
             }
-            guard ChoiceValue(patterns[0], tag: leaves[0].choice.tag).shortlexKey < leaves[0].choice.shortlexKey else { return nil }
+            guard ChoiceValue(patterns[0], tag: leaves[0].choice.tag).shortLexCompare(leaves[0].choice) == .lt else {
+                return nil
+            }
             return patterns
         }
     }

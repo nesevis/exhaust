@@ -20,11 +20,11 @@ struct ShortlexKeyTests {
     }
 
     @Test("Signed shortlexKey: opposite signs with same magnitude have off-by-one keys")
-    func signedOppositeSignsEqual() {
-        let pos = ChoiceValue(Int64(42), tag: .int64)
-        let neg = ChoiceValue(Int64(-42), tag: .int64)
-        #expect(pos.shortlexKey == neg.shortlexKey + 1)
-        #expect(pos.shortlexKey == 84)
+    func signedOppositeSignsPreferPositive() {
+        let positive = ChoiceValue(Int64(42), tag: .int64)
+        let negative = ChoiceValue(Int64(-42), tag: .int64)
+        #expect(negative.shortlexKey == positive.shortlexKey + 1)
+        #expect(positive.shortlexKey == 83)
     }
 
     @Test("Unsigned shortlexKey equals bitPattern64")
@@ -54,7 +54,7 @@ struct ShortlexKeyTests {
 
     @Test("Signed shortlexKey works for Int8")
     func shortlexKeyInt8() {
-        let values: [Int8] = [0, -1, 1, -2, 2]
+        let values: [Int8] = [0, 1, -1, 2, -2]
         let keys = values.map { ChoiceValue($0, tag: .int8).shortlexKey }
         #expect(keys == [0, 1, 2, 3, 4])
     }
@@ -62,11 +62,11 @@ struct ShortlexKeyTests {
     @Test("Signed shortlexKey works for Int32")
     func shortlexKeyInt32() {
         let zero = ChoiceValue(Int32(0), tag: .int32)
-        let pos = ChoiceValue(Int32(1000), tag: .int32)
-        let neg = ChoiceValue(Int32(-1000), tag: .int32)
-        #expect(zero.shortlexKey < pos.shortlexKey)
-        #expect(zero.shortlexKey < neg.shortlexKey)
-        #expect(pos.shortlexKey > neg.shortlexKey)
+        let positive = ChoiceValue(Int32(1000), tag: .int32)
+        let negative = ChoiceValue(Int32(-1000), tag: .int32)
+        #expect(zero.shortlexKey < positive.shortlexKey)
+        #expect(zero.shortlexKey < negative.shortlexKey)
+        #expect(positive.shortlexKey < negative.shortlexKey)
     }
 
     // MARK: Floating point
@@ -74,18 +74,18 @@ struct ShortlexKeyTests {
     @Test("Float shortlexKey: 0.0 is the smallest key")
     func floatZeroIsSmallest() {
         let zero = ChoiceValue(0.0, tag: .double)
-        let pos = ChoiceValue(1.0, tag: .double)
-        let neg = ChoiceValue(-1.0, tag: .double)
+        let positive = ChoiceValue(1.0, tag: .double)
+        let negative = ChoiceValue(-1.0, tag: .double)
         #expect(zero.shortlexKey == 0)
-        #expect(zero.shortlexKey < pos.shortlexKey)
-        #expect(zero.shortlexKey < neg.shortlexKey)
+        #expect(zero.shortlexKey < positive.shortlexKey)
+        #expect(zero.shortlexKey < negative.shortlexKey)
     }
 
     @Test("Float shortlexKey: opposite signs with same magnitude have equal keys")
     func floatOppositeSignsEqual() {
-        let pos = ChoiceValue(3.14, tag: .double)
-        let neg = ChoiceValue(-3.14, tag: .double)
-        #expect(pos.shortlexKey == neg.shortlexKey)
+        let positive = ChoiceValue(3.14, tag: .double)
+        let negative = ChoiceValue(-3.14, tag: .double)
+        #expect(positive.shortlexKey == negative.shortlexKey)
     }
 
     @Test("Float shortlexKey: -0.0 maps to 0")

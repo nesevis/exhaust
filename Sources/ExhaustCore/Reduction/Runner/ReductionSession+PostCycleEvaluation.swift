@@ -25,7 +25,7 @@ extension ReductionSession {
         case relationPass
         /// Probes branch pivots at non-minimal content and accepts the first that still fails, without a checkpoint.
         case improvingPivots
-        /// Searches the pending staged joint checkpoint, moving pairs of stalled leaves together, then wider groups.
+        /// Searches the pending staged joint checkpoint, trying sign flips and samples for selected pairs and wider groups.
         case stagedJointPass
         /// Perturbs the counterexample with a structural replacement that may worsen it, exploits it, and keeps the result only if it strictly precedes the checkpoint.
         case relaxRound

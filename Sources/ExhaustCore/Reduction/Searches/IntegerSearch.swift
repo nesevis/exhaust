@@ -111,9 +111,9 @@ struct IntegerSearch: ReductionSearch {
 
     /// State for the cross-zero phase of per-leaf minimization.
     ///
-    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key decodes via ``ChoiceValue/fromShortlexKey(_:tag:)`` to a signed value on the opposite side of zero from the current convergence, closing the gap that bit-pattern binary search cannot bridge (for example, reducing value `1` to value `0` or `-1`).
+    /// After bit-pattern binary search converges on one side of zero for a signed type, this phase enumerates shortlex keys from the simplest (key 0 ↔ value 0) upward. Each key is the rank of a signed value in the order 0, 1, −1, 2, −2, and so on, closing the gap that bit-pattern binary search cannot bridge (for example, reducing value `-1` to value `0` or `1`).
     ///
-    /// The walk climbs from key 0, so the first accepted probe is the simplest value this phase can reach and any later acceptance would be less simple. The phase therefore exits on its first acceptance.
+    /// The walk covers only the keys nearest zero, so a negative value whose positive counterpart lies beyond it probes that counterpart once the walk ends. The counterpart's key exceeds every walked key and precedes the current value's, so the first accepted probe is still the simplest value this phase can reach and any later acceptance would be less simple. The phase therefore exits on its first acceptance.
     struct CrossZeroState {
         let sequenceIndex: Int
         let tag: TypeTag
@@ -123,6 +123,8 @@ struct IntegerSearch: ReductionSearch {
         var nextKey: UInt64
         /// Exclusive upper bound on the key walk. Equals `min(initialCurrentKey, adaptiveBudget)`.
         let endKey: UInt64
+        /// The key of a negative value's in-range positive counterpart, pending until the walk ends. Nil when there is none or the walk already reaches it.
+        var counterpartKey: UInt64?
         /// The shortlex key of the last emitted probe, or `nil` when no probe has been emitted yet (or after feedback has been consumed).
         var lastEmittedKey: UInt64?
     }

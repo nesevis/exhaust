@@ -7,7 +7,7 @@
 
 /// Utilities for float-specific shortlex/reduction ordering.
 package enum FloatShortlex {
-    /// Upper bound (2^56) below which a non-negative integral float is treated as "simple" and mapped to its integer value directly, avoiding the transformed exponent/mantissa encoding.
+    /// Upper bound (2^56) below which an integral float's magnitude is treated as "simple" and mapped to its integer value directly, avoiding the transformed exponent/mantissa encoding.
     package static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
 
     /// Bitmask isolating the 11-bit exponent field of a `Double` bit pattern after the mantissa has been shifted out.
@@ -24,7 +24,7 @@ package enum FloatShortlex {
 
     /// Maps a `Double` into a lexical key matching Hypothesis-style float ordering.
     ///
-    /// This ordering treats non-negative integral floats up to 2^56 as "simple" (key equals the integer value), and encodes other finite values by transformed exponent/mantissa so coarse semantic moves are cheap to discover.
+    /// This key treats integral magnitudes up to 2^56 as "simple" (key equals the magnitude), and encodes other finite values by transformed exponent/mantissa so coarse semantic moves are cheap to discover. Opposite signs share a key; ``ChoiceValue/shortLexCompare(_:)`` prefers the positive sign when resolving ties.
     package static func shortlexKey(for value: Double) -> UInt64 {
         let magnitude = abs(value)
 

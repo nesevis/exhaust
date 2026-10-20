@@ -1,4 +1,4 @@
-/// Tries primitive, small-scale, geometric, and nearby rescalings before coherent proposals, then shares each Cartesian diagonal across retained groups. Only index tuples are enumerated; candidate histories are written into the caller's reusable buffer.
+/// Tries sign flips, then primitive, small-scale, geometric, and nearby rescalings before coherent proposals, then shares each Cartesian diagonal across retained groups. Only index tuples are enumerated; candidate histories are written into the caller's reusable buffer.
 struct NumericJointSearchCursor {
     private struct Plan {
         let leaves: [ReductionLeaf]
@@ -23,12 +23,12 @@ struct NumericJointSearchCursor {
         let plans: [Plan] = groups.compactMap { group in
             let samples = group.samples
             guard samples.allSatisfy({ $0.isEmpty == false }) else { return nil }
-            return Plan(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.ratioProposals.map(\.patterns)))
+            return Plan(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.priorityProposals.map(\.probe.patterns)))
         }
         self.plans = plans
         rescalingProposals = groups.enumerated().flatMap { groupIndex, group in
-            group.ratioProposals.map { rescaling in
-                (priority: rescaling.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: rescaling.patterns))
+            group.priorityProposals.map { priorityProposal in
+                (priority: priorityProposal.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: priorityProposal.probe.patterns))
             }
         }.sorted { first, second in
             if first.priority != second.priority { return first.priority < second.priority }

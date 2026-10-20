@@ -5,7 +5,7 @@
 
 // MARK: - Staged Joint Search
 
-/// Searches one stage of a staged joint checkpoint: pairs, or the groups of one higher arity.
+/// Searches one stage of a staged joint checkpoint, pairs or the groups of one higher arity, trying each group's sign flip before its rescalings and samples.
 ///
 /// Stops after the first acceptance, because every group's addresses and domain samples belong to the checkpoint the acceptance replaced. Candidates are sparse, so the interpreter checks their hash against the rejection cache before writing them.
 struct StagedJointSearch: ReductionSearch {
@@ -18,10 +18,15 @@ struct StagedJointSearch: ReductionSearch {
     private let probeBudget: Int
     private var emitted = 0
 
-    /// Searches `pairs`, emitting at most `probeBudget` candidates.
-    init(pairs: [NumericPairQuery.Pair], base: ChoiceSequence, probeBudget: Int) {
+    /// Searches `pairs` and `signFlipProposals`, emitting at most `probeBudget` candidates.
+    init(
+        pairs: [NumericPairQuery.Pair],
+        signFlipProposals: [StagedJointQuery.PriorityProposal] = [],
+        base: ChoiceSequence,
+        probeBudget: Int
+    ) {
         arity = 2
-        cursor = StagedPairSearchCursor(pairs: pairs)
+        cursor = StagedPairSearchCursor(pairs: pairs, signFlipProposals: signFlipProposals)
         self.base = base
         self.probeBudget = probeBudget
     }

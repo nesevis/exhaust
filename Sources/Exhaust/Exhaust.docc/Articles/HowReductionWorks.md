@@ -55,7 +55,7 @@ The three representations are kept in sync. When an encoder mutates the sequence
 
 The choice sequence defines a natural ordering: *shortlex*. A shorter sequence is simpler than a longer one. Between sequences of equal length, the one whose values are smaller (in a type-aware sense) is simpler.
 
-For signed integers, closeness to zero is a natural measure of simplicity. The zigzag ordering (0, −1, 1, −2, 2, and so on) is the encoding that makes shortlex agree with that measure.
+For signed integers, closeness to zero is a natural measure of simplicity. Shortlex orders them as 0, 1, −1, 2, −2, and so on, preferring positive values when magnitudes match. Floating-point values use a separate simplicity key that favors integers and simple binary fractions.
 
 ### The journey
 

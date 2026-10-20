@@ -1,3 +1,4 @@
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -105,6 +106,35 @@ struct IntegerSearchTests {
         let recovered = try ChoiceSequence(#require(try Interpreters.reflect(longer, with: [50, 50, 50])))
 
         #expect(fixture.search.next(.accepted(recovered: recovered), into: &buffer) == nil)
+    }
+
+    @Test("Integer reduction can cross zero from a negative range endpoint", arguments: [-1 ... 1, -10 ... 10])
+    func integerReductionPrefersPositive(range: ClosedRange<Int>) throws {
+        let generator = Gen.choose(in: range)
+        let output = try reduceFromReflection(
+            generator,
+            startingAt: range.lowerBound,
+            config: .init(maxStalls: 2, enabledEncoders: [.valueSearch])
+        ) { value in
+            value == 0
+        }
+        #expect(output == 1)
+    }
+
+    @Test("A negative integer reduces to its positive counterpart at every magnitude", arguments: [false, true])
+    func integerCounterpartAtEveryMagnitude(isRangeEndpoint: Bool) throws {
+        let magnitudes = Gen.choose(in: 1 ... 1_000_000) as Generator<Int>
+        try exhaustCheck(magnitudes) { (magnitude: Int) throws -> Bool in
+            let bound = isRangeEndpoint ? magnitude : 1_000_000
+            let output = try reduceFromReflection(
+                Gen.choose(in: -bound ... bound),
+                startingAt: -magnitude,
+                config: .init(maxStalls: 2, enabledEncoders: [.valueSearch])
+            ) { value in
+                abs(value) < magnitude
+            }
+            return output == magnitude
+        }
     }
 }
 
