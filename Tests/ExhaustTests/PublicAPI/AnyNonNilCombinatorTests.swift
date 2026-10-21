@@ -27,12 +27,16 @@ struct AnyNonNilCombinatorTests {
     }
 
     @Test("unlabelled form yields nil only when every arm withdraws")
-    func failableYieldsNilOnExhaustion() {
+    func failableYieldsNilOnExhaustion() throws {
         let partial = #gen(.int(in: 0 ... 9)).map { $0.isMultiple(of: 3) ? $0 : nil }
         let gen = #gen(.anyNonNil((1, partial)))
         #exhaust(gen, .replay(.numeric(42))) { value in
             value == nil || value!.isMultiple(of: 3)
         }
+        let samples = try #example(gen, count: 100, seed: 42)
+        #expect(samples.count == 100)
+        #expect(samples.contains { $0 == nil })
+        #expect(samples.compactMap { $0 }.isEmpty == false)
     }
 
     @Test("unlabelled form prefers a producing arm over absence")

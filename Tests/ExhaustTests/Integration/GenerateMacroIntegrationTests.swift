@@ -25,8 +25,8 @@ struct GenerateMacroIntegrationTests {
 
     // MARK: - Two-generator bidirectional
 
-    @Test("Two-generator zip can be reflected")
-    func twoGeneratorReflection() throws {
+    @Test("Two-generator zip reflects named target values", arguments: [Person(name: "Alice", age: 30), Person(name: "Bob", age: 25)])
+    private func twoGeneratorReflection(target: Person) throws {
         let nameGen = stringGen()
         let ageGen = Gen.choose(in: 0 ... 120) as Generator<Int>
         let personGen = Gen.contramap(
@@ -34,7 +34,6 @@ struct GenerateMacroIntegrationTests {
             Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
         )
 
-        let target = Person(name: "Alice", age: 30)
         let tree = try #require(try Interpreters.reflect(personGen, with: target))
 
         let sequence = ChoiceSequence(tree)
@@ -95,30 +94,6 @@ struct GenerateMacroIntegrationTests {
             }
             #expect(roundTripped == generated)
         }
-    }
-
-    // MARK: - Shorthand parameters bidirectional
-
-    @Test("Shorthand parameters round-trip through reflection")
-    func shorthandParametersRoundTrip() throws {
-        let nameGen = stringGen()
-        let ageGen = Gen.choose(in: 0 ... 120) as Generator<Int>
-        let personGen = Gen.contramap(
-            { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen).map { Person(name: $0, age: $1) }
-        )
-
-        let target = Person(name: "Bob", age: 25)
-        let tree = try #require(try Interpreters.reflect(personGen, with: target))
-
-        let sequence = ChoiceSequence(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(personGen, context: .init(
-            prefix: sequence, mode: .exact, fallbackTree: tree
-        )) else {
-            Issue.record("Expected .success")
-            return
-        }
-        #expect(materialized == target)
     }
 
     // MARK: - Reflect → shrink

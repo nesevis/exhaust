@@ -9,12 +9,13 @@ struct CGSBindBoundaryTests {
             .just("hello"),
             .just("world"),
             .just("test")
-        ).bind { str in
-            .just(str.count)
+        ).bind { text in
+            .just(text.count)
         }.filter(.choiceGradientSampling) { $0 != 0 }
 
         let values = try #example(gen, count: 50, seed: 42)
-        #expect(values.allSatisfy { $0 != 0 })
+        #expect(values.count == 50)
+        #expect(Set(values) == [4, 5])
     }
 
     @Test("Pick inside nested binds with type changes does not crash CGS")
@@ -29,7 +30,8 @@ struct CGSBindBoundaryTests {
         }.filter(.choiceGradientSampling) { $0.isEmpty == false }
 
         let values = try #example(gen, count: 50, seed: 42)
-        #expect(values.allSatisfy { $0.isEmpty == false })
+        #expect(values.count == 50)
+        #expect(Set(values) == ["x", String(repeating: "x", count: 10)])
     }
 
     @Test("Unfold with filter does not crash CGS")
@@ -47,7 +49,9 @@ struct CGSBindBoundaryTests {
         ).filter(.choiceGradientSampling) { $0 >= 0 }
 
         let values = try #example(gen, count: 50, seed: 42)
-        #expect(values.allSatisfy { $0 >= 0 })
+        #expect(values.count == 50)
+        #expect(values.allSatisfy { (0 ... 3).contains($0) })
+        #expect(Set(values).count > 1)
     }
 
     @Test("CGS tunes picks inside bind toward filter predicate")
@@ -62,7 +66,10 @@ struct CGSBindBoundaryTests {
         }
 
         let values = try #example(gen, count: 100, seed: 42)
-        let allValid = values.allSatisfy { $0.allSatisfy { $0 <= 200 } }
+        #expect(values.count == 100)
+        let allValid = values.allSatisfy {
+            $0.count == 2 && (1 ... 100).contains($0[0]) && $0[1] == $0[0] * 2
+        }
         #expect(allValid, "CGS should steer the inner pick toward values <= 100")
     }
 }

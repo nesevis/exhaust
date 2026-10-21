@@ -10,106 +10,39 @@ import Testing
 
 @Suite("Decimal Generator")
 struct DecimalGeneratorTests {
-    @Suite("Basic generation")
-    struct BasicGeneration {
-        @Test("Generated values are within range")
-        func valuesWithinRange() throws {
-            let lower = Decimal(string: "10.00")!
-            let upper = Decimal(string: "99.99")!
-            let gen = #gen(.decimal(in: lower ... upper, precision: 2))
-            let values = try #example(gen, count: 50, seed: 42)
-
-            for value in values {
-                #expect(value >= lower)
-                #expect(value <= upper)
-            }
-        }
-
-        @Test("Generated values have correct precision")
-        func correctPrecision() throws {
-            let gen = #gen(.decimal(in: Decimal(0) ... Decimal(100), precision: 3))
-            let values = try #example(gen, count: 50, seed: 42)
-
-            for value in values {
-                // Multiplying by 10^3 should yield an integer
-                let scaled = value * 1000
-                let rounded = Decimal(Int64(truncating: scaled as NSDecimalNumber))
-                #expect(scaled == rounded)
-            }
-        }
-
-        @Test("Precision 0 produces integer Decimals")
-        func integerDecimals() throws {
-            let gen = #gen(.decimal(in: Decimal(-50) ... Decimal(50), precision: 0))
-            let values = try #example(gen, count: 50, seed: 42)
-
-            for value in values {
-                let asInt = Int64(truncating: value as NSDecimalNumber)
-                #expect(value == Decimal(asInt))
-            }
-        }
-
-        @Test("Deterministic: same seed produces same values")
-        func deterministic() throws {
-            let gen = #gen(.decimal(in: Decimal(0) ... Decimal(1000), precision: 2))
-
-            let values1 = try #example(gen, count: 20, seed: 99)
-            let values2 = try #example(gen, count: 20, seed: 99)
-            #expect(values1 == values2)
+    @Test("Decimal bounds and precision hold for boundary fixtures", arguments: decimalDomains)
+    func boundaryContracts(domain: DecimalDomain) throws {
+        let values = try #example(.decimal(in: domain.range, precision: domain.precision), count: 50, seed: 42)
+        #expect(values.count == 50)
+        for value in values {
+            #expect(domain.range.contains(value))
+            #expect(hasPrecision(value, digits: domain.precision))
         }
     }
 
-    @Suite("Edge cases")
-    struct EdgeCases {
-        @Test("Negative range")
-        func negativeRange() throws {
-            let lower = Decimal(string: "-100.50")!
-            let upper = Decimal(string: "-0.25")!
-            let gen = #gen(.decimal(in: lower ... upper, precision: 2))
-            let values = try #example(gen, count: 30, seed: 42)
-
+    @Test("Decimal bounds and precision hold for generated domains")
+    func generatedDomains() {
+        // Integral ticks construct aligned endpoints; bounded widths keep sampling inexpensive.
+        let domains = #gen(.int(in: -100_000 ... 100_000), .int(in: 0 ... 100_000), .int(in: 0 ... 4))
+        #exhaust(domains) { lowerTicks, width, precision in
+            let scale = pow(Decimal(10), precision)
+            let range = (Decimal(lowerTicks) / scale) ... (Decimal(lowerTicks + width) / scale)
+            let values = try #example(.decimal(in: range, precision: precision), count: 20, seed: 42)
+            #expect(values.count == 20)
             for value in values {
-                #expect(value >= lower)
-                #expect(value <= upper)
+                #expect(range.contains(value))
+                #expect(hasPrecision(value, digits: precision))
             }
         }
+    }
 
-        @Test("Single-value range")
-        func singleValueRange() throws {
-            let value = Decimal(string: "3.14")!
-            let gen = #gen(.decimal(in: value ... value, precision: 2))
-            let values = try #example(gen, count: 5, seed: 42)
-
-            for generated in values {
-                #expect(generated == value)
-            }
-        }
-
-        @Test("Large range near Int64 boundary stays in range")
-        func largeRangeNearInt64Boundary() throws {
-            let lower = Decimal(Int64.max - 20)
-            let upper = Decimal(Int64.max - 10)
-            let gen = #gen(.decimal(in: lower ... upper, precision: 0))
-            let values = try #example(gen, count: 20, seed: 42)
-
-            for value in values {
-                #expect(value >= lower)
-                #expect(value <= upper)
-            }
-        }
-
-        @Test("Range spanning zero")
-        func spanningZero() throws {
-            let lower = Decimal(string: "-10.5")!
-            let upper = Decimal(string: "10.5")!
-            let gen = #gen(.decimal(in: lower ... upper, precision: 1))
-            let values = try #example(gen, count: 50, seed: 42)
-
-            for value in values {
-                #expect(value >= lower)
-                #expect(value <= upper)
-            }
-        }
+    @Test("The same seed reproduces decimal samples")
+    func deterministic() throws {
+        let generator = #gen(.decimal(in: Decimal(0) ... Decimal(1000), precision: 2))
+        let first = try #example(generator, count: 20, seed: 99)
+        let second = try #example(generator, count: 20, seed: 99)
+        #expect(first.count == 20)
+        #expect(first == second)
     }
 
     @Suite("Shrinking")
@@ -172,4 +105,28 @@ struct DecimalGeneratorTests {
             #expect(#examine(gen, .samples(20), .replay(42)).passed)
         }
     }
+}
+
+// MARK: - Domains
+
+struct DecimalDomain: Sendable {
+    let range: ClosedRange<Decimal>
+    let precision: Int
+}
+
+private let decimalDomains = [
+    DecimalDomain(range: Decimal(string: "10.00")! ... Decimal(string: "99.99")!, precision: 2),
+    DecimalDomain(range: Decimal(0) ... Decimal(100), precision: 3),
+    DecimalDomain(range: Decimal(-50) ... Decimal(50), precision: 0),
+    DecimalDomain(range: Decimal(string: "-100.50")! ... Decimal(string: "-0.25")!, precision: 2),
+    DecimalDomain(range: Decimal(string: "3.14")! ... Decimal(string: "3.14")!, precision: 2),
+    DecimalDomain(range: Decimal(Int64.max - 20) ... Decimal(Int64.max - 10), precision: 0),
+    DecimalDomain(range: Decimal(string: "-10.5")! ... Decimal(string: "10.5")!, precision: 1),
+]
+
+private func hasPrecision(_ value: Decimal, digits: Int) -> Bool {
+    var scaled = value * pow(Decimal(10), digits)
+    var rounded = Decimal()
+    NSDecimalRound(&rounded, &scaled, 0, .plain)
+    return scaled == rounded
 }

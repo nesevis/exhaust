@@ -36,12 +36,6 @@ struct ExamineCoverageTests {
         #expect(intEntry == nil)
     }
 
-    @Test("Bool generator has no decile entries")
-    func boolNoDeciles() {
-        let report = #examine(.bool(), .samples(50), .suppress(.issueReporting))
-        #expect(report.numericCoverage.isEmpty)
-    }
-
     @Test("Multiple TypeTags reported separately")
     func multipleTypeTags() {
         let gen = #gen(.int(in: 0 ... 1000), .double(in: 0.0 ... 100.0))
@@ -72,12 +66,18 @@ struct ExamineCoverageTests {
     func noBranchesVacuouslyTrue() {
         let report = #examine(.int(in: 0 ... 100), .samples(50), .suppress(.issueReporting))
         #expect(report.branchCoverage == 1.0)
+        #expect(report.valuesGenerated == 50)
+        #expect(report.sequenceLengthDeciles == 10)
+        #expect(report.characterVariety == 1.0)
+        #expect(report.complexityDeciles == 10)
+        #expect(report.representativeTree != nil)
     }
 
     @Test("Bool generator covers both branches")
     func boolBranchCoverage() {
         let report = #examine(.bool(), .samples(50), .suppress(.issueReporting))
         #expect(report.branchCoverage == 1.0)
+        #expect(report.numericCoverage.isEmpty)
     }
 
     // MARK: - Sequence Length Deciles
@@ -90,12 +90,8 @@ struct ExamineCoverageTests {
             .suppress(.issueReporting)
         )
         #expect(report.sequenceLengthDeciles >= 5)
-    }
-
-    @Test("Sequence length deciles are vacuously 10 when no sequences exist")
-    func noSequencesVacuouslyTrue() {
-        let report = #examine(.int(in: 0 ... 100), .samples(50), .suppress(.issueReporting))
-        #expect(report.sequenceLengthDeciles == 10)
+        #expect(report.complexityDeciles >= 5)
+        #expect(report.valuesGenerated == 200)
     }
 
     // MARK: - Character Variety
@@ -104,12 +100,6 @@ struct ExamineCoverageTests {
     func characterVariety() {
         let report = #examine(.character(), .samples(200), .suppress(.issueReporting))
         #expect(report.characterVariety > 0)
-    }
-
-    @Test("Character variety is vacuously 1.0 when no character generators exist")
-    func noCharactersVacuouslyTrue() {
-        let report = #examine(.int(in: 0 ... 100), .samples(50), .suppress(.issueReporting))
-        #expect(report.characterVariety == 1.0)
     }
 
     @Test("Complex generator report")
@@ -146,29 +136,7 @@ struct ExamineCoverageTests {
 
     // MARK: - Complexity Deciles
 
-    @Test("Array generator varies complexity")
-    func arrayComplexityDeciles() {
-        let report = #examine(
-            .int(in: 0 ... 100).array(length: 0 ... 20),
-            .samples(200),
-            .suppress(.issueReporting)
-        )
-        #expect(report.complexityDeciles >= 5)
-    }
-
-    @Test("Fixed-structure generator has vacuously true complexity")
-    func fixedStructureComplexity() {
-        let report = #examine(.int(in: 0 ... 100), .samples(50), .suppress(.issueReporting))
-        #expect(report.complexityDeciles == 10)
-    }
-
     // MARK: - Representative Tree
-
-    @Test("Report includes a representative tree")
-    func representativeTree() {
-        let report = #examine(.int(in: 0 ... 100), .samples(10), .suppress(.issueReporting))
-        #expect(report.representativeTree != nil)
-    }
 
     // MARK: - Suppress Settings
 
@@ -231,6 +199,7 @@ struct ExamineCoverageTests {
     @Test("Users can assert all deciles cover a minimum")
     func assertAllDecilesCoverMinimum() {
         let report = #examine(.int(in: 0 ... 10000), .samples(200), .suppress(.issueReporting))
+        #expect(report.numericCoverage.isEmpty == false)
         #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 5 })
     }
 }

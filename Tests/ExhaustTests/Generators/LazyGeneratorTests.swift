@@ -9,8 +9,8 @@ import Testing
 
 @Suite("lazy generator")
 struct LazyGeneratorTests {
-    @Test("Construction is deferred until generation reaches the generator")
-    func constructionIsDeferredUntilGenerationReachesTheGenerator() {
+    @Test("Lazy construction is deferred and runs once, including parallel draws", arguments: [false, true])
+    func constructionRunsOnceAndLaterDrawsReuseTheBuiltGenerator(parallel: Bool) {
         let counter = ConstructionCounter()
         let generator: ReflectiveGenerator<Int> = .lazy {
             counter.increment()
@@ -18,38 +18,7 @@ struct LazyGeneratorTests {
         }
 
         #expect(counter.isEmpty)
-
-        #exhaust(#gen(generator), .budget(.quick)) { value in
-            (0 ... 9).contains(value)
-        }
-
-        #expect(!counter.isEmpty)
-    }
-
-    @Test("Construction runs once and later draws reuse the built generator")
-    func constructionRunsOnceAndLaterDrawsReuseTheBuiltGenerator() {
-        let counter = ConstructionCounter()
-        let generator: ReflectiveGenerator<Int> = .lazy {
-            counter.increment()
-            return .int(in: 0 ... 9)
-        }
-
-        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: 200))) { value in
-            (0 ... 9).contains(value)
-        }
-
-        #expect(counter.count == 1)
-    }
-
-    @Test("Construction runs once under parallel lanes")
-    func constructionRunsOnceUnderParallelLanes() {
-        let counter = ConstructionCounter()
-        let generator: ReflectiveGenerator<Int> = .lazy {
-            counter.increment()
-            return .int(in: 0 ... 9)
-        }
-
-        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: 2000)), .parallelize(lanes: .four)) { value in
+        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: parallel ? 2000 : 200)), .parallelize(lanes: parallel ? .four : .one)) { value in
             (0 ... 9).contains(value)
         }
 
@@ -82,7 +51,7 @@ struct LazyGeneratorTests {
         let first = collect(seed: 1337)
         let second = collect(seed: 1337)
 
-        #expect(first.isEmpty == false)
+        #expect(first.count == 50)
         #expect(first == second)
     }
 
@@ -142,5 +111,6 @@ struct LazyGeneratorTests {
         #exhaust(#gen(generator), .budget(.quick)) { value in
             value == -1 || (0 ... 9).contains(value)
         }
+        #expect(counter.count == 1)
     }
 }

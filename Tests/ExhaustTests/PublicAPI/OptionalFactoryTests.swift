@@ -11,12 +11,16 @@ struct OptionalFactoryTests {
         }
     }
 
-    @Test("The static form honors custom weights")
-    func staticFormHonorsWeights() {
-        let gen = #gen(.optional(.int(in: 0 ... 10), someWeight: 1, noneWeight: 3))
-        #exhaust(gen, .replay(.numeric(1))) { value in
-            value == nil || (0 ... 10).contains(value!)
-        }
+    @Test("Optional weights select both arms at the requested proportions", arguments: [(1, 3), (3, 1)])
+    func staticFormHonorsWeights(someWeight: Int, noneWeight: Int) throws {
+        let values = try #example(
+            #gen(.optional(.int(in: 0 ... 10), someWeight: someWeight, noneWeight: noneWeight)),
+            count: 1000, seed: .numeric(1)
+        )
+        #expect(values.count == 1000)
+        let someCount = values.compactMap { $0 }.count
+        let expected = 1000 * someWeight / (someWeight + noneWeight)
+        #expect(abs(someCount - expected) < 100)
     }
 
     @Test("The static and instance forms produce the same stream for a seed")

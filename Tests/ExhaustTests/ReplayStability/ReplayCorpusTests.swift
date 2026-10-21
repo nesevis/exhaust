@@ -29,6 +29,7 @@ struct ReplayCorpusTests {
         for seed in ReplayCorpusEntry.seeds {
             let first = await entry.capture(seed)
             let second = await entry.capture(seed)
+            #expect(first.isEmpty == false, "Corpus capture must exercise the entry")
             #expect(first == second, "\(entry.name) rendered differently across two captures under seed \(seed); the corpus cannot pin a nondeterministic stream")
         }
     }
@@ -88,7 +89,8 @@ enum ReplayCorpus {
         var values: [Key: [String]] = [:]
         for rawLine in text.split(whereSeparator: \.isNewline) where rawLine.isEmpty == false {
             let line = try decoder.decode(Line.self, from: Data(rawLine.utf8))
-            values[Key(entry: line.entry, seed: line.seed)] = line.values
+            let corpusKey = Key(entry: line.entry, seed: line.seed)
+            try #require(values.updateValue(line.values, forKey: corpusKey) == nil, "Duplicate corpus corpusKey: \(line.entry), \(line.seed)")
         }
         return Loaded(values: values)
     }

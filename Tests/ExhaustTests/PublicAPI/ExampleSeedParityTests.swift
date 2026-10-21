@@ -14,10 +14,10 @@ struct ExampleSeedParityTests {
     private static let parseSeed: UInt64 = 1337
     private static let sampleCount = 20
 
-    @Test("#example(count:seed:) recreates the values #exhaust sampled with the same seed")
-    func arrayParity() throws {
+    @Test("Single, batch and offset examples reproduce the sampling stream")
+    func samplingAndIterationReplayParity() throws {
         let sampled = Self.recordSampledValues()
-        #expect(sampled.count == Self.sampleCount)
+        try #require(sampled.count == Self.sampleCount)
 
         let recreated = try #example(
             Self.parityGen,
@@ -25,26 +25,16 @@ struct ExampleSeedParityTests {
             seed: .numeric(Self.parseSeed)
         )
         #expect(recreated == sampled)
-    }
-
-    @Test("#example(seed:) with an encoded iteration seed recreates that iteration's value")
-    func iterationParity() throws {
-        let sampled = Self.recordSampledValues()
 
         for iteration in [1, 7, Self.sampleCount] {
             let encoded = ReplaySeed.Resolved.sampling(seed: Self.parseSeed, iteration: iteration).encoded
             let recreated = try #example(Self.parityGen, seed: .encoded(encoded))
             #expect(recreated == sampled[iteration - 1], "iteration \(iteration), seed \(encoded)")
         }
-    }
-
-    @Test("#example(count:seed:) with an encoded iteration seed starts at that iteration")
-    func iterationOffsetArrayParity() throws {
-        let sampled = Self.recordSampledValues()
 
         let encoded = ReplaySeed.Resolved.sampling(seed: Self.parseSeed, iteration: 5).encoded
-        let recreated = try #example(Self.parityGen, count: 10, seed: .encoded(encoded))
-        #expect(recreated == Array(sampled[4 ..< 14]))
+        let recreatedOffset = try #example(Self.parityGen, count: 10, seed: .encoded(encoded))
+        #expect(recreatedOffset == Array(sampled[4 ..< 14]))
     }
 
     /// Runs the `#exhaust` sampling phase with a fixed seed and no screening, recording every value the property saw.

@@ -13,12 +13,14 @@ final class XCTestIssueReportingTests: XCTestCase {
         func testFailingPropertyRecordsXCTestFailure() {
             // reportIssue bridges to XCTFail, so #exhaust records an XCTest failure
             // for the failing property. XCTExpectFailure marks this as intentional.
-            XCTExpectFailure("exhaust should report property failure via XCTFail")
-            let result = #exhaust(
-                #gen(.int(in: 0 ... 100)),
-                .budget(.custom(screening: 0, sampling: 10))
-            ) { value in
-                value < 0
+            var result: Int?
+            XCTExpectFailure("exhaust should report property failure via XCTFail") {
+                result = #exhaust(
+                    #gen(.int(in: 0 ... 100)),
+                    .budget(.custom(screening: 0, sampling: 10))
+                ) { value in
+                    value < 0
+                }
             }
             XCTAssertNotNil(result, "Should return a counterexample")
         }

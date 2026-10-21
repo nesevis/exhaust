@@ -18,8 +18,8 @@ struct RecursiveDepthReflectionTests {
 
     @Test("A target within depthRange still reflects")
     func targetWithinDepthRangeReflects() throws {
-        let reflected = try Interpreters.reflect(Self.treeGenerator.gen, with: Self.shallowTree)
-        #expect(reflected != nil)
+        let reflected = try #require(try Interpreters.reflect(Self.treeGenerator.gen, with: Self.shallowTree))
+        #expect(try Interpreters.replay(Self.treeGenerator.gen, using: reflected) == Self.shallowTree)
     }
 
     @Test("Reflecting a too-deep target through #exhaust returns the value instead of trapping")

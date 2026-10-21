@@ -61,9 +61,10 @@ struct GeneratorSynthesizerTests {
         """
         let generator = try #gen(Person.self, from: json)
 
-        #exhaust(generator, .suppress(.issueReporting)) { person in
-            person.age >= 0
+        let counterexample = #exhaust(generator, .suppress(.issueReporting)) { person in
+            person.age < 10
         }
+        #expect(try #require(counterexample).age >= 10)
     }
 
     @Test("Generates dictionary properties")

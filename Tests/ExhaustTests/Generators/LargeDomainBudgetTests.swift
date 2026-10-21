@@ -1,293 +1,100 @@
-//
-//  LargeDomainBudgetTests.swift
-//  Exhaust
-//
-//  Exercises the screening budget with multi-parameter large-domain generators
-//  to measure how long problematic-value analysis takes at different scales.
-//
-
 import Exhaust
 import Foundation
 import Testing
 
-@Suite("Large Domain Budget Stress Tests")
+@Suite("Large-domain screening budgets")
 struct LargeDomainBudgetTests {
-    // MARK: - Date Ranges
-
-    // Full year 2024
-    static let year2024Start = Date(timeIntervalSinceReferenceDate: 725_760_000)
-    static let year2024End = Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366)
-    static let year2024 = year2024Start ... year2024End
-
-    /// Q1 2024 (Jan–Mar, captures US spring forward)
-    static let q1_2024 = year2024Start
-        ... Date(timeIntervalSinceReferenceDate: 725_760_000 + 91 * 86400)
-
-    /// Q4 2024 (Oct–Dec, captures US fall back)
-    static let q4_2024 = Date(timeIntervalSinceReferenceDate: 725_760_000 + 274 * 86400)
-        ... year2024End
-
-    static let usEastern = TimeZone(identifier: "America/New_York")!
-
-    // MARK: - 1 Parameter: Baseline
-
-    @Test("1-param year range, hourly interval")
-    func oneParamYearHourly() {
-        let gen = #gen(.date(between: Self.year2024, interval: .hours(1)))
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
-            // Property: every date in 2024 has a valid weekday (1–7)
-            let calendar = Calendar(identifier: .gregorian)
-            let weekday = calendar.component(.weekday, from: date)
-            return (1 ... 7).contains(weekday)
-        }
-
-        #expect(counterExample == nil)
+    @Test("Every shape materializes within its screening budget", arguments: DateBudgetFixture.all, [100, 200, 600])
+    func screeningBudget(fixture: DateBudgetFixture, budget: Int) throws {
+        let report = try fixture.run(budget)
+        #expect(report.screeningRows > 0)
+        #expect(report.screeningRows <= budget)
+        #expect(report.screeningInvocations == report.screeningRows)
+        #expect(report.screeningRejectedRows == 0)
+        #expect(report.randomSamplingInvocations == 0)
     }
+}
 
-    @Test("1-param year range, 15-minute interval")
-    func oneParamYear15Min() {
-        let gen = #gen(.date(between: Self.year2024, interval: .minutes(15)))
+// MARK: - Fixtures
 
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date in
-            // Property: timeIntervalSinceReferenceDate round-trips through Date
-            let seconds = date.timeIntervalSinceReferenceDate
-            let roundTripped = Date(timeIntervalSinceReferenceDate: seconds)
-            return abs(roundTripped.timeIntervalSince(date)) < 1.0
-        }
+/// Each fixture runs its original generator and checks every date and scalar in its output.
+struct DateBudgetFixture: Sendable, CustomTestStringConvertible {
+    let name: String
+    let run: @Sendable (Int) throws -> ExhaustReport
 
-        #expect(counterExample == nil)
-    }
-
-    // MARK: - 2 Parameters: Pairwise Coverage
-
-    @Test("2-param: scheduling overlap detection across DST")
-    func twoParamSchedulingOverlap() {
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
-        )
-
-        // Property: if eventEnd > eventStart, the duration is positive
-        // (This is trivially true but exercises the 2-param covering array)
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end in
-            guard end > start else {
-                return true
+    init<Value>(name: String, generator: ReflectiveGenerator<Value>, sample: @escaping @Sendable (Value) -> DateBudgetSample) {
+        self.name = name
+        run = { budget in
+            var captured: ExhaustReport?
+            let result = #exhaust(
+                generator,
+                .budget(.custom(screening: budget, sampling: 0)),
+                .replay(42),
+                .onReport { captured = $0 }
+            ) { value in
+                sample(value).isValid
             }
-            return end.timeIntervalSince(start) > 0
+            #expect(result == nil)
+            return try #require(captured)
         }
-
-        #expect(counterExample == nil)
     }
 
-    @Test("2-param: cross-quarter date comparison")
-    func twoParamCrossQuarter() {
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q4_2024, interval: .hours(1))
-        )
-
-        // Property: Q4 date is always after Q1 date
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { q1Date, q4Date in
-            q4Date > q1Date
-        }
-
-        #expect(counterExample == nil)
+    var testDescription: String {
+        name
     }
 
-    @Test("2-param: day-of-week consistency across DST")
-    func twoParamDayOfWeekConsistency() {
-        let gen = #gen(
-            .date(between: Self.year2024, interval: .hours(1)),
-            .date(between: Self.year2024, interval: .hours(1))
-        )
+    static let start = Date(timeIntervalSinceReferenceDate: 725_760_000)
+    static let year = start ... start.addingTimeInterval(86400 * 366)
+    static let firstQuarter = start ... start.addingTimeInterval(86400 * 91)
+    static let lastQuarter = start.addingTimeInterval(86400 * 274) ... year.upperBound
+    static let spring = Date(timeIntervalSinceReferenceDate: 731_746_800 - 14 * 86400)
+        ... Date(timeIntervalSinceReferenceDate: 731_746_800 + 14 * 86400)
 
-        // Property: if two dates are exactly 7 calendar days apart,
-        // they fall on the same weekday.
-        //
-        // The guard must require an exact gap: `dateComponents([.day]).day == 7` alone matches any
-        // difference in [7 days, 8 days), so a pair 7 days and 23 hours apart (different weekdays,
-        // no DST involved) is a false counterexample. That was the earlier "two dates in August".
-        let counterExample = #exhaust(
-            gen,
-            .suppress(.issueReporting),
-            .replay(9_233_197_236_318_045_878)
-        ) { date1, date2 in
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = Self.usEastern
-            let gap = calendar.dateComponents([.day, .hour, .minute, .second], from: date1, to: date2)
-            guard gap.day == 7, gap.hour == 0, gap.minute == 0, gap.second == 0 else {
-                return true
-            }
-            let weekday1 = calendar.component(.weekday, from: date1)
-            let weekday2 = calendar.component(.weekday, from: date2)
-            return weekday1 == weekday2
-        }
+    static var all: [DateBudgetFixture] {
+        let hourly = ReflectiveGenerator<Date>.date(between: year, interval: .hours(1))
+        let fine = ReflectiveGenerator<Date>.date(between: year, interval: .minutes(15))
+        let quarter = ReflectiveGenerator<Date>.date(between: firstQuarter, interval: .hours(1))
+        let late = ReflectiveGenerator<Date>.date(between: lastQuarter, interval: .hours(1))
+        let springDate = ReflectiveGenerator<Date>.date(between: spring, interval: .hours(1))
+        let springArray = springDate.array(length: 0 ... 5)
+        return [
+            .init(name: "one hourly", generator: #gen(hourly)) { DateBudgetSample([$0], in: year) },
+            .init(name: "one fine", generator: #gen(fine)) { DateBudgetSample([$0], in: year, interval: 900) },
+            .init(name: "two quarter", generator: #gen(quarter, quarter)) { DateBudgetSample([$0, $1], in: firstQuarter) },
+            .init(name: "cross quarter", generator: #gen(quarter, late)) { DateBudgetSample([$0, $1], in: year, scalarsValid: firstQuarter.contains($0) && lastQuarter.contains($1)) },
+            .init(name: "two year", generator: #gen(hourly, hourly)) { DateBudgetSample([$0, $1], in: year) },
+            .init(name: "three quarter", generator: #gen(quarter, quarter, quarter)) { DateBudgetSample([$0, $1, $2], in: firstQuarter) },
+            .init(name: "date and offset", generator: #gen(hourly, .int(in: -168 ... 168))) { DateBudgetSample([$0], in: year, scalarsValid: (-168 ... 168).contains($1)) },
+            .init(name: "date and two offsets", generator: #gen(hourly, .int(in: -72 ... 72), .int(in: -72 ... 72))) { DateBudgetSample([$0], in: year, scalarsValid: (-72 ... 72).contains($1) && (-72 ... 72).contains($2)) },
+            .init(name: "five dates", generator: #gen(quarter, quarter, quarter, quarter, quarter)) { DateBudgetSample([$0, $1, $2, $3, $4], in: firstQuarter) },
+            .init(name: "six mixed", generator: #gen(quarter, quarter, quarter, quarter, .int(in: 0 ... 4), .int(in: 1 ... 5))) { DateBudgetSample([$0, $1, $2, $3], in: firstQuarter, scalarsValid: (0 ... 4).contains($4) && (1 ... 5).contains($5)) },
+            .init(name: "two fine", generator: #gen(fine, fine)) { DateBudgetSample([$0, $1], in: year, interval: 900) },
+            .init(name: "year array", generator: #gen(hourly.array(length: 1 ... 10))) { DateBudgetSample($0, in: year, scalarsValid: (1 ... 10).contains($0.count)) },
+            .init(name: "DST fine array", generator: #gen(.date(between: spring, interval: .minutes(30)).array(length: 1 ... 5))) { DateBudgetSample($0, in: spring, interval: 1800, scalarsValid: (1 ... 5).contains($0.count)) },
+            .init(name: "array and date", generator: #gen(springDate.array(length: 1 ... 5), springDate)) { DateBudgetSample($0 + [$1], in: spring, scalarsValid: (1 ... 5).contains($0.count)) },
+            .init(name: "two arrays", generator: #gen(springArray, springArray)) { DateBudgetSample($0 + $1, in: spring, scalarsValid: $0.count <= 5 && $1.count <= 5) },
+            .init(name: "array and offset", generator: #gen(hourly.array(length: 1 ... 5), .int(in: -168 ... 168))) { DateBudgetSample($0, in: year, scalarsValid: (1 ... 5).contains($0.count) && (-168 ... 168).contains($1)) },
+            .init(name: "two arrays and date", generator: #gen(springArray, springArray, springDate)) { DateBudgetSample($0 + $1 + [$2], in: spring, scalarsValid: $0.count <= 5 && $1.count <= 5) },
+        ]
+    }
+}
 
-        #expect(counterExample == nil)
+struct DateBudgetSample {
+    let dates: [Date]
+    let range: ClosedRange<Date>
+    let interval: TimeInterval
+    let scalarsValid: Bool
+
+    init(_ dates: [Date], in range: ClosedRange<Date>, interval: TimeInterval = 3600, scalarsValid: Bool = true) {
+        self.dates = dates
+        self.range = range
+        self.interval = interval
+        self.scalarsValid = scalarsValid
     }
 
-    // MARK: - 3 Parameters: Triple Interaction
-
-    @Test("3-param: transitive date ordering")
-    func threeParamTransitiveOrdering() {
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
-        )
-
-        // Property: date comparison is transitive (a < b && b < c → a < c)
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, c in
-            guard a < b, b < c else {
-                return true
-            }
-            return a < c
+    var isValid: Bool {
+        scalarsValid && dates.allSatisfy { date in
+            range.contains(date) && abs(date.timeIntervalSince(range.lowerBound).remainder(dividingBy: interval)) < 0.001
         }
-
-        #expect(counterExample == nil)
-    }
-
-    @Test("3-param: calendar day containment")
-    func threeParamCalendarDayContainment() {
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
-        )
-
-        // Property: if a and c are on the same calendar day, and a <= b <= c,
-        // then b is also on the same calendar day.
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { a, b, c in
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = Self.usEastern
-            // Sort so we have ordered dates
-            let sorted = [a, b, c].sorted()
-            let first = sorted[0], mid = sorted[1], last = sorted[2]
-            let startFirst = calendar.startOfDay(for: first)
-            let startLast = calendar.startOfDay(for: last)
-            guard startFirst == startLast else { // different days, skip
-                return true
-            }
-            let startMid = calendar.startOfDay(for: mid)
-            return startMid == startFirst
-        }
-
-        #expect(counterExample == nil)
-    }
-
-    // MARK: - Mixed Types: Date + Integer
-
-    @Test("2-param: date + offset — calendar addition consistency")
-    func mixedDateAndOffset() {
-        let gen = #gen(
-            .date(between: Self.year2024, interval: .hours(1)),
-            .int(in: -168 ... 168) // ±1 week in hours
-        )
-
-        // Property: adding N hours via seconds matches Calendar.date(byAdding:)
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date, hours in
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = Self.usEastern
-            let bySeconds = date.addingTimeInterval(Double(hours) * 3600)
-            guard let byCalendar = calendar.date(byAdding: .hour, value: hours, to: date) else {
-                return true
-            }
-            // These should always agree — Calendar.date(byAdding: .hour) adds wall-clock hours
-            // which equals adding seconds for hour additions
-            return abs(bySeconds.timeIntervalSince(byCalendar)) < 1.0
-        }
-
-        #expect(counterExample == nil)
-    }
-
-    @Test("3-param: date + two offsets — associativity of hour addition")
-    func mixedDateAndTwoOffsets() {
-        let gen = #gen(
-            .date(between: Self.year2024, interval: .hours(1)),
-            .int(in: -72 ... 72),
-            .int(in: -72 ... 72)
-        )
-
-        // Property: adding hours is associative — (date + a) + b == date + (a + b)
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date, a, b in
-            let stepwise = date.addingTimeInterval(Double(a) * 3600)
-                .addingTimeInterval(Double(b) * 3600)
-            let combined = date.addingTimeInterval(Double(a + b) * 3600)
-            return abs(stepwise.timeIntervalSince(combined)) < 1.0
-        }
-
-        #expect(counterExample == nil)
-    }
-
-    // MARK: - Realistic Record Types
-
-    @Test("5-param: record with startDate, endDate, modifiedDate, createdDate, dueDate")
-    func fiveDateRecord() {
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
-        )
-
-        // Property: createdDate <= modifiedDate (treating params as: start, end, modified, created, due)
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end, modified, created, _ in
-            guard created <= modified else { // precondition
-                return true
-            }
-            guard start <= end else { // precondition
-                return true
-            }
-            // Trivially true — just exercising the covering array
-            return created <= modified
-        }
-
-        #expect(counterExample == nil)
-    }
-
-    @Test("6-param: record with dates + status enum + priority int")
-    func sixParamMixedRecord() {
-        let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)), // startDate
-            .date(between: Self.q1_2024, interval: .hours(1)), // endDate
-            .date(between: Self.q1_2024, interval: .hours(1)), // modifiedDate
-            .date(between: Self.q1_2024, interval: .hours(1)), // createdDate
-            .int(in: 0 ... 4), // status
-            .int(in: 1 ... 5) // priority
-        )
-
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { _, _, _, _, status, priority in
-            (1 ... 5).contains(priority) && (0 ... 4).contains(status)
-        }
-
-        #expect(counterExample == nil)
-    }
-
-    // MARK: - Budget Ceiling: Large Problematic-Value Sets
-
-    @Test("2-param year range with fine granularity — approaches budget ceiling")
-    func budgetCeiling() {
-        let gen = #gen(
-            .date(between: Self.year2024, interval: .minutes(15)),
-            .date(between: Self.year2024, interval: .minutes(15))
-        )
-
-        // Property: dates preserve their relative ordering through Calendar
-        let counterExample = #exhaust(gen, .suppress(.issueReporting)) { date1, date2 in
-            guard date1 != date2 else {
-                return true
-            }
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = Self.usEastern
-            let comp = calendar.compare(date1, to: date2, toGranularity: .second)
-            if date1 < date2 {
-                return comp == .orderedAscending
-            } else {
-                return comp == .orderedDescending
-            }
-        }
-
-        #expect(counterExample == nil)
     }
 }

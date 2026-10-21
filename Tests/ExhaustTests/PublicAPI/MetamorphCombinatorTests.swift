@@ -62,7 +62,8 @@ struct MetamorphCombinatorTests {
             .metamorph({ $0 * 3 }, { $0 * 6 }, { $0.description })
         let first = try #example(gen, count: 50, seed: 99)
         let second = try #example(gen, count: 50, seed: 99)
-        #expect(first.count == second.count)
+        #expect(first.count == 50)
+        #expect(second.count == 50)
         for (a, b) in zip(first, second) {
             #expect(a == b)
         }
@@ -156,8 +157,7 @@ struct MetamorphCombinatorTests {
             }
         )
 
-        #expect(reduced.1 == reduced.0 * 2)
-        #expect(reduced.2 == String(reduced.0))
+        #expect(reduced == (1, 2, "1"))
     }
 
     @Test("Reflection gives mutating transforms independent copies")

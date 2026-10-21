@@ -7,13 +7,15 @@ final class XCTestIntegrationTests: XCTestCase {
     #if canImport(ObjectiveC)
         func testXCTSkipTreatedAsPassingValue() {
             // A skipped invocation is not a counterexample, so the result stays nil. A run whose every invocation was skipped asserts nothing, so it must report a pointless-run failure; XCTExpectFailure fails this test if that failure ever stops firing.
-            XCTExpectFailure("All invocations were skipped, so the run reports a pointless-run failure")
-            let result = #exhaust(
-                #gen(.int(in: 0 ... 100)),
-                .suppress(.issueReporting),
-                .budget(.custom(screening: 0, sampling: 10))
-            ) { _ in
-                throw XCTSkip("Skipping everything")
+            var result: Int?
+            XCTExpectFailure("All invocations were skipped, so the run reports a pointless-run failure") {
+                result = #exhaust(
+                    #gen(.int(in: 0 ... 100)),
+                    .suppress(.issueReporting),
+                    .budget(.custom(screening: 0, sampling: 10))
+                ) { _ in
+                    throw XCTSkip("Skipping everything")
+                }
             }
             XCTAssertNil(result, "XCTSkip should be treated as passing, not as a counterexample")
         }
