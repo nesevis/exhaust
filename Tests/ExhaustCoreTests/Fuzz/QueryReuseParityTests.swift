@@ -38,7 +38,8 @@ struct QueryReuseParityTests {
             elements: [boundedLeaf(3, in: 0 ... 100), boundedLeaf(4, in: 0 ... 100)],
             metadata: .init(validRange: nil, isRangeExplicit: false)
         )
-        let tree = ChoiceTree.group([seq1, seq2, seq3])
+        let empty = ChoiceTree.sequence(elements: [], metadata: .init(validRange: nil))
+        let tree = ChoiceTree.group([seq1, seq2, seq3, empty])
         let graph = ChoiceGraphBuilder.build(from: tree)
 
         let scopes = PermutationQuery.build(graph: graph)
@@ -81,21 +82,23 @@ struct QueryReuseParityTests {
         #expect(targets.deletableSequenceNodeIDs == scopeNodeIDs)
     }
 
-    @Test("Repertoire sights a superset of the per-parent structural arms")
-    func repertoireIsSuperset() {
+    @Test("Repertoire includes active and inactive structural arms", arguments: [false, true])
+    func repertoireIsSuperset(selectZip: Bool) {
         let leaf1 = boundedLeaf(100, in: 0 ... 200)
         let leaf2 = boundedLeaf(150, in: 0 ... 200)
         let leaf3 = boundedLeaf(175, in: 0 ... 200)
         let zipBranch = ChoiceTree.group([leaf1, leaf2, leaf3])
         let scalarBranch = boundedLeaf(0, in: 0 ... 0)
         let tree = ChoiceTree.group([
-            .branch(fingerprint: 1, weight: 1, id: 0, branchCount: 2, choice: scalarBranch, isSelected: true),
-            .branch(fingerprint: 1, weight: 1, id: 1, branchCount: 2, choice: zipBranch),
+            .branch(fingerprint: 1, weight: 1, id: 0, branchCount: 2, choice: scalarBranch, isSelected: selectZip == false),
+            .branch(fingerprint: 1, weight: 1, id: 1, branchCount: 2, choice: zipBranch, isSelected: selectZip),
         ])
         let fullGraph = ChoiceGraphBuilder.build(from: tree)
         let sighted = MutationArmRepertoire.sighted(in: fullGraph)
 
         let targets = MutationTargets(tree: tree)
+        #expect(sighted.contains(.swap))
+        #expect(targets.structuralArms.contains(.swap) == selectZip)
         for arm in MutationArm.allCases where targets.structuralArms.contains(arm) {
             #expect(sighted.contains(arm), "Repertoire missing arm \(arm) that targets reports")
         }

@@ -7,9 +7,8 @@ import Testing
 struct TasksFuzzTests {
     // MARK: - Reproducer Smoke Test
 
-    @Test("Fault L fires under a hand-realized overlapping schedule")
-    func faultLMinimal() async {
-        // Two interleaved read-modify-writes: both read before either writes, so one deposit is lost.
+    @Test("Concurrent deposits preserve the balance bounds under the global executor")
+    func concurrentDepositBounds() async {
         let ledger = RacyLedger()
         async let first: Void = ledger.deposit(1)
         async let second: Void = ledger.deposit(1)
@@ -31,7 +30,7 @@ struct TasksFuzzTests {
             .commandLimit(20),
             .suppress(.issueReporting)
         )
-        #expect(report.attempts.total > 0)
+        #expect(report.attempts.evaluated > 0)
         #expect(report.clusters.isEmpty == false, "Lane-marker mutation should realize a read-read-write-write interleaving within the budget")
         #expect(report.clusters.allSatisfy { $0.symptoms.contains("StateMachineCheckFailure") }, "Fault L surfaces as the balanceMatchesModel invariant violation")
     }
@@ -49,7 +48,7 @@ struct TasksFuzzTests {
             .replay(1),
             .suppress(.issueReporting)
         )
-        #expect(report.attempts.total > 0)
+        #expect(report.attempts.evaluated > 0)
         #expect(report.clusters.isEmpty, "A single-lane schedule realized fault L — the cooperative path is executing lanes it should not have, or the fixture gained a sequential fault")
     }
 
@@ -75,6 +74,9 @@ struct TasksFuzzTests {
             .replay(42),
             .suppress(.issueReporting)
         )
+        #expect(first.attempts.evaluated > 0)
+        #expect(second.attempts.evaluated > 0)
+        #expect(first.clusters.isEmpty == false, "Replay must rediscover an actual fault")
         let firstSymptoms = Set(first.clusters.flatMap(\.symptoms))
         let secondSymptoms = Set(second.clusters.flatMap(\.symptoms))
         #expect(firstSymptoms == secondSymptoms, "Replay under the same seed diverged: \(firstSymptoms) vs \(secondSymptoms)")

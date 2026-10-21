@@ -30,7 +30,7 @@ struct MultiModelTests {
 @StateMachine
 final class MultiModelSpec {
     var expectedKeys: [String] = []
-    var expectedValues: [Int] = []
+    var expectedValues: [String: Int] = [:]
     var expectedCount: Int = 0
     @SystemUnderTest
     var store: BuggyKeyValueStore = .init()
@@ -45,13 +45,18 @@ final class MultiModelSpec {
         store.keys.sorted() == expectedKeys.sorted()
     }
 
+    @Invariant
+    func valuesMatch() -> Bool {
+        expectedValues.allSatisfy { store.value(for: $0.key) == $0.value }
+    }
+
     @Command(weight: 3, .element(from: ["a", "b", "c"]), .int(in: 0 ... 9))
     func insert(key: String, value: Int) throws {
         if expectedKeys.contains(key) == false {
             expectedKeys.append(key)
             expectedCount += 1
         }
-        expectedValues.append(value)
+        expectedValues[key] = value
         store.insert(key: key, value: value)
     }
 
@@ -62,6 +67,7 @@ final class MultiModelSpec {
         }
         expectedKeys.removeAll { $0 == key }
         expectedCount -= 1
+        expectedValues.removeValue(forKey: key)
         store.remove(key: key)
     }
 
@@ -72,7 +78,7 @@ final class MultiModelSpec {
 
 // MARK: - SUT
 
-/// Key-value store with a bug: insert doesn't update the count when overwriting an existing key.
+/// Key-value store with a bug: overwriting an existing key increments the count.
 struct BuggyKeyValueStore {
     private var storage: [String: Int] = [:]
     private var _count: Int = 0
@@ -83,6 +89,10 @@ struct BuggyKeyValueStore {
 
     var keys: [String] {
         Array(storage.keys)
+    }
+
+    func value(for key: String) -> Int? {
+        storage[key]
     }
 
     mutating func insert(key: String, value: Int) {

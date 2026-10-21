@@ -8,28 +8,14 @@ struct DeepFixtureSmokeTests {
         #expect(throws: AlignmentError.self) { try DeepParser.decode(DeepFixture.reproducerP) }
         #expect(throws: AlignmentError.self) { try DeepParser.decode(DeepFixture.reproducerQ) }
         #expect(throws: OverflowError.self) { try DeepParser.decode(DeepFixture.reproducerR) }
-    }
-
-    @Test("The deep slippage pair shares one symptom type but has disjoint minimal forms")
-    func slippagePairIsDistinct() {
-        #expect(throws: AlignmentError.self) { try DeepParser.decode(DeepFixture.reproducerP) }
-        #expect(throws: AlignmentError.self) { try DeepParser.decode(DeepFixture.reproducerQ) }
         #expect(DeepFixture.reproducerP.channel != DeepFixture.reproducerQ.channel)
         #expect(DeepFixture.reproducerP != DeepFixture.reproducerQ)
     }
 
-    @Test("Zeroing any reproducer stops triggering its fault", arguments: [
-        DeepFixture.reproducerP,
-        DeepFixture.reproducerQ,
-        DeepFixture.reproducerR,
-    ])
-    func reproducersCarrySomethingLoadBearing(reproducer: Packet) {
-        #expect(throws: (any Error).self) {
-            _ = try DeepParser.decode(reproducer)
-        }
-        let zeroed = Packet(channel: 0, flags: 0, window: 0, commands: [], body: [])
+    @Test("A minimal packet decodes cleanly")
+    func minimalPasses() {
         #expect(throws: Never.self) {
-            _ = try DeepParser.decode(zeroed)
+            _ = try DeepParser.decode(Packet(channel: 0, flags: 0, window: 0, commands: [], body: []))
         }
     }
 

@@ -28,39 +28,6 @@ struct SetupGeneratorTests {
         #expect(preload.isEmpty)
         // The command passes run after setup settles and still reduce the sequence.
         #expect(result.commands.count == 1)
-    }
-
-    @Test("Setup-dependent failure pins the setup value the failure needs")
-    func setupDependentFailurePinsSetupValue() async throws {
-        let result = try #require(
-            await #execute(
-                CapacityGatedSpec.self,
-                mode: .sequential,
-                .commandLimit(6),
-                .budget(.custom(screening: 0, sampling: 300)),
-                .suppress(.issueReporting)
-            )
-        )
-        let setup = try #require(result.setup)
-        guard case let .configure(capacity) = setup else {
-            Issue.record("Expected a configure setup step, got \(setup)")
-            return
-        }
-        // The property only fails at capacity 10 or above, so setup reduction cannot cross that boundary.
-        #expect(capacity >= 10)
-    }
-
-    @Test("Setup steps render first in the trace with the (setup) suffix and shift command indices")
-    func setupStepsRenderFirstInTrace() async throws {
-        let result = try #require(
-            await #execute(
-                AlwaysFailingSetupSpec.self,
-                mode: .sequential,
-                .commandLimit(6),
-                .budget(.custom(screening: 0, sampling: 50)),
-                .suppress(.issueReporting)
-            )
-        )
         let firstStep = try #require(result.trace.first)
         #expect(firstStep.index == 1)
         #expect(firstStep.command.hasSuffix("(setup)"))
@@ -70,19 +37,6 @@ struct SetupGeneratorTests {
         }
         let commandSteps = result.trace.filter { $0.command.hasSuffix("(setup)") == false }
         #expect(commandSteps.isEmpty == false)
-    }
-
-    @Test("The failure header counts the setup step on both sides of the reduction")
-    func failureHeaderCountsSetupStep() async throws {
-        let result = try #require(
-            await #execute(
-                AlwaysFailingSetupSpec.self,
-                mode: .sequential,
-                .commandLimit(6),
-                .budget(.custom(screening: 0, sampling: 50)),
-                .suppress(.issueReporting)
-            )
-        )
         let originalCommands = try #require(result.originalCommands)
         let message = renderSequentialFailure(result)
         #expect(message.contains("Command sequence (\(result.commands.count + 1) step"))
@@ -123,6 +77,7 @@ struct SetupGeneratorTests {
         if originalCommands.count > result.commands.count {
             #expect(message.contains("reduced from \(originalCommands.count)):"))
         }
+        #expect(result.setup == nil)
     }
 
     @Test("A throwing setup fails the run and is attributed to the setup step")
@@ -157,20 +112,6 @@ struct SetupGeneratorTests {
         #expect(result == nil)
     }
 
-    @Test("A zero-setup spec reports nil setup")
-    func zeroSetupSpecReportsNilSetup() async throws {
-        let result = try #require(
-            await #execute(
-                PlainFailingSpec.self,
-                mode: .sequential,
-                .commandLimit(4),
-                .budget(.custom(screening: 0, sampling: 50)),
-                .suppress(.issueReporting)
-            )
-        )
-        #expect(result.setup == nil)
-    }
-
     @Test("Replay seed reproduces the same setup value")
     func replaySeedReproducesSetup() async throws {
         let first = try #require(
@@ -182,6 +123,12 @@ struct SetupGeneratorTests {
                 .suppress(.issueReporting)
             )
         )
+        let setup = try #require(first.setup)
+        guard case let .configure(capacity) = setup else {
+            Issue.record("Expected configure setup")
+            return
+        }
+        #expect(capacity == 10)
         let replaySeed = try #require(first.replaySeed)
         let replayed = try #require(
             await #execute(
@@ -192,7 +139,7 @@ struct SetupGeneratorTests {
                 .suppress(.issueReporting)
             )
         )
-        #expect(replayed.setup.map { "\($0)" } == first.setup.map { "\($0)" })
+        #expect(try String(describing: #require(replayed.setup)) == String(describing: #require(first.setup)))
     }
 }
 
@@ -299,7 +246,7 @@ struct SetupChoiceSequenceTests {
             )
         )
         #expect(replayed.discoveryMethod == .screening)
-        #expect(replayed.setup.map { "\($0)" } == first.setup.map { "\($0)" })
+        #expect(try String(describing: #require(replayed.setup)) == String(describing: #require(first.setup)))
         // Row determinism: the replay must land on the same row with the same pre-reduction command sequence, or the U-seed is not reproducing what discovery found.
         let firstOriginal = try #require(first.originalCommands)
         let replayedOriginal = try #require(replayed.originalCommands)
@@ -351,30 +298,20 @@ struct SetupChoiceSequenceTests {
 @Suite("@Setup under concurrent execution models", .serialized, .tags(.stateMachine))
 struct SetupConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("mode: .tasks passes when the model and the system under test are seeded identically")
-    func tasksSpecWithSetupPasses() async {
+    @Test("Every concurrent instance receives the setup", arguments: [ExecutionModel.tasks, .threads])
+    func tasksSpecWithSetupPasses(mode: ExecutionModel) async {
+        var invocations = 0
         let result = await #execute(
             SeededSpec.self,
-            mode: .tasks,
+            mode: mode,
             .commandLimit(6),
+            .onReport { invocations = $0.propertyInvocations },
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
         )
         // If any executor instance missed the setup application, the invariant would flag the divergence immediately.
         #expect(result == nil)
-    }
-
-    @Test("mode: .threads passes because every replay instance shares the setup")
-    func threadsSpecWithSetupPasses() async {
-        let result = await #execute(
-            SeededSpec.self,
-            mode: .threads,
-            .commandLimit(6),
-            .budget(.custom(screening: 0, sampling: 30)),
-            .suppress(.issueReporting)
-        )
-        // The equivalence compares the concurrent system under test against fresh sequential replays, and the invariant is judged along those replays. A missed setup on any instance the run constructs (reference, witness, search replays) would diverge and fail.
-        #expect(result == nil)
+        #expect(invocations > 0)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

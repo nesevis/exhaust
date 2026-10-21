@@ -178,16 +178,16 @@ struct PreemptiveDetectionBoundaryParityTests {
 @StateMachine
 final class PreemptiveExposedRaceParitySpec {
     @SystemUnderTest
-    var counter: ExposedRacyCounter = .init()
+    var counter: NonAtomicCounter = .init()
 
     @Equivalence
-    func valuesMatch(other: ExposedRacyCounter) -> Bool {
+    func valuesMatch(other: NonAtomicCounter) -> Bool {
         counter.value == other.value
     }
 
     @Command(weight: 1)
     func racyIncrement() async throws {
-        await counter.racyIncrement()
+        await counter.increment()
     }
 
     func failureDescription() -> String? {
@@ -198,10 +198,10 @@ final class PreemptiveExposedRaceParitySpec {
 @StateMachine
 final class PreemptiveThreeWayRaceParitySpec {
     @SystemUnderTest
-    var counter: ThreeWayRacyCounter = .init()
+    var counter: NonAtomicCounter = .init()
 
     @Equivalence
-    func valuesMatch(other: ThreeWayRacyCounter) -> Bool {
+    func valuesMatch(other: NonAtomicCounter) -> Bool {
         counter.value == other.value
     }
 

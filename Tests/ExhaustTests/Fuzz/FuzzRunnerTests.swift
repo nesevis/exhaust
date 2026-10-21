@@ -162,6 +162,11 @@ struct FuzzRunnerTests {
             #expect(cluster.reducedCount >= 1)
             #expect(cluster.instanceCount >= cluster.reducedCount)
         }
+        #expect(result.termination == .attemptLimitReached)
+        #expect(result.counts.screeningAttempts > 0)
+        #expect(result.counts.samplingAttempts > 0)
+        #expect(result.counts.mutationAttempts > 0)
+        #expect(result.counts.totalAttempts >= 1500)
     }
 
     @Test("Screening rows are pinned by the run seed")
@@ -192,8 +197,10 @@ struct FuzzRunnerTests {
             return probes.value
         }
 
-        #expect(screeningProbes(seed: 11) == screeningProbes(seed: 11))
-        #expect(screeningProbes(seed: 11) != screeningProbes(seed: 12))
+        let first = screeningProbes(seed: 11)
+        #expect(first.isEmpty == false)
+        #expect(first == screeningProbes(seed: 11))
+        #expect(first != screeningProbes(seed: 12))
     }
 
     @Test("Cluster inventory is stable across runs with the same seed")
@@ -212,8 +219,9 @@ struct FuzzRunnerTests {
             return Set(runner.run().clusters.map(\.reducedDescription))
         }
         // Inventory contents are deterministic under a pinned seed; only Task completion timestamps vary.
-        #expect(clusterForms(seed: 3) == clusterForms(seed: 3))
-        #expect(clusterForms(seed: 3) == ["42"])
+        let first = clusterForms(seed: 3)
+        #expect(first == clusterForms(seed: 3))
+        #expect(first == ["42"])
     }
 
     @Test("Saturated coverage ends the run on plateau and returns unused budget")
@@ -300,36 +308,6 @@ struct FuzzRunnerTests {
         ))
     }
 
-    @Test("Path defaults produce identical output across refactors")
-    func pathRegressionGuard() {
-        let property: @Sendable (Int) -> FuzzVerdict = { value in
-            (value > 40 && value < 60) || value > 940 ? .fail(.returnedFalse) : .pass
-        }
-        let runner = FuzzRunner(
-            gen: Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
-            property: property,
-            source: bucketedSource(),
-            configuration: FuzzRunnerConfiguration(
-                budgetNanoseconds: 60_000_000_000,
-                seed: 11,
-                attemptLimit: 1500
-            )
-        )
-        let result = runner.run()
-
-        #expect(result.clusters.count == 2)
-        let descriptions = Set(result.clusters.map(\.reducedDescription))
-        #expect(descriptions == Set(["41", "941"]))
-        #expect(result.termination == .attemptLimitReached)
-        #expect(result.counts.screeningAttempts > 0)
-        #expect(result.counts.samplingAttempts > 0)
-        #expect(result.counts.mutationAttempts > 0)
-        #expect(result.counts.totalAttempts >= 1500)
-        for cluster in result.clusters {
-            #expect(cluster.reducedCount >= 1)
-        }
-    }
-
     @Test("Duplicate skips are charged to the arms that produced them and the report sums them")
     func duplicateSkipAttribution() {
         // A tiny domain makes rebuilding an already evaluated sequence the common case in every arm, so the aggregate is nonzero and every skip has an owner.
@@ -350,9 +328,6 @@ struct FuzzRunnerTests {
         let arms = [skips.freshDraw, skips.mutationChild, skips.reflectionInjection, skips.graftInjection, skips.comparandSubstitution]
         let sum = arms.reduce(0, +)
         #expect(sum == result.counts.duplicateCandidatesSkipped)
-        for origin in CandidateOrigin.allCases {
-            #expect(result.counts[duplicateSkipsFor: origin] >= 0)
-        }
     }
 
     @Test("Comparand substitution finds a magic-number gate that random search cannot")

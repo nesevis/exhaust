@@ -6,6 +6,7 @@ struct MutationBanditTests {
     @Test("Fresh bandit distributes uniformly")
     func uniformStart() {
         let bandit = MutationBandit()
+        #expect(bandit.probabilities.count == 4)
         for probability in bandit.probabilities {
             #expect(abs(probability - 0.25) < 1e-9)
         }
@@ -42,17 +43,14 @@ struct MutationBanditTests {
         for probability in probabilities {
             #expect(probability >= floor - 1e-12)
         }
-        // pick honors the floor: a draw landing in the tail of the cumulative distribution returns a non-favored arm.
-        #expect(bandit.pick(random: 0.999) != bandit.pick(random: 0.5) || bandit.pick(random: 0.999) == .splice)
+        expectCumulativePicks(bandit)
     }
 
     @Test("Picks follow the cumulative distribution deterministically")
     func pickIsDeterministic() {
         var bandit = MutationBandit()
         bandit.reward(.high, drawProbability: bandit.probability(of: .high))
-        let first = (0 ..< 10).map { step in bandit.pick(random: Double(step) / 10) }
-        let second = (0 ..< 10).map { step in bandit.pick(random: Double(step) / 10) }
-        #expect(first == second)
+        expectCumulativePicks(bandit)
     }
 
     @Test("The bandit draws only from the eligible set and renormalises over it")
@@ -117,4 +115,16 @@ struct MutationBanditTests {
         full.reward(.swap, drawProbability: full.probability(of: .swap))
         #expect(full.probabilities[MutationArm.swap.rawValue] > full.probabilities[MutationArm.shuffle.rawValue])
     }
+}
+
+private func expectCumulativePicks(_ bandit: MutationBandit) {
+    let arms: [MutationArm] = [.low, .medium, .high, .splice]
+    #expect(bandit.probabilities.count == arms.count)
+    var cumulative = 0.0
+    for (arm, probability) in zip(arms, bandit.probabilities) {
+        #expect(probability > 0)
+        #expect(bandit.pick(random: cumulative + probability / 2) == arm)
+        cumulative += probability
+    }
+    #expect(abs(cumulative - 1) < 1e-9)
 }

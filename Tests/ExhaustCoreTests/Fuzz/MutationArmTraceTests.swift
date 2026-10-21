@@ -23,23 +23,24 @@ struct MutationArmTraceTests {
         #expect(ledger.admissions(arm: .low) == 1)
     }
 
-    /// The synthetic source admits only a handful of mutation candidates, because random sampling covers most of its small edge domain before the mutation phase begins. These two tests therefore assert that admissions are recorded at all, not at what rate.
-    @Test("A run records a draw for every arm it picks and an admission for every arm it admits")
-    func runRecordsDrawsAndAdmissions() {
-        let counts = runCounts(banditBands: true)
+    /// The synthetic source admits only a handful of mutation candidates, because random sampling covers most of its small edge domain before the mutation phase begins. These cases therefore assert that admissions are recorded at all, not at what rate.
+    @Test("Draws, admissions and parity are accounted with either bandit setting", arguments: [false, true])
+    func runRecordsDrawsAndAdmissions(banditBands: Bool) {
+        let counts = runCounts(banditBands: banditBands)
         let drawn = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.draws(arm: $1) }
         let admitted = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.admissions(arm: $1) }
         let credited = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.count(arm: $1) }
         #expect(drawn > 0)
         #expect(admitted > 0)
         #expect(admitted <= credited)
-    }
 
-    @Test("Admissions are recorded with the bandit off, so both arms of a comparison report the same reward")
-    func admissionsAreRecordedWithoutTheBandit() {
-        let counts = runCounts(banditBands: false)
-        let admitted = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.admissions(arm: $1) }
-        #expect(admitted > 0)
+        for arm in MutationArm.allCases {
+            #expect(counts.mutationArms.creditedEven(arm: arm) <= counts.mutationArms.count(arm: arm))
+            #expect(counts.mutationArms.admissionsEven(arm: arm) <= counts.mutationArms.admissions(arm: arm))
+        }
+        let even = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.creditedEven(arm: $1) }
+        #expect(even > 0)
+        #expect(even < credited)
     }
 
     @Test("A missed arm is counted as drawn and missed, and the band that absorbs the fallback takes the credit")
@@ -127,19 +128,6 @@ struct MutationArmTraceTests {
         #expect(experiments.banditBands)
         #expect(FuzzExperiments.shipped.armEligibility)
         #expect(FuzzExperiments.shipped.armAdmissibility)
-    }
-
-    @Test("The parity halves of a run's credited candidates sum to its totals")
-    func parityHalvesSumToTotals() {
-        let counts = runCounts(banditBands: true)
-        for arm in MutationArm.allCases {
-            #expect(counts.mutationArms.creditedEven(arm: arm) <= counts.mutationArms.count(arm: arm))
-            #expect(counts.mutationArms.admissionsEven(arm: arm) <= counts.mutationArms.admissions(arm: arm))
-        }
-        let credited = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.count(arm: $1) }
-        let even = MutationArm.allCases.reduce(0) { $0 + counts.mutationArms.creditedEven(arm: $1) }
-        #expect(even > 0)
-        #expect(even < credited)
     }
 
     // MARK: - Helpers

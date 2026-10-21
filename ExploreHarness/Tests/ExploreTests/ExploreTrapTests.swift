@@ -78,7 +78,7 @@ struct ExploreTrapTests {
             }
 
             // The run completed rather than dying: the exception was caught in process.
-            #expect(report.attempts.total > 0)
+            #expect(report.attempts.evaluated > 0)
             #expect(report.termination != .instrumentationMissing)
 
             // The caught exception was clustered under an NSException symptom.
@@ -99,7 +99,7 @@ struct ExploreTrapTests {
         ) { message in
             try Parser.decode(message).byteCount >= 0
         }
-        #expect(report.attempts.total > 0)
+        #expect(report.attempts.evaluated > 0)
         #expect(report.attemptsPerSecond > 0)
         #expect(report.timing.testingOverheadFraction >= 0 && report.timing.testingOverheadFraction <= 1)
         // Recorded for the CI log so a pipeline-cost regression is visible as a falling number.

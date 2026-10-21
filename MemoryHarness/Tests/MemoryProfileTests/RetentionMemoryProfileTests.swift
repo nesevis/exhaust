@@ -19,10 +19,12 @@ struct RetentionMemoryProfileTests {
 
         var postRunSamples: [UInt64] = []
         for iteration in 1 ... 5 {
+            var invocations = 0
             let counterexample = autoreleasepool {
                 #exhaust(
                     generator,
                     .replay(5901),
+                    .onReport { invocations = $0.propertyInvocations },
                     .suppress(.all)
                 ) { values, text in
                     values.count <= 512 && text.count <= 256
@@ -30,6 +32,7 @@ struct RetentionMemoryProfileTests {
             }
 
             #expect(counterexample == nil)
+            #expect(invocations > 0)
             let footprint = try #require(ProcessMemory.footprintBytes())
             postRunSamples.append(footprint)
             printSample(label: "iteration \(iteration)", bytes: footprint)

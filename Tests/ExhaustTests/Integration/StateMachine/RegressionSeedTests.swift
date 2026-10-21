@@ -76,6 +76,7 @@ struct RegressionSeedTests {
                 RegressionPreemptiveSpec.self,
                 mode: .threads,
                 .commandLimit(20),
+                .budget(.custom(screening: 0, sampling: 0)),
                 .suppress(.all)
             )
         }
@@ -102,7 +103,7 @@ struct RegressionSeedTests {
                 RegressionAsyncSequentialSpec.self,
                 mode: .sequential,
                 .commandLimit(8),
-                .budget(.custom(screening: 0, sampling: 1)),
+                .budget(.custom(screening: 0, sampling: 0)),
                 .suppress(.all)
             )
         }

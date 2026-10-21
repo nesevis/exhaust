@@ -19,7 +19,7 @@ import Testing
                     .suppress(.issueReporting)
                 )
             )
-            #expect(result.commands.isEmpty == false, "Should find a failure from the NSException")
+            #expect(result.commands.contains { "\($0)" == "triggerException" })
         }
     }
 
@@ -53,18 +53,19 @@ import Testing
     // MARK: - SUT
 
     final class ObjCThrowingStore: @unchecked Sendable, CustomDebugStringConvertible {
+        private let lock = NSLock()
         private var _value: Int = 0
 
         var value: Int {
-            _value
+            lock.withLock { _value }
         }
 
         var debugDescription: String {
-            "ObjCThrowingStore(value: \(_value))"
+            "ObjCThrowingStore(value: \(value))"
         }
 
         func increment() {
-            _value += 1
+            lock.withLock { _value += 1 }
         }
 
         func triggerObjCException() {

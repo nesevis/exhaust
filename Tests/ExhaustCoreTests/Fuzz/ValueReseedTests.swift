@@ -7,10 +7,10 @@ struct ValueReseedTests {
     func leafReseedPreservesContinuation(inSequence: Bool, multipleTargets: Bool) throws {
         let leaf: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1_000_000)
         let pair = leaf.bind { first in leaf.map { second in (first, second) } }
-        let gen: Generator<[(UInt64, UInt64)]> = inSequence
+        let generator: Generator<[(UInt64, UInt64)]> = inSequence
             ? Gen.arrayOf(pair, exactly: 2)
             : Gen.zip(pair, pair).map { [$0.0, $0.1] }
-        let (parentSequence, parentTree) = try materializedParent(gen)
+        let (parentSequence, parentTree) = try materializedParent(generator)
         let sites = MutationTargets(tree: parentTree).reseedSites
         #expect(sites.count == 4)
         let first = try #require(sites.first)
@@ -19,7 +19,7 @@ struct ValueReseedTests {
         var changedRanges: Set<Int> = []
 
         for seed in UInt64(1) ... 20 {
-            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: ranges))
+            let child = try #require(flatChild(generator, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: ranges))
             #expect(child.count == parentSequence.count)
             for index in child.indices where ranges.contains(where: { $0.contains(index) }) == false {
                 #expect(child[index] == parentSequence[index], "entry \(index) outside the targeted leaves moved, seed \(seed)")
@@ -31,10 +31,13 @@ struct ValueReseedTests {
         #expect(changedRanges.count == ranges.count, "every targeted leaf should be redrawn")
     }
 
-    @Test("Reseeding one leaf redraws that entry and keeps every other entry")
-    func leafReseedIsLocal() throws {
-        let gen = leafZipGenerator()
-        let (parentSequence, parentTree) = try materializedParent(gen)
+    @Test("Reseeding a leaf preserves every other entry", arguments: [false, true], [0, 1, 2])
+    func leafReseedIsLocal(inSequence: Bool, leafIndex: Int) throws {
+        let leaf: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1_000_000)
+        let generator = inSequence
+            ? Gen.arrayOf(leaf, exactly: 3)
+            : Gen.zip(leaf, leaf, leaf).map { [$0.0, $0.1, $0.2] }
+        let (parentSequence, parentTree) = try materializedParent(generator)
         let targets = MutationTargets(tree: parentTree)
         let leafSites = targets.reseedSites.filter { site in
             if case .chooseBits = targets.graph.nodes[site.nodeID].kind {
@@ -43,11 +46,11 @@ struct ValueReseedTests {
             return false
         }
         #expect(leafSites.count == 3)
-        let site = try #require(leafSites.dropFirst().first)
+        let site = try #require(leafSites.dropFirst(leafIndex).first)
 
         var changed = 0
         for seed in UInt64(1) ... 40 {
-            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
+            let child = try #require(flatChild(generator, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
             #expect(child.count == parentSequence.count)
             for index in child.indices where site.range.contains(index) == false {
                 #expect(child[index] == parentSequence[index], "entry \(index) outside the reseeded span moved, seed \(seed)")
@@ -61,8 +64,8 @@ struct ValueReseedTests {
 
     @Test("Reseeding a pick redraws its branch and subtree and keeps the entries after it")
     func pickReseedRedrawsSubtree() throws {
-        let gen = pickZipGenerator()
-        let (parentSequence, parentTree) = try materializedParent(gen)
+        let generator = pickZipGenerator()
+        let (parentSequence, parentTree) = try materializedParent(generator)
         let targets = MutationTargets(tree: parentTree)
         let pickSite = try #require(targets.reseedSites.first { site in
             if case .pick = targets.graph.nodes[site.nodeID].kind {
@@ -75,9 +78,10 @@ struct ValueReseedTests {
 
         var branchChanged = 0
         for seed in UInt64(1) ... 40 {
-            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [pickSite.range]))
+            let child = try #require(flatChild(generator, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [pickSite.range]))
             // The trailing leaf keeps its parent value whatever the reseeded subtree's length turned out to be.
-            #expect(child.last == parentSequence.last, "trailing entry moved, seed \(seed)")
+            try #require(child.count >= trailing.count)
+            #expect(child.suffix(trailing.count).elementsEqual(parentSequence[trailing]), "trailing entries moved, seed \(seed)")
             #expect(child.prefix(pickSite.range.lowerBound).elementsEqual(parentSequence.prefix(pickSite.range.lowerBound)))
             if selectedBranch(in: child, at: pickSite.range.lowerBound) != selectedBranch(in: parentSequence, at: pickSite.range.lowerBound) {
                 branchChanged += 1
@@ -88,10 +92,11 @@ struct ValueReseedTests {
 
     @Test("Reseed spans are disjoint and the all draw is the maximal antichain")
     func spansAreAnAntichain() throws {
-        let gen = pickZipGenerator()
-        let (parentSequence, parentTree) = try materializedParent(gen)
+        let generator = pickZipGenerator()
+        let (parentSequence, parentTree) = try materializedParent(generator)
         let targets = MutationTargets(tree: parentTree)
         #expect(targets.structuralArms.contains(.valueReseed))
+        #expect(targets.maximalReseedSiteIndices.isEmpty == false)
         for index in targets.maximalReseedSiteIndices {
             #expect(targets.reseedSites[index].containingSiteIndices.isEmpty)
         }
@@ -103,6 +108,7 @@ struct ValueReseedTests {
                 continue
             }
             drawn += 1
+            #expect(ranges.isEmpty == false)
             for (first, second) in zip(ranges, ranges.dropFirst()) {
                 #expect(first.upperBound < second.lowerBound, "spans overlap or are unsorted: \(ranges)")
             }
@@ -113,57 +119,15 @@ struct ValueReseedTests {
         #expect(drawn > 0, "sixty attempts produced no reseed span")
     }
 
-    @Test("Reseeding the first leaf of a zip redraws that leaf alone")
-    func firstZipLeafReseedStaysLocal() throws {
-        let gen = leafZipGenerator()
-        let (parentSequence, parentTree) = try materializedParent(gen)
-        let targets = MutationTargets(tree: parentTree)
-        let site = try #require(targets.reseedSites.first)
-        // The zip dispatches at the position just before its first leaf, and a start check that skips the zip marker matches there; the reseed must wait for the leaf itself or the whole zip is redrawn.
-        var changed = 0
-        for seed in UInt64(1) ... 20 {
-            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
-            #expect(child.count == parentSequence.count)
-            for index in child.indices where site.range.contains(index) == false {
-                #expect(child[index] == parentSequence[index], "entry \(index) outside the first leaf moved, seed \(seed)")
-            }
-            if child[site.range.lowerBound] != parentSequence[site.range.lowerBound] {
-                changed += 1
-            }
-        }
-        #expect(changed > 0, "twenty reseeds of the first zip leaf never produced a different value")
-    }
-
-    @Test("Reseeding an element of an array redraws it, through the sequence handler's own element loop")
-    func arrayElementReseedRedraws() throws {
-        let leaf: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1_000_000)
-        let gen: Generator<[UInt64]> = Gen.arrayOf(leaf, exactly: 3)
-        let (parentSequence, parentTree) = try materializedParent(gen)
-        let targets = MutationTargets(tree: parentTree)
-        let site = try #require(targets.reseedSites.dropFirst().first)
-        var changed = 0
-        for seed in UInt64(1) ... 40 {
-            let child = try #require(flatChild(gen, prefix: parentSequence, tree: parentTree, seed: seed, reseeding: [site.range]))
-            #expect(child.count == parentSequence.count)
-            for index in child.indices where site.range.contains(index) == false {
-                #expect(child[index] == parentSequence[index], "entry \(index) outside the element moved, seed \(seed)")
-            }
-            if child[site.range.lowerBound] != parentSequence[site.range.lowerBound] {
-                changed += 1
-            }
-        }
-        #expect(changed > 0, "forty reseeds of an array element never redrew it")
-    }
-
     @Test("A leaf inside a bind inner is never a reseed site")
     func bindInnerLeavesAreExcluded() throws {
         let lengthGen: Generator<UInt64> = Gen.choose(in: UInt64(1) ... 4)
         let element: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 9)
-        let gen: Generator<[UInt64]> = lengthGen._bound(
+        let generator: Generator<[UInt64]> = lengthGen._bound(
             forward: { (length: UInt64) -> AnyGenerator in Gen.arrayOf(element, exactly: length).erase() },
             backward: { (array: [UInt64]) -> UInt64 in UInt64(array.count) }
         )
-        let (_, parentTree) = try materializedParent(gen)
+        let (_, parentTree) = try materializedParent(generator)
         let targets = MutationTargets(tree: parentTree)
         #expect(targets.reseedSites.count == 3, "The bound array's three elements are the only reseed sites")
         for site in targets.reseedSites {
@@ -173,11 +137,6 @@ struct ValueReseedTests {
 }
 
 // MARK: - Helpers
-
-private func leafZipGenerator() -> Generator<(UInt64, UInt64, UInt64)> {
-    let leaf: Generator<UInt64> = Gen.choose(in: UInt64(0) ... 1_000_000)
-    return Gen.zip(leaf, leaf, leaf)
-}
 
 private func pickZipGenerator() -> Generator<(Any, UInt64)> {
     let scalarArm: Generator<Any> = Gen.choose(in: UInt64(0) ... 100).map { value -> Any in value }
@@ -190,21 +149,21 @@ private func pickZipGenerator() -> Generator<(Any, UInt64)> {
     return Gen.zip(arm, trailing)
 }
 
-private func materializedParent(_ gen: Generator<some Any>) throws -> (ChoiceSequence, ChoiceTree) {
-    var interpreter = ValueAndChoiceTreeInterpreter(gen, seed: 99, maxRuns: 1)
+private func materializedParent(_ generator: Generator<some Any>) throws -> (ChoiceSequence, ChoiceTree) {
+    var interpreter = ValueAndChoiceTreeInterpreter(generator, seed: 99, maxRuns: 1)
     let (_, tree) = try #require(try interpreter.next())
     return (ChoiceSequence.flatten(tree), tree)
 }
 
 private func flatChild(
-    _ gen: Generator<some Any>,
+    _ generator: Generator<some Any>,
     prefix: ChoiceSequence,
     tree: ChoiceTree,
     seed: UInt64,
     reseeding ranges: [ClosedRange<Int>]
 ) -> ChoiceSequence? {
     guard case let .success(_, sequence, report) = Materializer.materializeAnyFlat(
-        gen.erase(),
+        generator.erase(),
         context: .init(
             prefix: prefix,
             mode: .guided(seed: seed, fallbackTree: tree),

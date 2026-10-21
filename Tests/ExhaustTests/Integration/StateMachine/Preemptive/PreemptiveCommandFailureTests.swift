@@ -1,175 +1,115 @@
 import Exhaust
-import Foundation
+import ExhaustCore
 import Testing
 
-@Suite("Preemptive concurrent spec: command-level failures", .serialized, .tags(.stateMachine))
+@Suite("Preemptive command failure propagation", .serialized, .tags(.stateMachine))
 struct PreemptiveCommandFailureTests {
-    @Test("Sync checker detects postcondition failure in prefix command")
-    func syncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
-        let result = try #require(
-            await #execute(
-                SyncPrefixFailingSpec.self,
-                mode: .threads,
-                .parallelize(lanes: .two),
-                .suppress(.all)
-            )
+    @Test("Sync checker propagates failure from the selected execution phase", arguments: [false, true])
+    func synchronous(prefix: Bool) {
+        PostconditionOnlyCounter.reset()
+        let commands: [(ScheduleMarker, SyncLaneFailingSpec.Command)] = [
+            (prefix ? .prefix : ScheduleMarker(rawValue: 1), .fail),
+            (ScheduleMarker(rawValue: 2), .noop),
+        ]
+        let outcome = PreemptiveChecker<SyncLaneFailingSpec>(idleTimeoutMilliseconds: nil).execute(
+            commands, setupStep: nil, partition: LanePartition(markers: commands.map(\.0))
         )
-        #expect(result.commands.isEmpty == false)
+        guard case let .failed(spec) = outcome else {
+            Issue.record("Expected command failure, got \(outcome)")
+            return
+        }
+        #expect(spec?.counter.calls.value == 1)
+        #expect(PostconditionOnlyCounter.referenceCalls.value == (prefix ? 0 : 1))
     }
 
-    @Test("Sync checker detects postcondition failure in concurrent lane")
-    func syncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
-        let result = try #require(
-            await #execute(
-                SyncLaneFailingSpec.self,
-                mode: .threads,
-                .parallelize(lanes: .two),
-                .suppress(.all)
-            )
+    @Test("Async checker propagates failure from the selected execution phase", arguments: [false, true])
+    func asynchronous(prefix: Bool) {
+        PostconditionOnlyCounter.reset()
+        let commands: [(ScheduleMarker, AsyncLaneFailingSpec.Command)] = [
+            (prefix ? .prefix : ScheduleMarker(rawValue: 1), .fail),
+            (ScheduleMarker(rawValue: 2), .noop),
+        ]
+        let outcome = AsyncPreemptiveChecker<AsyncLaneFailingSpec>(idleTimeoutMilliseconds: nil).execute(
+            commands, setupStep: nil, partition: LanePartition(markers: commands.map(\.0))
         )
-        #expect(result.commands.isEmpty == false)
-    }
-
-    @Test("Async checker detects postcondition failure in prefix command")
-    func asyncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
-        let result = try #require(
-            await #execute(
-                AsyncPrefixFailingSpec.self,
-                mode: .threads,
-                .parallelize(lanes: .two),
-                .suppress(.all)
-            )
-        )
-        #expect(result.commands.isEmpty == false)
-    }
-
-    @Test("Async checker detects postcondition failure in concurrent lane")
-    func asyncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
-        let result = try #require(
-            await #execute(
-                AsyncLaneFailingSpec.self,
-                mode: .threads,
-                .parallelize(lanes: .two),
-                .suppress(.all)
-            )
-        )
-        #expect(result.commands.isEmpty == false)
+        guard case let .failed(spec) = outcome else {
+            Issue.record("Expected command failure, got \(outcome)")
+            return
+        }
+        #expect(spec?.counter.calls.value == 1)
+        #expect(PostconditionOnlyCounter.referenceCalls.value == (prefix ? 0 : 1))
     }
 }
 
-// MARK: - Sync Specs
+// MARK: - Specs
 
-/// Prefix command throws a postcondition failure after three increments.
-/// No invariant — the only failure path is the throw from `run(_:)`.
-@StateMachine
-final class SyncPrefixFailingSpec {
-    @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
-
-    @Equivalence
-    func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
-        true
-    }
-
-    @Command(weight: 1)
-    func increment() throws {
-        counter.increment()
-        try check(counter.value < counter.threshold, "value must stay below threshold")
-    }
-
-    func failureDescription() -> String? {
-        "\(counter)"
-    }
-}
-
-/// Concurrent lane command throws a postcondition failure. The oracle always passes —
-/// without proper error propagation from `run(_:)`, the failure is invisible.
 @StateMachine
 final class SyncLaneFailingSpec {
-    @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
+    @SystemUnderTest var counter = PostconditionOnlyCounter()
 
     @Equivalence
     func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
         true
     }
 
-    @Command(weight: 3)
-    func increment() throws {
-        counter.increment()
-        try check(counter.value < counter.threshold, "value must stay below threshold")
+    @Command
+    func fail() throws {
+        try check(counter.permitsCommand(), "injected command failure")
     }
 
-    @Command(weight: 1)
+    @Command
     func noop() throws {}
 
     func failureDescription() -> String? {
-        "\(counter)"
+        "injected failure"
     }
 }
 
-// MARK: - Async Specs
-
-/// Async variant: prefix command throws a postcondition failure.
-@StateMachine
-final class AsyncPrefixFailingSpec {
-    @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
-
-    @Equivalence
-    func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
-        true
-    }
-
-    @Command(weight: 1)
-    func increment() async throws {
-        counter.increment()
-        try check(counter.value < counter.threshold, "value must stay below threshold")
-    }
-
-    func failureDescription() -> String? {
-        "\(counter)"
-    }
-}
-
-/// Async variant: concurrent lane command throws a postcondition failure.
 @StateMachine
 final class AsyncLaneFailingSpec {
-    @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
+    @SystemUnderTest var counter = PostconditionOnlyCounter()
 
     @Equivalence
     func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
         true
     }
 
-    @Command(weight: 3)
-    func increment() async throws {
-        counter.increment()
-        try check(counter.value < counter.threshold, "value must stay below threshold")
+    @Command
+    func fail() async throws {
+        try check(counter.permitsCommand(), "injected command failure")
     }
 
-    @Command(weight: 1)
+    @Command
     func noop() async throws {}
 
     func failureDescription() -> String? {
-        "\(counter)"
+        "injected failure"
     }
 }
 
-// MARK: - Types
+// MARK: - Fixture
 
-/// Counter with no thread safety. The only failure mechanism is the postcondition
-/// check inside each command — no invariant, no oracle divergence.
-final class PostconditionOnlyCounter: @unchecked Sendable, CustomDebugStringConvertible {
-    private(set) var value: Int = 0
-    let threshold: Int
-
-    init(threshold: Int) {
-        self.threshold = threshold
+/// The checker constructs the concurrent instance first and its reference second.
+/// Fail only the former: otherwise the reference rejects the commands before any lane runs.
+final class PostconditionOnlyCounter: @unchecked Sendable {
+    static let constructions = SendableBox(0)
+    static let referenceCalls = SendableBox(0)
+    let calls = SendableBox(0)
+    let isConcurrent = constructions.withValue {
+        $0 += 1
+        return $0 == 1
     }
 
-    var debugDescription: String {
-        "PostconditionOnlyCounter(value: \(value), threshold: \(threshold))"
+    static func reset() {
+        constructions.value = 0
+        referenceCalls.value = 0
     }
 
-    func increment() {
-        value += 1
+    func permitsCommand() -> Bool {
+        calls.withValue { $0 += 1 }
+        if isConcurrent == false {
+            Self.referenceCalls.withValue { $0 += 1 }
+        }
+        return isConcurrent == false
     }
 }

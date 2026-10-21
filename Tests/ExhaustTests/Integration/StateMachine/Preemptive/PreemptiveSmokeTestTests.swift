@@ -5,19 +5,6 @@ import Testing
 
 @Suite("Preemptive concurrent spec: smoke test", .serialized, .tags(.stateMachine))
 struct PreemptiveSmokeTestTests {
-    @Test("Smoke test catches sequential bug before concurrent phase")
-    func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async {
-        let result = await #execute(
-            SequentiallyBrokenSpec.self,
-            mode: .threads,
-            .parallelize(lanes: .two),
-            .commandLimit(10),
-            .budget(.custom(screening: 0, sampling: 0)),
-            .suppress(.issueReporting)
-        )
-        #expect(result?.commands.isEmpty == false)
-    }
-
     @Test("Smoke test failure carries specific replay seed")
     func smokeTestFailureCarriesSpecificReplaySeed() async throws {
         let result = try #require(
@@ -30,6 +17,8 @@ struct PreemptiveSmokeTestTests {
                 .suppress(.issueReporting)
             )
         )
+        #expect(result.commands.isEmpty == false)
+        #expect(result.discoveryMethod == .smokeTest)
         let replaySeed = try #require(result.replaySeed)
         #expect(replaySeed == "0-1")
     }

@@ -7,6 +7,7 @@ import Testing
 struct PreemptiveAsyncFacadeTests {
     @Test("Detects lost-update bug behind async facade")
     func detectsLostUpdateBugBehindAsyncFacade() async throws {
+        var capturedReport: ExhaustReport?
         let result = try #require(
             await #execute(
                 AsyncRacyCounterSpec.self,
@@ -14,24 +15,11 @@ struct PreemptiveAsyncFacadeTests {
                 .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
+                .suppress(.issueReporting),
+                .onReport { capturedReport = $0 }
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
-    }
-
-    @Test("onReport delivers profiling summary")
-    func onReportDeliversProfilingSummary() async throws {
-        var capturedReport: ExhaustReport?
-        _ = await #execute(
-            AsyncRacyCounterSpec.self,
-            mode: .threads,
-            .parallelize(lanes: .two),
-            .commandLimit(6),
-            .budget(.custom(screening: 0, sampling: 200)),
-            .suppress(.issueReporting),
-            .onReport { capturedReport = $0 }
-        )
         let report = try #require(capturedReport)
         #expect(report.totalMilliseconds > 0)
         #expect(report.propertyInvocations > 0)
@@ -40,17 +28,17 @@ struct PreemptiveAsyncFacadeTests {
 
     @Test("Reports issue through Swift Testing when suppression is off")
     func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
+        var foundFailure = false
         await withKnownIssue {
-            _ = try #require(
-                await #execute(
-                    AsyncRacyCounterSpec.self,
-                    mode: .threads,
-                    .parallelize(lanes: .two),
-                    .commandLimit(6),
-                    .budget(.custom(screening: 0, sampling: 200))
-                )
-            )
+            foundFailure = await #execute(
+                AsyncRacyCounterSpec.self,
+                mode: .threads,
+                .parallelize(lanes: .two),
+                .commandLimit(6),
+                .budget(.custom(screening: 0, sampling: 200))
+            ) != nil
         }
+        #expect(foundFailure)
     }
 }
 

@@ -88,32 +88,25 @@ struct ParallelExploreTests {
         ) { value in
             value >= 0
         }
+        #expect(report.result == nil)
+        #expect(report.termination == .coverageAchieved)
+        #expect(report.coOccurrence.totalSampleCount > 0)
+        #expect(report.coOccurrence.count(direction: 0, direction: 0) > 0)
+        #expect(report.coOccurrence.count(direction: 1, direction: 1) > 0)
+        #expect(report.coOccurrence.count(direction: 0, direction: 1) == 0)
+        let maximumBudget = 2 * Self.budget.maxAttemptsPerDirection
+        #expect(report.invocations.warmup == 0)
+        #expect(report.invocations.regression == 0)
+        #expect(report.invocations.reduction == 0)
+        #expect(report.invocations.diagnostic == 0)
+        #expect(report.propertyInvocations == report.invocations.total)
+        #expect(report.propertyInvocations <= maximumBudget)
         #expect(report.directionCoverage.count == 2)
         for coverage in report.directionCoverage {
             #expect(coverage.hits >= Self.budget.hitsPerDirection)
             #expect(coverage.directedSamplingSamples > 0)
             #expect(coverage.warmup == nil)
         }
-    }
-
-    @Test("Co-occurrence matrix is populated across directions")
-    func coOccurrenceMatrixIsPopulatedAcrossDirections() {
-        let gen = #gen(.int(in: 0 ... 100))
-        let report = #explore(
-            gen,
-            directions: [
-                ("low", { (value: Int) in value < 50 }),
-                ("high", { (value: Int) in value >= 50 }),
-            ],
-            .budget(Self.budget),
-            .parallelize,
-            .suppress(.all)
-        ) { value in
-            value >= 0
-        }
-        #expect(report.coOccurrence.totalSampleCount > 0)
-        #expect(report.coOccurrence.count(direction: 0, direction: 0) > 0)
-        #expect(report.coOccurrence.count(direction: 1, direction: 1) > 0)
     }
 
     @Test("Single direction falls back to sequential")
@@ -132,31 +125,6 @@ struct ParallelExploreTests {
         #expect(report.termination == .coverageAchieved)
         #expect(report.warmup != nil, "Sequential path runs warm-up")
         #expect((report.warmup?.samples ?? 0) > 0)
-    }
-
-    @Test("Directed sampling invocations do not exceed the total directed sampling budget")
-    func directedSamplingInvocationsDoNotExceedTheTotalDirectedSamplingBudget() {
-        let gen = #gen(.int(in: 0 ... 100))
-        let report = #explore(
-            gen,
-            directions: [
-                ("low", { (value: Int) in value < 50 }),
-                ("high", { (value: Int) in value >= 50 }),
-            ],
-            .budget(Self.budget),
-            .parallelize,
-            .suppress(.all)
-        ) { value in
-            value >= 0
-        }
-        let maxBudget = report.directionCoverage.count * Self.budget.maxAttemptsPerDirection
-        #expect(report.invocations.warmup == 0)
-        #expect(report.invocations.regression == 0)
-        #expect(report.invocations.directedSampling <= maxBudget)
-        #expect(report.invocations.reduction == 0)
-        #expect(report.invocations.diagnostic == 0)
-        #expect(report.propertyInvocations == report.invocations.total)
-        #expect(report.propertyInvocations <= maxBudget)
     }
 
     @Test("Cross-direction hits from other lanes are merged into the total")

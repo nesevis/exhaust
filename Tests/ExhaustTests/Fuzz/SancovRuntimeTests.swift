@@ -168,7 +168,7 @@ extension CoverageRegistryTests {
                         start: UnsafeRawPointer(base),
                         end: UnsafeRawPointer(base + 2)
                     )
-                    let symbols = SancovSymbolizer.symbolize(edges: [0])
+                    let symbols = SancovSymbolizer.symbolize(edges: [0, 7])
                     #expect(symbols[0]?.displayName.contains("strlen") == true)
                     // A C symbol has no Swift module.
                     #expect(symbols[0]?.module == nil)

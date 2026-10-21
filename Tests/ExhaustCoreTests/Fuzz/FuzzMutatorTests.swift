@@ -63,24 +63,32 @@ struct FuzzMutatorTests {
             }
         }
 
+        let (_, donorTree, donor) = try generateBindExample(seed: 19)
+        let donorLayout = FuzzMutator.layout(of: donor, tree: donorTree)
+        #expect(donor != sequence)
+        var changedSplices = 0
         var uncachedPRNG = Xoshiro256(seed: 9)
         var cachedPRNG = Xoshiro256(seed: 9)
         for _ in 0 ..< 50 {
             let uncached = FuzzMutator.splice(
                 recipient: sequence,
-                donor: sequence,
+                donor: donor,
                 prng: &uncachedPRNG
             )
             let cached = FuzzMutator.splice(
                 recipient: sequence,
-                donor: sequence,
+                donor: donor,
                 recipientLayout: layout,
-                donorLayout: layout,
+                donorLayout: donorLayout,
                 prng: &cachedPRNG
             )
             #expect(cached == uncached)
             #expect(cachedPRNG.currentState == uncachedPRNG.currentState)
+            if cached != sequence {
+                changedSplices += 1
+            }
         }
+        #expect(changedSplices > 0)
     }
 
     @Test("Layout catalog carries the character payload's problematic indices")
