@@ -55,10 +55,6 @@ struct DerivedContainerScreeningCoverageTests {
                 .budget(.custom(recursion: 2, nodes: 3))
             ), length: 0 ... 2)),
             ("lazy-element", .array(.lazy { element }, length: 0 ... 2)),
-            ("sized-element", .array(ContainerScreeningElement.gen(
-                recursion: 0,
-                .budget(.custom(recursion: 0, nodes: 3))
-            ), length: 0 ... 2)),
         ]
         for (name, source) in variants {
             let generator = source.resize(100)

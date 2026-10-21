@@ -56,17 +56,19 @@ struct ElementRunOperatorTests {
             }
             let parentValues = values(of: fixture.sequence)
             let childValues = values(of: child)
-            #expect(childValues.count > parentValues.count)
+            try #require(childValues.count > parentValues.count)
             let added = childValues.count - parentValues.count
+            try #require(2 * added <= childValues.count)
             // The child is the parent with one run repeated: removing one copy of some run of length `added` recovers the parent.
-            var recovered = false
-            for start in 0 ... (childValues.count - added) where childValues[start ..< start + added].elementsEqual(childValues[(start - added < 0 ? start + added : start - added) ..< (start - added < 0 ? start + 2 * added : start)]) {
-                var candidate = childValues
-                candidate.removeSubrange(start ..< start + added)
-                if candidate == parentValues {
-                    recovered = true
-                    break
+            let recovered = (0 ... childValues.count - 2 * added).contains { start in
+                let first = start ..< start + added
+                let second = start + added ..< start + 2 * added
+                guard childValues[first].elementsEqual(childValues[second]) else {
+                    return false
                 }
+                var candidate = childValues
+                candidate.removeSubrange(second)
+                return candidate == parentValues
             }
             #expect(recovered, "duplicated child is not the parent with one adjacent run repeated")
             #expect(markersBalanced(child))
@@ -87,7 +89,7 @@ struct ElementRunOperatorTests {
             let parentValues = values(of: fixture.sequence)
             let childValues = values(of: child)
             #expect(childValues.count == parentValues.count)
-            #expect(Set(childValues).isSubset(of: Set(parentValues)), "copy introduced a value the parent did not have")
+            #expect(isSingleRunCopy(childValues, of: parentValues), "copy must overwrite exactly one disjoint run")
             #expect(markersBalanced(child))
             if childValues != parentValues {
                 copied += 1
@@ -240,4 +242,23 @@ private final class DeletionCounter {
     func increment() {
         total += 1
     }
+}
+
+/// A witness from the operation's contract: one disjoint source/target pair explains the complete child.
+private func isSingleRunCopy(_ child: [UInt64], of parent: [UInt64]) -> Bool {
+    guard parent.count >= 2, child.count == parent.count else {
+        return false
+    }
+    for length in 1 ... parent.count / 2 {
+        for source in 0 ... parent.count - length {
+            for target in 0 ... parent.count - length where abs(source - target) >= length {
+                var expected = parent
+                expected.replaceSubrange(target ..< target + length, with: parent[source ..< source + length])
+                if expected == child {
+                    return true
+                }
+            }
+        }
+    }
+    return false
 }

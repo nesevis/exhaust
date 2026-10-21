@@ -115,7 +115,7 @@ final class SilentRaceSpec {
 final class ExposedRaceSpec {
     var expected: Int = 0
     @SystemUnderTest
-    var counter: ExposedRacyCounter = .init()
+    var counter: NonAtomicCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {
@@ -125,7 +125,7 @@ final class ExposedRaceSpec {
     @Command(weight: 1)
     func racyIncrement() async throws {
         expected += 1
-        await counter.racyIncrement()
+        await counter.increment()
     }
 
     func failureDescription() -> String? {
@@ -139,7 +139,7 @@ final class ExposedRaceSpec {
 final class ThreeWayRaceSpec {
     var expected: Int = 0
     @SystemUnderTest
-    var counter: ThreeWayRacyCounter = .init()
+    var counter: NonAtomicCounter = .init()
 
     @Invariant
     func matchesModel() -> Bool {

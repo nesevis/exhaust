@@ -52,48 +52,34 @@ struct CollectionGeneratorTests {
 
     @Suite("Gen.setOf")
     struct SetOfTests {
-        @Test("Produces sets with unique elements")
-        func uniqueElements() throws {
-            let gen = Gen.setOf(Gen.choose(in: 0 ... 100) as Generator<Int>)
-            var iterator = ValueInterpreter(gen, seed: 42)
-
-            var generated = 0
-            while let set = try iterator.next() {
-                // Set guarantees uniqueness; verify count matches
-                let array = Array(set)
-                #expect(Set(array).count == array.count)
-                generated += 1
+        @Test("Set generators honor cardinality and element domains", arguments: [0, 1, 5])
+        func cardinalityAndMembership(count: Int) throws {
+            let elements = Gen.choose(in: 0 ... 1000) as Generator<Int>
+            let generators = [
+                Gen.setOf(elements, exactly: UInt64(count)),
+                Gen.setOf(elements, within: UInt64(count) ... UInt64(count + 3), scaling: .constant),
+            ]
+            for (index, generator) in generators.enumerated() {
+                var iterator = ValueInterpreter(generator, seed: 42, maxRuns: 20)
+                for _ in 0 ..< 20 {
+                    let values = try #require(try iterator.next())
+                    #expect(values.count >= count)
+                    #expect(values.count <= (index == 0 ? count : count + 3))
+                    #expect(values.allSatisfy { (0 ... 1000).contains($0) })
+                }
             }
-            #expect(generated > 0)
         }
 
-        @Test("setOf with exact count")
-        func exactCount() throws {
-            let gen = Gen.setOf(
-                Gen.choose(in: 0 ... 1000) as Generator<Int>,
-                exactly: 5
-            )
-            var iterator = ValueInterpreter(gen, seed: 1)
-
-            let set = try #require(try iterator.next())
-            #expect(set.count == 5)
-        }
-
-        @Test("setOf with range")
-        func withinRange() throws {
-            let gen = Gen.setOf(
-                Gen.choose(in: 0 ... 1000) as Generator<Int>,
-                within: 2 ... 5,
-                scaling: .constant
-            )
-            var iterator = ValueInterpreter(gen, seed: 10)
-
-            var generated = 0
-            while let set = try iterator.next() {
-                #expect(set.count >= 2 && set.count <= 5)
-                generated += 1
+        @Test("Default set generation draws only from its element domain")
+        func defaultMembership() throws {
+            var iterator = ValueInterpreter(Gen.setOf(Gen.choose(in: 0 ... 100) as Generator<Int>), seed: 42)
+            var sawNonempty = false
+            for _ in 0 ..< 100 {
+                let values = try #require(try iterator.next())
+                #expect(values.allSatisfy { (0 ... 100).contains($0) })
+                sawNonempty = sawNonempty || values.isEmpty == false
             }
-            #expect(generated > 0)
+            #expect(sawNonempty)
         }
     }
 

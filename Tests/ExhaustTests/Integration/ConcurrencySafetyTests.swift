@@ -154,9 +154,7 @@ struct ConcurrentExhaustTests {
                 }
             }
             for await result in group {
-                if let counterexample = result {
-                    #expect(counterexample >= 50)
-                }
+                #expect(result == 50)
             }
         }
     }
@@ -176,9 +174,7 @@ struct ConcurrentExhaustTests {
                 }
             }
             for await result in group {
-                if let counterexample = result {
-                    #expect(counterexample >= 1000)
-                }
+                #expect(result == 1000)
             }
         }
     }
@@ -202,9 +198,7 @@ struct AsyncPropertyBridgeTests {
                 }
             }
             for await result in group {
-                if let counterexample = result {
-                    #expect(counterexample >= 50)
-                }
+                #expect(result == 50)
             }
         }
     }
@@ -223,9 +217,7 @@ struct AsyncPropertyBridgeTests {
                 }
             }
             for await result in group {
-                if let counterexample = result {
-                    #expect(counterexample >= 50)
-                }
+                #expect(result == 50)
             }
         }
     }

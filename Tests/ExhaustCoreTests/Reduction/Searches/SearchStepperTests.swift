@@ -1,73 +1,9 @@
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
 @Suite("BinarySearchStepper")
 struct BinarySearchStepperTests {
-    // MARK: - findSmallest
-
-    @Test("findSmallest converges to smallest accepted value")
-    func findSmallestConverges() {
-        var stepper = BinarySearchStepper(lo: 0, hi: 100, direction: .findSmallest)
-        guard let first = stepper.start() else {
-            Issue.record("Expected non-nil first probe")
-            return
-        }
-        #expect(first == 50)
-
-        let threshold: UInt64 = 30
-        var probes: [UInt64] = [first]
-        var lastValue = first
-        while let next = stepper.advance(lastAccepted: lastValue >= threshold) {
-            probes.append(next)
-            lastValue = next
-        }
-
-        #expect(stepper.bestAccepted == threshold)
-    }
-
-    @Test("findSmallest all-rejected keeps bestAccepted at hi")
-    func findSmallestAllRejected() {
-        var stepper = BinarySearchStepper(lo: 0, hi: 100, direction: .findSmallest)
-        _ = stepper.start()
-        while stepper.advance(lastAccepted: false) != nil {}
-        #expect(stepper.bestAccepted == 100)
-    }
-
-    @Test("findSmallest all-accepted converges to lo")
-    func findSmallestAllAccepted() {
-        var stepper = BinarySearchStepper(lo: 10, hi: 50, direction: .findSmallest)
-        _ = stepper.start()
-        while stepper.advance(lastAccepted: true) != nil {}
-        #expect(stepper.bestAccepted == 10)
-    }
-
-    // MARK: - findLargest
-
-    @Test("findLargest converges to largest accepted value")
-    func findLargestConverges() {
-        var stepper = BinarySearchStepper(lo: 0, hi: 100, direction: .findLargest)
-        guard let first = stepper.start() else {
-            Issue.record("Expected non-nil first probe")
-            return
-        }
-
-        let threshold: UInt64 = 70
-        var lastValue = first
-        while let next = stepper.advance(lastAccepted: lastValue <= threshold) {
-            lastValue = next
-        }
-
-        #expect(stepper.bestAccepted == threshold)
-    }
-
-    @Test("findLargest all-rejected keeps bestAccepted at lo")
-    func findLargestAllRejected() {
-        var stepper = BinarySearchStepper(lo: 0, hi: 100, direction: .findLargest)
-        _ = stepper.start()
-        while stepper.advance(lastAccepted: false) != nil {}
-        #expect(stepper.bestAccepted == 0)
-    }
-
     @Test("findLargest biases midpoint above findSmallest for odd ranges")
     func findLargestRoundsUpOdd() {
         var largestStepper = BinarySearchStepper(lo: 0, hi: 99, direction: .findLargest)
@@ -120,24 +56,6 @@ struct BinarySearchStepperTests {
 @Suite("InterpolationSearchStepper")
 struct InterpolationSearchStepperTests {
     // MARK: - findSmallest
-
-    @Test("findSmallest converges to smallest accepted value")
-    func findSmallestConverges() {
-        var stepper = InterpolationSearchStepper(lo: 0, hi: 10000, direction: .findSmallest)
-        guard let first = stepper.start() else {
-            Issue.record("Expected non-nil first probe")
-            return
-        }
-        #expect(first < 10000, "First probe should be biased toward lo")
-
-        let threshold: UInt64 = 500
-        var lastValue = first
-        while let next = stepper.advance(lastAccepted: lastValue >= threshold) {
-            lastValue = next
-        }
-
-        #expect(stepper.bestAccepted == threshold)
-    }
 
     @Test("Initial probe biases toward lo in findSmallest mode")
     func initialProbeBiasLo() {
@@ -237,21 +155,39 @@ struct InterpolationSearchStepperTests {
         }
         #expect(probeCount <= 30)
     }
+}
 
-    @Test("findLargest converges correctly")
-    func findLargestConverges() {
-        var stepper = InterpolationSearchStepper(lo: 0, hi: 10000, direction: .findLargest)
-        guard let first = stepper.start() else {
-            Issue.record("Expected non-nil first probe")
-            return
+@Suite("Search stepper boundary contracts")
+struct SearchStepperContractTests {
+    @Test("Both steppers find the boundary of a monotone predicate", arguments: [SearchDirection.findSmallest, .findLargest])
+    func monotoneBoundary(direction: SearchDirection) throws {
+        // Bounded intervals make a linear scan an independent oracle. The existing UInt64.max
+        // vector separately covers arithmetic overflow beyond this generated resource bound.
+        let inputs = Gen.zip(Gen.choose(in: 0 ... 1000), Gen.choose(in: 0 ... 10000), Gen.choose(in: -1 ... 10001))
+        try exhaustCheck(inputs, maxIterations: 300) { lower, width, offset in
+            let upper = lower + width
+            let threshold = lower + min(offset, width + 1)
+            let accepted: (Int) -> Bool = { direction == .findLargest ? $0 <= threshold : $0 >= threshold }
+            let permitted = (lower ... upper).filter(accepted)
+            let expected = direction == .findLargest ? (permitted.last ?? lower) : (permitted.first ?? upper)
+            var binary = BinarySearchStepper(lo: UInt64(lower), hi: UInt64(upper), direction: direction)
+            var interpolation = InterpolationSearchStepper(lo: UInt64(lower), hi: UInt64(upper), direction: direction)
+            var binaryProbe = binary.start()
+            var interpolationProbe = interpolation.start()
+            for _ in 0 ..< 64 {
+                if let probe = binaryProbe {
+                    binaryProbe = binary.advance(lastAccepted: accepted(Int(probe)))
+                }
+                if let probe = interpolationProbe {
+                    interpolationProbe = interpolation.advance(lastAccepted: accepted(Int(probe)))
+                }
+                if binaryProbe == nil, interpolationProbe == nil {
+                    break
+                }
+            }
+            return binaryProbe == nil && interpolationProbe == nil
+                && binary.bestAccepted == UInt64(expected)
+                && interpolation.bestAccepted == UInt64(expected)
         }
-
-        let threshold: UInt64 = 7000
-        var lastValue = first
-        while let next = stepper.advance(lastAccepted: lastValue <= threshold) {
-            lastValue = next
-        }
-
-        #expect(stepper.bestAccepted == threshold)
     }
 }

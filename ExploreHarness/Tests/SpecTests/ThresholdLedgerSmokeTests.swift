@@ -5,31 +5,15 @@ import Testing
 struct ThresholdLedgerSmokeTests {
     // MARK: - Fault J (unspent accumulation)
 
-    @Test("Fault J fires at threshold 40 on five max accumulates (registry minimal)")
-    func faultJMinimal40() {
-        var ledger = ThresholdLedger(threshold: 40)
-        for _ in 0 ..< 5 {
+    @Test("Accumulation triggers exactly at the threshold", arguments: [40, 90], [false, true])
+    func accumulationThreshold(threshold: Int, laddered: Bool) {
+        var ledger = ThresholdLedger(threshold: threshold, laddered: laddered)
+        for _ in 0 ..< (threshold + 8) / 9 - 1 {
             ledger.accumulate(9)
+            #expect(ledger.isCorrupted == false)
         }
-        #expect(ledger.isCorrupted, "five accumulate(9) reach sum 45")
-    }
-
-    @Test("Fault J fires at threshold 90 on ten max accumulates (registry minimal)")
-    func faultJMinimal90() {
-        var ledger = ThresholdLedger(threshold: 90)
-        for _ in 0 ..< 10 {
-            ledger.accumulate(9)
-        }
-        #expect(ledger.isCorrupted, "ten accumulate(9) reach sum 90")
-    }
-
-    @Test("Fault J does not fire one accumulate short (strict prefix)")
-    func faultJPrefixSafe() {
-        var ledger = ThresholdLedger(threshold: 40)
-        for _ in 0 ..< 4 {
-            ledger.accumulate(9)
-        }
-        #expect(ledger.isCorrupted == false, "sum 36 is below threshold 40")
+        ledger.accumulate(9)
+        #expect(ledger.isCorrupted)
     }
 
     @Test("Fault J does not fire when a spend intervenes")
@@ -62,14 +46,5 @@ struct ThresholdLedgerSmokeTests {
         ledger.audit()
         #expect(ledger.lastAudit == 7)
         #expect(ledger.currentBalance == 7)
-    }
-
-    @Test("The laddered variant shares the flat variant's trigger")
-    func ladderedVariantSameTrigger() {
-        var ledger = ThresholdLedger(threshold: 90, laddered: true)
-        for _ in 0 ..< 10 {
-            ledger.accumulate(9)
-        }
-        #expect(ledger.isCorrupted, "laddered changes the coverage surface, never the trigger")
     }
 }

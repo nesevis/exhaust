@@ -3,30 +3,32 @@ import Testing
 
 @Suite("PhaseSession reproducer smoke tests")
 struct PhaseSessionSmokeTests {
-    // MARK: - Fault O (order-gated: cycles, then use while closed)
+    // MARK: - Completed Cycles and Fault O
 
-    @Test("Fault O fires after five completed cycles and a stray use (registry minimal)")
-    func faultOMinimal() {
-        var session = PhaseSession()
-        for _ in 0 ..< 5 {
+    @Test("Completed cycles trigger only at the threshold, in both coverage variants", arguments: [
+        (4, false, false),
+        (4, false, true),
+        (4, true, false),
+        (4, true, true),
+        (5, false, false),
+        (5, false, true),
+        (5, true, false),
+        (5, true, true),
+    ])
+    func completedCycles(count: Int, laddered: Bool, configured: Bool) {
+        var session = PhaseSession(laddered: laddered)
+        for _ in 0 ..< count {
             session.open()
+            if configured {
+                session.configure(3)
+            }
             session.use()
             session.close()
         }
+        #expect(session.cycleCount == count)
+        #expect(session.isCorrupted == false)
         session.use()
-        #expect(session.isCorrupted, "five completed cycles followed by use-while-closed should fire fault O")
-    }
-
-    @Test("Fault O does not fire after four completed cycles (strict prefix)")
-    func faultOPrefixSafe() {
-        var session = PhaseSession()
-        for _ in 0 ..< 4 {
-            session.open()
-            session.use()
-            session.close()
-        }
-        session.use()
-        #expect(session.isCorrupted == false, "four cycles are below the threshold")
+        #expect(session.isCorrupted == (count >= 5))
     }
 
     @Test("Fault O does not fire when the stray use lands while open")
@@ -65,31 +67,6 @@ struct PhaseSessionSmokeTests {
         session.use()
         #expect(session.cycleCount == 0, "open followed directly by close is not a completed cycle")
         #expect(session.isCorrupted == false)
-    }
-
-    @Test("A cycle completes through the configured phase too")
-    func cycleThroughConfiguredPhase() {
-        var session = PhaseSession()
-        for _ in 0 ..< 5 {
-            session.open()
-            session.configure(3)
-            session.use()
-            session.close()
-        }
-        session.use()
-        #expect(session.isCorrupted, "use while configured counts toward the cycle")
-    }
-
-    @Test("The laddered variant shares the flat variant's trigger")
-    func ladderedVariantSameTrigger() {
-        var session = PhaseSession(laddered: true)
-        for _ in 0 ..< 5 {
-            session.open()
-            session.use()
-            session.close()
-        }
-        session.use()
-        #expect(session.isCorrupted, "laddered changes the coverage surface, never the trigger")
     }
 
     @Test("The laddered variant still fires at the rung cap")

@@ -120,6 +120,8 @@ struct CompositionTests {
             let rareCount = results.count(where: { $0 == "rare" })
 
             // Should be roughly 9:1 ratio
+            #expect(commonCount + rareCount == 1000)
+            #expect(rareCount > 0)
             #expect(commonCount > rareCount * 5) // Allow some variance
         }
     }

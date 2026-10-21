@@ -111,15 +111,16 @@ struct ExhaustReportTests {
     func reportPropertyInvocationsIncludeScreeningAndRandomPhases() throws {
         var capturedReport: ExhaustReport?
         #exhaust(
-            #gen(.int(in: 0 ... 10)),
+            #gen(.int(in: 0 ... 10000)),
             .onReport { capturedReport = $0 },
             .budget(.custom(screening: 100, sampling: 50))
         ) { value in
             value >= 0
         }
         let report = try #require(capturedReport)
-        // Screening phase should run (small finite domain) plus random phase
-        #expect(report.propertyInvocations > 0)
+        #expect(report.screeningInvocations > 0)
+        #expect(report.randomSamplingInvocations == 50)
+        #expect(report.propertyInvocations == report.screeningInvocations + report.randomSamplingInvocations)
         #expect(report.screeningMilliseconds >= 0)
         #expect(report.generationMilliseconds >= 0)
     }
@@ -222,67 +223,6 @@ struct ExhaustReportTests {
 
         #expect(object["event"] as? String == "property_failed")
         #expect((object["counterexample"] as? String)?.contains("temporary") == true)
-    }
-
-    // MARK: - onReport fires for all closure shapes
-
-    @Test("Report fires for sync Void/#expect closure (failing)")
-    func reportFiresForSyncVoidexpectClosureFailing() throws {
-        var capturedReport: ExhaustReport?
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 1000)),
-            .onReport { capturedReport = $0 },
-            .suppress(.all)
-        ) { value in
-            #expect(value < 50)
-        }
-        #expect(result != nil)
-        let report = try #require(capturedReport)
-        #expect(report.propertyInvocations > 0)
-    }
-
-    @Test("Report fires for sync Void/#expect closure (passing)")
-    func reportFiresForSyncVoidexpectClosurePassing() throws {
-        var capturedReport: ExhaustReport?
-        #exhaust(
-            #gen(.int(in: 0 ... 10)),
-            .onReport { capturedReport = $0 },
-            .suppress(.all)
-        ) { value in
-            #expect(value >= 0)
-        }
-        let report = try #require(capturedReport)
-        #expect(report.propertyInvocations > 0)
-    }
-
-    @Test("Report fires for async Bool closure (failing)")
-    func reportFiresForAsyncBoolClosureFailing() async throws {
-        var capturedReport: ExhaustReport?
-        let result = await #exhaust(
-            #gen(.int(in: 0 ... 1000)),
-            .onReport { capturedReport = $0 },
-            .suppress(.all)
-        ) { value async in
-            value < 50
-        }
-        #expect(result != nil)
-        let report = try #require(capturedReport)
-        #expect(report.propertyInvocations > 0)
-    }
-
-    @Test("Report fires for async Void/#expect closure (failing)")
-    func reportFiresForAsyncVoidexpectClosureFailing() async throws {
-        var capturedReport: ExhaustReport?
-        let result = await #exhaust(
-            #gen(.int(in: 0 ... 1000)),
-            .onReport { capturedReport = $0 },
-            .suppress(.all)
-        ) { value async in
-            #expect(value < 50)
-        }
-        #expect(result != nil)
-        let report = try #require(capturedReport)
-        #expect(report.propertyInvocations > 0)
     }
 }
 

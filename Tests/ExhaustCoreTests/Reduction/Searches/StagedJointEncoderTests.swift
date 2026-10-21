@@ -195,7 +195,7 @@ private struct StagedJointFixture {
         let typed = Gen.eachOf(Array(repeating: Gen.choose(in: range), count: values.count))
         let reflected = try #require(try Interpreters.reflect(typed, with: values))
         var built = ChoiceGraph.build(from: reflected)
-        Self.markConverged(&built)
+        built.markLeavesConverged()
         self.values = values
         generator = typed.erase()
         tree = reflected
@@ -248,21 +248,6 @@ private struct StagedJointFixture {
             )
         )
         return Run(report: result.report, output: result.incumbent.output as! [Int], checksAtTermination: checks.atTermination)
-    }
-
-    /// Settles every leaf at its current value, so each nontrivial leaf is a stalled source.
-    private static func markConverged(_ graph: inout ChoiceGraph) {
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
-                continue
-            }
-            graph.convergenceStore[nodeID] = ConvergedOrigin(
-                bound: metadata.value.bitPattern64,
-                signal: .monotoneConvergence,
-                configuration: .binarySearchSemanticSimplest,
-                cycle: 0
-            )
-        }
     }
 }
 

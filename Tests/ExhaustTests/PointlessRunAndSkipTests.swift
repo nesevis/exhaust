@@ -66,37 +66,15 @@ struct PointlessRunAndSkipTests {
         #expect(skipped == 200)
     }
 
-    @Test("Partially skipped run passes and tallies the skips")
-    func partialSkipsPassAndAreCounted() {
-        var skipped = -1
-        var invocations = -1
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .budget(.quick),
-            .onReport { report in
-                skipped = report.skippedInvocations
-                invocations = report.propertyInvocations
-            }
-        ) { (value: Int) -> Bool in
-            if value < 30 {
-                throw PropertySkip()
-            }
-            return true
-        }
-        #expect(result == nil)
-        #expect(skipped > 0)
-        #expect(skipped < invocations)
-    }
-
-    @Test("Parallel lanes tally skips exactly")
-    func parallelLanesTallySkipsExactly() {
+    @Test("Sequential and parallel runs tally partial skips exactly", arguments: [ConcurrencyLevel.one, .four])
+    func partialSkipsAreCounted(lanes: ConcurrencyLevel) {
         let observedSkips = SkipCounter()
         var skipped = -1
         var invocations = -1
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .budget(.quick),
-            .parallelize(lanes: .four),
+            .parallelize(lanes: lanes),
             .onReport { report in
                 skipped = report.skippedInvocations
                 invocations = report.propertyInvocations
@@ -145,7 +123,7 @@ struct UniqueExhaustionTruncationTests {
             }
         }
         #expect(truncated)
-        #expect(invocations < 200)
+        #expect(invocations == 2)
     }
 
     @Test("Small domain with screening enabled passes exhaustively, not by truncation")
@@ -230,6 +208,7 @@ struct ExploreCoverageFailureTests {
         ) { _ in
             true
         }
+        #expect(report.directionCoverage.count == 2)
         let allCovered = report.directionCoverage.allSatisfy(\.isCovered)
         #expect(allCovered)
     }
@@ -239,11 +218,15 @@ struct ExploreCoverageFailureTests {
 struct MisuseValidationTests {
     @Test("Example with a negative count throws instead of trapping")
     func exampleNegativeCountThrows() {
+        var thrownError: (any Error)?
         withKnownIssue {
-            #expect(throws: GeneratorError.self) {
+            do {
                 _ = try #example(#gen(.int(in: 0 ... 9)), count: -1)
+            } catch {
+                thrownError = error
             }
         }
+        #expect(thrownError is GeneratorError)
     }
 
     @Test("Zero idle timeout resolves to unbounded")

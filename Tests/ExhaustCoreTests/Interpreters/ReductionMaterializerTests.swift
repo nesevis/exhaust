@@ -279,9 +279,11 @@ struct ReductionMaterializerTests {
         // Value should be clamped to max of range: 10.
         #expect(value == 10)
         // Fresh tree metadata should have the generator's range.
-        if case let .choice(_, meta) = tree {
-            #expect(meta.validRange == 0 ... 10)
+        guard case let .choice(_, metadata) = tree else {
+            Issue.record("Expected a numeric choice with fresh range metadata")
+            return
         }
+        #expect(metadata.validRange == 0 ... 10)
     }
 
     @Test("Guided mode falls back to PRNG when prefix exhausted")

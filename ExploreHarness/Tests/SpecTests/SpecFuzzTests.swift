@@ -16,6 +16,6 @@ struct SpecFuzzTests {
             .suppress(.issueReporting)
         )
         #expect(report.clusters.isEmpty == false)
-        #expect(report.attempts.total > 0)
+        #expect(report.attempts.evaluated > 0)
     }
 }

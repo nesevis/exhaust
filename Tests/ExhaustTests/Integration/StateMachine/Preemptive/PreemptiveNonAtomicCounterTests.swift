@@ -8,53 +8,23 @@ struct PreemptiveNonAtomicCounterTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Detects lost-update bug via oracle comparison")
     func detectsLostUpdateBugViaOracleComparison() async throws {
+        var capturedReport: ExhaustReport?
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
                 mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(6),
+                .onReport { capturedReport = $0 },
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
-    }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Failure report renders correctly")
-    func failureReportRendersCorrectly() async throws {
-        let result = try #require(
-            await #execute(
-                PreemptiveCounterSpec.self,
-                mode: .threads,
-                .parallelize(lanes: .two),
-                .commandLimit(6),
-                .budget(.custom(screening: 0, sampling: 200)),
-                .suppress(.issueReporting)
-            )
-        )
-        #expect(result.commands.isEmpty == false)
         #expect(result.seed != nil)
         #expect(result.discoveryMethod == .randomSampling)
-    }
-
-    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("onReport delivers profiling summary")
-    func onReportDeliversProfilingSummary() async throws {
-        var capturedReport: ExhaustReport?
-        _ = await #execute(
-            PreemptiveCounterSpec.self,
-            mode: .threads,
-            .parallelize(lanes: .two),
-            .commandLimit(6),
-            .budget(.custom(screening: 0, sampling: 200)),
-            .suppress(.issueReporting),
-            .onReport { capturedReport = $0 }
-        )
         let report = try #require(capturedReport)
         #expect(report.totalMilliseconds > 0)
-        #expect(report.propertyInvocations > 0)
         #expect(report.randomSamplingInvocations > 0)
     }
 

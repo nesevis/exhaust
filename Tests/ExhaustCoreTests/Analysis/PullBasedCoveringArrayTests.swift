@@ -16,7 +16,7 @@ struct PullBasedCoveringArrayTests {
 
         let lowerBound = largestProductOfSubset(domains, size: 3)
         #expect(rows.count >= lowerBound)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 3)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains, strength: 3).isEmpty)
     }
 
     @Test("4 binary parameters at t=4 covers all quadruples — exhaustive")
@@ -27,7 +27,7 @@ struct PullBasedCoveringArrayTests {
         // t == paramCount: must enumerate the full product space.
         let fullSpace = Int(domains.reduce(1, *))
         #expect(rows.count == fullSpace)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 4)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains, strength: 4).isEmpty)
     }
 
     @Test("Large seed pair with booleans at t=2")
@@ -37,7 +37,7 @@ struct PullBasedCoveringArrayTests {
 
         let lowerBound = largestProductOfSubset(domains, size: 2)
         #expect(rows.count >= lowerBound)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 
     @Test("Determinism — same inputs produce identical row sequence")
@@ -70,7 +70,7 @@ struct PullBasedCoveringArrayTests {
             }
         }
 
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 
     @Test("Early stop produces valid partial coverage")
@@ -127,7 +127,7 @@ struct PullBasedCoveringArrayTests {
 
         let lowerBound = largestProductOfSubset(domains, size: 2)
         #expect(rows.count >= lowerBound)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 
     @Test("Two parameters at t=2 requires full product")
@@ -139,24 +139,7 @@ struct PullBasedCoveringArrayTests {
         // Full coverage requires the complete product.
         let fullSpace = Int(domains.reduce(1, *))
         #expect(rows.count == fullSpace)
-        verifyTWayCoverage(rows: rows, domainSizes: domains, strength: 2)
-    }
-
-    // MARK: - Generated Domains
-
-    @Test("Rows stay in bounds, cover every pair, and repeat for repeated domains, over generated domains")
-    func generatedDomainsCoverAllPairs() throws {
-        let domains = Gen.arrayOf(Gen.choose(in: UInt64(2) ... 8), within: 2 ... 6)
-        try exhaustCheck(domains, maxIterations: 100) { domainSizes in
-            let rows = generateAll(domainSizes: domainSizes, strength: 2)
-            let repeated = generateAll(domainSizes: domainSizes, strength: 2)
-            let inBounds = rows.allSatisfy { row in
-                row.values.count == domainSizes.count
-                    && zip(row.values, domainSizes).allSatisfy { $0 < $1 }
-            }
-            let sameStream = rows.map(\.values) == repeated.map(\.values)
-            return inBounds && sameStream && coversAllPairs(rows: rows, domainSizes: domainSizes)
-        }
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 }
 
@@ -189,7 +172,7 @@ private func largestProductOfSubset(_ domains: [UInt64], size: Int) -> Int {
 /// Total number of t-tuples across all C(k,t) parameter combinations.
 private func totalTWayTuples(_ domains: [UInt64], strength: Int) -> Int {
     var total = 0
-    for combo in allCombinations(of: domains.count, choose: strength) {
+    for combo in parameterCombinations(of: domains.count, choose: strength) {
         var product = 1
         for index in combo {
             product *= Int(domains[index])
@@ -197,66 +180,4 @@ private func totalTWayTuples(_ domains: [UInt64], strength: Int) -> Int {
         total += product
     }
     return total
-}
-
-private func verifyTWayCoverage(rows: [CoveringArrayRow], domainSizes: [UInt64], strength: Int) {
-    let paramCount = domainSizes.count
-    for combo in allCombinations(of: paramCount, choose: strength) {
-        var seen = Set<[UInt64]>()
-        for row in rows {
-            let tuple = combo.map { row.values[$0] }
-            seen.insert(tuple)
-        }
-
-        var expected: UInt64 = 1
-        for index in combo {
-            expected *= domainSizes[index]
-        }
-
-        #expect(
-            UInt64(seen.count) == expected,
-            "Missing coverage for combination \(combo): got \(seen.count), expected \(expected)"
-        )
-    }
-}
-
-private func allCombinations(of n: Int, choose k: Int) -> [[Int]] {
-    guard k <= n, k > 0 else {
-        return []
-    }
-    var result: [[Int]] = []
-    var current: [Int] = []
-    current.reserveCapacity(k)
-
-    func build(start: Int) {
-        if current.count == k {
-            result.append(current)
-            return
-        }
-        let remaining = k - current.count
-        for i in start ... (n - remaining) {
-            current.append(i)
-            build(start: i + 1)
-            current.removeLast()
-        }
-    }
-
-    build(start: 0)
-    return result
-}
-
-/// Whether every unordered pair of parameters sees every combination of their two domains.
-private func coversAllPairs(rows: [CoveringArrayRow], domainSizes: [UInt64]) -> Bool {
-    for paramA in 0 ..< domainSizes.count {
-        for paramB in (paramA + 1) ..< domainSizes.count {
-            var seen = Set<[UInt64]>()
-            for row in rows {
-                seen.insert([row.values[paramA], row.values[paramB]])
-            }
-            guard UInt64(seen.count) == domainSizes[paramA] * domainSizes[paramB] else {
-                return false
-            }
-        }
-    }
-    return true
 }

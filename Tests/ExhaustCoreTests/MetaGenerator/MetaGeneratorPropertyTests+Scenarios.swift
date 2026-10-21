@@ -3,115 +3,43 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 11. Just Values
+    // MARK: - Just Values
 
-    @Test("Just values always produce the same constant")
+    @Test("Constant recipes preserve their literal through generation, reflection, replay and materialization")
     func justValuesAreConstant() throws {
-        let justRecipes: [GenRecipe] = [
-            .leaf(.justInt(42)),
-            .leaf(.justInt(-7)),
-            .leaf(.justInt(0)),
-            .leaf(.justBool(true)),
-            .leaf(.justBool(false)),
-            .leaf(.justDouble(3.14)),
-            .leaf(.justIntArray([1, 2, 3])),
-            .leaf(.justIntArray([])),
+        let fixtures: [(GenRecipe.LeafKind, Any)] = [
+            (.justInt(42), 42),
+            (.justInt(-7), -7),
+            (.justInt(0), 0),
+            (.justBool(true), true),
+            (.justBool(false), false),
+            (.justDouble(3.14), 3.14),
+            (.justIntArray([1, 2, 3]), [1, 2, 3]),
+            (.justIntArray([10, 20]), [10, 20]),
+            (.justIntArray([]), [Int]()),
         ]
-
-        for recipe in justRecipes {
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 5)
-            var first: Any?
-            while let (value, _) = try valueIter.next() {
-                if let first {
-                    #expect(
-                        anyEquals(first, value),
-                        "Just generator produced different values for recipe: \(recipe)"
-                    )
-                } else {
-                    first = value
-                }
+        for (leaf, expected) in fixtures {
+            try checkRecipeRoundTrips(.leaf(leaf), samples: 5) { value in
+                #expect(anyEquals(value, expected))
             }
         }
     }
 
-    @Test("Just values round-trip through reflect and replay")
-    func justValuesReflectionRoundTrip() throws {
-        let justRecipes: [GenRecipe] = [
-            .leaf(.justInt(42)),
-            .leaf(.justBool(true)),
-            .leaf(.justDouble(3.14)),
-            .leaf(.justIntArray([10, 20])),
-            .leaf(.justIntArray([])),
-        ]
-
-        for recipe in justRecipes {
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 3)
-            while let (value, _) = try valueIter.next() {
-                let tree = try #require(try Interpreters.reflect(gen, with: value), "Just must reflect for recipe: \(recipe)")
-                let replayed = try #require(try Interpreters.replay(gen, using: tree), "Just must replay for recipe: \(recipe)")
-                #expect(
-                    anyEquals(value, replayed),
-                    "Just round-trip failed for recipe: \(recipe)"
-                )
-            }
-        }
-    }
-
-    // MARK: 12. Zipped Generators
-
-    @Test("Zipped generators round-trip through reflect and replay")
-    func zippedReflectionRoundTrip() throws {
-        let zippedRecipes: [GenRecipe] = [
+    @Test("Zip and optional recipes preserve generated values through all reconstruction paths")
+    func composedRecipeRoundTrips() throws {
+        let recipes: [GenRecipe] = [
             .combinator(.zipped(.leaf(.int(-10 ... 10)), .leaf(.int(0 ... 100)))),
             .combinator(.zipped(.leaf(.justInt(5)), .leaf(.int(-5 ... 5)))),
             .combinator(.zipped(.leaf(.bool), .leaf(.bool))),
+            .combinator(.optional(.leaf(.int(0 ... 100)))),
+            .combinator(.optional(.leaf(.justInt(5)))),
         ]
-
-        for recipe in zippedRecipes {
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
-            while let (value, _) = try valueIter.next() {
-                let tree = try #require(try Interpreters.reflect(gen, with: value), "Zip must reflect for recipe: \(recipe)")
-                let replayed = try #require(try Interpreters.replay(gen, using: tree), "Zip must replay for recipe: \(recipe)")
-                #expect(
-                    anyEquals(value, replayed),
-                    "Zip round-trip failed for recipe: \(recipe)"
-                )
-            }
+        for recipe in recipes {
+            try checkRecipeRoundTrips(recipe, samples: 15)
         }
     }
 
-    @Test("Zipped generators materialize consistently")
-    func zippedMaterializeAgreement() throws {
-        let zippedRecipes: [GenRecipe] = [
-            .combinator(.zipped(.leaf(.int(-10 ... 10)), .leaf(.int(0 ... 100)))),
-            .combinator(.zipped(.leaf(.justInt(5)), .leaf(.int(-5 ... 5)))),
-        ]
-
-        for recipe in zippedRecipes {
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
-            while let (value, _) = try valueIter.next() {
-                let reflectedTree = try #require(try Interpreters.reflect(gen, with: value), "Zip must reflect for recipe: \(recipe)")
-                let replayed = try #require(try Interpreters.replay(gen, using: reflectedTree), "Zip must replay for recipe: \(recipe)")
-                let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-                    prefix: sequence, mode: .exact, fallbackTree: reflectedTree
-                )) else {
-                    Issue.record("Zip must materialize for recipe: \(recipe)")
-                    continue
-                }
-                #expect(
-                    anyEquals(materialized, replayed),
-                    "Zip materialize disagrees with replay for recipe: \(recipe)"
-                )
-            }
-        }
-    }
-
-    // MARK: 13. Optional Generators
+    // MARK: - Optional Generators
 
     @Test("Optional generators produce both nil and non-nil values")
     func optionalProducesBothBranches() throws {
@@ -142,60 +70,18 @@ extension MetaGeneratorPropertyTests {
         }
     }
 
-    @Test("Optional generators materialize consistently")
-    func optionalMaterializeAgreement() throws {
-        let optionalRecipes: [GenRecipe] = [
-            .combinator(.optional(.leaf(.int(0 ... 100)))),
-            .combinator(.optional(.leaf(.justInt(5)))),
-        ]
-
-        for recipe in optionalRecipes {
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 15)
-            while let (value, _) = try valueIter.next() {
-                let reflectedTree = try #require(try Interpreters.reflect(gen, with: value), "Optional must reflect for recipe: \(recipe)")
-                let replayed = try #require(try Interpreters.replay(gen, using: reflectedTree), "Optional must replay for recipe: \(recipe)")
-                let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-                    prefix: sequence, mode: .exact, fallbackTree: reflectedTree
-                )) else {
-                    Issue.record("Optional must materialize for recipe: \(recipe)")
-                    continue
-                }
-                #expect(
-                    anyEquals(materialized, replayed),
-                    "Optional materialize disagrees with replay for recipe: \(recipe)"
-                )
-            }
-        }
-    }
-
-    @Test("Nested optional generators round-trip through reflect and replay, including mid-chain nils")
+    @Test("Nested optionals reconstruct nil-bearing values at multiple depths")
     func nestedOptionalReflectionRoundTrip() throws {
-        let nestedRecipes: [GenRecipe] = [
+        let recipes: [GenRecipe] = [
             .combinator(.optional(.combinator(.optional(.leaf(.int(-10 ... 10)))))),
             .combinator(.optional(.combinator(.optional(.combinator(.optional(.leaf(.justInt(7)))))))),
         ]
-
-        for recipe in nestedRecipes {
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 60)
+        for recipe in recipes {
             var sawNilBearing = false
-            while let (value, _) = try valueIter.next() {
-                if containsNil(value) {
-                    sawNilBearing = true
-                }
-                let tree = try Interpreters.reflect(gen, with: value)
-                let replayed = try tree.flatMap { try Interpreters.replay(gen, using: $0) }
-                #expect(replayed != nil, "Reflect or replay produced nil for \(value) with recipe: \(recipe)")
-                if let replayed {
-                    #expect(
-                        anyEquals(value, replayed),
-                        "Nested optional round-trip failed for \(value) with recipe: \(recipe)"
-                    )
-                }
+            try checkRecipeRoundTrips(recipe, samples: 60) { value in
+                sawNilBearing = sawNilBearing || containsNil(value)
             }
-            #expect(sawNilBearing, "The sweep never exercised a nil-bearing value for recipe: \(recipe)")
+            #expect(sawNilBearing, "The sweep must exercise nil-bearing values: \(recipe)")
         }
     }
 
@@ -211,7 +97,7 @@ extension MetaGeneratorPropertyTests {
         #expect(anyEquals(replayed, value))
     }
 
-    // MARK: 14. Per-Combinator Reflection Coverage
+    // MARK: - Per-Combinator Reflection Coverage
 
     /// Asserts every reflectable combinator actually reflects and round-trips at least one of its own generated values.
     ///
@@ -230,7 +116,7 @@ extension MetaGeneratorPropertyTests {
         #expect(roundTripped > 0, "\(fixture.name) produced no values to check")
     }
 
-    // MARK: 15. Forward-Only Exemption (pinned)
+    // MARK: - Forward-Only Exemption (pinned)
 
     /// Pins the combinators the coverage sweep deliberately omits, so their exemption is an assertion rather than silence.
     ///
@@ -244,5 +130,30 @@ extension MetaGeneratorPropertyTests {
         let boundRange: GenRecipe = .combinator(.boundRange(.leaf(.int(0 ... 10))))
         let boundRangeReflected = try reflectableValueCount(boundRange, seed: 42, maxRuns: 12)
         #expect(boundRangeReflected < 12, "boundRange reflected all 12 values. It is now fully reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
+    }
+}
+
+// MARK: - Helpers
+
+private func checkRecipeRoundTrips(
+    _ recipe: GenRecipe,
+    samples: UInt64,
+    check: (Any) -> Void = { _ in }
+) throws {
+    let generator = buildGenerator(from: recipe)
+    var interpreter = ValueAndChoiceTreeInterpreter(generator, seed: 42, maxRuns: samples)
+    for _ in 0 ..< samples {
+        let (value, _) = try #require(try interpreter.next(), "No value generated for \(recipe)")
+        check(value)
+        let tree = try #require(try Interpreters.reflect(generator, with: value), "Must reflect: \(recipe)")
+        let replayed = try #require(try Interpreters.replay(generator, using: tree), "Must replay: \(recipe)")
+        #expect(anyEquals(value, replayed), "Replay changed value: \(recipe)")
+        guard case let .success(materialized, _, _) = Materializer.materialize(generator, context: .init(
+            prefix: ChoiceSequence(tree), mode: .exact, fallbackTree: tree
+        )) else {
+            Issue.record("Must materialize: \(recipe)")
+            continue
+        }
+        #expect(anyEquals(value, materialized), "Materialization changed value: \(recipe)")
     }
 }

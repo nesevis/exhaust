@@ -40,16 +40,16 @@ struct FuzzRunnerTwoPhaseTests {
 
         #expect(result.counts.mutationAttempts > 0, "The run must reach mutated candidates")
         #expect(result.clusters.isEmpty == false, "Failing candidates must produce at least one cluster")
-        // A cluster reduced from a placeholder tree could not retain the failure-triggering value; a real tree reduces to a sequence that still contains one.
-        let clusterWithTrigger = result.clusters.contains { cluster in
-            cluster.reducedSequence.contains { entry in
-                if case let .value(value) = entry {
-                    return value.choice.bitPattern64 > 90
-                }
-                return false
+        // Decode the stored sequence: encoded bits are not the generated integer values.
+        for cluster in result.clusters {
+            guard case let .success(values, _, _) = Materializer.materialize(
+                arrayGenerator(), context: .init(prefix: cluster.reducedSequence, mode: .exact)
+            ) else {
+                Issue.record("A reduced failure could not be replayed")
+                continue
             }
+            #expect(values.contains { $0 > 90000 }, "Reduction lost the failure trigger")
         }
-        #expect(clusterWithTrigger, "No cluster's reduced sequence retains a failure-triggering value")
         for entry in runner.corpus.entries {
             #expect(ChoiceSequence.flatten(entry.tree) == entry.sequence)
         }
@@ -62,7 +62,7 @@ struct FuzzRunnerTwoPhaseTests {
 private func makeRunner(
     property: @escaping @Sendable ([UInt64]) -> FuzzVerdict
 ) -> FuzzRunner<[UInt64]> {
-    let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100_000), within: 0 ... 10)
+    let generator = arrayGenerator()
     let source = SyntheticCoverageSource<[UInt64]>(edgeCount: 128) { values in
         var edges: [(edge: Int, hitCount: UInt8)] = [(edge: values.count, hitCount: 1)]
         for (position, value) in values.prefix(8).enumerated() {
@@ -91,4 +91,8 @@ private func makeRunner(
             attemptLimit: 8000
         )
     )
+}
+
+private func arrayGenerator() -> Generator<[UInt64]> {
+    Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100_000), within: 0 ... 10)
 }

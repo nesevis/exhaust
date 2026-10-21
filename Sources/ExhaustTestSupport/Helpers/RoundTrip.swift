@@ -29,5 +29,6 @@ package func roundTripBatch<Output: Equatable>(
         }
         results.append((value, materialized))
     }
+    #expect(results.isEmpty == false, "No generated value completed the round trip")
     return results
 }

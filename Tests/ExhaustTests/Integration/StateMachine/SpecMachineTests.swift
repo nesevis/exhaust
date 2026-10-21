@@ -6,11 +6,13 @@ import Testing
 struct SpecMachineTests {
     @Test("Empty source list finalizes immediately")
     func emptySourceListFinalizesImmediately() {
-        var machine = makeMachine(sources: [])
+        var report: ExhaustReport?
+        var machine = makeMachine(config: makeConfig(onReport: { report = $0 }), sources: [])
         let first = machine.next()
         #expect(first == .sourceExhausted)
         #expect(machine.next() == nil)
         #expect(machine.result == nil)
+        #expect(report != nil)
     }
 
     @Test("Source that returns nil advances to next source")
@@ -57,11 +59,7 @@ struct SpecMachineTests {
             transitions.append(label(transition))
         }
 
-        #expect(transitions.contains("candidateFound"))
-        #expect(transitions.contains("pruned"))
-        #expect(transitions.contains("reduced"))
-        #expect(transitions.contains("statsRecorded"))
-        #expect(transitions.contains("assembled"))
+        #expect(transitions == ["candidateFound", "pruned", "setupReduced", "reduced", "statsRecorded", "assembled"])
         #expect(machine.result != nil)
     }
 
@@ -88,18 +86,6 @@ struct SpecMachineTests {
         let result = machine.result
         #expect(result?.setup == .configure)
         #expect(result?.commands.map { "\($0)" } == commands.map { "\($0.1)" })
-    }
-
-    @Test("Reduction invocations are tracked in report")
-    func reductionInvocationsAreTrackedInReport() {
-        let candidate = makeCandidate(commands: [(.prefix, .increment), (.prefix, .increment)])
-        let source = AnyStateMachineCandidateSource<StubSpec>.once { candidate }
-        let context = makeContext()
-        var machine = makeMachine(context: context, sources: [source])
-
-        while machine.next() != nil {}
-
-        #expect(context.state.ledger.totalInvocations > 0)
     }
 
     @Test("Each source's invocations are attributed to its bucket, including a passing source")
@@ -151,17 +137,6 @@ struct SpecMachineTests {
         #expect(deliveredReport?.seed == 99)
     }
 
-    @Test("Finalize delivers report to onReport closure")
-    func finalizeDeliversReportToOnReportClosure() {
-        var deliveredReport: ExhaustReport?
-        let config = makeConfig(onReport: { deliveredReport = $0 })
-        var machine = makeMachine(config: config, sources: [])
-
-        while machine.next() != nil {}
-
-        #expect(deliveredReport != nil)
-    }
-
     @Test("Multiple sources are tried in order until one produces a candidate")
     func multipleSourcesTriedInOrder() {
         var sourceOrder: [Int] = []
@@ -185,22 +160,13 @@ struct SpecMachineTests {
         #expect(machine.result != nil)
     }
 
-    @Test("Pipeline run method drives machine to completion")
-    func pipelineRunDrivesMachineToCompletion() {
-        let pipeline = makePipeline(propertyPasses: false)
+    @Test("Pipeline completion returns a result and issues exactly when the property fails", arguments: [false, true])
+    func pipelineRunDrivesMachineToCompletion(propertyPasses: Bool) {
+        let pipeline = makePipeline(propertyPasses: propertyPasses)
         let config = makeConfig()
         let (result, issues) = pipeline.run(config: config)
-        #expect(result != nil)
-        #expect(issues.isEmpty == false)
-    }
-
-    @Test("Pipeline run returns nil when property passes")
-    func pipelineRunReturnsNilWhenPropertyPasses() {
-        let pipeline = makePipeline(propertyPasses: true)
-        let config = makeConfig()
-        let (result, issues) = pipeline.run(config: config)
-        #expect(result == nil)
-        #expect(issues.isEmpty)
+        #expect((result == nil) == propertyPasses)
+        #expect(issues.isEmpty == propertyPasses)
     }
 }
 
@@ -435,17 +401,7 @@ private func makeMachine(
     } else {
         var resolved = config ?? makeConfig()
         resolved.suppress.issueReporting = true
-        resolvedContext = StateMachineRunContext<StubSpec>(
-            config: resolved,
-            sequenceGen: stubSequenceGen(),
-            commandGen: StubSpec.commandGenerator.gen,
-            commandLimit: 5,
-            identifySkips: { _ in [] },
-            fileID: #fileID,
-            filePath: #filePath,
-            line: #line,
-            column: #column
-        )
+        resolvedContext = makeContext(config: resolved)
     }
     return SpecMachine(backend: backend, context: resolvedContext, sources: sources)
 }

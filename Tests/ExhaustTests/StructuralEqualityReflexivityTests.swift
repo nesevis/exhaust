@@ -16,7 +16,7 @@ import Testing
 struct StructuralEqualityReflexivityTests {
     @Test("Every generated value is structurally equal to itself")
     func everyGeneratedValueIsStructurallyEqualToItself() {
-        let payloadFreeGen = #gen(.element(from: [Shape.empty, Shape.reset]))
+        let payloadFreeGen = #gen(.oneOf(.just(Shape.empty), .just(Shape.reset)))
         let scalarGen = #gen(.int(in: -100 ... 100)) { Shape.scalar($0) }
         let pairGen = #gen(.int(in: -100 ... 100), .asciiString(length: 0 ... 5)) { Shape.pair(key: $0, name: $1) }
         let listGen = #gen(.int(in: -100 ... 100).array(length: 0 ... 4)) { Shape.list($0) }
@@ -32,7 +32,7 @@ struct StructuralEqualityReflexivityTests {
 // MARK: - Supporting Types
 
 /// Deliberately non-Equatable: an Equatable type short-circuits to `==` and never reaches the Mirror walk under test.
-private enum Shape: Hashable, Sendable {
+private enum Shape: Sendable {
     case empty
     case reset
     case scalar(Int)

@@ -10,7 +10,7 @@ struct StagedJointSearchTests {
         let text = ChoiceTree.sequence(elements: Array(repeating: character, count: count), metadata: .init(validRange: UInt64(count) ... UInt64(count), isRangeExplicit: true))
         let numbers = ChoiceTree.group([6, 8, 10].map { .choice(ChoiceValue(UInt64($0), tag: .uint64), .init(validRange: 1 ... 1000, isRangeExplicit: true)) })
         var graph = ChoiceGraph.build(from: .group([text, numbers]))
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let gate = BoundValueGate(baseBudget: 15)
         #expect(StagedJointQuery.eligibleLeaves(graph: graph, tuning: .init()).count == 3)
         #expect(StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: gate.isFruitless, tuning: .init()).count == 3)
@@ -29,7 +29,7 @@ struct StagedJointSearchTests {
             .choice(ChoiceValue(tag.floatingBitPattern(from: .infinity), tag: tag), .init(validRange: tag.bitPatternRange, isRangeExplicit: true)),
         ]
         var graph = ChoiceGraph.build(from: .group(values + excluded))
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let gate = BoundValueGate(baseBudget: 15)
         #expect(StagedJointQuery.eligibleLeaves(graph: graph, tuning: .init()).count == count + 1)
         #expect(StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: gate.isFruitless, tuning: .init()).isEmpty)
@@ -47,7 +47,7 @@ struct StagedJointSearchTests {
             .choice(ChoiceValue(tag.floatingBitPattern(from: value), tag: tag), .init(validRange: range, isRangeExplicit: true))
         })
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         #expect(frontier.count == 3)
         for entry in frontier {
@@ -71,7 +71,7 @@ struct StagedJointSearchTests {
     func uniqueGrid(arity: Int) {
         let tree = unsignedTree(values: Array(repeating: 3, count: arity), range: 0 ... 3)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let scope = StagedJointQuery.groups(candidatePool: frontier, graph: graph, arity: arity, workLimit: 4096, calculationLimit: 512, scopeLimit: 30)
         #expect(scope.groups.count == 1)
@@ -95,7 +95,7 @@ struct StagedJointSearchTests {
     @Test("Discovery and retention have independent bounds; coupling hints influence ranking")
     func boundedRanking() {
         var graph = ChoiceGraph.build(from: unsignedTree(values: Array(repeating: 2, count: 12), range: 0 ... UInt64.max))
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let preferred = Array(frontier.suffix(3).map(\.leaf.nodeID))
         graph.couplingDependents[preferred[0]] = Set(preferred.dropFirst())
@@ -112,7 +112,7 @@ struct StagedJointSearchTests {
     func fullWidthGate() throws {
         let tree = unsignedTree(values: [UInt64.max, UInt64.max - 1, UInt64.max - 2, UInt64.max - 3], range: 0 ... UInt64.max)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         #expect(StagedJointQuery.canWiden(to: 3, candidatePool: frontier, workLimit: 215) == false)
         #expect(StagedJointQuery.canWiden(to: 3, candidatePool: frontier, workLimit: 216))
@@ -132,7 +132,7 @@ struct StagedJointSearchTests {
     @Test("Early discovery rejections still consume the bounded combination prefix", arguments: [3, 4])
     func rejectedCombinationPrefix(arity: Int) {
         var graph = ChoiceGraph.build(from: unsignedTree(values: [0, 3, 3, 3, 3, 3], range: 0 ... 3))
-        markConverged(&graph)
+        graph.markLeavesConverged()
         var frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let rejected = StagedJointQuery.groups(candidatePool: frontier, graph: graph, arity: arity, workLimit: 4096, calculationLimit: 10, scopeLimit: 30)
         #expect(rejected.calculations == 10)
@@ -152,7 +152,7 @@ struct StagedJointSearchTests {
     func totalScopeWork(arity: Int) {
         let tree = unsignedTree(values: Array(repeating: 3, count: 6), range: 0 ... 3)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let perGroup = arity == 3 ? 27 : 81
         let allGroups = arity == 3 ? 20 : 15
@@ -184,7 +184,7 @@ struct StagedJointSearchTests {
     @Test("Residual magnitude ranks affordable groups without excluding larger ones")
     func residualRanking() {
         var graph = ChoiceGraph.build(from: unsignedTree(values: [300, 6, 8, 10], range: 1 ... 1_000_000))
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let scope = StagedJointQuery.groups(candidatePool: frontier, graph: graph, arity: 3, workLimit: 4096, calculationLimit: 512, scopeLimit: 30)
         #expect(scope.groups.count == 4)
@@ -201,7 +201,7 @@ struct StagedJointSearchTests {
         }
         let originalTree = tree(fingerprint: 42)
         var graph = ChoiceGraph.build(from: originalTree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let scope = StagedJointQuery.groups(candidatePool: frontier, graph: graph, arity: 3, workLimit: 4096, calculationLimit: 512, scopeLimit: 1)
         let group = try #require(scope.groups.first)
@@ -217,15 +217,6 @@ struct StagedJointSearchTests {
         var clamped = candidate
         clamped[group.leaves[2].position] = clamped[group.leaves[2].position].withBitPattern(4)
         #expect(admission.admits(decoded: clamped, candidate: candidate, original: ChoiceSequence(originalTree)) == false)
-    }
-
-    private func markConverged(_ graph: inout ChoiceGraph) {
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
-                continue
-            }
-            graph.convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
-        }
     }
 
     private func unsignedTree(values: [UInt64], range: ClosedRange<UInt64>) -> ChoiceTree {

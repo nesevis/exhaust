@@ -277,22 +277,13 @@ struct ResultGeneratorTests {
 
 @Suite("ClosedRange Generator")
 struct ClosedRangeGeneratorTests {
-    @Test("Lower bound is at most upper bound")
-    func boundsOrdered() throws {
-        let gen = #gen(.closedRange(.int(in: 0 ... 100)))
-        let values = try #example(gen, count: 50, seed: 42)
-
-        for range in values {
-            #expect(range.lowerBound <= range.upperBound)
-        }
-    }
-
     @Test("Bounds stay within source generator range")
     func boundsWithinSourceRange() throws {
         let gen = #gen(.closedRange(.int(in: -50 ... 50)))
         let values = try #example(gen, count: 50, seed: 42)
 
         for range in values {
+            #expect(range.lowerBound <= range.upperBound)
             #expect(range.lowerBound >= -50)
             #expect(range.upperBound <= 50)
         }
@@ -312,22 +303,13 @@ struct ClosedRangeGeneratorTests {
 
 @Suite("Range Generator")
 struct RangeGeneratorTests {
-    @Test("Lower bound is at most upper bound")
-    func boundsOrdered() throws {
-        let gen = #gen(.range(.int(in: 0 ... 100)))
-        let values = try #example(gen, count: 50, seed: 42)
-
-        for range in values {
-            #expect(range.lowerBound <= range.upperBound)
-        }
-    }
-
     @Test("Bounds stay within source generator range")
     func boundsWithinSourceRange() throws {
         let gen = #gen(.range(.double(in: 0.0 ... 1.0)))
         let values = try #example(gen, count: 50, seed: 42)
 
         for range in values {
+            #expect(range.lowerBound <= range.upperBound)
             #expect(range.lowerBound >= 0.0)
             #expect(range.upperBound <= 1.0)
         }

@@ -24,37 +24,15 @@ struct BuggyCounterTests {
             return false
         } == true)
 
-        // The SUT should be a BuggyCounter with capacity 3
-        #expect(result.systemUnderTest?.capacity == 3)
-    }
-
-    @Test("Trace steps have correct structure")
-    func traceStepsHaveCorrectStructure() async throws {
-        let result = try #require(
-            await #execute(
-                BuggyCounterSpec.self,
-                mode: .sequential,
-                .commandLimit(10),
-                .suppress(.issueReporting)
-            )
-        )
-
         // Every step should have a 1-based index
         for (offset, step) in result.trace.enumerated() {
             #expect(step.index == offset + 1)
         }
 
-        // At least the last step should not be .ok (it's the failing step)
-        if let lastStep = result.trace.last {
-            if case .ok = lastStep.outcome {
-                Issue.record("Last trace step should be a failure, not .ok")
-            }
-        }
+        #expect(result.trace.allSatisfy { $0.description.isEmpty == false })
 
-        // Trace descriptions should be non-empty
-        for step in result.trace {
-            #expect(step.description.isEmpty == false)
-        }
+        // The SUT should be a BuggyCounter with capacity 3
+        #expect(result.systemUnderTest?.capacity == 3)
     }
 
     @Test("Sequential spec failure carries replay seed")
@@ -92,21 +70,6 @@ struct BuggyCounterTests {
 
 @Suite("SCA reduction screening", .serialized, .tags(.stateMachine))
 struct SCAReductionScreeningTests {
-    @Test("SCA screening exercises the reduction path")
-    func scaScreeningExercisesReductionPath() async throws {
-        let result = try #require(
-            await #execute(
-                PairwiseBugSpec.self,
-                mode: .sequential,
-                .commandLimit(3),
-                .budget(.custom(screening: 200, sampling: 0)),
-                .suppress(.issueReporting)
-            )
-        )
-        #expect(result.discoveryMethod == .screening)
-        #expect(result.trace.isEmpty == false)
-    }
-
     @Test("SCA screening report counts reduction property invocations, not materializations")
     func scaScreeningReportCountsReductionPropertyInvocations() async throws {
         var capturedReport: ExhaustReport?
@@ -122,29 +85,14 @@ struct SCAReductionScreeningTests {
         )
         #expect(result.discoveryMethod == .screening)
         let report = try #require(capturedReport)
+        #expect(result.trace.isEmpty == false)
+        #expect(report.reductionInvocations > 0)
+        #expect(report.reductionMilliseconds > 0)
+        #expect(report.totalMilliseconds >= report.reductionMilliseconds)
         #expect(report.screeningInvocations > 0)
         #expect(report.randomSamplingInvocations == 0)
         #expect(report.totalMaterializations >= report.reductionInvocations)
         #expect(report.propertyInvocations == report.screeningInvocations + report.reductionInvocations)
-    }
-
-    @Test("SCA screening report includes non-zero reduction timing")
-    func scaScreeningReportIncludesReductionTiming() async throws {
-        var capturedReport: ExhaustReport?
-        let result = try #require(
-            await #execute(
-                PairwiseBugSpec.self,
-                mode: .sequential,
-                .commandLimit(3),
-                .budget(.custom(screening: 200, sampling: 0)),
-                .suppress(.issueReporting),
-                .onReport { capturedReport = $0 }
-            )
-        )
-        #expect(result.discoveryMethod == .screening)
-        let report = try #require(capturedReport)
-        #expect(report.reductionMilliseconds >= 0)
-        #expect(report.totalMilliseconds >= report.reductionMilliseconds)
     }
 
     @Test("A screening replay seed reproduces the candidate it was emitted for")

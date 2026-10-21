@@ -11,23 +11,20 @@ import Testing
 @Suite("Explore fuzz validation", .serialized)
 struct ExploreFuzzTests {
     @Test("A fuzz run finds every catchable fault, separates the slippage pair, and never over-splits one value", .timeLimit(.minutes(2)))
-    func fuzzInventory() {
+    func fuzzInventory() throws {
         let report = Self.report
 
         // Every planted fault's canonical minimal form appears among the clusters.
-        #expect(clusterMatching(report, .faultA) != nil, "expected fault A (data / region 5 / [0, 0])")
-        #expect(clusterMatching(report, .faultB) != nil, "expected fault B (control / region 2 / [241])")
+        let faultA = try #require(clusterMatching(report, .faultA), "expected fault A (data / region 5 / [0, 0])")
+        let faultB = try #require(clusterMatching(report, .faultB), "expected fault B (control / region 2 / [241])")
         #expect(clusterMatching(report, .faultC) != nil, "expected fault C (heartbeat / region 6)")
         #expect(clusterMatching(report, .faultD) != nil, "expected fault D (checksum 65535)")
 
         // The slippage pair: one shared symptom type, two distinct reduced forms in two clusters.
-        let a = clusterMatching(report, .faultA)
-        let b = clusterMatching(report, .faultB)
-        if let a, let b {
-            #expect(a.symptoms.contains("IntegrityError"))
-            #expect(b.symptoms.contains("IntegrityError"))
-            #expect(a.id != b.id, "A and B must be distinct clusters despite one symptom type")
-        }
+        #expect(faultA.symptoms.contains("IntegrityError"))
+        #expect(faultB.symptoms.contains("IntegrityError"))
+        #expect(faultA.id != faultB.id)
+        #expect(faultA.reducedDescription != faultB.reducedDescription)
 
         // Canonicalization guard: no reduced value is split across two clusters. The bind-inner-skipping identity key collapses the structurally different but semantically identical reduced forms a bind produces (the same payload reached through different length bookkeeping).
         let byForm = Dictionary(grouping: report.clusters, by: \.reducedDescription)
@@ -38,23 +35,6 @@ struct ExploreFuzzTests {
         // Throughput is recorded so a pipeline-cost regression surfaces as falling attempts per second.
         #expect(report.attemptsPerSecond > 0)
         #expect(report.timing.testingOverheadFraction >= 0 && report.timing.testingOverheadFraction <= 1)
-    }
-
-    @Test("The clustered inventory separates the slippage pair that symptom deduplication cannot", .timeLimit(.minutes(2)))
-    func slippageDifferential() {
-        let report = Self.report
-
-        // The distinctive signal is separation, not depth: the two faults A and B throw the same error type from the same site, so a symptom-deduplicating view — everything a blind sampler can offer — collapses them to one entry. The blind sampler here confirms it sees at most one IntegrityError symptom, with no way to tell the two faults apart.
-        let blindSymptoms = blindSampleFaultTypes(attempts: report.attempts.total, seed: 20_260_710)
-        let blindIntegritySymptoms = blindSymptoms.filter { $0 == "IntegrityError" }
-        #expect(blindIntegritySymptoms.count <= 1, "symptom deduplication cannot distinguish A from B")
-
-        // The fuzz run splits the same shared symptom into two clusters with distinct reduced forms. This is the mode's contribution over stack-trace or symptom dedup, and it does not depend on how deep the gates are.
-        let integrityClusters = report.clusters.filter { $0.symptoms.contains("IntegrityError") }
-        let distinctForms = Set(integrityClusters.map(\.reducedDescription))
-        #expect(distinctForms.count >= 2, "the inventory should separate A and B into distinct reduced forms")
-        #expect(clusterMatching(report, .faultA) != nil)
-        #expect(clusterMatching(report, .faultB) != nil)
     }
 
     @Test("The reported summary names the function that threw for every cluster", .timeLimit(.minutes(2)))
@@ -99,7 +79,7 @@ struct ExploreFuzzTests {
 
     // MARK: - Shared Fuzz Run
 
-    /// One instrumented run for the whole suite. Swift Testing builds a fresh suite value per test, so a per-test call would spend the full wall-clock budget four times over and leave each test describing a different campaign.
+    /// One instrumented run for the whole suite. Swift Testing builds a fresh suite value per test, so a per-test call would spend the full wall-clock budget repeatedly and leave each test describing a different campaign.
     private static let report = fuzz()
 
     /// The shared run's rendered inventory, in the attachment form that carries every suspect. The terminal form names one suspect per cluster, which cannot separate the slippage pair; ``FuzzReport/renderedAttachmentSummary()`` re-renders on every call, and every assertion against it wants the same text.
@@ -149,35 +129,4 @@ private func clusterMatching(_ report: FuzzReport, _ fault: PlantedFault) -> Fuz
 /// Found by displayed cluster number rather than by matching counterexample text: the summary rewrites a counterexample when it collapses a multi-line dump onto one line, dropping the per-index labels ``PlantedFault/markers`` relies on. The number is stable because a cluster's `id` stays its position in the report even though the summary orders frontier clusters first.
 private func block(for cluster: FuzzReport.Cluster, in summary: String) -> String? {
     summary.components(separatedBy: "\n\n").first { $0.hasPrefix("Cluster \(cluster.id + 1) ") }
-}
-
-// MARK: - Blind Sampler
-
-/// A blind PRNG sampler over the same message shape, standing in for `#exhaust`'s random tail. Returns the distinct fault type names it found, used only to show the two search regimes diverge on the deep chains.
-private func blindSampleFaultTypes(attempts: Int, seed: UInt64) -> Set<String> {
-    var state = seed &+ 0x9E37_79B9_7F4A_7C15
-    func next() -> UInt64 {
-        state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-        var value = state
-        value ^= value >> 33
-        return value
-    }
-    var found: Set<String> = []
-    for _ in 0 ..< max(1, attempts) {
-        let mode = Mode.allCases[Int(next() % 4)]
-        let flags = UInt8(next() & 0xFF)
-        let checksum = UInt16(next() & 0xFFFF)
-        let region = UInt8(next() % 8)
-        let length = Int(next() % 7)
-        var payload: [UInt8] = []
-        for _ in 0 ..< length {
-            payload.append(UInt8(next() & 0xFF))
-        }
-        do {
-            _ = try Parser.decode(Message(mode: mode, flags: flags, checksum: checksum, region: region, payload: payload))
-        } catch {
-            found.insert("\(type(of: error))")
-        }
-    }
-    return found
 }

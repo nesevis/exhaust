@@ -15,7 +15,7 @@ struct UnfoldTests {
         )
 
         let values = try #example(gen, count: 20, seed: 42)
-        #expect(values.isEmpty == false)
+        #expect(values.count == 20)
         #expect(values.allSatisfy { $0 >= 2 && $0 <= 20 })
     }
 
@@ -69,6 +69,8 @@ struct UnfoldTests {
         )
 
         let values = try #example(gen, count: 50, seed: 42)
+        #expect(values.count == 50)
+        #expect(values.allSatisfy { $0.count <= 5 && $0.allSatisfy { (1 ... 10).contains($0) } })
         let lengths = Set(values.map(\.count))
         #expect(lengths.count > 1, "Expected varied list lengths, got \(lengths)")
     }
@@ -97,7 +99,7 @@ struct UnfoldTests {
     }
 
     @Test("Failing property finds and reduces counterexample")
-    func failingPropertyFindsAndReducesCounterexample() {
+    func failingPropertyFindsAndReducesCounterexample() throws {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 10,
@@ -116,10 +118,8 @@ struct UnfoldTests {
         ) { list in
             list.count < 3
         }
-        #expect(result != nil, "Should find a list with count >= 3")
-        if let result {
-            #expect(result.count >= 3)
-        }
+        let counterexample = try #require(result)
+        #expect(counterexample.count >= 3)
     }
 
     @Test("Deterministic replay with seed")
@@ -137,6 +137,7 @@ struct UnfoldTests {
 
         let firstValues = try #example(gen, count: 10, seed: 99)
         let secondValues = try #example(gen, count: 10, seed: 99)
+        #expect(firstValues.count == 10)
         #expect(firstValues == secondValues)
     }
 

@@ -32,10 +32,12 @@ struct SliceCombinatorTests {
         var iterator = ValueInterpreter(gen, seed: 123)
 
         var checked = 0
+        var nonempty = 0
         while let (source, sub) = try iterator.next() {
             #expect(sub.count <= source.count)
             // The subsequence must appear contiguously in the source
             if sub.isEmpty == false {
+                nonempty += 1
                 let found = source.indices.contains { start in
                     let end = start + sub.count
                     guard end <= source.count else {
@@ -48,6 +50,7 @@ struct SliceCombinatorTests {
             checked += 1
         }
         #expect(checked > 0)
+        #expect(nonempty > 0)
     }
 
     @Test("Gen.slice of an empty collection returns an empty slice")

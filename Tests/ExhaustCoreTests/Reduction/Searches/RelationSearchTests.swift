@@ -20,7 +20,7 @@ struct RelationSearchTests {
     @Test("Query pairs stall-converged leaves with a small ratio", arguments: integerTags)
     func queryPairsStallConvergedLeaves(tag: TypeTag) throws {
         var graph = leafPairGraph(values: [200, 100], tag: tag)
-        markStallConverged(&graph)
+        graph.markLeavesConverged()
 
         let scope = try #require(RelationQuery.build(graph: graph))
         #expect(scope.pairs.count == 1)
@@ -41,12 +41,12 @@ struct RelationSearchTests {
     func queryExcludesEqualValuesAndOversizedRatios(tag: TypeTag) {
         // Equal magnitudes reduce to 1:1, which lockstep's common-delta search already covers.
         var equalGraph = leafPairGraph(values: [100, 100], tag: tag)
-        markStallConverged(&equalGraph)
+        equalGraph.markLeavesConverged()
         #expect(RelationQuery.build(graph: equalGraph) == nil)
 
         // 170:10 reduces to 17:1, above the ratio cap of 16.
         var oversizedGraph = leafPairGraph(values: [170, 10], tag: tag)
-        markStallConverged(&oversizedGraph)
+        oversizedGraph.markLeavesConverged()
         #expect(RelationQuery.build(graph: oversizedGraph) == nil)
     }
 
@@ -55,7 +55,7 @@ struct RelationSearchTests {
     @Test("Search probes the line minimum first", arguments: integerTags)
     func encoderProbesLineMinimumFirst(tag: TypeTag) throws {
         var graph = leafPairGraph(values: [200, 100], tag: tag)
-        markStallConverged(&graph)
+        graph.markLeavesConverged()
         let scope = try #require(RelationQuery.build(graph: graph))
         let sequence = ChoiceSequence(rebuildTree(graph: graph))
 
@@ -71,7 +71,7 @@ struct RelationSearchTests {
     @Test("Search converges to the smallest accepted scale factor", arguments: integerTags)
     func encoderConvergesToSmallestAcceptedScale(tag: TypeTag) throws {
         var graph = leafPairGraph(values: [200, 100], tag: tag)
-        markStallConverged(&graph)
+        graph.markLeavesConverged()
         let scope = try #require(RelationQuery.build(graph: graph))
         let sequence = ChoiceSequence(rebuildTree(graph: graph))
 
@@ -99,7 +99,7 @@ struct RelationSearchTests {
     @Test("Search terminates when every probe is rejected", arguments: integerTags)
     func encoderTerminatesOnAllRejections(tag: TypeTag) throws {
         var graph = leafPairGraph(values: [200, 100], tag: tag)
-        markStallConverged(&graph)
+        graph.markLeavesConverged()
         let scope = try #require(RelationQuery.build(graph: graph))
         let sequence = ChoiceSequence(rebuildTree(graph: graph))
 
@@ -141,20 +141,6 @@ private func semanticMagnitudes(of sequence: ChoiceSequence) -> [UInt64] {
             return nil
         }
         return value.choice.bitPattern64 &- value.choice.semanticSimplest.bitPattern64
-    }
-}
-
-private func markStallConverged(_ graph: inout ChoiceGraph) {
-    for nodeID in graph.leafNodes {
-        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
-            continue
-        }
-        graph.convergenceStore[nodeID] = ConvergedOrigin(
-            bound: metadata.value.bitPattern64,
-            signal: .monotoneConvergence,
-            configuration: .binarySearchSemanticSimplest,
-            cycle: 0
-        )
     }
 }
 

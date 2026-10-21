@@ -157,15 +157,31 @@ struct PreemptiveOracleReplayTests {
 
 @Suite("Concurrent spec replay seed resolution", .serialized, .tags(.stateMachine))
 struct ConcurrentStateMachineReplayTests {
+    @Test("The reentrant actor remains correct when commands run sequentially")
+    func actorPassesSequentialExecution() async {
+        var invocations = 0
+        let result = await #execute(
+            ReplayableNonAtomicCounterSpec.self,
+            mode: .sequential,
+            .commandLimit(6),
+            .budget(.custom(screening: 0, sampling: 100)),
+            .replay(42),
+            .onReport { invocations = $0.propertyInvocations }
+        )
+        #expect(result == nil)
+        #expect(invocations == 100)
+    }
+
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Iteration-targeted replay reproduces a cooperative concurrent failure")
+    @Test("Iteration-targeted replay reproduces an actor reentrancy failure")
     func iterationTargetedReplayReproducesCooperativeConcurrentFailure() async throws {
         let initial = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                mode: .sequential,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 2000)),
+                .replay(42),
                 .idleTimeout(.seconds(5)),
                 .suppress(.all)
             )
@@ -176,9 +192,9 @@ struct ConcurrentStateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                mode: .sequential,
+                mode: .tasks,
                 .commandLimit(6),
-                .budget(.custom(screening: 0, sampling: 2000)),
+                .budget(.custom(screening: 0, sampling: 0)),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
             )
@@ -188,14 +204,15 @@ struct ConcurrentStateMachineReplayTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Screening row replay reproduces a cooperative concurrent SCA failure")
+    @Test("Screening row replay reproduces an actor reentrancy failure")
     func screeningRowReplayReproducesCooperativeConcurrentSCAFailure() async throws {
         let initial = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                mode: .sequential,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 2000, sampling: 0)),
+                .replay(42),
                 .suppress(.all)
             )
         )
@@ -203,9 +220,9 @@ struct ConcurrentStateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                mode: .sequential,
+                mode: .tasks,
                 .commandLimit(6),
-                .budget(.custom(screening: 2000, sampling: 0)),
+                .budget(.custom(screening: 0, sampling: 0)),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
             )
@@ -267,8 +284,8 @@ final class ReplayableNonAtomicCounterSpec {
     @SystemUnderTest var counter: ReplayableNonAtomicCounter = .init()
 
     @Invariant
-    func matchesModel() -> Bool {
-        counter.value == expected
+    func matchesModel() async -> Bool {
+        await counter.value == expected
     }
 
     @Command(weight: 3)
@@ -291,26 +308,20 @@ final class ReplayableNonAtomicCounterSpec {
     }
 }
 
-actor ReplayableNonAtomicCounter: CustomDebugStringConvertible {
-    private var _value: Int = 0
+/// Suspension between reading and writing permits another actor call to overwrite the same value.
+actor ReplayableNonAtomicCounter {
+    private(set) var value: Int = 0
 
-    nonisolated var value: Int {
-        // Intentionally non-isolated read for race detection
-        withUnsafePointer(to: self) { pointer in
-            pointer.withMemoryRebound(to: Int.self, capacity: 2) { $0[1] }
-        }
+    func increment() async {
+        let current = value
+        await Task.yield()
+        value = current + 1
     }
 
-    nonisolated var debugDescription: String {
-        "ReplayableNonAtomicCounter(value: \(value))"
-    }
-
-    func increment() {
-        _value += 1
-    }
-
-    func decrement() {
-        _value -= 1
+    func decrement() async {
+        let current = value
+        await Task.yield()
+        value = current - 1
     }
 }
 

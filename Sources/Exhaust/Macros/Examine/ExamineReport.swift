@@ -627,7 +627,8 @@ private extension Generator where Operation == ReflectiveOperation {
         guard let replay1 = try? Interpreters.replay(self, using: tree),
               let replay2 = try? Interpreters.replay(self, using: tree)
         else {
-            return true
+            failures.append(.replayDivergence(sampleIndex: sampleIndex))
+            return false
         }
         if replayCheck(replay1, replay2) == false {
             failures.append(.replayDivergence(sampleIndex: sampleIndex))

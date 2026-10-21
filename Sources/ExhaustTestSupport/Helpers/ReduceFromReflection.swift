@@ -3,7 +3,7 @@ import Testing
 
 /// Reflects a value into a choice tree and reduces it, returning the best counterexample.
 ///
-/// Returns the reduced value when reduction improves the counterexample, the original value when it does not, or the original value when reduction fails entirely. Use this in tests that start from a known value and want the reducer's best effort.
+/// Returns the reduced value or the unchanged counterexample. A failed reduction records a test failure rather than silently returning the original input.
 ///
 /// - Parameters:
 ///   - gen: The generator that describes the value's structure.
@@ -19,9 +19,5 @@ package func reduceFromReflection<Output>(
 ) throws -> Output {
     let tree = try #require(try Interpreters.reflect(gen, with: value))
     let outcome = Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
-    switch outcome {
-        case let .reduced(_, _, output): return output
-        case let .unreduced(_, _, output): return output
-        case .failure: return value
-    }
+    return try #require(outcome.counterexample).1
 }

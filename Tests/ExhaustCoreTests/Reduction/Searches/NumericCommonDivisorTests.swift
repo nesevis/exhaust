@@ -81,7 +81,7 @@ struct NumericCommonDivisorTests {
     func pairDeduplication() {
         let tree = unsignedTree(values: [3, 3, 3], range: 0 ... 3)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let pairs = StagedJointQuery.pairs(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         #expect(pairs.count == 3)
         var cursor = StagedPairSearchCursor(pairs: pairs)
@@ -107,7 +107,7 @@ struct NumericCommonDivisorTests {
     func pairPrioritySharing() throws {
         let tree = unsignedTree(values: [75, 100, 125], range: 1 ... 1_000_000)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let pairs = StagedJointQuery.pairs(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         #expect(pairs.count == 3)
         var cursor = StagedPairSearchCursor(pairs: pairs)
@@ -128,7 +128,7 @@ struct NumericCommonDivisorTests {
     func jointPrioritySharing() throws {
         let tree = unsignedTree(values: [75, 100, 125, 175], range: 1 ... 1_000_000)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let scope = StagedJointQuery.groups(candidatePool: frontier, graph: graph, arity: 3, workLimit: 4096, calculationLimit: 512, scopeLimit: 30)
         #expect(scope.groups.count == 4)
@@ -149,7 +149,7 @@ struct NumericCommonDivisorTests {
     func offGridWork(arity: Int) throws {
         let tree = unsignedTree(values: Array([75, 100, 125, 175].prefix(arity)), range: 1 ... 1_000_000)
         var graph = ChoiceGraph.build(from: tree)
-        markConverged(&graph)
+        graph.markLeavesConverged()
         let frontier = StagedJointQuery.candidatePool(graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless, tuning: .init())
         let gridWork = arity == 3 ? 216 : 1296
         let rejected = StagedJointQuery.groups(candidatePool: frontier, graph: graph, arity: arity, workLimit: gridWork + 8, calculationLimit: 512, scopeLimit: 30)
@@ -187,14 +187,5 @@ struct NumericCommonDivisorTests {
 
     private func unsignedTree(values: [UInt64], range: ClosedRange<UInt64>) -> ChoiceTree {
         .group(values.map { .choice(ChoiceValue($0, tag: .uint64), .init(validRange: range, isRangeExplicit: true)) })
-    }
-
-    private func markConverged(_ graph: inout ChoiceGraph) {
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
-                continue
-            }
-            graph.convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
-        }
     }
 }

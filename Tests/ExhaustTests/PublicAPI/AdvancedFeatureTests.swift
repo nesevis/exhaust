@@ -16,22 +16,6 @@ struct TestTree<T: Equatable>: Equatable {
     let children: [TestTree<T>]
 }
 
-struct TestGraph: Equatable {
-    let nodes: [TestNode]
-    let edges: [TestEdge]
-}
-
-struct TestNode: Equatable {
-    let id: Int
-    let label: String
-}
-
-struct TestEdge: Equatable {
-    let from: Int
-    let to: Int
-    let weight: Double
-}
-
 @Suite("Advanced Features")
 struct AdvancedFeatureTests {
     @Suite("Recursive Structures")
@@ -52,11 +36,16 @@ struct AdvancedFeatureTests {
                 }
             }
 
-            let gen = treeGen(depth: 3)
-            let trees = try #example(gen, count: 10, seed: 42)
+            let generator = treeGen(depth: 3).resize(100)
+            let trees = try #example(generator, count: 10, seed: 42)
+            #expect(trees.count == 10)
+            #expect(trees.contains { $0.children.isEmpty == false })
 
             /// Validate tree structure
             func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {
+                guard (1 ... 100).contains(tree.value), tree.children.count <= 3 else {
+                    return false
+                }
                 if maxDepth <= 0 {
                     return tree.children.isEmpty
                 }
@@ -67,7 +56,7 @@ struct AdvancedFeatureTests {
                 #expect(validateDepth(tree, maxDepth: 3))
             }
 
-            let report = #examine(gen, .samples(10), .replay(42))
+            let report = #examine(generator, .samples(10), .replay(42))
             #expect(report.passed)
         }
 
@@ -93,9 +82,9 @@ struct AdvancedFeatureTests {
                 .array(length: 1 ... 1)
 
             // Test the two type-safe approaches
-            for gen in [innerGen, innerGen2] {
+            for generator in [innerGen, innerGen2] {
                 // Test the outer generator with each inner generator
-                let outerGen = #gen(gen, .uint()) { inners, id in
+                let outerGen = #gen(generator, .uint()) { inners, id in
                     Outer(inners: inners, id: id)
                 }
 
@@ -115,12 +104,12 @@ struct AdvancedFeatureTests {
                 #gen(.int(in: 0 ... 0)), // Single value
             ]
 
-            for gen in extremeGenerators {
-                #expect(#examine(gen, .samples(10), .replay(42)).passed)
+            for generator in extremeGenerators {
+                #expect(#examine(generator, .samples(10), .replay(42)).passed)
             }
         }
 
-        @Test("Large nested structure generation and memory efficiency")
+        @Test("Large nested structures reflect and replay")
         func largeNestedStructures() {
             // Generate structures with significant nesting but reasonable memory usage
             let largeNestedGen = #gen(.int())
@@ -128,8 +117,10 @@ struct AdvancedFeatureTests {
                 .array(length: 10 ... 10) // 10 inner arrays
                 .array(length: 2 ... 2) // 2 outer arrays
 
-            // Test round-trip (this tests memory efficiency of reflection/replay)
-            #expect(#examine(largeNestedGen, .samples(3), .replay(42)).passed)
+            let report = #examine(largeNestedGen, .samples(3), .replay(42)) { $0 == $1 }
+            #expect(report.passed)
+            #expect(report.valuesGenerated == 3)
+            #expect(report.replayDeterminismSuccesses == 3)
         }
     }
 }

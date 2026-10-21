@@ -311,7 +311,7 @@ struct ExchangeQueryTests {
         gate.markFruitless(1)
         #expect(StagedJointQuery.isStalledBindInner(bindInnerLeafNodeID: bindInner, graph: graph, isFruitlessBind: gate.isFruitless), "A fruitless bound value search marks the bind inner as stalled")
 
-        markStallConverged(&graph)
+        graph.markLeavesConverged()
         #expect(StagedJointQuery.isStalledBindInner(bindInnerLeafNodeID: bindInner, graph: graph, isFruitlessBind: BoundValueGate(baseBudget: 15).isFruitless), "A convergence record at the current value marks the bind inner as stalled")
     }
 }
@@ -434,21 +434,6 @@ private func leaf(_ value: UInt64, tag: TypeTag) -> ChoiceTree {
         ChoiceValue(value, tag: tag),
         .init(validRange: 0 ... 1_000_000, isRangeExplicit: true)
     )
-}
-
-/// Records every value leaf as converged at its current value, the state value search leaves when no single-leaf reduction exists.
-private func markStallConverged(_ graph: inout ChoiceGraph) {
-    for nodeID in graph.leafNodes {
-        guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
-            continue
-        }
-        graph.convergenceStore[nodeID] = ConvergedOrigin(
-            bound: metadata.value.bitPattern64,
-            signal: .monotoneConvergence,
-            configuration: .binarySearchSemanticSimplest,
-            cycle: 0
-        )
-    }
 }
 
 /// The value leaf whose current value is `value`. Fixtures give each leaf a distinct value.

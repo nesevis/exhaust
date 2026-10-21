@@ -18,6 +18,7 @@ struct ReproducibilityTests {
         let values1 = try Array(collecting: &iter1).map(\.value)
         var iter2 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
         let values2 = try Array(collecting: &iter2).map(\.value)
+        #expect(values1.count == 20)
         #expect(values1 == values2)
     }
 
@@ -28,6 +29,7 @@ struct ReproducibilityTests {
         let short = try shortIter.prefix(30).map(\.value)
         var longIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 200)
         let long = try longIter.prefix(30).map(\.value)
+        #expect(short.count == 30)
         #expect(short == long)
     }
 
@@ -40,6 +42,7 @@ struct ReproducibilityTests {
         let values1 = try Array(collecting: &valIter1)
         var valIter2 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
         let values2 = try Array(collecting: &valIter2)
+        #expect(values1.count == 20)
         #expect(values1 == values2)
     }
 

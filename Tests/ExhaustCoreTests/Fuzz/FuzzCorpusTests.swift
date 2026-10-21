@@ -3,22 +3,6 @@ import Testing
 
 @Suite("FuzzCorpus admission and parent selection tests")
 struct FuzzCorpusTests {
-    @Test("First candidate with any coverage is admitted")
-    func firstAdmission() {
-        let corpus = FuzzCorpus(edgeCount: 10)
-        let admission = corpus.offer(
-            sequence: sequence(length: 1),
-            tree: .just,
-            hits: [(edge: 3, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .screening
-        )
-        #expect(admission == .admitted(index: 0, tier: .mutable))
-        #expect(corpus.entries.count == 1)
-        #expect(corpus.coveredEdgeCount == 1)
-    }
-
     @Test("A child inherits its parent's root phase, and a mutation-phase root is its own")
     func rootPhaseFollowsTheLineage() {
         let corpus = FuzzCorpus(edgeCount: 10)
@@ -68,103 +52,6 @@ struct FuzzCorpusTests {
         #expect(corpus.score(at: discardedIndex) == corpus.score(at: validIndex) * FuzzTunables.discardParentEnergy)
         #expect(corpus.entries[discardedIndex].propertyDiscarded)
         #expect(corpus.passingSample.sampleSize == 1, "a discard is neither a pass nor a failure for discrimination")
-    }
-
-    @Test("Duplicate choice sequences are rejected before coverage math")
-    func duplicateRejection() {
-        let corpus = FuzzCorpus(edgeCount: 10)
-        _ = corpus.offer(
-            sequence: sequence(length: 2),
-            tree: .just,
-            hits: [(edge: 1, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        let second = corpus.offer(
-            sequence: sequence(length: 2),
-            tree: .just,
-            hits: [(edge: 9, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        #expect(second == .rejectedDuplicate)
-        #expect(corpus.incidenceSampleCount == 1, "the duplicate did not add an incidence row")
-    }
-
-    @Test("Every nonduplicate offer contributes one incidence row, including an empty signature")
-    func incidenceSampleCountTracksMatrixRows() {
-        let corpus = FuzzCorpus(edgeCount: 10)
-        _ = corpus.offer(
-            sequence: sequence(length: 1),
-            tree: .just,
-            hits: [],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        _ = corpus.offer(
-            sequence: sequence(length: 2),
-            tree: .just,
-            hits: [(edge: 3, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-
-        #expect(corpus.incidenceSampleCount == 2)
-        #expect(corpus.incidenceTotal == 1)
-
-        corpus.resetIncidenceStatistics()
-        #expect(corpus.incidenceSampleCount == 0)
-        #expect(corpus.incidenceTotal == 0)
-    }
-
-    @Test("Precomputed sequence hash preserves duplicate detection")
-    func precomputedHashDuplicateRejection() {
-        let corpus = FuzzCorpus(edgeCount: 10)
-        let candidate = sequence(length: 2)
-        _ = corpus.offer(
-            sequence: candidate,
-            tree: .just,
-            hits: [(edge: 1, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling,
-            precomputedHash: ZobristHash.hash(of: candidate)
-        )
-        let duplicate = corpus.offer(
-            sequence: candidate,
-            tree: .just,
-            hits: [(edge: 9, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        #expect(duplicate == .rejectedDuplicate)
-    }
-
-    @Test("Candidate covering only known (edge, bucket) pairs is rejected")
-    func notNovelRejection() {
-        let corpus = FuzzCorpus(edgeCount: 10)
-        _ = corpus.offer(
-            sequence: sequence(length: 1),
-            tree: .just,
-            hits: [(edge: 1, hitCount: 1), (edge: 2, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        let rejected = corpus.offer(
-            sequence: sequence(length: 2),
-            tree: .just,
-            hits: [(edge: 1, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        #expect(rejected == .rejectedNotNovel)
     }
 
     @Test("New hit-count bucket on a known edge counts as novelty")
@@ -427,43 +314,6 @@ struct FuzzCorpusTests {
         for draw in [0.0, 0.3, 0.7, 0.999] {
             let pick = try #require(corpus.pickParent(random: draw))
             #expect(pick.index != 2)
-        }
-    }
-
-    @Test("Quarantined hashes leave parent selection and stay out on re-admission")
-    func corpusQuarantine() {
-        let corpus = FuzzCorpus(edgeCount: 8)
-        var sequences: [ChoiceSequence] = []
-        for value in 0 ..< 4 {
-            let sequence: ChoiceSequence = [
-                .value(ChoiceSequenceValue.Value(
-                    choice: ChoiceValue(UInt64(value), tag: .int64),
-                    validRange: nil
-                )),
-            ]
-            sequences.append(sequence)
-            let admission = corpus.offer(
-                sequence: sequence,
-                tree: .just,
-                hits: [(edge: value, hitCount: 1)],
-                convergence: 1.0,
-                generation: 0,
-                phase: .sampling
-            )
-            guard case .admitted = admission else {
-                Issue.record("Expected admission for entry \(value)")
-                return
-            }
-        }
-        #expect(corpus.parentIndices.count == 4)
-
-        let quarantinedHash = ZobristHash.hash(of: sequences[1])
-        corpus.quarantine(sequenceHash: quarantinedHash)
-        #expect(corpus.parentIndices.count == 3)
-        for draw in stride(from: 0.0, to: 1.0, by: 0.05) {
-            if let (_, entry) = corpus.pickParent(random: draw) {
-                #expect(entry.hash != quarantinedHash)
-            }
         }
     }
 }

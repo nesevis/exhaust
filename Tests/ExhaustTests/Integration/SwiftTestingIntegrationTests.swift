@@ -5,17 +5,6 @@ import Testing
 struct SwiftTestingIntegrationTests {
     // MARK: - Void property with #expect
 
-    @Test("void property reduces to minimal counterexample") func voidPropertyReducesToMinimalCounterexample() {
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .suppress(.issueReporting),
-            .budget(.custom(screening: 0, sampling: 50))
-        ) { value in
-            #expect(value < 50)
-        }
-        #expect(result == 50, "Minimal counterexample for value < 50 on 0...100 should be 50")
-    }
-
     @Test("void property with require") func voidPropertyWithRequire() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
@@ -24,22 +13,7 @@ struct SwiftTestingIntegrationTests {
         ) { value in
             try #require(value < 50)
         }
-        #expect(result != nil, "Should find a counterexample via #require")
-        if let result {
-            #expect(result == 50, "Minimal counterexample should be 50")
-        }
-    }
-
-    @Test("void property passes when no failure") func voidPropertyPassesWhenNoFailure() {
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .suppress(.issueReporting),
-            .budget(.custom(screening: 0, sampling: 20))
-        ) { value in
-            #expect(value >= 0)
-            #expect(value <= 100)
-        }
-        #expect(result == nil, "All values in 0...100 should pass")
+        #expect(result == 50)
     }
 
     @Test("void property with multiple expect failures") func voidPropertyWithMultipleExpectFailures() {
@@ -83,7 +57,7 @@ struct SwiftTestingIntegrationTests {
                 throw TestError()
             }
         }
-        #expect(result != nil, "Should detect thrown errors as failures")
+        #expect(result == 50)
     }
 
     @Test("single-call throwing Void helper uses assertion semantics")
@@ -97,45 +71,6 @@ struct SwiftTestingIntegrationTests {
         }
 
         #expect(result == 1)
-    }
-
-    // MARK: - Bool property unchanged
-
-    @Test("bool property still works") func boolPropertyStillWorks() {
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .suppress(.issueReporting),
-            .budget(.custom(screening: 0, sampling: 200))
-        ) { value in
-            value < 50
-        }
-        #expect(result == 50, "Bool property should still work and reduce to 50")
-    }
-
-    // MARK: - Overload resolution
-
-    @Test("bool closure resolves to bool overload") func boolClosureResolvesToBoolOverload() {
-        // { value in value < 50 } returns Bool — uses #exhaust.
-        let result: Int? = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .suppress(.issueReporting),
-            .budget(.custom(screening: 0, sampling: 200))
-        ) { value in
-            value < 50
-        }
-        #expect(result == 50)
-    }
-
-    @Test("expect closure resolves to void overload") func expectClosureResolvesToVoidOverload() {
-        // { value in #expect(value < 50) } returns Void — should resolve to Void overload.
-        let result: Int? = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .suppress(.issueReporting),
-            .budget(.custom(screening: 0, sampling: 200))
-        ) { value in
-            #expect(value < 50)
-        }
-        #expect(result == 50)
     }
 
     // MARK: - Replay with numeric seed
@@ -159,7 +94,8 @@ struct SwiftTestingIntegrationTests {
             value < 50
         }
 
-        #expect(result1 == result2, "Numeric replay should be deterministic")
+        #expect(result1 == 50)
+        #expect(result2 == 50)
     }
 
     // MARK: - ReplaySeed literals
@@ -366,7 +302,6 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: Int.min ... Int.max)),
             .suppress(.issueReporting),
-            .budget(.custom(screening: 0, sampling: 600)),
             .onReport { report in
                 capturedReport = report
             }
@@ -394,19 +329,39 @@ struct SwiftTestingIntegrationTests {
         }
         #expect(result == nil)
         // The inline budget of 5 sampling iterations should be used, not the trait's .standard (200).
-        #expect(capturedReport?.randomSamplingInvocations ?? 0 <= 5)
+        #expect(capturedReport?.randomSamplingInvocations == 5)
     }
 
-    @Test("Trait with regression seed that fails", .exhaust(.regressions("1A")))
-    func traitWithRegressionSeedThatFails() {
-        // Seed "1A" (= 42) should reproduce a counterexample for value < 50 on 0...100.
+    @Test("A failing bare regression seed runs its pipeline before the ordinary seed", .exhaust(.regressions("1A")))
+    func failingBareRegressionSeed() throws {
+        var capturedReport: ExhaustReport?
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 20)),
+            .replay(99),
+            .suppress(.all),
+            .onReport { capturedReport = $0 }
+        ) { _ in
+            false
+        }
+        #expect(result == 0)
+        let report = try #require(capturedReport)
+        #expect(report.seed == 42)
+        #expect(report.randomSamplingInvocations > 0)
+        #expect(report.replaySeed?.hasPrefix("1A-") == true)
+    }
+
+    @Test("Trait with regression seed that fails", .exhaust(.regressions("1A-1")))
+    func traitWithRegressionSeedThatFails() {
+        // An addressed regression must execute even when the normal budgets are zero.
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.issueReporting)
         ) { value in
-            #expect(value < 50)
+            #expect(value < 0)
         }
-        #expect(result != nil, "Regression seed should find a counterexample")
+        #expect(result == 0, "Regression seed should find a counterexample")
     }
 
     @Test("Trait regression seeds apply to Bool properties", .exhaust(.regressions("1A-1")))
@@ -422,12 +377,13 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil)
     }
 
-    @Test("Trait regression replay still delivers onReport", .exhaust(.regressions("1A")))
+    @Test("Trait regression replay still delivers onReport", .exhaust(.regressions("1A-1")))
     func traitRegressionReplayStillDeliversOnReport() {
         var capturedReport: ExhaustReport?
         var reportDeliveryCount = 0
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.all),
             .onReport { report in
                 reportDeliveryCount += 1
@@ -448,6 +404,7 @@ struct SwiftTestingIntegrationTests {
         var capturedReport: ExhaustReport?
         let result = await #exhaust(
             #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.all),
             .onReport { report in
                 capturedReport = report

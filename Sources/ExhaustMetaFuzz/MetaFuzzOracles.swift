@@ -340,7 +340,7 @@ extension MetaFuzz {
             maxRuns: valuesPerCase,
             check: anyEquals
         )
-        guard held else {
+        guard held.matches else {
             throw DeterminismViolation("same seed produced different values for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
     }
@@ -355,7 +355,7 @@ extension MetaFuzz {
             maxRuns: valuesPerCase,
             check: anyEquals
         )
-        guard held else {
+        guard held.matches else {
             throw FunctorIdentityViolation("map(identity) changed the value stream for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
     }
@@ -766,26 +766,36 @@ private func nextTreeValueOutcome(
 
 // MARK: - Paired Values Helper
 
-/// Checks that two generators produce pairwise-equal values from the same seed.
+/// Compares values and terminal outcomes from the same seed, reporting how many value pairs were checked.
+///
+/// Matching rejections are valid for partial generators; callers checking productive domains must also require a nonzero evaluation count.
 package func checkPairedValues(
-    _ gen1: AnyGenerator,
-    _ gen2: AnyGenerator,
+    _ first: AnyGenerator,
+    _ second: AnyGenerator,
     seed: UInt64 = 42,
     maxRuns: UInt64 = 10,
     check: (Any, Any) -> Bool
-) -> Bool {
-    do {
-        var iter1 = ValueInterpreter(gen1, seed: seed, maxRuns: maxRuns)
-        var iter2 = ValueInterpreter(gen2, seed: seed, maxRuns: maxRuns)
-        while let v1 = try iter1.next(), let v2 = try iter2.next() {
-            if check(v1, v2) == false {
-                return false
-            }
+) -> (matches: Bool, evaluated: Int) {
+    var firstIterator = ValueInterpreter(first, seed: seed, maxRuns: maxRuns)
+    var secondIterator = ValueInterpreter(second, seed: seed, maxRuns: maxRuns)
+    var evaluated = 0
+    while true {
+        let firstOutcome = nextValueOutcome(&firstIterator)
+        let secondOutcome = nextValueOutcome(&secondIterator)
+        switch (firstOutcome, secondOutcome) {
+            case let (.value(firstValue), .value(secondValue)):
+                evaluated += 1
+                guard check(firstValue, secondValue) else {
+                    return (false, evaluated)
+                }
+            case (.exhausted, .exhausted):
+                return (true, evaluated)
+            case let (.failure(firstFailure), .failure(secondFailure)):
+                return (firstFailure == secondFailure, evaluated)
+            default:
+                return (false, evaluated)
         }
-    } catch {
-        return true
     }
-    return true
 }
 
 // MARK: - Marker Kinds

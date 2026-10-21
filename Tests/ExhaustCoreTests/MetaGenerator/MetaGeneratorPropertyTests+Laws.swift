@@ -3,27 +3,32 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 4. Functor Identity
+    // MARK: - Functor Identity
 
     @Test("Mapping with identity produces same values")
     func functorIdentity() throws {
+        let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: .int, maxDepth: 1), maxIterations: 50) { recipe in
             let gen = buildGenerator(from: recipe)
             let mappedGen: AnyGenerator = Gen.contramap(
                 { (newOutput: Any) throws -> Any in newOutput },
                 gen.map(\.self)
             )
-            return checkPairedValues(gen, mappedGen, maxRuns: 10) { v1, v2 in
+            let comparison = checkPairedValues(gen, mappedGen, maxRuns: 10) { v1, v2 in
                 anyEquals(v1, v2)
             }
+            tally.evaluated += comparison.evaluated
+            return comparison.matches
         }
         #expect(badRecipe == nil, "Functor identity failed for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "No value pairs were compared")
     }
 
-    // MARK: 5. Functor Composition
+    // MARK: - Functor Composition
 
     @Test("map(f).map(g) produces same values as map(g . f)")
     func functorComposition() throws {
+        let tally = Tally()
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         let badRecipe = try findMinimalCounterexample(intLeafGen, maxIterations: 50) { recipe in
             let gen = buildGenerator(from: recipe)
@@ -31,14 +36,17 @@ extension MetaGeneratorPropertyTests {
             let g: (Any) -> Any = { ($0 as! Int) + 1 }
             let composed1 = gen.map(f).map(g)
             let composed2 = gen.map { g(f($0)) }
-            return checkPairedValues(composed1, composed2, maxRuns: 10) { v1, v2 in
+            let comparison = checkPairedValues(composed1, composed2, maxRuns: 10) { v1, v2 in
                 anyEquals(v1, v2)
             }
+            tally.evaluated += comparison.evaluated
+            return comparison.matches
         }
         #expect(badRecipe == nil, "Functor composition failed for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "No value pairs were compared")
     }
 
-    // MARK: 6. Monad Left Identity
+    // MARK: - Monad Left Identity
 
     @Test("just(x).bind(f) produces same values as f(x)")
     func monadLeftIdentity() throws {
@@ -49,57 +57,47 @@ extension MetaGeneratorPropertyTests {
             let f: (Int) -> Generator<Int> = { val in Gen.choose(in: val ... (val + 10)) }
             let lhs: Generator<Int> = Gen.just(x).bind { f($0) }
             let rhs: Generator<Int> = f(x)
-            var lhsIter = ValueInterpreter(lhs, seed: 99, maxRuns: 5)
-            var rhsIter = ValueInterpreter(rhs, seed: 99, maxRuns: 5)
-            do {
-                while let v1 = try lhsIter.next(), let v2 = try rhsIter.next() {
-                    if v1 != v2 {
-                        return false
-                    }
-                }
-            } catch {
-                Issue.record(error, "Generation threw for x=\(x)")
-            }
-            return true
+            let comparison = checkPairedValues(lhs.erase(), rhs.erase(), seed: 99, maxRuns: 5, check: anyEquals)
+            return comparison.matches && comparison.evaluated == 5
         }
         #expect(badValue == nil, "Monad left identity failed for x=\(badValue!)")
     }
 
-    // MARK: 7. Monad Right Identity
+    // MARK: - Monad Right Identity
 
     @Test("gen.bind(just) produces same values as gen")
     func monadRightIdentity() throws {
+        let tally = Tally()
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         let badRecipe = try findMinimalCounterexample(intLeafGen, maxIterations: 50) { recipe in
             let gen = buildGenerator(from: recipe)
             let boundGen = gen.bind { .pure($0) }
-            return checkPairedValues(gen, boundGen, maxRuns: 10) { v1, v2 in
+            let comparison = checkPairedValues(gen, boundGen, maxRuns: 10) { v1, v2 in
                 anyEquals(v1, v2)
             }
+            tally.evaluated += comparison.evaluated
+            return comparison.matches
         }
         #expect(badRecipe == nil, "Monad right identity failed for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "No value pairs were compared")
     }
 
-    // MARK: 9. Filter Correctness
+    // MARK: - Filter Correctness
 
     @Test("Filtered generators only produce values satisfying the predicate")
     func filterCorrectness() throws {
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         var recipeIter = ValueInterpreter(intLeafGen, seed: 42, maxRuns: 20)
-        while let recipe = try recipeIter.next() {
+        for _ in 0 ..< 20 {
+            let recipe = try #require(try recipeIter.next())
             for predicate in KnownPredicate.applicable(to: recipe.outputType) {
-                let innerGen: AnyGenerator
-                if predicate == .isPositive {
-                    innerGen = Gen.choose(in: -10 ... 100 as ClosedRange<Int>).erase()
-                } else if predicate == .isNonEmpty {
-                    continue
-                } else {
-                    innerGen = buildGenerator(from: recipe)
-                }
+                let innerGenerator = predicate == .isPositive
+                    ? Gen.choose(in: -10 ... 100 as ClosedRange<Int>).erase()
+                    : buildGenerator(from: recipe)
 
                 let filteredGen: AnyGenerator = .impure(
                     operation: .filter(
-                        gen: innerGen.erase(),
+                        gen: innerGenerator,
                         fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
                         filterType: .auto,
                         predicate: { predicate.evaluate($0) },
@@ -109,7 +107,8 @@ extension MetaGeneratorPropertyTests {
                 )
 
                 var valueIter = ValueInterpreter(filteredGen, seed: 42, maxRuns: 15)
-                while let value = try valueIter.next() {
+                for _ in 0 ..< 15 {
+                    let value = try #require(try valueIter.next())
                     #expect(
                         predicate.evaluate(value),
                         "Filter \(predicate) violated for recipe: \(recipe)"
@@ -119,28 +118,22 @@ extension MetaGeneratorPropertyTests {
         }
     }
 
-    // MARK: 10. Size Bounds
+    // MARK: - Size Bounds
 
-    @Test("choose(in: range) values are always within range")
+    @Test("Numeric generation stays inside arbitrary ordered endpoint pairs")
     func sizeBounds() throws {
-        let intRecipeGen = recipeGenerator(producing: .int, maxDepth: 2)
-        let badRecipe = try findMinimalCounterexample(intRecipeGen, maxIterations: 50) { recipe in
-            guard case let .leaf(.int(range)) = recipe else {
-                return true
-            }
-            let gen = Gen.choose(in: range)
-            do {
-                var valueIter = ValueInterpreter(gen, seed: 42, maxRuns: 20)
-                while let value = try valueIter.next() {
-                    if range.contains(value) == false {
-                        return false
-                    }
-                }
-            } catch {
-                Issue.record(error, "Generation threw for range \(range)")
+        let endpoints = Gen.zip(
+            Gen.choose(in: Int.min ... Int.max),
+            Gen.choose(in: Int.min ... Int.max)
+        )
+        try exhaustCheck(endpoints, maxIterations: 100) { first, second in
+            let range = min(first, second) ... max(first, second)
+            var interpreter = ValueInterpreter(Gen.choose(in: range), seed: 42, maxRuns: 20)
+            for _ in 0 ..< 20 {
+                let value = try #require(try interpreter.next())
+                #expect(range.contains(value))
             }
             return true
         }
-        #expect(badRecipe == nil, "Value outside range for minimal recipe: \(badRecipe!)")
     }
 }

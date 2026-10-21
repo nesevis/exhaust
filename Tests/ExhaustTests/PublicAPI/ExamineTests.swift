@@ -1,3 +1,4 @@
+import ExhaustCore
 import Testing
 @testable import Exhaust
 
@@ -12,17 +13,20 @@ struct ExamineTests {
 
     @Test("Examine passes for a non-Equatable generator")
     func nonEquatable() {
-        let report = #examine(.int(in: 0 ... 100).array(), .samples(50))
+        let report = #examine(#gen(.int(in: 0 ... 100)) { NonEquatableValue(value: $0) }, .samples(50))
         #expect(report.passed)
-        #expect(report.valuesGenerated > 0)
+        #expect(report.valuesGenerated == 50)
+        #expect(report.replayDeterminismSuccesses == nil)
     }
 
     @Test("Examine is deterministic with a seed")
-    func deterministicWithSeed() {
+    func deterministicWithSeed() throws {
         let a = #examine(.int(in: 0 ... 1_000_000), .samples(30), .replay(42))
         let b = #examine(.int(in: 0 ... 1_000_000), .samples(30), .replay(42))
-        #expect(a.valuesGenerated == b.valuesGenerated)
-        #expect(a.reflectionRoundTripSuccesses == b.reflectionRoundTripSuccesses)
+        #expect(a.valuesGenerated == 30)
+        #expect(b.valuesGenerated == 30)
+        #expect(try ChoiceSequence(#require(a.representativeTree)) == ChoiceSequence(#require(b.representativeTree)))
+        #expect(a.numericCoverage.map(\.mean) == b.numericCoverage.map(\.mean))
     }
 
     @Test("Examine reports reflection and replay stats")
@@ -173,4 +177,8 @@ struct ExamineTests {
         #expect(config.samples == 500)
         #expect(config.replaySeed != nil)
     }
+}
+
+private struct NonEquatableValue {
+    let value: Int
 }

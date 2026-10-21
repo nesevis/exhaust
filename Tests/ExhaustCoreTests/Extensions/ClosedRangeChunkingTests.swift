@@ -53,62 +53,29 @@ struct ClosedRangeChunkingTests {
         #expect(range.split(into: 10) == [range])
     }
 
-    // MARK: - Property Tests
-
-    @Test("Sub-ranges are contiguous and exactly cover the original range")
-    func subRangesAreContiguousAndCoverOriginalRange() throws {
+    @Test("Splitting produces a balanced contiguous partition of the entire range")
+    func partitionContract() throws {
         try exhaustCheck(rangeAndChunksGen) { range, chunks in
             let result = range.split(into: chunks)
-            guard result.isEmpty == false else {
-                return true
-            }
-            guard result.first?.lowerBound == range.lowerBound else {
+            let distance = range.upperBound - range.lowerBound
+            // Compare before adding one so the full UInt64 domain cannot overflow.
+            let expectedCount = distance >= UInt64(chunks - 1) ? chunks : Int(distance) + 1
+            guard result.count == expectedCount,
+                  result.first?.lowerBound == range.lowerBound,
+                  result.last?.upperBound == range.upperBound
+            else {
                 return false
             }
-            guard result.last?.upperBound == range.upperBound else {
-                return false
+            let contained = result.allSatisfy {
+                $0.lowerBound >= range.lowerBound && $0.upperBound <= range.upperBound
+                    && $0.lowerBound <= $0.upperBound
             }
-            return zip(result, result.dropFirst()).allSatisfy { current, next in
-                next.lowerBound == current.upperBound &+ 1
+            let contiguous = zip(result, result.dropFirst()).allSatisfy { current, next in
+                current.upperBound < UInt64.max && next.lowerBound == current.upperBound + 1
             }
-        }
-    }
-
-    @Test("All sub-ranges are non-empty")
-    func allSubRangesAreNonEmpty() throws {
-        try exhaustCheck(rangeAndChunksGen) { range, chunks in
-            range.split(into: chunks).allSatisfy { $0.lowerBound <= $0.upperBound }
-        }
-    }
-
-    @Test("Sub-ranges differ in size by at most one")
-    func subRangesAreBalanced() throws {
-        try exhaustCheck(rangeAndChunksGen) { range, chunks in
-            let result = range.split(into: chunks)
-            guard result.count >= 2 else {
-                return true
-            }
-            // Use upperBound - lowerBound as a proxy for size - 1 to avoid overflow
-            // on full-range sub-ranges. The balance invariant holds either way.
-            let proxySizes = result.map { $0.upperBound - $0.lowerBound }
-            return proxySizes.max()! - proxySizes.min()! <= 1
-        }
-    }
-
-    @Test("Result count does not exceed requested chunk count")
-    func resultCountDoesNotExceedRequestedChunks() throws {
-        try exhaustCheck(rangeAndChunksGen) { range, chunks in
-            range.split(into: chunks).count <= chunks
-        }
-    }
-
-    @Test("All sub-ranges are contained within the original range")
-    func subRangesAreContainedInOriginalRange() throws {
-        try exhaustCheck(rangeAndChunksGen) { range, chunks in
-            range.split(into: chunks).allSatisfy { subRange in
-                subRange.lowerBound >= range.lowerBound &&
-                    subRange.upperBound <= range.upperBound
-            }
+            let sizes = result.map { $0.upperBound - $0.lowerBound }
+            return contained && contiguous && sizes.max()! - sizes.min()! <= 1
+                && zip(sizes, sizes.dropFirst()).allSatisfy { $0 >= $1 }
         }
     }
 }

@@ -143,16 +143,12 @@ struct MetamorphTests {
 
     @Test("Reflection passes through to inner generator")
     func reflectionPassesThroughToInnerGenerator() throws {
-        let innerGen = Gen.choose(in: 1 ... 50 as ClosedRange<Int>)
-        var iterator = ValueInterpreter(innerGen, seed: 42, maxRuns: 20)
-        var count = 0
-
-        while let value = try iterator.next() {
-            let tree = try Interpreters.reflect(innerGen, with: value)
-            #expect(tree != nil, "Reflection should succeed for Int value \(value)")
-            count += 1
+        let generator = intNegateGen()
+        for value in [1, 7, 50, 100] {
+            let tree = try #require(try Interpreters.reflect(generator, with: [value, -value] as [Any]))
+            let replayed = try #require(try Interpreters.replay(generator, using: tree))
+            #expect(replayed as? [Int] == [value, -value])
         }
-        #expect(count > 0)
     }
 
     // MARK: - Reduction / Bonsai

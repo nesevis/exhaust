@@ -3,7 +3,7 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 23. Exact Replay of Generated Sequences
+    // MARK: - Exact Replay of Generated Sequences
 
     /// The reducer's setup and every exact probe replay a sequence the generator itself produced, and a rejection there silently strips pick alternatives from the graph. The reflection sweeps cannot see this: their trees come from `reflect`, and the materialize-agreement sweep counts a rejection as a skip. Here a rejection is a violation, and the replay must re-emit the sequence it was given.
     @Test("Exact replay accepts the generator's own sequence and re-emits it", arguments: metaRecipeTypes)

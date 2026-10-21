@@ -6,14 +6,6 @@ import Testing
 
 @Suite("@Setup arguments join the screening covering array", .tags(.stateMachine))
 struct SetupScreeningTests {
-    @Test("Each setup argument becomes its own covering array factor")
-    func setupArgumentsBecomeSeparateFactors() throws {
-        let factors = try #require(__ExhaustRuntime.setupScreeningFactors(for: TwoArgumentSetupSpec.self))
-        // One factor per argument: the `Int` range and the array, the latter as a composite (length, elements) factor.
-        #expect(factors.domainSizes.count == 2)
-        #expect(factors.domainSizes.allSatisfy { $0 > 1 }, "A factor with one level covers nothing: \(factors.domainSizes)")
-    }
-
     @Test("A zero-setup spec contributes no factors, leaving the covering array unchanged")
     func zeroSetupSpecContributesNoFactors() {
         #expect(__ExhaustRuntime.setupScreeningFactors(for: NoSetupSpec.self) == nil)
@@ -22,14 +14,15 @@ struct SetupScreeningTests {
     @Test("Screening rows vary the setup arguments rather than repeating one value")
     func screeningRowsVarySetupArguments() throws {
         let factors = try #require(__ExhaustRuntime.setupScreeningFactors(for: TwoArgumentSetupSpec.self))
+        #expect(factors.domainSizes.count == 2)
+        #expect(factors.domainSizes.allSatisfy { $0 > 1 })
         _ = try #require(TwoArgumentSetupSpec.setupGenerator)
         let generator = BalancedCoveringArrayGenerator(domainSizes: factors.domainSizes)
 
         var steps: [String] = []
         for _ in 0 ..< 12 {
-            guard let row = generator.next(), let tree = factors.buildTree(row) else {
-                break
-            }
+            let coveringRow = try #require(generator.next())
+            let tree = try #require(factors.buildTree(coveringRow))
             let combined = try #require(__ExhaustRuntime.combineScreeningCandidate(
                 TwoArgumentSetupSpec.self,
                 setupTree: tree,
@@ -42,7 +35,6 @@ struct SetupScreeningTests {
 
         #expect(steps.count >= 8)
         #expect(Set(steps).count >= 6, "Covering array rows should spread across setup values, got \(Set(steps))")
-        // The composed candidate tree must be decomposable again, or reduction cannot separate the two halves.
         #expect(steps.allSatisfy { $0.hasPrefix("configure(") })
     }
 
@@ -71,16 +63,19 @@ struct SetupScreeningTests {
 
     @Test("A deterministic setup is applied during screening probes")
     func deterministicSetupAppliedDuringScreening() async {
+        var invocations = 0
         // A zero-parameter @Setup synthesizes a deterministic generator, which has no parameters for the covering array
         // analysis to extract. Screening must still apply it: this spec only fails when a probe runs before setup.
         let result = await #execute(
             DeterministicSetupSpec.self,
             mode: .sequential,
             .commandLimit(4),
+            .onReport { invocations = $0.screeningInvocations },
             .budget(.custom(screening: 40, sampling: 0)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Screening probed an unconfigured spec: \(String(describing: result?.trace))")
+        #expect(invocations > 0)
     }
 
     @Test("A deterministic setup contributes a zero-factor leading block rather than none")
@@ -89,15 +84,6 @@ struct SetupScreeningTests {
         #expect(factors.domainSizes.isEmpty)
         // The block's one tree is what keeps every screening candidate carrying a setup step.
         #expect(factors.buildTree(CoveringArrayRow(values: [])) != nil)
-    }
-
-    @Test("Setup factor domains do not depend on the screening budget")
-    func setupFactorDomainsAreBudgetIndependent() throws {
-        // A `U-{N}` replay runs under a different budget than discovery. Budget-dependent factor domains would build a
-        // different covering array and land the replay on a different row.
-        let first = try #require(__ExhaustRuntime.setupScreeningFactors(for: TwoArgumentSetupSpec.self))
-        let second = try #require(__ExhaustRuntime.setupScreeningFactors(for: TwoArgumentSetupSpec.self))
-        #expect(first.domainSizes == second.domainSizes)
     }
 }
 

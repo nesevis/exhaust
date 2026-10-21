@@ -11,10 +11,13 @@ package func exhaustCheck<Value>(
     seed: UInt64 = 42,
     property: (Value) throws -> Bool
 ) throws {
-    var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = try iter.next() {
+    var iterator = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
+    var evaluated = 0
+    while let value = try iterator.next() {
+        evaluated += 1
         #expect(try property(value), "Property failed for value: \(value)")
     }
+    #expect(evaluated > 0, "The generator produced no values; the property was never evaluated")
 }
 
 package func exhaustCheck<Value>(

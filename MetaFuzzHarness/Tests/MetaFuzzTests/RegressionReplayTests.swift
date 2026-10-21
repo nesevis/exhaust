@@ -15,11 +15,12 @@ struct RegressionReplayTests {
         }
     }
 
-    @Test("The regression directory exists")
-    func regressionDirectoryExists() {
+    @Test("The committed regression corpus is nonempty")
+    func regressionDirectoryExists() throws {
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: regressionsDirectory().path, isDirectory: &isDirectory)
         #expect(exists && isDirectory.boolValue)
+        #expect(try frozenRecordURLs().isEmpty == false)
     }
 }
 

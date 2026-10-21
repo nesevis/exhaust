@@ -26,6 +26,7 @@ struct ComparisonRingConcurrencyTests {
         let finished = DispatchGroup()
         let start = DispatchSemaphore(value: 0)
         let torn = SendableBox(0)
+        let drained = SendableBox(0)
         var writerThreads: [Thread] = []
         for writer in 1 ... writers {
             ready.enter()
@@ -48,6 +49,7 @@ struct ComparisonRingConcurrencyTests {
 
         repeat {
             ComparisonRuntime.forEachRecord { _, first, second in
+                drained.withValue { $0 += 1 }
                 if first != second {
                     torn.withValue { $0 += 1 }
                 }
@@ -58,12 +60,14 @@ struct ComparisonRingConcurrencyTests {
         withExtendedLifetime(writerThreads) {
             // The last snapshot is after every writer, so it observes the settled ring.
             ComparisonRuntime.forEachRecord { _, first, second in
+                drained.withValue { $0 += 1 }
                 if first != second {
                     torn.withValue { $0 += 1 }
                 }
             }
         }
 
+        #expect(drained.value > 0)
         #expect(torn.value == 0)
         // The drainer's last pass ran after every writer finished, so the ring holds every record up to its capacity; anything less means a store was lost.
         #expect(ComparisonRuntime.recordCount() == min(writers * recordsPerWriter, 4096))
@@ -78,6 +82,7 @@ struct ComparisonRingConcurrencyTests {
 
         // Clearing the flag is not on its own a fence for a writer already inside the critical section; the drain takes the ring's lock, which is what settles it.
         let settled = ComparisonRuntime.recordCount()
+        #expect(settled == 1)
         TracePCGuardCoverageSource.fireComparisonForTesting(9, 9)
         #expect(ComparisonRuntime.recordCount() == settled)
 

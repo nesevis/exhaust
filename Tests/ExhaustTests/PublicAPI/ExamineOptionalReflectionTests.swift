@@ -1,8 +1,28 @@
 import Exhaust
+import ExhaustCore
 import Testing
 
 @Suite("Optional examine reflection")
 struct ExamineOptionalReflectionTests {
+    @Test("An unmaterializable replay is a failure, not a successful comparison")
+    func unmaterializableReplayFails() {
+        let calls = SendableBox(0)
+        let generator = ReflectiveGenerator<Int>.just(7).filter(.rejectionSampling) { _ in
+            calls.withValue {
+                $0 += 1
+                return $0 == 1
+            }
+        }
+        let report = #examine(generator, .skipReflection, .samples(1), .suppress(.all)) { $0 == $1 }
+        #expect(report.valuesGenerated == 1)
+        #expect(report.replayDeterminismSuccesses == 0)
+        #expect(report.failures.count == 1)
+        #expect(report.passed == false)
+        if case .replayDivergence = report.failures.first {} else {
+            Issue.record("Expected replay divergence when the recorded choices cannot replay")
+        }
+    }
+
     @Test("Skipping dictionary reflection retains every generation and recorded-choice replay check")
     func dictionaryReplay() {
         let generator = ReflectiveGenerator<[Bool: Int]>.dictionary(.bool(), .int(in: -10 ... 10), count: 10)
