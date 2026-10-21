@@ -5,30 +5,15 @@
 
 // MARK: - Staged Joint Query
 
-/// Discovers the pairs and higher-order groups of one staged joint checkpoint.
+/// Discovers and ranks targets for one staged joint checkpoint. Selected groups are prepared by ``NumericJointPlan``, and concrete sign flips by ``SignFlipProposal``.
 ///
 /// A sampled pair needs only a stalled source; its compensating partner may still be moving. A negative source that has not stalled pairs with a stalled partner for their sign flip alone. Higher-order groups are discovered only after the preceding stage stalls.
 ///
 /// Ranking is a heuristic: generator relationships and observed floor motion suggest property coupling but do not prove it. Discovery has its own limit, ``ReductionTuning/numericJointGroupCalculationLimit``, separate from the probe budget. A leaf under a bind is eligible only when the bind's classification shows it lifts at both ends of its controller's range with the same bound shape at each. That checks only the two ends, so the candidate's ``DecoderAdmission`` still rejects any decoding that changes a proposed choice.
 enum StagedJointQuery {
-    /// One leaf of the candidate pool. Captures stalled membership as well as values and domains so new convergence evidence can reopen an exhausted checkpoint.
-    struct Entry: Equatable {
-        let leaf: ReductionLeaf
-        let stalled: Bool
-        let span: UInt64
-        let simplifyingSamples: [UInt64]
-        let compensatingSamples: [UInt64]
-    }
-
-    /// A sparse proposal a staged cursor tries before its grid. Cursors emit lower priorities first across every scope, in scope order within one priority.
-    struct PriorityProposal: Equatable {
-        let priority: Int
-        let probe: SparseEncoderProbe
-    }
-
     /// The groups one higher-order stage retains, with the discovery work spent finding them.
     struct Groups {
-        let groups: [NumericJointQuery.Group]
+        let groups: [NumericJointPlan]
         let calculations: Int
     }
 
@@ -41,14 +26,14 @@ enum StagedJointQuery {
         graph: ChoiceGraph,
         isFruitlessBind: (UInt64) -> Bool,
         tuning: ReductionTuning
-    ) -> [NumericPairQuery.Pair] {
+    ) -> [NumericPair] {
         let leaves = eligibleLeaves(graph: graph, tuning: tuning)
         guard leaves.count > 1 else {
             return []
         }
         let sourceIndices = leaves.indices.filter { isStalled(leaves[$0], graph: graph, isFruitlessBind: isFruitlessBind) }
         return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { sourceIndex, sinkIndex in
-            NumericPairQuery.Pair(source: leaves[sourceIndex], sink: leaves[sinkIndex])
+            NumericPair(source: leaves[sourceIndex], sink: leaves[sinkIndex])
         }
     }
 
@@ -61,7 +46,7 @@ enum StagedJointQuery {
         graph: ChoiceGraph,
         isFruitlessBind: (UInt64) -> Bool,
         tuning: ReductionTuning
-    ) -> [PriorityProposal] {
+    ) -> [NumericPriorityProposal] {
         let leaves = eligibleLeaves(graph: graph, tuning: tuning)
         guard leaves.count > 1 else {
             return []
@@ -69,10 +54,10 @@ enum StagedJointQuery {
         let stalled = leaves.map { isStalled($0, graph: graph, isFruitlessBind: isFruitlessBind) }
         let sourceIndices = leaves.indices.filter { stalled[$0] == false && leaves[$0].choice.hasNegativeSign }
         return collectPairs(leaves: leaves, sourceIndices: sourceIndices, tuning: tuning) { sourceIndex, sinkIndex in
-            guard stalled[sinkIndex], let signFlip = SignFlipQuery.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) else {
+            guard stalled[sinkIndex], let signFlip = SignFlipProposal.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) else {
                 return nil
             }
-            return PriorityProposal(priority: SignFlipQuery.priority, probe: signFlip)
+            return NumericPriorityProposal(priority: SignFlipProposal.priority, probe: signFlip)
         }
     }
 
@@ -83,7 +68,7 @@ enum StagedJointQuery {
             let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind,
                   let position = node.positionRange?.lowerBound,
-                  NumericPairQuery.isNumeric(metadata),
+                  ReductionLeaf.supportsNumericSearch(metadata),
                   supportsBinds(above: nodeID, graph: graph)
             else {
                 return nil
@@ -94,7 +79,7 @@ enum StagedJointQuery {
                 path: node.choicePath,
                 choice: metadata.value,
                 range: metadata.validRange ?? metadata.typeTag.bitPatternRange,
-                bindFingerprints: NumericPairQuery.bindFingerprints(above: nodeID, graph: graph),
+                bindFingerprints: ReductionLeaf.bindFingerprints(above: nodeID, graph: graph),
                 mayReshapeOnAcceptance: node.scopeAnnotation.isBindInner
             )
         }.prefix(tuning.numericPairMaximumLeaves).sorted { $0.position < $1.position }
@@ -141,7 +126,7 @@ enum StagedJointQuery {
         graph: ChoiceGraph,
         isFruitlessBind: (UInt64) -> Bool,
         tuning: ReductionTuning
-    ) -> [Entry] {
+    ) -> [NumericJointPlan.LeafSamples] {
         guard tuning.threeWayNumericWorkLimit > 0,
               tuning.numericJointGroupCalculationLimit > 0,
               tuning.numericJointScopeLimit > 0
@@ -172,45 +157,19 @@ enum StagedJointQuery {
             }
             return first.leaf.position < second.leaf.position
         }.prefix(tuning.numericJointMaximumLeaves).sorted { $0.leaf.position < $1.leaf.position }.map { entry in
-            Entry(
+            NumericJointPlan.LeafSamples(
                 leaf: entry.leaf,
                 stalled: entry.stalled,
-                span: entry.span,
-                simplifyingSamples: NumericPairCandidates.jointValues(for: entry.leaf, simplifying: true),
-                compensatingSamples: NumericPairCandidates.jointValues(for: entry.leaf, simplifying: false)
+                span: entry.span
             )
         }
     }
 
     // MARK: - Higher-Order Groups
 
-    /// Whether the search can widen to groups of `arity` leaves: the pool has at least `arity` stalled leaves, and some stalled first leaf's cheapest sampled grid fits `workLimit`. The cheapest grid multiplies the first leaf's simplifying samples by the smallest compensating sample counts among the leaves after it.
-    ///
-    /// An estimate: ``groups(candidatePool:graph:arity:workLimit:calculationLimit:scopeLimit:)`` also counts extra sign flips and ratio-preserving proposals against the limit, so it can still find no group. When this is false, it finds none. A large residual magnitude never makes it false.
-    static func canWiden(to arity: Int, candidatePool: [Entry], workLimit: Int) -> Bool {
-        guard (3 ... 4).contains(arity), workLimit > 0, candidatePool.count >= arity,
-              candidatePool.count(where: \.stalled) >= arity
-        else {
-            return false
-        }
-        for sourceIndex in 0 ... candidatePool.count - arity where candidatePool[sourceIndex].stalled {
-            let sourceCount = candidatePool[sourceIndex].simplifyingSamples.count
-            let partnerCounts = candidatePool[(sourceIndex + 1)...].map { $0.compensatingSamples.count }
-                .filter { $0 > 0 }.sorted().prefix(arity - 1)
-            guard sourceCount > 0, partnerCounts.count == arity - 1 else {
-                continue
-            }
-            let estimatedWork = partnerCounts.reduce(sourceCount, *)
-            if estimatedWork <= workLimit {
-                return true
-            }
-        }
-        return false
-    }
-
     /// Scores a bounded prefix of unique combinations, then packs ranked groups under both the retention and estimated-work limits. Work sums each sampled grid plus every sign flip and ratio-preserving proposal outside that grid, bounding the complete retained search before the shared probe budget truncates exploration. The earliest edited leaf must be stalled and simplify; later leaves may move in either direction.
     static func groups(
-        candidatePool: [Entry],
+        candidatePool: [NumericJointPlan.LeafSamples],
         graph: ChoiceGraph,
         arity: Int,
         workLimit: Int,
@@ -223,7 +182,7 @@ enum StagedJointQuery {
         else {
             return Groups(groups: [], calculations: 0)
         }
-        var selected = BoundedSortedBuffer<NumericJointQuery.Group>(limit: scopeLimit)
+        var selected = BoundedSortedBuffer<NumericJointPlan>(limit: scopeLimit)
         var indices = Array(0 ..< arity)
         var calculations = 0
         repeat {
@@ -231,75 +190,18 @@ enum StagedJointQuery {
             guard candidatePool[indices[0]].stalled else {
                 continue
             }
-            var gridWork = 1
-            for (offset, index) in indices.enumerated() {
-                let entry = candidatePool[index]
-                gridWork *= offset == 0 ? entry.simplifyingSamples.count : entry.compensatingSamples.count
-            }
-            guard gridWork > 0, gridWork <= workLimit else {
-                continue
-            }
             let entries = indices.map { candidatePool[$0] }
-            let samples = entries.enumerated().map { index, entry in
-                index == 0 ? entry.simplifyingSamples : entry.compensatingSamples
-            }
-            let leaves = entries.map(\.leaf)
-            let priorityProposals = priorityProposals(for: leaves)
-            let extraWork = priorityProposals.count { proposal in
-                samples.indices.allSatisfy { samples[$0].contains(proposal.probe.patterns[$0]) } == false
-            }
-            let estimatedWork = gridWork + extraWork
-            if estimatedWork <= workLimit {
-                var couplingCount = 0
-                var sharedContextCount = 0
-                for first in leaves.indices {
-                    for second in leaves.indices where second > first {
-                        let firstNode = leaves[first].nodeID
-                        let secondNode = leaves[second].nodeID
-                        if graph.couplingDependents[firstNode]?.contains(secondNode) == true
-                            || graph.couplingDependents[secondNode]?.contains(firstNode) == true
-                        {
-                            couplingCount += 1
-                        }
-                        if graph.nodes[firstNode].parent == graph.nodes[secondNode].parent {
-                            sharedContextCount += 1
-                        }
-                    }
-                }
-                selected.insert(NumericJointQuery.Group(
-                    leaves: leaves,
-                    samples: samples,
-                    priorityProposals: priorityProposals,
-                    estimatedWork: estimatedWork,
-                    residualVolume: saturatedVolume(entries.map(\.span)),
-                    stalledCount: entries.count(where: \.stalled),
-                    couplingCount: couplingCount,
-                    sharedContextCount: sharedContextCount
-                )) { $0.precedes($1) }
+            if let plan = NumericJointPlan.prepare(entries, graph: graph, workLimit: workLimit) {
+                selected.insert(plan) { $0.precedes($1) }
             }
         } while calculations < calculationLimit && advance(&indices, count: candidatePool.count)
-        var groups: [NumericJointQuery.Group] = []
+        var groups: [NumericJointPlan] = []
         var estimatedWork = 0
         for group in selected.elements where group.estimatedWork <= workLimit - estimatedWork {
             groups.append(group)
             estimatedWork += group.estimatedWork
         }
         return Groups(groups: groups, calculations: calculations)
-    }
-
-    // MARK: - Priority Proposals
-
-    /// The proposals both staged cursors try before their grids: the group's sign flip, a rescaling by −1, then its ratio-preserving rescalings.
-    ///
-    /// Ranking the flip below every rescaling priority makes each cursor emit every group's flip before any rescaling, and the cursors skip grid points that repeat a priority proposal. The flip never duplicates a rescaling: rescalings apply only to integers and strictly shrink every nonzero magnitude, while the flip preserves magnitudes and changes at least one nonzero leaf.
-    static func priorityProposals(for leaves: [ReductionLeaf]) -> [PriorityProposal] {
-        let rescalings = NumericCommonDivisorProposal.rescalings(for: leaves).map { rescaling in
-            PriorityProposal(priority: rescaling.priority, probe: SparseEncoderProbe(leaves: leaves, patterns: rescaling.patterns))
-        }
-        guard let signFlip = SignFlipQuery.build(leaves: leaves) else {
-            return rescalings
-        }
-        return [PriorityProposal(priority: SignFlipQuery.priority, probe: signFlip)] + rescalings
     }
 
     // MARK: - Helpers
@@ -350,19 +252,6 @@ enum StagedJointQuery {
             ancestor = node.parent
         }
         return true
-    }
-
-    /// Keeps residual magnitude as a ranking hint without letting full-width products wrap or reject otherwise affordable grids.
-    private static func saturatedVolume(_ spans: [UInt64]) -> UInt64 {
-        var product: UInt64 = 1
-        for span in spans {
-            let (nextProduct, overflow) = product.multipliedReportingOverflow(by: span)
-            guard overflow == false else {
-                return UInt64.max
-            }
-            product = nextProduct
-        }
-        return product
     }
 
     /// Advances lexicographic combinations without constructing their discarded tail.

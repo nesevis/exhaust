@@ -125,7 +125,7 @@ struct NumericPairSearchTests {
                 value: ChoiceValue(UInt64(1), tag: tag),
                 typeTagPayload: nil
             )
-            #expect(NumericPairQuery.isNumeric(metadata) == false)
+            #expect(ReductionLeaf.supportsNumericSearch(metadata) == false)
         }
     }
 

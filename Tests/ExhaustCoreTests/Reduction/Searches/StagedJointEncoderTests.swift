@@ -143,8 +143,8 @@ struct StagedJointEncoderTests {
         let values = [Int8.min, -1, 1].map { ChoiceValue($0, tag: .int8) }
         let members = leaves(values)
         let pairs = [
-            NumericPairQuery.Pair(source: members[0], sink: members[1]),
-            NumericPairQuery.Pair(source: members[1], sink: members[2]),
+            NumericPair(source: members[0], sink: members[1]),
+            NumericPair(source: members[1], sink: members[2]),
         ]
         var search = StagedJointSearch(pairs: pairs, base: [], probeBudget: 10000)
         var buffer: ChoiceSequence = []

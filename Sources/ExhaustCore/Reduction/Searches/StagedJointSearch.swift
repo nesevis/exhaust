@@ -20,8 +20,8 @@ struct StagedJointSearch: ReductionSearch {
 
     /// Searches `pairs` and `signFlipProposals`, emitting at most `probeBudget` candidates.
     init(
-        pairs: [NumericPairQuery.Pair],
-        signFlipProposals: [StagedJointQuery.PriorityProposal] = [],
+        pairs: [NumericPair],
+        signFlipProposals: [NumericPriorityProposal] = [],
         base: ChoiceSequence,
         probeBudget: Int
     ) {
@@ -32,7 +32,7 @@ struct StagedJointSearch: ReductionSearch {
     }
 
     /// Searches `groups`, which share one arity, emitting at most `probeBudget` candidates.
-    init(groups: [NumericJointQuery.Group], base: ChoiceSequence, probeBudget: Int) {
+    init(groups: [NumericJointPlan], base: ChoiceSequence, probeBudget: Int) {
         arity = groups.first?.leaves.count ?? 0
         jointCursor = NumericJointSearchCursor(groups: groups)
         self.base = base

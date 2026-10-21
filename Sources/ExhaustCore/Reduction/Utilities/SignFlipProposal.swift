@@ -1,7 +1,7 @@
 /// Flips the sign of every member of a selected numeric group, preserving exact magnitudes in either sign direction.
 ///
 /// A group is indivisible: an unrepresentable negation or an out-of-range counterpart suppresses the whole proposal. Only flips whose earliest changed leaf is negative are proposed, because making that leaf negative can never precede the checkpoint in shortlex order. Exact numeric admission still checks replay before the property runs.
-enum SignFlipQuery {
+enum SignFlipProposal {
     /// Ranks a sign flip below every ``NumericCommonDivisorProposal`` priority, so the staged cursors try every group's flip before any rescaling.
     static let priority = -1
 

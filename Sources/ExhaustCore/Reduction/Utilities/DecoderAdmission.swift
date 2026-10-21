@@ -1,7 +1,7 @@
 /// Adds candidate-specific feasibility checks to exact decoding. Only ``SequenceDecoder/exact(materializePicks:admission:)`` carries one, so guided decoding cannot silently drop it.
 enum DecoderAdmission {
     case standard
-    case numericPair(NumericPairQuery.Pair)
+    case numericPair(NumericPair)
     case numericJoint([ReductionLeaf])
 
     /// Whether the admission inspects the decoded history. Only exact decoding produces a history to inspect, and only then does value-only decoding need to build it.
@@ -32,9 +32,9 @@ enum DecoderAdmission {
             case .standard:
                 true
             case let .numericPair(pair):
-                NumericPairQuery.preservesIdentity(of: pair, in: tree)
+                NumericRecoveryCheck.preservesIdentity(of: pair, in: tree)
             case let .numericJoint(leaves):
-                NumericPairQuery.preservesIdentity(of: leaves, in: tree)
+                NumericRecoveryCheck.preservesIdentity(of: leaves, in: tree)
         }
     }
 }

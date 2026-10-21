@@ -120,10 +120,10 @@ enum ExchangeScope {
     case relation(RelationScope)
 
     /// Two-way stage of staged joint search.
-    case stagedNumericPairs([NumericPairQuery.Pair], probeBudget: Int)
+    case stagedNumericPairs([NumericPair], probeBudget: Int)
 
     /// Retained three- or four-way groups unlocked after a lower-order numeric stage stalls.
-    case numericJoint([NumericJointQuery.Group], probeBudget: Int)
+    case numericJoint([NumericJointPlan], probeBudget: Int)
 
     /// Sum-preserving exchange from a bind inner into a leaf whose range its bind determines, placed through a lift.
     case boundExchange(BoundExchangeScope)
