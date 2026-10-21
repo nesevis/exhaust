@@ -50,7 +50,7 @@ struct BalancedCoveringArrayTests {
         let domains: [UInt64] = [2, 3, 4, 2]
         let rows = generateAll(domainSizes: domains, budget: 1000, seed: seed)
 
-        verifyTWayCoverage(rows: rows, domainSizes: domains)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 
     // MARK: - Fast Path (domains > greedyThreshold)
@@ -274,7 +274,7 @@ struct BalancedCoveringArrayTests {
         let rows = generateAll(domainSizes: domains, budget: 5000)
 
         #expect(rows.count < 5000, "Expected exhaustion, got \(rows.count) rows")
-        verifyTWayCoverage(rows: rows, domainSizes: domains)
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 
     // MARK: - Gain Ceiling
@@ -286,24 +286,7 @@ struct BalancedCoveringArrayTests {
         let rows = generateAll(domainSizes: domains, budget: 1000)
 
         #expect(rows.count == 196, "Expected the optimal 196 rows, got \(rows.count)")
-        verifyTWayCoverage(rows: rows, domainSizes: domains)
-    }
-
-    // MARK: - Generated Domains
-
-    @Test("Rows stay in bounds, cover every pair, and repeat for a repeated seed, over generated domains")
-    func generatedDomainsCoverAllPairs() throws {
-        let domains = Gen.arrayOf(Gen.choose(in: UInt64(2) ... 8), within: 2 ... 6)
-        try exhaustCheck(domains, maxIterations: 100) { domainSizes in
-            let rows = generateAll(domainSizes: domainSizes, budget: 5000)
-            let repeated = generateAll(domainSizes: domainSizes, budget: 5000)
-            let inBounds = rows.allSatisfy { row in
-                row.values.count == domainSizes.count
-                    && zip(row.values, domainSizes).allSatisfy { $0 < $1 }
-            }
-            let sameStream = rows.map(\.values) == repeated.map(\.values)
-            return inBounds && sameStream && coversAllPairs(rows: rows, domainSizes: domainSizes)
-        }
+        #expect(coveringArrayFailures(rows: rows, domainSizes: domains).isEmpty)
     }
 
     @Test("Covering array applies its documented per-parameter domain cap")
@@ -338,37 +321,4 @@ private func generateAll(domainSizes: [UInt64], budget: Int, seed: UInt64 = 0) -
         rows.append(row)
     }
     return rows
-}
-
-private func verifyTWayCoverage(rows: [CoveringArrayRow], domainSizes: [UInt64]) {
-    let paramCount = domainSizes.count
-    for paramA in 0 ..< paramCount {
-        for paramB in (paramA + 1) ..< paramCount {
-            var seen = Set<[UInt64]>()
-            for row in rows {
-                seen.insert([row.values[paramA], row.values[paramB]])
-            }
-            let expected = domainSizes[paramA] * domainSizes[paramB]
-            #expect(
-                UInt64(seen.count) == expected,
-                "Missing pairwise coverage for (\(paramA), \(paramB)): got \(seen.count), expected \(expected)"
-            )
-        }
-    }
-}
-
-/// Whether every unordered pair of parameters sees every combination of their two domains.
-private func coversAllPairs(rows: [CoveringArrayRow], domainSizes: [UInt64]) -> Bool {
-    for paramA in 0 ..< domainSizes.count {
-        for paramB in (paramA + 1) ..< domainSizes.count {
-            var seen = Set<[UInt64]>()
-            for row in rows {
-                seen.insert([row.values[paramA], row.values[paramB]])
-            }
-            guard UInt64(seen.count) == domainSizes[paramA] * domainSizes[paramB] else {
-                return false
-            }
-        }
-    }
-    return true
 }

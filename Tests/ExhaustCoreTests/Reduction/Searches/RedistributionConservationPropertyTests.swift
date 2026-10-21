@@ -4,127 +4,44 @@ import Testing
 
 @Suite("Redistribution Conservation Properties")
 struct RedistributionConservationPropertyTests {
-    @Test("Signed integer redistribution conserves total value for arbitrary pairs and deltas")
-    func signedConservation() throws {
-        let pairGen = Gen.zip(
-            Gen.choose(in: Int64(-1000) ... 1000),
-            Gen.choose(in: Int64(-1000) ... 1000)
-        ).map { (pair: (Int64, Int64)) in pair }
-
-        try exhaustCheck(pairGen, maxIterations: 300) { sourceValue, sinkValue in
-            guard sourceValue != sinkValue else {
-                return true
+    @Test("Integer transfers conserve the sum and move by the requested delta", arguments: [TypeTag.int64, .uint64])
+    func transferContract(tag: TypeTag) throws {
+        // Bounded magnitudes keep both results and their sum representable; overflow rejection has separate boundary tests.
+        let transfers = Gen.zip(
+            Gen.choose(in: Int64(1) ... 1000),
+            Gen.choose(in: tag == .int64 ? Int64(-1000) ... 1000 : Int64(0) ... 999),
+            Gen.choose(from: tag == .int64 ? [Int64(-1), 1] : [Int64(1)])
+        ).bind { magnitude, sink, sign in
+            Gen.choose(in: UInt64(1) ... UInt64(magnitude)).map { delta in
+                (source: magnitude * sign, sink: sink, delta: delta)
             }
-
-            let source = ChoiceValue(sourceValue, tag: .int64)
-            let sink = ChoiceValue(sinkValue, tag: .int64)
-
-            guard let context = RedistributionSearch.makeMixedRedistributionContext(
-                sourceChoice: source,
-                sinkChoice: sink,
-                sourceValidRange: nil as ClosedRange<UInt64>?,
-                sourceIsRangeExplicit: false
-            ) else {
-                return true
-            }
-
-            let originalTotal = sourceValue + sinkValue
-            for delta: UInt64 in 1 ... min(context.distanceInSteps, 20) {
-                guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-                    sourceChoice: source,
-                    sinkChoice: sink,
-                    delta: delta,
-                    context: context
-                ) else {
-                    continue
-                }
-                let newTotal = newSource.decodedSignedValue + newSink.decodedSignedValue
-                if newTotal != originalTotal {
-                    return false
-                }
-            }
-            return true
         }
-    }
-
-    @Test("Unsigned integer redistribution conserves total value for arbitrary pairs and deltas")
-    func unsignedConservation() throws {
-        let pairGen = Gen.zip(
-            Gen.choose(in: UInt64(1) ... 1000),
-            Gen.choose(in: UInt64(0) ... 999)
-        ).map { (pair: (UInt64, UInt64)) in pair }
-
-        try exhaustCheck(pairGen, maxIterations: 300) { sourceValue, sinkValue in
-            guard sourceValue != sinkValue else {
-                return true
-            }
-            guard sourceValue > sinkValue else {
-                return true
-            }
-
-            let source = ChoiceValue(sourceValue, tag: .uint64)
-            let sink = ChoiceValue(sinkValue, tag: .uint64)
-
-            guard let context = RedistributionSearch.makeMixedRedistributionContext(
+        try exhaustCheck(transfers, maxIterations: 500) { transfer in
+            let source = tag == .int64
+                ? ChoiceValue(transfer.source, tag: tag)
+                : ChoiceValue(UInt64(transfer.source), tag: tag)
+            let sink = tag == .int64
+                ? ChoiceValue(transfer.sink, tag: tag)
+                : ChoiceValue(UInt64(transfer.sink), tag: tag)
+            let context = try #require(RedistributionSearch.makeMixedRedistributionContext(
                 sourceChoice: source,
                 sinkChoice: sink,
-                sourceValidRange: nil as ClosedRange<UInt64>?,
+                sourceValidRange: nil,
                 sourceIsRangeExplicit: false
-            ) else {
-                return true
-            }
-
-            let originalTotal = sourceValue + sinkValue
-            for delta: UInt64 in 1 ... min(context.distanceInSteps, 20) {
-                guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-                    sourceChoice: source,
-                    sinkChoice: sink,
-                    delta: delta,
-                    context: context
-                ) else {
-                    continue
-                }
-                let newTotal = newSource.bitPattern64 + newSink.bitPattern64
-                if newTotal != originalTotal {
-                    return false
-                }
-            }
-            return true
-        }
-    }
-
-    @Test("Redistribution source moves toward semantic zero")
-    func sourceMovesTowardZero() throws {
-        let pairGen = Gen.zip(
-            Gen.choose(in: Int64(1) ... 500),
-            Gen.choose(in: Int64(-500) ... -1)
-        ).map { (pair: (Int64, Int64)) in pair }
-
-        try exhaustCheck(pairGen, maxIterations: 200) { sourceValue, sinkValue in
-            let source = ChoiceValue(sourceValue, tag: .int64)
-            let sink = ChoiceValue(sinkValue, tag: .int64)
-
-            guard let context = RedistributionSearch.makeMixedRedistributionContext(
+            ))
+            let (newSource, newSink) = try #require(RedistributionSearch.mixedRedistributedPairChoices(
                 sourceChoice: source,
                 sinkChoice: sink,
-                sourceValidRange: nil as ClosedRange<UInt64>?,
-                sourceIsRangeExplicit: false
-            ) else {
-                return true
-            }
-
-            guard let (newSource, _) = RedistributionSearch.mixedRedistributedPairChoices(
-                sourceChoice: source,
-                sinkChoice: sink,
-                delta: 1,
+                delta: transfer.delta,
                 context: context
-            ) else {
-                return true
-            }
-
-            let originalDistance = abs(sourceValue)
-            let newDistance = abs(newSource.decodedSignedValue)
-            return newDistance <= originalDistance
+            ))
+            let sourceValue = tag == .int64 ? newSource.decodedSignedValue : Int64(newSource.bitPattern64)
+            let sinkValue = tag == .int64 ? newSink.decodedSignedValue : Int64(newSink.bitPattern64)
+            let movement = transfer.source > 0 ? Int64(transfer.delta) : -Int64(transfer.delta)
+            return sourceValue == transfer.source - movement
+                && sinkValue == transfer.sink + movement
+                && sourceValue + sinkValue == transfer.source + transfer.sink
+                && abs(sourceValue) < abs(transfer.source)
         }
     }
 }

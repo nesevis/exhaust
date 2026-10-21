@@ -34,13 +34,18 @@ extension ChoiceGraph {
     /// Builds the graph with every leaf certified at its current value, the state the relation pass requires before it considers a leaf.
     static func stalled(from tree: ChoiceTree) -> ChoiceGraph {
         var graph = ChoiceGraph.build(from: tree)
-        for nodeID in graph.leafNodes {
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
+        graph.markLeavesConverged()
+        return graph
+    }
+
+    /// Certifies each value leaf at its current value without replacing the graph's other state.
+    mutating func markLeavesConverged() {
+        for nodeID in leafNodes {
+            guard case let .chooseBits(metadata) = nodes[nodeID].kind else {
                 continue
             }
-            graph.convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
+            convergenceStore[nodeID] = ConvergedOrigin(bound: metadata.value.bitPattern64, signal: .monotoneConvergence, configuration: .binarySearchSemanticSimplest, cycle: 0)
         }
-        return graph
     }
 }
 

@@ -20,7 +20,7 @@ extension MetaGeneratorPropertyTests {
                 "unique produced a duplicate choice sequence"
             )
         }
-        #expect(count > 0, "unique produced no values")
+        #expect(count == 30, "unique must fill its requested sample")
     }
 
     // MARK: 18. classify — transparency
@@ -30,6 +30,7 @@ extension MetaGeneratorPropertyTests {
     func classifyIsTransparent(type: RecipeType) throws {
         var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 1), seed: 42, maxRuns: 20)
         var checkedRecipes = 0
+        var checkedValues = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
                 continue
@@ -37,10 +38,22 @@ extension MetaGeneratorPropertyTests {
             checkedRecipes += 1
             var plain = ValueInterpreter(buildGenerator(from: recipe), seed: 7, maxRuns: 5)
             var classified = ValueInterpreter(buildGenerator(from: .combinator(.classified(recipe))), seed: 7, maxRuns: 5)
-            while let unwrapped = try plain.next(), let wrapped = try classified.next() {
-                #expect(anyEquals(unwrapped, wrapped), "classify changed the value for recipe: \(recipe)")
+            while true {
+                let unwrapped = try plain.next()
+                let wrapped = try classified.next()
+                switch (unwrapped, wrapped) {
+                    case (.none, .none): break
+                    case let (.some(first), .some(second)):
+                        checkedValues += 1
+                        #expect(anyEquals(first, second), "classify changed the value for recipe: \(recipe)")
+                        continue
+                    default:
+                        Issue.record("classify changed stream termination for recipe: \(recipe)")
+                }
+                break
             }
         }
+        #expect(checkedValues > 0)
         #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
     }
 
@@ -76,13 +89,12 @@ extension MetaGeneratorPropertyTests {
         var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 3000)
         var counts = [0, 0]
         while let (value, _) = try iter.next() {
-            guard let selected = value as? Int, selected == 0 || selected == 1 else {
-                continue
-            }
+            let selected = try #require(value as? Int)
+            try #require(selected == 0 || selected == 1)
             counts[selected] += 1
         }
         let total = Double(counts[0] + counts[1])
-        #expect(total > 0, "weightedOneOf produced no distinguishable values")
+        #expect(total == 3000)
         let highWeightFraction = Double(counts[1]) / total
         #expect(abs(highWeightFraction - 0.75) < 0.04, "weightedOneOf frequency off declared 1:3 weights: high-weight fraction=\(highWeightFraction)")
     }

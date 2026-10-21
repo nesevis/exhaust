@@ -9,42 +9,38 @@ import Testing
 
 @Suite("Leaf proposal candidates")
 struct LeafCandidatesTests {
-    @Test("Every candidate lies in the domain and appears once")
-    func candidatesAreInDomainAndUnique() throws {
+    @Test("Candidates obey domain, budget, inclusion and ordering contracts")
+    func candidateContract() throws {
+        var smallDomains = 0
+        var largeDomains = 0
         try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
             let candidates = input.candidates()
-            return candidates.allSatisfy { input.domain.contains($0) }
-                && Set(candidates).count == candidates.count
-        }
-    }
-
-    @Test("The current value is a candidate exactly when it is requested")
-    func currentPresentOnlyWhenIncluded() throws {
-        try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
-            input.candidates().contains(input.current) == input.includesCurrent
-        }
-    }
-
-    @Test("Candidate count is the domain size up to the budget, less the excluded current value")
-    func candidateCountMatchesDomainAndBudget() throws {
-        try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
             let admissible = input.domain.saturatingCount - (input.includesCurrent ? 0 : 1)
-            let expected = min(admissible, UInt64(LeafCandidates.candidateBudget))
-            return UInt64(input.candidates().count) == expected
-        }
-    }
-
-    @Test("Small domains are enumerated in order of distance from the current value")
-    func smallDomainsOrderedByDistance() throws {
-        try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
-            guard input.domain.saturatingCount <= LeafCandidates.exhaustiveThreshold else {
-                return true
+            #expect(candidates.allSatisfy { input.domain.contains($0) })
+            #expect(Set(candidates).count == candidates.count)
+            #expect(candidates.contains(input.current) == input.includesCurrent)
+            #expect(UInt64(candidates.count) == min(admissible, UInt64(LeafCandidates.candidateBudget)))
+            if input.domain.saturatingCount <= LeafCandidates.exhaustiveThreshold {
+                smallDomains += 1
+                let distances = candidates.map { $0 > input.current ? $0 - input.current : input.current - $0 }
+                return distances == distances.sorted()
             }
-            let distances = input.candidates().map { candidate in
-                candidate > input.current ? candidate - input.current : input.current - candidate
+            largeDomains += 1
+            var expectedPrefix: [UInt64] = input.includesCurrent ? [input.current] : []
+            var leading = [input.target]
+            if input.current > input.domain.lowerBound {
+                leading.append(input.current - 1)
             }
-            return distances == distances.sorted()
+            if input.current < input.domain.upperBound {
+                leading.append(input.current + 1)
+            }
+            for value in leading where value != input.current && expectedPrefix.contains(value) == false {
+                expectedPrefix.append(value)
+            }
+            return Array(candidates.prefix(expectedPrefix.count)) == expectedPrefix
         }
+        #expect(smallDomains > 0)
+        #expect(largeDomains > 0)
     }
 
     @Test("The first neighbour reduces signed magnitude in either direction", arguments: [Int64(-5), 5])
@@ -68,27 +64,6 @@ struct LeafCandidatesTests {
         let first = try #require(candidates.first)
         let proposed = ChoiceValue(TypeTag.int64.makeConvertible(bitPattern64: first), tag: .int64)
         #expect(proposed.shortlexKey < current.shortlexKey)
-    }
-
-    @Test("Large domains try the target and the current value's neighbours first")
-    func largeDomainsLeadWithTargetAndNeighbours() throws {
-        try exhaustCheck(candidateInputGen, maxIterations: 1000) { input in
-            guard input.domain.saturatingCount > LeafCandidates.exhaustiveThreshold else {
-                return true
-            }
-            var expectedPrefix: [UInt64] = input.includesCurrent ? [input.current] : []
-            var leading = [input.target]
-            if input.current > input.domain.lowerBound {
-                leading.append(input.current - 1)
-            }
-            if input.current < input.domain.upperBound {
-                leading.append(input.current + 1)
-            }
-            for value in leading where value != input.current && expectedPrefix.contains(value) == false {
-                expectedPrefix.append(value)
-            }
-            return Array(input.candidates().prefix(expectedPrefix.count)) == expectedPrefix
-        }
     }
 
     @Test("A small domain that does not contain the current value yields no candidates", arguments: [

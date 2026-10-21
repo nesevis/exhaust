@@ -294,7 +294,8 @@ struct MaterializeTests {
     func materializeIdempotent() throws {
         let gen = Gen.choose(in: -10000 ... 10000) as Generator<Int>
         var iter = ValueInterpreter(gen, seed: 42, maxRuns: 200)
-        while let value = try iter.next() {
+        for _ in 0 ..< 200 {
+            let value = try #require(try iter.next())
             guard let tree = try? Interpreters.reflect(gen, with: value) else {
                 Issue.record("reflect returned nil")
                 continue
@@ -397,25 +398,7 @@ struct MaterializeTests {
             Gen.choose(in: UInt64(0) ... 100),
             exactly: 3
         ))
-        var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 20)
-        var roundTripFailures = 0
-        var total = 0
-        while let (value, tree) = try iter.next() {
-            total += 1
-            let sequence = ChoiceSequence.flatten(tree)
-            switch Materializer.materialize(gen, context: .init(
-                prefix: sequence, mode: .exact, fallbackTree: tree
-            )) {
-                case let .success(materialized, _, _):
-                    if materialized != value {
-                        roundTripFailures += 1
-                    }
-                case .rejected, .failed:
-                    roundTripFailures += 1
-            }
-        }
-        #expect(total > 0)
-        #expect(roundTripFailures == 0, "VACTI tree missing continuation nodes: \(roundTripFailures)/\(total) round-trips failed")
+        try assertGeneratedTreeRoundTrip(gen, seed: 42, runs: 20)
     }
 
     @Test("Sequence with non-pure continuation preserves continuation tree (direct bind)")
@@ -426,25 +409,7 @@ struct MaterializeTests {
         let gen: Generator<UInt64> = arrayGen.bind { array in
             Gen.choose(in: UInt64(0) ... UInt64(array.count))
         }
-        var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 99, maxRuns: 20)
-        var roundTripFailures = 0
-        var total = 0
-        while let (value, tree) = try iter.next() {
-            total += 1
-            let sequence = ChoiceSequence.flatten(tree)
-            switch Materializer.materialize(gen, context: .init(
-                prefix: sequence, mode: .exact, fallbackTree: tree
-            )) {
-                case let .success(materialized, _, _):
-                    if materialized != value {
-                        roundTripFailures += 1
-                    }
-                case .rejected, .failed:
-                    roundTripFailures += 1
-            }
-        }
-        #expect(total > 0)
-        #expect(roundTripFailures == 0, "VACTI tree missing continuation nodes: \(roundTripFailures)/\(total) round-trips failed")
+        try assertGeneratedTreeRoundTrip(gen, seed: 99, runs: 20)
     }
 }
 
@@ -476,13 +441,16 @@ private func assertMaterializeRoundTrip<Output>(
     sourceLocation: SourceLocation = #_sourceLocation
 ) throws {
     var iterator = ValueInterpreter(gen, seed: seed, maxRuns: runs)
+    var evaluated = 0
     while let value = try iterator.next() {
+        evaluated += 1
         guard let materialized = materializeViaReflection(gen, value) else {
             Issue.record("materializeViaReflection returned nil for \(value)", sourceLocation: sourceLocation)
             continue
         }
         #expect(equals(materialized, value), "Materialized \(materialized) != original \(value)", sourceLocation: sourceLocation)
     }
+    #expect(evaluated > 0, "No value was generated for materialization", sourceLocation: sourceLocation)
 }
 
 /// Equatable convenience overload.
@@ -493,4 +461,20 @@ private func assertMaterializeRoundTrip(
     sourceLocation: SourceLocation = #_sourceLocation
 ) throws {
     try assertMaterializeRoundTrip(gen, seed: seed, runs: runs, equals: { $0 == $1 }, sourceLocation: sourceLocation)
+}
+
+private func assertGeneratedTreeRoundTrip(
+    _ generator: Generator<some Equatable>, seed: UInt64, runs: UInt64
+) throws {
+    var interpreter = ValueAndChoiceTreeInterpreter(generator, materializePicks: false, seed: seed, maxRuns: runs)
+    for _ in 0 ..< runs {
+        let (value, tree) = try #require(try interpreter.next())
+        guard case let .success(materialized, _, _) = Materializer.materialize(generator, context: .init(
+            prefix: ChoiceSequence(tree), mode: .exact, fallbackTree: tree
+        )) else {
+            Issue.record("Generated tree failed exact materialization")
+            continue
+        }
+        #expect(materialized == value)
+    }
 }

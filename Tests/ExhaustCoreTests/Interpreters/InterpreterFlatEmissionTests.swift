@@ -22,6 +22,7 @@ struct InterpreterFlatEmissionTests {
             Gen.choose(from: [true, false])
         )
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Variable-length array matches flattened tree")
@@ -31,6 +32,7 @@ struct InterpreterFlatEmissionTests {
             within: 0 ... 12
         )
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Nested arrays match flattened tree")
@@ -38,11 +40,13 @@ struct InterpreterFlatEmissionTests {
         let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 4)
         let gen = Gen.arrayOf(innerGen, within: 0 ... 4)
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("String matches flattened tree")
     func string() throws {
         try assertFlatDrawMatchesTreeDraw(stringGen())
+        try assertFlatEmissionMatchesFlatten(stringGen())
     }
 
     @Test("Zip of arrays matches flattened tree")
@@ -52,6 +56,7 @@ struct InterpreterFlatEmissionTests {
             Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 1 ... 5)
         )
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     // MARK: - Branching
@@ -64,6 +69,7 @@ struct InterpreterFlatEmissionTests {
             (1, Gen.just(UInt64(7))),
         ])
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Array of picks matches flattened tree")
@@ -74,6 +80,7 @@ struct InterpreterFlatEmissionTests {
         ])
         let gen = Gen.arrayOf(elementGen, within: 0 ... 6)
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Backtrack with a withdrawing arm matches flattened tree")
@@ -124,6 +131,7 @@ struct InterpreterFlatEmissionTests {
             inner: lengthGen.erase()
         ))
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("getSize-bind matches flattened tree")
@@ -142,6 +150,7 @@ struct InterpreterFlatEmissionTests {
             inner: Gen.rawGetSize().erase()
         ))
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     // MARK: - Wrappers
@@ -160,6 +169,7 @@ struct InterpreterFlatEmissionTests {
             continuation: { .pure($0 as! UInt64) }
         )
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Filter under a length bind matches flattened tree")
@@ -179,6 +189,7 @@ struct InterpreterFlatEmissionTests {
         }.erase()
         let gen = Gen.classify(boundArrayGen, ("recipe", { _ in true }))
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Classified generator matches flattened tree")
@@ -189,18 +200,21 @@ struct InterpreterFlatEmissionTests {
             ("large", { $0 >= 50 })
         )
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Resized generator matches flattened tree")
     func resized() throws {
         let gen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: 1000 ... 10000) as Generator<Int>))
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Raw Freer pure matches flattened tree")
     func rawPure() throws {
         let gen = Generator<Int>.pure(42)
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Zip containing a raw Freer pure matches flattened tree")
@@ -211,6 +225,7 @@ struct InterpreterFlatEmissionTests {
             Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 1 ... 3)
         )
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     @Test("Reified map matches flattened tree")
@@ -225,6 +240,7 @@ struct InterpreterFlatEmissionTests {
             inner: Gen.arrayOf(Gen.choose(in: UInt64(0) ... 20), within: 1 ... 4).map { $0.reduce(0, &+) }.erase()
         ))
         try assertFlatDrawMatchesTreeDraw(gen)
+        try assertFlatEmissionMatchesFlatten(gen)
     }
 
     // MARK: - Exact rebuild across sizes
@@ -329,9 +345,8 @@ private func assertFlatDrawMatchesTreeDraw(
                     "run \(checked): flat draw \(flatDraw.sequence.shortString) diverged from flattened tree \(flattened.shortString)",
                     sourceLocation: sourceLocation
                 )
-                // Description equality: the values are tuples and arrays of Any as often as not, and both draws consume one PRNG stream, so a rendered mismatch is the only way they can differ.
                 #expect(
-                    String(describing: flatDraw.value) == String(describing: treeDraw.value),
+                    StructuralEquality.structurallyEqual(flatDraw.value, treeDraw.value),
                     "run \(checked): flat draw produced \(flatDraw.value), tree draw produced \(treeDraw.value)",
                     sourceLocation: sourceLocation
                 )
@@ -348,7 +363,7 @@ private func assertFlatDrawMatchesTreeDraw(
                 )
                 checked += 1
             case (nil, nil):
-                #expect(checked > 0, "no run was checked", sourceLocation: sourceLocation)
+                #expect(checked == runs, "The interpreters stopped before the requested sample count", sourceLocation: sourceLocation)
                 return
             default:
                 Issue.record(

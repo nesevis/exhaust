@@ -104,21 +104,6 @@ struct ReducerSimplifyValuesTests {
         #expect(property(output) == false)
     }
 
-    @Test("Values already at simplest are not changed")
-    func alreadySimplestUnchanged() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100)
-
-        let (_, tree) = try generate(gen)
-
-        // Property always passes → nothing can be simplified
-        let property: (UInt64) -> Bool = { _ in true }
-
-        let result = Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property)
-        if case .reduced = result {
-            Issue.record("Property always passes — reduction should not find an improvement")
-        }
-    }
-
     @Test("Simplification works with positive signed integers")
     func signedIntegerSimplification() throws {
         // Use a positive-only range so 0 is shortlex-smaller than generated values

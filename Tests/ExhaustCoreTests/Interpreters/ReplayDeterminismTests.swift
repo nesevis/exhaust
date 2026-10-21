@@ -37,8 +37,8 @@ struct ReplayDeterminismTests {
         #expect(replay2 == replay3)
     }
 
-    @Test("Recipe serialization preserves determinism")
-    func recipeSerializationDeterminism() throws {
+    @Test("Reflecting a replayed value preserves its meaning")
+    func repeatedReflectionPreservesValue() throws {
         let gen: Generator<Int> = Gen.choose(in: 1 ... 1000)
 
         let value = 742
@@ -100,12 +100,6 @@ struct ReplayDeterminismTests {
         let replayed = try #require(try Interpreters.replay(gen, using: recipe))
 
         #expect(array == replayed)
-        #expect(array.count == replayed.count)
-
-        // Check element-by-element
-        for (original, replayed) in zip(array, replayed) {
-            #expect(original == replayed)
-        }
     }
 
     @Test("Generated sequence with constant length replays")

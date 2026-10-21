@@ -99,8 +99,8 @@ struct ReducerReduceValuesTests {
         #expect(output == -5)
     }
 
-    @Test("Value already at target is unchanged")
-    func alreadyAtTarget() throws {
+    @Test("An always-passing property produces no reduced counterexample")
+    func passingPropertyHasNoCounterexample() throws {
         let gen = Gen.choose(in: UInt64(0) ... 100)
 
         let (_, tree) = try generate(gen)
@@ -206,12 +206,7 @@ struct ReducerReduceValuesTests {
             try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
-        #expect(output.count == 3)
-        // At least one value should be exactly 100 (minimum failing)
-        #expect(output.contains(100))
-        // The other values should be 0 (simplified by Pass 3)
-        let nonLoadBearing = output.filter { $0 != 100 }
-        #expect(nonLoadBearing.allSatisfy { $0 == 0 })
+        #expect(output.sorted() == [0, 0, 100])
     }
 
     @Test("Dynamic child ranges from bind do not block value shrinking")

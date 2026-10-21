@@ -21,10 +21,9 @@ struct SchedulerDecisionTests {
         ) { _ in true }
 
         let original = ChoiceSequence.flatten(tree)
-        if case let .reduced(reduced, _, _) = result {
-            #expect(reduced == original, "Property always passes — sequence should be unchanged")
-        }
-        // .unreduced / .failure is also valid — means the reducer found no counterexample to work with
+        let (sequence, output) = try #require(result.counterexample)
+        #expect(sequence == original, "Passing candidates must never be accepted")
+        #expect(output == value)
     }
 
     @Test("Scheduler converges to minimum for trivially-falsified single value")
@@ -34,7 +33,7 @@ struct SchedulerDecisionTests {
         try #require(value > 0)
 
         let (_, reducedValue) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -54,7 +53,7 @@ struct SchedulerDecisionTests {
         try #require(value.count > 1)
 
         let (_, reducedValue) = try #require(
-            try Interpreters.choiceGraphReduceCollectingStats(
+            Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -63,9 +62,8 @@ struct SchedulerDecisionTests {
         )
 
         #expect(reducedValue.count <= value.count)
-        if reducedValue.isEmpty == false {
-            #expect(reducedValue[0] >= 5)
-        }
+        let first = try #require(reducedValue.first)
+        #expect(first >= 5)
     }
 
     // MARK: - Stall Budget
@@ -99,7 +97,7 @@ struct SchedulerDecisionTests {
         try #require(first > 10 && second > 10)
 
         let (_, reducedValue) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -107,6 +105,6 @@ struct SchedulerDecisionTests {
             ) { pair in pair.0 < 10 || pair.1 < 10 }.counterexample
         )
 
-        #expect(reducedValue.0 == 10 || reducedValue.1 == 10)
+        #expect(reducedValue == (10, 10))
     }
 }

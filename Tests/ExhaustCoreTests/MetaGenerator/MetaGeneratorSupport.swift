@@ -54,41 +54,6 @@ func checkAllValues(
     }
 }
 
-/// Checks a property against all generated choice trees, recording verdicts into `tally`. Returns true if the property held for every tree that produced a verdict. See ``checkAllValues`` for the `nil`/`true`/`false` contract.
-func checkAllTrees(
-    _ gen: AnyGenerator,
-    maxRuns: UInt64 = 10,
-    tally: Tally,
-    check: (ChoiceTree) throws -> Bool?
-) -> Bool {
-    var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
-    while true {
-        let element: (value: Any, tree: ChoiceTree)?
-        do {
-            element = try iter.next()
-        } catch {
-            tally.thrown += 1
-            return true
-        }
-        guard let (_, tree) = element else {
-            return true
-        }
-        do {
-            switch try check(tree) {
-                case .none:
-                    tally.vacuous += 1
-                case .some(true):
-                    tally.evaluated += 1
-                case .some(false):
-                    tally.evaluated += 1
-                    return false
-            }
-        } catch {
-            tally.thrown += 1
-        }
-    }
-}
-
 /// Returns whether the recipe contains a combinator of the given kind at any depth, matched by `predicate`.
 func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorKind) -> Bool) -> Bool {
     guard case let .combinator(kind) = recipe else {
@@ -138,13 +103,12 @@ func meanArrayLength(_ gen: AnyGenerator, size: UInt64, samples: UInt64) throws 
     var total = 0
     var count = 0
     while let (value, _) = try iter.next() {
-        guard let array = value as? [Any] else {
-            continue
-        }
+        let array = try #require(value as? [Any])
         total += array.count
         count += 1
     }
-    return count > 0 ? Double(total) / Double(count) : 0
+    try #require(count > 0)
+    return Double(total) / Double(count)
 }
 
 /// Counts how many of a recipe's generated values reflect to a non-nil tree. A throw or a nil reflection both count as "did not reflect", since `try?` collapses them.
@@ -152,7 +116,8 @@ func reflectableValueCount(_ recipe: GenRecipe, seed: UInt64, maxRuns: UInt64) t
     let gen = buildGenerator(from: recipe)
     var iter = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: maxRuns)
     var reflected = 0
-    while let (value, _) = try iter.next() {
+    for _ in 0 ..< maxRuns {
+        let (value, _) = try #require(try iter.next())
         if (try? Interpreters.reflect(gen, with: value)) != nil {
             reflected += 1
         }

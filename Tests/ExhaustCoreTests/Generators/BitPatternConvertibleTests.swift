@@ -1,90 +1,40 @@
-//
-//  BitPatternConvertibleTests.swift
-//  ExhaustTests
-//
-//  Tests for BitPatternConvertible implementations, particularly Int.
-//
-
 import ExhaustCore
 import ExhaustTestSupport
 import Testing
 
-@Suite("BitPattern Conversion")
+@Suite("BitPattern conversion")
 struct BitPatternConvertibleTests {
-    @Test("Int BitPatternConvertible round-trip for Int.min")
-    func intMinRoundTrip() {
-        let intMin = Int.min
-        let bitPattern = intMin.bitPattern64
-
-        // Verify round-trip (don't care about specific bit pattern value)
-        let reconstructed = Int(bitPattern64: bitPattern)
-        #expect(reconstructed == intMin)
+    @Test("Every integer width preserves values and encoded words")
+    func integerEncodings() throws {
+        try integerEncoding(Int.self)
+        try integerEncoding(Int8.self)
+        try integerEncoding(Int16.self)
+        try integerEncoding(Int32.self)
+        try integerEncoding(Int64.self)
+        try integerEncoding(UInt.self)
+        try integerEncoding(UInt8.self)
+        try integerEncoding(UInt16.self)
+        try integerEncoding(UInt32.self)
+        try integerEncoding(UInt64.self)
     }
 
-    @Test("Int BitPatternConvertible round-trip for Int.max")
-    func intMaxRoundTrip() {
-        let intMax = Int.max
-        let bitPattern = intMax.bitPattern64
-
-        // Verify round-trip (don't care about specific bit pattern value)
-        let reconstructed = Int(bitPattern64: bitPattern)
-        #expect(reconstructed == intMax)
-    }
-
-    @Test("Int BitPatternConvertible round-trip for zero")
-    func intZeroRoundTrip() {
-        let zero = 0
-        let bitPattern = zero.bitPattern64
-
-        // Verify round-trip (don't care about specific bit pattern value)
-        let reconstructed = Int(bitPattern64: bitPattern)
-        #expect(reconstructed == zero)
-    }
-
-    @Test("Int BitPatternConvertible round-trip for various values")
-    func intBitPatternRoundTrip() throws {
-        // #exhaust was Exhaust-only; using exhaustCheck helper
-        try exhaustCheck(Gen.choose() as Generator<Int>) { value in
-            Int(bitPattern64: value.bitPattern64) == value
+    @Test("Floating encodings preserve every bit, including NaN payloads and signed zero")
+    func floatingEncodings() throws {
+        try exhaustCheck(Gen.choose() as Generator<UInt64>) { word in
+            let value = Double(bitPattern: word)
+            return Double(bitPattern64: value.bitPattern64).bitPattern == word
+                && Double(bitPattern64: word).bitPattern64 == word
         }
-    }
-
-    @Test("Int BitPatternConvertible uses full UInt64 range")
-    func intBitPatternUsesFullRange() {
-        #expect(Int.bitPatternRange == UInt64.min ... UInt64.max)
-    }
-
-    @Test("UInt64 to Int mapping round-trip consistency")
-    func uInt64ToIntMappingRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt64>) { bitPattern in
-            Int(bitPattern64: bitPattern).bitPattern64 == bitPattern
+        try exhaustCheck(Gen.choose() as Generator<UInt32>) { word in
+            let value = Float(bitPattern: word)
+            return Float(bitPattern64: value.bitPattern64).bitPattern == word
+                && Float(bitPattern64: UInt64(word)).bitPattern64 == UInt64(word)
         }
-    }
-
-    @Test("Float BitPatternConvertible round-trip for arbitrary values")
-    func floatSpecialValuesRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<Float>) { val in
-            val.isNaN || Float(bitPattern64: val.bitPattern64) == val
+        for value in [Double.zero, -Double.zero, .infinity, -.infinity, .nan] {
+            #expect(Double(bitPattern64: value.bitPattern64).bitPattern == value.bitPattern)
         }
-    }
-
-    @Test("Float BitPatternConvertible round-trip for infinity and NaN")
-    func floatInfinityAndNaNRoundTrip() {
-        let testValues: [Float] = [
-            Float.infinity,
-            -Float.infinity,
-            Float.nan,
-        ]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Float(bitPattern64: bitPattern)
-
-            if value.isNaN {
-                #expect(reconstructed.isNaN, "NaN round-trip failed")
-            } else {
-                #expect(reconstructed == value, "Round-trip failed for Float(\(value)): got \(reconstructed)")
-            }
+        for value in [Float.zero, -Float.zero, .infinity, -.infinity, .nan] {
+            #expect(Float(bitPattern64: value.bitPattern64).bitPattern == value.bitPattern)
         }
     }
 
@@ -99,33 +49,6 @@ struct BitPatternConvertibleTests {
         }
     }
 
-    @Test("Double BitPatternConvertible round-trip for arbitrary values")
-    func doubleSpecialValuesRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<Double>) { val in
-            val.isNaN || Double(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("Double BitPatternConvertible round-trip for infinity and NaN")
-    func doubleInfinityAndNaNRoundTrip() {
-        let testValues: [Double] = [
-            Double.infinity,
-            -Double.infinity,
-            Double.nan,
-        ]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Double(bitPattern64: bitPattern)
-
-            if value.isNaN {
-                #expect(reconstructed.isNaN, "NaN round-trip failed")
-            } else {
-                #expect(reconstructed == value, "Round-trip failed for Double(\(value)): got \(reconstructed)")
-            }
-        }
-    }
-
     @Test("Property test Double bit pattern representation is sequential with size")
     func propertyTestDoubleBitPatternSequentiality() throws {
         let gen = Gen.zip(
@@ -134,50 +57,6 @@ struct BitPatternConvertibleTests {
         )
         try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
-        }
-    }
-
-    @Test("UInt64 to Float mapping round-trip consistency")
-    func uInt64ToFloatMappingRoundTrip() throws {
-        try exhaustCheck(Gen.choose(in: UInt64(0) ... UInt64(UInt32.max))) { bitPattern in
-            Float(bitPattern64: bitPattern).bitPattern64 == bitPattern
-        }
-    }
-
-    @Test("UInt64 to Double mapping round-trip consistency")
-    func uInt64ToDoubleMappingRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt64>) { bitPattern in
-            Double(bitPattern64: bitPattern).bitPattern64 == bitPattern
-        }
-    }
-
-    // MARK: - Signed Integer Tests
-
-    @Test("Int8 BitPatternConvertible round-trip")
-    func int8BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<Int8>) { val in
-            Int8(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("Int16 BitPatternConvertible round-trip")
-    func int16BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<Int16>) { val in
-            Int16(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("Int32 BitPatternConvertible round-trip")
-    func int32BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<Int32>) { val in
-            Int32(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("Int64 BitPatternConvertible round-trip")
-    func int64BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<Int64>) { val in
-            Int64(bitPattern64: val.bitPattern64) == val
         }
     }
 
@@ -192,46 +71,6 @@ struct BitPatternConvertibleTests {
         }
     }
 
-    // MARK: - Unsigned Integer Tests
-
-    @Test("UInt8 BitPatternConvertible round-trip")
-    func uInt8BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt8>) { val in
-            UInt8(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("UInt16 BitPatternConvertible round-trip")
-    func uInt16BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt16>) { val in
-            UInt16(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("UInt32 BitPatternConvertible round-trip")
-    func uInt32BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt32>) { val in
-            UInt32(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("UInt64 BitPatternConvertible round-trip")
-    func uInt64BitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt64>) { val in
-            UInt64(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    @Test("UInt BitPatternConvertible round-trip")
-    func uIntBitPatternRoundTrip() throws {
-        try exhaustCheck(Gen.choose() as Generator<UInt>) { val in
-            UInt(bitPattern64: val.bitPattern64) == val
-        }
-    }
-
-    // MARK: - Mixed-sign zero ranges
-
-    /// The monotonic encoding orders -0.0 strictly below +0.0 while float comparison calls them equal, so `0.0 ... -0.0` is a valid `ClosedRange` whose encoded bounds invert. Gen.choose reorders the encoded bounds; without that, every interpreter's `min ... max` construction traps. Found by the self-fuzzing harness.
     @Test("Double range 0.0 ... -0.0 generates zeros without trapping")
     func mixedSignZeroDoubleRange() throws {
         var iterator = ValueInterpreter(Gen.choose(in: 0.0 ... -0.0 as ClosedRange<Double>), seed: 1, maxRuns: 10)
@@ -263,5 +102,22 @@ struct BitPatternConvertibleTests {
             generated += 1
         }
         #expect(generated == 10)
+    }
+}
+
+// MARK: - Shared integer contract
+
+private func integerEncoding<Value: FixedWidthInteger & BitPatternConvertible>(_ type: Value.Type) throws {
+    // Independent endpoint pins complement the two inverse laws.
+    #expect(Value.min.bitPattern64 == 0, "\(type)")
+    #expect(Value.max.bitPattern64 == Value.bitPatternRange.upperBound, "\(type)")
+    for value in [Value.min, .max, 0, 1] {
+        #expect(Value(bitPattern64: value.bitPattern64) == value, "\(type)")
+    }
+    try exhaustCheck(Gen.choose() as Generator<Value>) { value in
+        Value(bitPattern64: value.bitPattern64) == value
+    }
+    try exhaustCheck(Gen.choose(in: Value.bitPatternRange)) { word in
+        Value(bitPattern64: word).bitPattern64 == word
     }
 }

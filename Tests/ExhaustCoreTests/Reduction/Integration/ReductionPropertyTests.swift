@@ -157,9 +157,9 @@ struct ReductionPropertyTests {
         )
 
         let originalSequence = ChoiceSequence.flatten(tree)
-        if case let .reduced(reduced, _, _) = result {
-            #expect(reduced == originalSequence, "Minimal value should not change during reduction")
-        }
-        // .unreduced / .failure is also acceptable — it means the reducer found no improvement
+        let (sequence, output) = try #require(result.counterexample)
+        #expect(sequence == originalSequence)
+        #expect(output == 0)
+        #expect(property(output) == false)
     }
 }

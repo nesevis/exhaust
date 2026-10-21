@@ -3,417 +3,84 @@ import Testing
 
 @Suite("Redistribution Rational Math")
 struct RedistributionRationalMathTests {
-    // MARK: - makeMixedRedistributionContext: Integer Pairs
-
-    @Test("Same-type signed integers produce denominator 1 and correct distance")
-    func sameSignedIntegers() {
-        let source = ChoiceValue(Int64(10), tag: .int64)
-        let sink = ChoiceValue(Int64(3), tag: .int64)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        guard let context else {
-            Issue.record("Expected non-nil context for same-type signed pair")
-            return
-        }
+    @Test("Integral contexts preserve magnitude, direction, and unit steps", arguments: [
+        (ChoiceValue(Int64(10), tag: .int64), ChoiceValue(Int64(3), tag: .int64), UInt64(10), false),
+        (ChoiceValue(Int64(-7), tag: .int64), ChoiceValue(Int64(0), tag: .int64), UInt64(7), true),
+        (ChoiceValue(Int16(6), tag: .int16), ChoiceValue(Int32(2), tag: .int32), UInt64(6), false),
+        (ChoiceValue(UInt64(100), tag: .uint64), ChoiceValue(UInt64(0), tag: .uint64), UInt64(100), false),
+        (ChoiceValue(4.0, tag: .double), ChoiceValue(1.0, tag: .double), UInt64(4), false),
+    ])
+    func contextContract(source: ChoiceValue, sink: ChoiceValue, distance: UInt64, movesUpward: Bool) throws {
+        let context = try #require(context(source, sink))
         #expect(context.denominator == 1)
         #expect(context.intStepSize == 1)
-        #expect(context.distanceInSteps == 10)
-        #expect(context.sourceMovesUpward == false)
+        #expect(context.distanceInSteps == distance)
+        #expect(context.sourceMovesUpward == movesUpward)
     }
 
-    @Test("Negative signed source moves upward toward zero")
-    func negativeSignedMovesUpward() {
-        let source = ChoiceValue(Int64(-7), tag: .int64)
-        let sink = ChoiceValue(Int64(0), tag: .int64)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        guard let context else {
-            Issue.record("Expected non-nil context for negative source")
-            return
-        }
-        #expect(context.sourceMovesUpward == true)
-        #expect(context.distanceInSteps == 7)
+    @Test("Ineligible pairs have no rational context", arguments: [
+        (ChoiceValue(Int64(0), tag: .int64), ChoiceValue(Int64(5), tag: .int64)),
+        (ChoiceValue(UInt64(Int64.max) + 1, tag: .uint64), ChoiceValue(UInt64(0), tag: .uint64)),
+        (ChoiceValue(Double.infinity, tag: .double), ChoiceValue(1.0, tag: .double)),
+        (ChoiceValue(1.0, tag: .double), ChoiceValue(Double.nan, tag: .double)),
+    ])
+    func ineligiblePairs(source: ChoiceValue, sink: ChoiceValue) {
+        #expect(context(source, sink) == nil)
     }
 
-    @Test("Source already at target returns nil")
-    func sourceAtTargetReturnsNil() {
-        let source = ChoiceValue(Int64(0), tag: .int64)
-        let sink = ChoiceValue(Int64(5), tag: .int64)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        #expect(context == nil)
-    }
-
-    // MARK: - makeMixedRedistributionContext: Cross-Type Pairs
-
-    @Test("Cross-type integer pair has intStepSize equal to denominator")
-    func crossTypeIntegerPair() {
-        let source = ChoiceValue(Int16(6), tag: .int16)
-        let sink = ChoiceValue(Int32(2), tag: .int32)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        guard let context else {
-            Issue.record("Expected non-nil context for cross-type pair")
-            return
-        }
-        #expect(context.denominator == 1)
-        #expect(context.intStepSize == 1)
-        #expect(context.distanceInSteps == 6)
-    }
-
-    @Test("Unsigned source with large value produces valid context")
-    func unsignedLargeValue() {
-        let source = ChoiceValue(100 as UInt64, tag: .uint64)
-        let sink = ChoiceValue(0 as UInt64, tag: .uint64)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        guard let context else {
-            Issue.record("Expected non-nil context for unsigned pair")
-            return
-        }
-        #expect(context.distanceInSteps == 100)
-        #expect(context.sourceMovesUpward == false)
-    }
-
-    @Test("Unsigned value exceeding Int64.max returns nil")
-    func unsignedExceedingInt64MaxReturnsNil() {
-        let source = ChoiceValue(UInt64(Int64.max) + 1, tag: .uint64)
-        let sink = ChoiceValue(0 as UInt64, tag: .uint64)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        #expect(context == nil)
-    }
-
-    // MARK: - makeMixedRedistributionContext: Float Pairs
-
-    @Test("Same-type double pair produces rational context with nonzero distance")
-    func sameTypeDoublePair() {
-        let source = ChoiceValue(4.0, tag: .double)
-        let sink = ChoiceValue(1.0, tag: .double)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        guard let context else {
-            Issue.record("Expected non-nil context for double pair")
-            return
-        }
-        #expect(context.distanceInSteps > 0)
-        #expect(context.denominator > 0)
-    }
-
-    @Test("Non-finite float source returns nil")
-    func nonFiniteFloatReturnsNil() {
-        let source = ChoiceValue(Double.infinity, tag: .double)
-        let sink = ChoiceValue(1.0, tag: .double)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        #expect(context == nil)
-    }
-
-    @Test("Non-finite float sink returns nil")
-    func nonFiniteFloatSinkReturnsNil() {
-        let source = ChoiceValue(1.0, tag: .double)
-        let sink = ChoiceValue(Double.nan, tag: .double)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        #expect(context == nil)
-    }
-
-    // MARK: - makeMixedRedistributionContext: Explicit Range
-
-    @Test("Explicit source range constrains reduction target")
-    func explicitRangeConstrainsTarget() {
+    @Test("Explicit source range changes the reduction distance")
+    func explicitRangeConstrainsTarget() throws {
         let source = ChoiceValue(Int64(10), tag: .int64)
         let sink = ChoiceValue(Int64(0), tag: .int64)
-        let rangedBP = Int64(5).bitPattern64 ... Int64(15).bitPattern64
-
-        let contextWithRange = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: rangedBP,
+        let ranged = try #require(RedistributionSearch.makeMixedRedistributionContext(
+            sourceChoice: source, sinkChoice: sink,
+            sourceValidRange: Int64(5).bitPattern64 ... Int64(15).bitPattern64,
             sourceIsRangeExplicit: true
-        )
-        let contextWithoutRange = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        guard let withRange = contextWithRange, let withoutRange = contextWithoutRange else {
-            Issue.record("Both contexts should be non-nil")
-            return
-        }
-        #expect(withRange.distanceInSteps <= withoutRange.distanceInSteps)
+        ))
+        #expect(ranged.distanceInSteps == 5)
+        #expect(try #require(context(source, sink)).distanceInSteps == 10)
     }
 
-    // MARK: - mixedRedistributedPairChoices: Basic Round-Trips
-
-    @Test("Redistributed signed integers move source toward target and sink in opposite direction")
-    func redistSignedRoundTrip() {
-        let source = ChoiceValue(Int64(10), tag: .int64)
-        let sink = ChoiceValue(Int64(3), tag: .int64)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context")
-            return
-        }
-
-        guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-            sourceChoice: source,
-            sinkChoice: sink,
-            delta: 3,
-            context: context
-        ) else {
-            Issue.record("Expected non-nil result for delta=3")
-            return
-        }
-
-        #expect(newSource.decodedSignedValue == 7)
-        #expect(newSink.decodedSignedValue == 6)
-    }
-
-    @Test("Full delta zeroes the source")
-    func fullDeltaZeroesSource() {
-        let source = ChoiceValue(Int64(5), tag: .int64)
-        let sink = ChoiceValue(Int64(0), tag: .int64)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context")
-            return
-        }
-
-        guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-            sourceChoice: source,
-            sinkChoice: sink,
-            delta: context.distanceInSteps,
-            context: context
-        ) else {
-            Issue.record("Expected non-nil result for full delta")
-            return
-        }
-
-        #expect(newSource.decodedSignedValue == 0)
-        #expect(newSink.decodedSignedValue == 5)
-    }
-
-    @Test("Negative source redistributes upward toward zero")
-    func negativeSourceRedistributes() {
-        let source = ChoiceValue(Int64(-8), tag: .int64)
-        let sink = ChoiceValue(Int64(0), tag: .int64)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context")
-            return
-        }
-
-        #expect(context.sourceMovesUpward == true)
-
-        guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-            sourceChoice: source,
-            sinkChoice: sink,
-            delta: 4,
-            context: context
-        ) else {
-            Issue.record("Expected non-nil result for delta=4")
-            return
-        }
-
-        #expect(newSource.decodedSignedValue == -4)
-        #expect(newSink.decodedSignedValue == -4)
-    }
-
-    // MARK: - mixedRedistributedPairChoices: Edge Cases
-
-    @Test("Delta exceeding distanceInSteps returns nil")
-    func excessiveDeltaReturnsNil() {
-        let source = ChoiceValue(Int64(5), tag: .int64)
-        let sink = ChoiceValue(Int64(0), tag: .int64)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context")
-            return
-        }
-
-        let result = RedistributionSearch.mixedRedistributedPairChoices(
-            sourceChoice: source,
-            sinkChoice: sink,
-            delta: context.distanceInSteps + 1,
-            context: context
-        )
-        #expect(result == nil)
-    }
-
-    @Test("Zero delta is prevented by makeMixedRedistributionContext requiring nonzero distance")
-    func zeroDeltaGuardedByContextConstruction() {
-        let source = ChoiceValue(Int64(0), tag: .int64)
-        let sink = ChoiceValue(Int64(5), tag: .int64)
-
-        let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        )
-        #expect(context == nil)
-    }
-
-    // MARK: - mixedRedistributedPairChoices: Unsigned
-
-    @Test("Unsigned integer redistribution preserves total")
-    func unsignedRedistributionPreservesTotal() {
-        let source = ChoiceValue(20 as UInt64, tag: .uint64)
-        let sink = ChoiceValue(5 as UInt64, tag: .uint64)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context")
-            return
-        }
-
-        guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-            sourceChoice: source,
-            sinkChoice: sink,
-            delta: 7,
-            context: context
-        ) else {
-            Issue.record("Expected non-nil result")
-            return
-        }
-
-        #expect(newSource.bitPattern64 == 13)
-        #expect(newSink.bitPattern64 == 12)
-    }
-
-    // MARK: - mixedRedistributedPairChoices: Float Round-Trip
-
-    @Test("Double pair redistribution produces finite results")
-    func doubleRedistributionFinite() {
-        let source = ChoiceValue(6.0, tag: .double)
-        let sink = ChoiceValue(2.0, tag: .double)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context for double pair")
-            return
-        }
-
-        guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-            sourceChoice: source,
-            sinkChoice: sink,
-            delta: 1,
-            context: context
-        ) else {
-            Issue.record("Expected non-nil result for delta=1")
-            return
-        }
-
-        #expect(newSource.decodedDoubleValue.isFinite)
-        #expect(newSink.decodedDoubleValue.isFinite)
-        #expect(newSource.decodedDoubleValue < 6.0, "Source should decrease after redistribution")
-        #expect(newSink.decodedDoubleValue > 2.0, "Sink should increase after redistribution")
-    }
-
-    // MARK: - Conservation Property
-
-    @Test("Signed integer redistribution conserves total value across all valid deltas")
-    func conservationAcrossDeltas() {
-        let source = ChoiceValue(Int64(12), tag: .int64)
-        let sink = ChoiceValue(Int64(3), tag: .int64)
-        let originalTotal = Int64(12) + Int64(3)
-
-        guard let context = RedistributionSearch.makeMixedRedistributionContext(
-            sourceChoice: source,
-            sinkChoice: sink,
-            sourceValidRange: nil,
-            sourceIsRangeExplicit: false
-        ) else {
-            Issue.record("Expected non-nil context")
-            return
-        }
-
+    @Test("Every legal delta moves both operands exactly and the next delta is rejected", arguments: [
+        (ChoiceValue(Int64(10), tag: .int64), ChoiceValue(Int64(3), tag: .int64), Int64(10), Int64(3)),
+        (ChoiceValue(Int64(5), tag: .int64), ChoiceValue(Int64(0), tag: .int64), Int64(5), Int64(0)),
+        (ChoiceValue(Int64(-8), tag: .int64), ChoiceValue(Int64(0), tag: .int64), Int64(-8), Int64(0)),
+        (ChoiceValue(UInt64(20), tag: .uint64), ChoiceValue(UInt64(5), tag: .uint64), Int64(20), Int64(5)),
+        (ChoiceValue(6.0, tag: .double), ChoiceValue(2.0, tag: .double), Int64(6), Int64(2)),
+        (ChoiceValue(Int64(12), tag: .int64), ChoiceValue(Int64(3), tag: .int64), Int64(12), Int64(3)),
+    ])
+    func transferContract(source: ChoiceValue, sink: ChoiceValue, sourceValue: Int64, sinkValue: Int64) throws {
+        let context = try #require(context(source, sink))
+        try #require(context.distanceInSteps == sourceValue.magnitude)
         for delta in 1 ... context.distanceInSteps {
-            guard let (newSource, newSink) = RedistributionSearch.mixedRedistributedPairChoices(
-                sourceChoice: source,
-                sinkChoice: sink,
-                delta: delta,
-                context: context
-            ) else {
-                continue
+            let (newSource, newSink) = try #require(RedistributionSearch.mixedRedistributedPairChoices(
+                sourceChoice: source, sinkChoice: sink, delta: delta, context: context
+            ))
+            let movement = sourceValue > 0 ? Int64(delta) : -Int64(delta)
+            let expectedSource = sourceValue - movement
+            let expectedSink = sinkValue + movement
+            switch source.tag {
+                case .double:
+                    #expect(newSource.decodedDoubleValue == Double(expectedSource))
+                    #expect(newSink.decodedDoubleValue == Double(expectedSink))
+                case .uint64:
+                    #expect(newSource.bitPattern64 == UInt64(expectedSource))
+                    #expect(newSink.bitPattern64 == UInt64(expectedSink))
+                default:
+                    #expect(newSource.decodedSignedValue == expectedSource)
+                    #expect(newSink.decodedSignedValue == expectedSink)
             }
-            let newTotal = newSource.decodedSignedValue + newSink.decodedSignedValue
-            #expect(newTotal == originalTotal, "Total not conserved at delta=\(delta): \(newSource.decodedSignedValue) + \(newSink.decodedSignedValue) = \(newTotal) != \(originalTotal)")
+            #expect(newSource.tag == source.tag)
+            #expect(newSink.tag == sink.tag)
         }
+        #expect(RedistributionSearch.mixedRedistributedPairChoices(
+            sourceChoice: source, sinkChoice: sink, delta: context.distanceInSteps + 1, context: context
+        ) == nil)
+    }
+
+    private func context(_ source: ChoiceValue, _ sink: ChoiceValue) -> RedistributionSearch.MixedRedistributionContext? {
+        RedistributionSearch.makeMixedRedistributionContext(
+            sourceChoice: source, sinkChoice: sink, sourceValidRange: nil, sourceIsRangeExplicit: false
+        )
     }
 }

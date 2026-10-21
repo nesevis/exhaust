@@ -19,8 +19,8 @@ struct SizeScalingDistributionTests {
     // MARK: - Signed integers anchor at zero
 
     @Test("Int linear at small size clusters symmetrically around zero")
-    func intLinearCentersOnZero() {
-        let samples = sample(
+    func intLinearCentersOnZero() throws {
+        let samples = try sample(
             Gen.resize(30, Gen.choose(in: Int.min ... Int.max, scaling: .linear)),
             count: 400,
             seed: 1
@@ -41,13 +41,13 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Int exponential at small size is tighter than linear")
-    func intExponentialTighterThanLinear() {
-        let linearSamples = sample(
+    func intExponentialTighterThanLinear() throws {
+        let linearSamples = try sample(
             Gen.resize(20, Gen.choose(in: Int.min ... Int.max, scaling: .linear)),
             count: 400,
             seed: 2
         )
-        let exponentialSamples = sample(
+        let exponentialSamples = try sample(
             Gen.resize(20, Gen.choose(in: Int.min ... Int.max, scaling: .exponential)),
             count: 400,
             seed: 2
@@ -63,8 +63,8 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Int linear at size 100 spans the full range")
-    func intLinearReachesFullRangeAtSize100() {
-        let samples = sample(
+    func intLinearReachesFullRangeAtSize100() throws {
+        let samples = try sample(
             Gen.resize(100, Gen.choose(in: Int.min ... Int.max, scaling: .linear)),
             count: 400,
             seed: 3
@@ -81,9 +81,9 @@ struct SizeScalingDistributionTests {
     // MARK: - Floats anchor at zero
 
     @Test("Double linear at small size clusters symmetrically around zero")
-    func doubleLinearCentersOnZero() {
+    func doubleLinearCentersOnZero() throws {
         let range = -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude
-        let samples = sample(
+        let samples = try sample(
             Gen.resize(25, Gen.choose(in: range, scaling: .linear)),
             count: 400,
             seed: 4
@@ -104,8 +104,8 @@ struct SizeScalingDistributionTests {
     // MARK: - Unsigned integers anchor at the lower bound
 
     @Test("UInt64 linear at small size stays near the lower bound")
-    func uint64LinearAnchorsAtLowerBound() {
-        let samples = sample(
+    func uint64LinearAnchorsAtLowerBound() throws {
+        let samples = try sample(
             Gen.resize(10, Gen.choose(in: UInt64.min ... UInt64.max, scaling: .linear)),
             count: 400,
             seed: 5
@@ -120,9 +120,9 @@ struct SizeScalingDistributionTests {
     // MARK: - Ranges entirely above or below zero
 
     @Test("Linear on range above zero grows upward from lower bound")
-    func linearOnPositiveRangeGrowsUpward() {
+    func linearOnPositiveRangeGrowsUpward() throws {
         let range: ClosedRange<Int> = 100 ... 1_000_000
-        let samples = sample(
+        let samples = try sample(
             Gen.resize(10, Gen.choose(in: range, scaling: .linear)),
             count: 400,
             seed: 6
@@ -136,9 +136,9 @@ struct SizeScalingDistributionTests {
     }
 
     @Test("Linear on range below zero grows downward from upper bound")
-    func linearOnNegativeRangeGrowsDownward() {
+    func linearOnNegativeRangeGrowsDownward() throws {
         let range: ClosedRange<Int> = -1_000_000 ... -100
-        let samples = sample(
+        let samples = try sample(
             Gen.resize(10, Gen.choose(in: range, scaling: .linear)),
             count: 400,
             seed: 7
@@ -293,13 +293,14 @@ private func sample<Value>(
     _ gen: Generator<Value>,
     count: Int,
     seed: UInt64
-) -> [Value] {
+) throws -> [Value] {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
     var values: [Value] = []
     values.reserveCapacity(count)
-    while let value = try? iter.next() {
+    while let value = try iter.next() {
         values.append(value)
     }
+    #expect(values.count == count)
     return values
 }
 

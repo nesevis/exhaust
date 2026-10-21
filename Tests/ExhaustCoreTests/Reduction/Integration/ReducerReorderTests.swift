@@ -1,136 +1,43 @@
-//
-//  ReducerReorderTests.swift
-//  ExhaustTests
-//
-
 import ExhaustCore
 import ExhaustTestSupport
 import Testing
 
-@Suite("Reducer Pass 6: sibling value reordering")
+@Suite("Reducer: sibling value reordering")
 struct ReducerReorderTests {
-    @Test("Unsorted array is reordered to sorted")
-    func unsortedArrayReordered() throws {
-        // Generate [UInt64] with values that will likely be out of order
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+    @Test("Reordering sorts without changing values and replays its result", arguments: [
+        [UInt64(3), 1, 2],
+        [1, 2, 3],
+        [4, 1, 3, 2],
+        [5, 3, 1, 4, 2],
+    ])
+    func sortsAndReplays(values: [UInt64]) throws {
+        let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: UInt64(values.count))
+        let tree = try #require(try Interpreters.reflect(generator, with: values))
+        let (sequence, output) = try #require(Interpreters.choiceGraphReduce(
+            gen: generator, tree: tree, output: values, config: reorderConfiguration, property: { _ in false }
+        ).counterexample)
 
-        // Try seeds until we find one that produces an unsorted array
-        var foundResult: (value: [UInt64], tree: ChoiceTree)?
-        for seed: UInt64 in 0 ... 100 {
-            let (value, tree) = try generate(gen, seed: seed, iteration: 5)
-            if value != value.sorted() {
-                foundResult = (value, tree)
-                break
-            }
-        }
-        let (originalValue, tree) = try #require(foundResult)
-        #expect(originalValue != originalValue.sorted())
-
-        // Property: always fails → reducer can freely reorder
-        let property: ([UInt64]) -> Bool = { _ in false }
-
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
-        )
-
-        // The output should be sorted (or at least simpler than the original)
-        #expect(output.sorted() == output)
-    }
-
-    @Test("Already-sorted sequence is not changed by reorder pass")
-    func alreadySortedNoChange() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
-
-        // Find a seed that produces an already-sorted array
-        var foundResult: (value: [UInt64], tree: ChoiceTree)?
-        for seed: UInt64 in 0 ... 1000 {
-            let (value, tree) = try generate(gen, seed: seed, iteration: 5)
-            if value == value.sorted(), value != [0, 0, 0] {
-                foundResult = (value, tree)
-                break
-            }
-        }
-        let (_, tree) = try #require(foundResult, "No naturally sorted seed found in 0...1000")
-
-        // Property always fails
-        let property: ([UInt64]) -> Bool = { _ in false }
-
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
-        )
-
-        // Values should still be sorted after reduction
-        #expect(output == output.sorted())
-    }
-
-    @Test("Reordering that would cause property to pass is not accepted")
-    func reorderingRejectedWhenPropertyPasses() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
-
-        var foundResult: (value: [UInt64], tree: ChoiceTree)?
-        for seed: UInt64 in 0 ... 100 {
-            let (value, tree) = try generate(gen, seed: seed, iteration: 5)
-            if value != value.sorted() {
-                foundResult = (value, tree)
-                break
-            }
-        }
-        let (_, tree) = try #require(foundResult)
-
-        // Property fails ONLY when array is not sorted
-        // So reordering to sorted would make the property pass → must be rejected
-        let property: ([UInt64]) -> Bool = { arr in
-            arr == arr.sorted()
-        }
-
-        let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
-        )
-
-        // The output must still fail the property
-        #expect(property(output) == false)
-        // Therefore the array must NOT be sorted
-        #expect(output != output.sorted())
-    }
-
-    @Test("Reduced sequence from reorder pass has balanced brackets")
-    func reducedSequenceBalanced() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: 5)
-
-        let (_, tree) = try generate(gen, seed: 7, iteration: 5)
-
-        let property: ([UInt64]) -> Bool = { _ in false }
-
-        let (sequence, _) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
-        )
-
+        #expect(output == values.sorted())
         #expect(ChoiceSequence.validate(sequence))
-    }
-
-    @Test("Materialized output from reordered sequence matches stored output")
-    func materializedMatchesStored() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 4)
-
-        let (_, tree) = try generate(gen, seed: 13, iteration: 5)
-
-        let property: ([UInt64]) -> Bool = { _ in false }
-
-        let (sequence, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
-        )
-
-        guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: sequence, mode: .exact, fallbackTree: tree
-        )) else {
-            Issue.record("Expected .success")
+        guard case let .success(replayed, _, _) = Materializer.materialize(
+            generator, context: .init(prefix: sequence, mode: .exact, fallbackTree: tree)
+        ) else {
+            Issue.record("Reordered history failed exact replay")
             return
         }
+        #expect(replayed == output)
+    }
 
-        #expect(output == rematerialized)
+    @Test("Reordering preserves a failure that requires an unsorted array")
+    func refusesPassingOrder() throws {
+        let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let original: [UInt64] = [3, 1, 2]
+        let reduced = try reduceFromReflection(generator, startingAt: original, config: reorderConfiguration) {
+            $0 == $0.sorted()
+        }
+        #expect(reduced != reduced.sorted())
+        #expect(reduced.sorted() == original.sorted())
     }
 }
 
-// MARK: - Helpers
-
-private let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
+private let reorderConfiguration = Interpreters.ReducerConfiguration(maxStalls: 2, enabledEncoders: [.numericReorder])

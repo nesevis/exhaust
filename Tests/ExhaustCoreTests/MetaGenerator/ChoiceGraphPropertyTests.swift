@@ -4,8 +4,8 @@ import Testing
 
 @Suite("ChoiceGraph Construction Properties", .tags(.dogfood))
 struct ChoiceGraphPropertyTests {
-    @Test("Every leaf node has a non-nil position range", arguments: recipeSeeds, metaRecipeTypes)
-    func leafNodesHavePositions(seed: UInt64, type: RecipeType) throws {
+    @Test("Generated graphs preserve positions, containment and live-node indexing", arguments: recipeSeeds, metaRecipeTypes)
+    func graphConstructionContract(seed: UInt64, type: RecipeType) throws {
         try forEachRecipeGraph(seed: seed, type: type) { graph, recipe in
             for leafID in graph.leafNodes {
                 #expect(
@@ -13,29 +13,12 @@ struct ChoiceGraphPropertyTests {
                     "Leaf node \(leafID) has nil position range for recipe: \(recipe)"
                 )
             }
-        }
-    }
 
-    @Test("Position ranges of leaf nodes are non-overlapping", arguments: recipeSeeds, metaRecipeTypes)
-    func positionRangesNonOverlapping(seed: UInt64, type: RecipeType) throws {
-        try forEachRecipeGraph(seed: seed, type: type) { graph, recipe in
-            let ranges = graph.leafNodes.compactMap { graph.nodes[$0].positionRange }
-            guard ranges.count >= 2 else {
-                return
+            let sorted = graph.leafNodes.compactMap { graph.nodes[$0].positionRange }.sorted { $0.lowerBound < $1.lowerBound }
+            for (previous, next) in zip(sorted, sorted.dropFirst()) {
+                #expect(next.lowerBound > previous.upperBound, "Overlapping leaf ranges for recipe: \(recipe)")
             }
-            let sorted = ranges.sorted { $0.lowerBound < $1.lowerBound }
-            for index in 1 ..< sorted.count {
-                #expect(
-                    sorted[index].lowerBound > sorted[index - 1].upperBound,
-                    "Overlapping position ranges at index \(index) for recipe: \(recipe)"
-                )
-            }
-        }
-    }
 
-    @Test("Parent links are consistent with children links", arguments: recipeSeeds, metaRecipeTypes)
-    func parentChildConsistency(seed: UInt64, type: RecipeType) throws {
-        try forEachRecipeGraph(seed: seed, type: type) { graph, recipe in
             for (index, node) in graph.nodes.enumerated() {
                 for childID in node.children {
                     #expect(
@@ -44,12 +27,7 @@ struct ChoiceGraphPropertyTests {
                     )
                 }
             }
-        }
-    }
 
-    @Test("Live node IDs reference valid nodes with non-nil position ranges", arguments: recipeSeeds, metaRecipeTypes)
-    func liveNodeIDsValid(seed: UInt64, type: RecipeType) throws {
-        try forEachRecipeGraph(seed: seed, type: type) { graph, recipe in
             for nodeID in graph.liveNodeIDs {
                 #expect(
                     nodeID >= 0 && nodeID < graph.nodes.count,
@@ -72,6 +50,8 @@ private func forEachRecipeGraph(
     type: RecipeType,
     check: (ChoiceGraph, GenRecipe) throws -> Void
 ) throws {
+    var checkedGraphs = 0
+    var checkedLeaves = 0
     var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 2), seed: seed, maxRuns: 30)
     while let recipe = try recipeIter.next() {
         guard recipe.nodeCount <= metaRecipeNodeBudget else {
@@ -80,9 +60,14 @@ private func forEachRecipeGraph(
         let gen = buildGenerator(from: recipe)
         var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed &+ 1, maxRuns: 5)
         while let (_, tree) = try valueIter.next() {
-            try check(ChoiceGraph.build(from: tree), recipe)
+            let graph = ChoiceGraph.build(from: tree)
+            checkedGraphs += 1
+            checkedLeaves += graph.leafNodes.count
+            try check(graph, recipe)
         }
     }
+    #expect(checkedGraphs > 0)
+    #expect(checkedLeaves > 0)
 }
 
 /// Seeds for the recipe interpreter; each test replays identically across runs while still covering 90 recipes per output type.

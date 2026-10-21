@@ -17,12 +17,12 @@ struct EnabledEncoderFilterTests {
         let property: ([UInt64]) -> Bool = { $0.count < 3 }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
         #expect(output.count >= 3, "Property requires count >= 3 to fail")
         #expect(output.count < 5, "Deletion should have removed at least one element")
-        #expect(output.allSatisfy { $0 >= 50 }, "Values should remain in the original range (no value search)")
+        #expect(output == value.filter { output.contains($0) }, "Deletion preserves surviving values and their order")
     }
 
     @Test("Value-search-only pass simplifies values but does not shorten the array")
@@ -38,7 +38,7 @@ struct EnabledEncoderFilterTests {
         let property: ([UInt64]) -> Bool = { $0.count != 4 || $0.allSatisfy { $0 == 0 } }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
         #expect(output.count == 4, "Array length should be unchanged (no deletion)")
@@ -55,7 +55,7 @@ struct EnabledEncoderFilterTests {
         let property: ([UInt64]) -> Bool = { $0.count < 3 || $0.allSatisfy { $0 == 0 } }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
         #expect(output.count < 5, "Deletion should shorten the array")
@@ -78,10 +78,9 @@ struct EnabledEncoderFilterTests {
 
         let result = Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
 
-        if case let .reduced(_, _, output) = result {
-            #expect(output == value, "No encoders enabled means the result should be unchanged")
-        }
-        // .unreduced / .failure is also acceptable — it means no improvement was found
+        let (sequence, output) = try #require(result.counterexample)
+        #expect(output == value, "No encoders enabled means the result should be unchanged")
+        #expect(sequence == ChoiceSequence(tree))
     }
 
     @Test("Two-pass staging: structural then value reaches the same result as all-at-once")
@@ -96,8 +95,8 @@ struct EnabledEncoderFilterTests {
         let cosmetic = Set(EncoderName.allCases).subtracting(structural)
 
         // Pass 1: structural
-        let (afterStructuralSequence, afterStructuralOutput) = try #require(
-            try Interpreters.choiceGraphReduce(
+        let (afterStructuralSequence, _) = try #require(
+            Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree,
                 config: .init(maxStalls: 2, enabledEncoders: structural),
                 property: property
@@ -120,18 +119,17 @@ struct EnabledEncoderFilterTests {
             config: .init(maxStalls: 2, enabledEncoders: cosmetic),
             property: property
         )
-        let twoPassResult = afterCosmetic.counterexample?.1 ?? afterStructuralOutput
+        let (_, twoPassResult) = try #require(afterCosmetic.counterexample)
 
         // Full reduction in one pass
         let (_, fullOutput) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree,
                 config: .init(maxStalls: 2),
                 property: property
             ).counterexample
         )
 
-        #expect(twoPassResult.count == fullOutput.count, "Two-pass should reach the same array length")
         #expect(twoPassResult == fullOutput, "Two-pass should reach the same final result")
     }
 }

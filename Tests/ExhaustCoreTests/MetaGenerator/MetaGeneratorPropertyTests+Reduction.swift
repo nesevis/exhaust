@@ -3,183 +3,59 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 8. Reduction Preserves Failure (manual — circular if dogfooded)
-
-    @Test("Reduced values still fail the original property", arguments: metaRecipeTypes)
-    func reductionPreservesFailure(type: RecipeType) throws {
-        let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
-        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
+    /// These laws share the same recipes, sampled failures, and first reduction. Keep the reducer outside a dogfooded property to avoid circular validation.
+    @Test("Reduction preserves failure, replays its result, and never enlarges eligible histories", arguments: metaRecipeTypes)
+    func reductionLaws(type: RecipeType) throws {
+        var recipes = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 1), seed: 42, maxRuns: 20)
         let property = failingProperty(for: type)
-        let tally = Tally()
-        var checkedRecipes = 0
-        while let recipe = try recipeIter.next() {
+        var reductions = 0
+        var complexityChecks = 0
+        var repeatedChecks = 0
+        while let recipe = try recipes.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
                 continue
             }
-            checkedRecipes += 1
-            let gen = buildGenerator(from: recipe)
+            let generator = buildGenerator(from: recipe)
+            var values = ValueAndChoiceTreeInterpreter(generator, seed: 7, maxRuns: 20)
+            while let (value, tree) = try values.next() {
+                guard property(value) == false,
+                      case let .reduced(sequence, reducedTree, reducedValue) = Interpreters.choiceGraphReduce(
+                          gen: generator, tree: tree, config: .init(maxStalls: 2), property: property
+                      )
+                else {
+                    continue
+                }
+                reductions += 1
+                #expect(property(reducedValue) == false, "Reduction lost the failure for \(recipe)")
+                if case let .success(materialized, _, _) = Materializer.materialize(
+                    generator, context: .init(prefix: sequence, mode: .exact, fallbackTree: reducedTree)
+                ) {
+                    #expect(anyEquals(materialized, reducedValue), "Reduced history disagrees with the reported value for \(recipe)")
+                } else {
+                    Issue.record("Reduced history failed exact replay for \(recipe)")
+                }
 
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
-            while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else {
+                // Constant-arm re-encoding intentionally expands the starting representation.
+                if ConstantArmReencoder.reencodesStart(of: tree, gen: generator) == false {
+                    let original = ChoiceSequence.flatten(tree)
+                    #expect(sequence.shortLexPrecedes(original) || sequence == original, "Reduction enlarged \(recipe)")
+                    complexityChecks += 1
+                }
+                guard ConstantArmReencoder.reencodesStart(of: reducedTree, gen: generator) == false else {
                     continue
                 }
-                guard case let .reduced(_, _, shrunk) = Interpreters.choiceGraphReduce(
-                    gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else {
-                    tally.vacuous += 1
-                    continue
-                }
-                tally.evaluated += 1
-                #expect(
-                    property(shrunk) == false,
-                    "Shrunk value passes property but shouldn't, recipe: \(recipe)"
+                let repeated = Interpreters.choiceGraphReduce(
+                    gen: generator, tree: reducedTree, config: .init(maxStalls: 2), property: property
                 )
+                // A bounded reducer may stop at a fixed point or improve again; both outcomes carry a counterexample.
+                let (repeatedSequence, repeatedValue) = try #require(repeated.counterexample)
+                #expect(property(repeatedValue) == false)
+                #expect(sequence.shortLexPrecedes(repeatedSequence) == false, "Re-reduction enlarged \(recipe)")
+                repeatedChecks += 1
             }
         }
-        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
-        #expect(tally.evaluated > 0, "Reduction sweep for \(type) reached no verdict: \(tally.summary)")
-    }
-
-    // MARK: 8b. Reduction Reduces Complexity
-
-    @Test("Reduced choice sequence shortlex-precedes or equals the original", arguments: metaRecipeTypes)
-    func reductionReducesComplexity(type: RecipeType) throws {
-        let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
-        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
-        let property = failingProperty(for: type)
-        let tally = Tally()
-        var checkedRecipes = 0
-        while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else {
-                continue
-            }
-            checkedRecipes += 1
-            let gen = buildGenerator(from: recipe)
-
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
-            while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else {
-                    continue
-                }
-                // Constant arm re-encoding deliberately starts reduction from a shortlex-larger sequence, so the law only holds for starts it leaves unchanged.
-                guard ConstantArmReencoder.reencodesStart(of: tree, gen: gen) == false else {
-                    tally.vacuous += 1
-                    continue
-                }
-                let originalSequence = ChoiceSequence.flatten(tree)
-                guard case let .reduced(shrunkSequence, _, _) = Interpreters.choiceGraphReduce(
-                    gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else {
-                    tally.vacuous += 1
-                    continue
-                }
-                tally.evaluated += 1
-                #expect(
-                    shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
-                    "Shrunk sequence is not simpler than the original, recipe: \(recipe)"
-                )
-            }
-        }
-        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
-        #expect(tally.evaluated > 0, "Reduction sweep for \(type) reached no verdict: \(tally.summary)")
-    }
-
-    // MARK: 21. Closed-loop reduction
-
-    /// The choice sequence the reducer reports, materialized in `.exact` mode, must produce exactly the shrunk value the reducer reports. This ties the reducer's sequence accounting to its output value.
-    @Test("Reduced sequence materializes to the reported shrunk value", arguments: metaRecipeTypes)
-    func reductionClosedLoop(type: RecipeType) throws {
-        let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
-        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
-        let property = failingProperty(for: type)
-        let tally = Tally()
-        var checkedRecipes = 0
-        while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else {
-                continue
-            }
-            checkedRecipes += 1
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
-            while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else {
-                    continue
-                }
-                guard case let .reduced(sequence, reducedTree, shrunk) = Interpreters.choiceGraphReduce(
-                    gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else {
-                    tally.vacuous += 1
-                    continue
-                }
-                tally.evaluated += 1
-                guard case let .success(materialized, _, _) = Materializer.materialize(
-                    gen, context: .init(
-                        prefix: sequence, mode: .exact, fallbackTree: reducedTree
-                    )
-                ) else {
-                    Issue.record("Reduced sequence failed to materialize for recipe: \(recipe)")
-                    continue
-                }
-                #expect(
-                    anyEquals(materialized, shrunk),
-                    "Reduced sequence materialized to \(materialized), not the reported shrunk value \(shrunk), recipe: \(recipe)"
-                )
-            }
-        }
-        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
-        #expect(tally.evaluated > 0, "Reduction sweep for \(type) reached no verdict: \(tally.summary)")
-    }
-
-    // MARK: 22. Reduction monotonicity
-
-    /// Re-reducing an already-reduced tree must never produce a shortlex-larger sequence unless the second pass re-encodes a constant arm. Reduction simplifies the output value, and the choice sequence is its internal representation: it shrinks too in every case except constant arm re-encoding, which lengthens it to reach values the constant arm could not. A budgeted reducer (`maxStalls: 2`) need not fully converge in one pass, so a smaller second result is legal; a larger one is a defect, an encoder that grew a reduced input.
-    ///
-    /// The second pass reads its sequence from `.unreduced` as well as `.reduced`. Both carry one, and measured over every recipe here the second pass is a fixed point: it returns the first pass's sequence unchanged, so matching `.reduced` alone skipped the comparison every time.
-    @Test("Re-reducing never enlarges the sequence", arguments: metaRecipeTypes)
-    func reductionMonotonicity(type: RecipeType) throws {
-        let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
-        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
-        let property = failingProperty(for: type)
-        let tally = Tally()
-        var checkedRecipes = 0
-        while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else {
-                continue
-            }
-            checkedRecipes += 1
-            let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
-            while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else {
-                    continue
-                }
-                guard case let .reduced(firstSequence, firstTree, _) = Interpreters.choiceGraphReduce(
-                    gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else {
-                    tally.vacuous += 1
-                    continue
-                }
-                // Constant arm re-encoding can enlarge the second pass's start, so the law only holds for starts it leaves unchanged.
-                guard ConstantArmReencoder.reencodesStart(of: firstTree, gen: gen) == false else {
-                    tally.vacuous += 1
-                    continue
-                }
-                let secondOutcome = Interpreters.choiceGraphReduce(
-                    gen: gen, tree: firstTree, config: .init(maxStalls: 2), property: property
-                )
-                guard let (secondSequence, _) = secondOutcome.counterexample else {
-                    tally.vacuous += 1
-                    continue
-                }
-                tally.evaluated += 1
-                #expect(
-                    firstSequence.shortLexPrecedes(secondSequence) == false,
-                    "Re-reduction enlarged the sequence (reduction is not monotone) for recipe: \(recipe)"
-                )
-            }
-        }
-        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
-        #expect(tally.evaluated > 0, "Re-reduction sweep for \(type) reached no verdict: \(tally.summary)")
+        #expect(reductions > 0, "No failure reduced for \(type)")
+        #expect(complexityChecks > 0, "No reduction qualified for the complexity law for \(type)")
+        #expect(repeatedChecks > 0, "No reduction qualified for the repeated-reduction law for \(type)")
     }
 }
