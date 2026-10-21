@@ -332,6 +332,25 @@ struct SwiftTestingIntegrationTests {
         #expect(capturedReport?.randomSamplingInvocations == 5)
     }
 
+    @Test("A failing bare regression seed runs its pipeline before the ordinary seed", .exhaust(.regressions("1A")))
+    func failingBareRegressionSeed() throws {
+        var capturedReport: ExhaustReport?
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 20)),
+            .replay(99),
+            .suppress(.all),
+            .onReport { capturedReport = $0 }
+        ) { _ in
+            false
+        }
+        #expect(result == 0)
+        let report = try #require(capturedReport)
+        #expect(report.seed == 42)
+        #expect(report.randomSamplingInvocations > 0)
+        #expect(report.replaySeed?.hasPrefix("1A-") == true)
+    }
+
     @Test("Trait with regression seed that fails", .exhaust(.regressions("1A-1")))
     func traitWithRegressionSeedThatFails() {
         // An addressed regression must execute even when the normal budgets are zero.

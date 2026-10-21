@@ -3,14 +3,19 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 11. Just Values
+    // MARK: - Just Values
 
     @Test("Constant recipes preserve their literal through generation, reflection, replay and materialization")
     func justValuesAreConstant() throws {
         let fixtures: [(GenRecipe.LeafKind, Any)] = [
-            (.justInt(42), 42), (.justInt(-7), -7), (.justInt(0), 0),
-            (.justBool(true), true), (.justBool(false), false), (.justDouble(3.14), 3.14),
-            (.justIntArray([1, 2, 3]), [1, 2, 3]), (.justIntArray([10, 20]), [10, 20]),
+            (.justInt(42), 42),
+            (.justInt(-7), -7),
+            (.justInt(0), 0),
+            (.justBool(true), true),
+            (.justBool(false), false),
+            (.justDouble(3.14), 3.14),
+            (.justIntArray([1, 2, 3]), [1, 2, 3]),
+            (.justIntArray([10, 20]), [10, 20]),
             (.justIntArray([]), [Int]()),
         ]
         for (leaf, expected) in fixtures {
@@ -34,9 +39,7 @@ extension MetaGeneratorPropertyTests {
         }
     }
 
-    // MARK: 12. Zipped Generators
-
-    // MARK: 13. Optional Generators
+    // MARK: - Optional Generators
 
     @Test("Optional generators produce both nil and non-nil values")
     func optionalProducesBothBranches() throws {
@@ -94,7 +97,7 @@ extension MetaGeneratorPropertyTests {
         #expect(anyEquals(replayed, value))
     }
 
-    // MARK: 14. Per-Combinator Reflection Coverage
+    // MARK: - Per-Combinator Reflection Coverage
 
     /// Asserts every reflectable combinator actually reflects and round-trips at least one of its own generated values.
     ///
@@ -113,7 +116,7 @@ extension MetaGeneratorPropertyTests {
         #expect(roundTripped > 0, "\(fixture.name) produced no values to check")
     }
 
-    // MARK: 15. Forward-Only Exemption (pinned)
+    // MARK: - Forward-Only Exemption (pinned)
 
     /// Pins the combinators the coverage sweep deliberately omits, so their exemption is an assertion rather than silence.
     ///

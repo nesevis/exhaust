@@ -7,8 +7,8 @@ import Testing
 
 @Suite("@Setup generator-fed setup", .serialized, .tags(.stateMachine))
 struct SetupGeneratorTests {
-    @Test("Setup-independent failure reduces the setup to its floor and the commands to one")
-    func setupIndependentFailureReducesSetupToFloor() async throws {
+    @Test("Setup-independent failure preserves the minimal setup, command, and failure trace")
+    func setupIndependentFailurePreservesReducedSetupAndTrace() async throws {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
@@ -298,8 +298,17 @@ struct SetupChoiceSequenceTests {
 @Suite("@Setup under concurrent execution models", .serialized, .tags(.stateMachine))
 struct SetupConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Every concurrent instance receives the setup", arguments: [ExecutionModel.tasks, .threads])
-    func tasksSpecWithSetupPasses(mode: ExecutionModel) async {
+    @Test("Every cooperative instance receives the setup")
+    func tasksSpecWithSetupPasses() async {
+        await concurrentInstancesReceiveSetup(mode: .tasks)
+    }
+
+    @Test("Every threaded instance receives the setup")
+    func threadsSpecWithSetupPasses() async {
+        await concurrentInstancesReceiveSetup(mode: .threads)
+    }
+
+    private func concurrentInstancesReceiveSetup(mode: ExecutionModel) async {
         var invocations = 0
         let result = await #execute(
             SeededSpec.self,

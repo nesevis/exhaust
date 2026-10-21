@@ -3,7 +3,7 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 4. Functor Identity
+    // MARK: - Functor Identity
 
     @Test("Mapping with identity produces same values")
     func functorIdentity() throws {
@@ -24,7 +24,7 @@ extension MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "No value pairs were compared")
     }
 
-    // MARK: 5. Functor Composition
+    // MARK: - Functor Composition
 
     @Test("map(f).map(g) produces same values as map(g . f)")
     func functorComposition() throws {
@@ -46,7 +46,7 @@ extension MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "No value pairs were compared")
     }
 
-    // MARK: 6. Monad Left Identity
+    // MARK: - Monad Left Identity
 
     @Test("just(x).bind(f) produces same values as f(x)")
     func monadLeftIdentity() throws {
@@ -63,7 +63,7 @@ extension MetaGeneratorPropertyTests {
         #expect(badValue == nil, "Monad left identity failed for x=\(badValue!)")
     }
 
-    // MARK: 7. Monad Right Identity
+    // MARK: - Monad Right Identity
 
     @Test("gen.bind(just) produces same values as gen")
     func monadRightIdentity() throws {
@@ -82,7 +82,7 @@ extension MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "No value pairs were compared")
     }
 
-    // MARK: 9. Filter Correctness
+    // MARK: - Filter Correctness
 
     @Test("Filtered generators only produce values satisfying the predicate")
     func filterCorrectness() throws {
@@ -118,7 +118,7 @@ extension MetaGeneratorPropertyTests {
         }
     }
 
-    // MARK: 10. Size Bounds
+    // MARK: - Size Bounds
 
     @Test("Numeric generation stays inside arbitrary ordered endpoint pairs")
     func sizeBounds() throws {

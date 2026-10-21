@@ -12,7 +12,15 @@ struct FuzzCorpusLifecycleTests {
     @Test("Duplicate offers preserve statistics with either hash path", arguments: [false, true])
     func duplicateOffers(precomputed: Bool) throws {
         let spec = CorpusLifecycleSpec()
-        try spec.offer(request: CorpusOffer(marker: 1, length: 2, edgeMask: 2, hitCount: 1, mutable: true, boundary: false, precomputed: precomputed))
+        try spec.offer(request: CorpusOffer(
+            marker: 1,
+            length: 2,
+            edgeMask: 2,
+            hitCount: 1,
+            isMutable: true,
+            isBoundaryDerived: false,
+            hasPrecomputedHash: precomputed
+        ))
         try spec.repeatAdmitted(index: 0, edgeMask: 128, precomputed: precomputed == false)
         #expect(spec.stateMatches())
         #expect(spec.corpus.entries.count == 1)
@@ -23,9 +31,33 @@ struct FuzzCorpusLifecycleTests {
     func rejectedOffersAndReset() throws {
         let spec = CorpusLifecycleSpec()
         for request in [
-            CorpusOffer(marker: 0, length: 1, edgeMask: 0, hitCount: 1, mutable: true, boundary: false, precomputed: false),
-            CorpusOffer(marker: 1, length: 2, edgeMask: 6, hitCount: 1, mutable: true, boundary: false, precomputed: false),
-            CorpusOffer(marker: 2, length: 3, edgeMask: 2, hitCount: 1, mutable: true, boundary: false, precomputed: false),
+            CorpusOffer(
+                marker: 0,
+                length: 1,
+                edgeMask: 0,
+                hitCount: 1,
+                isMutable: true,
+                isBoundaryDerived: false,
+                hasPrecomputedHash: false
+            ),
+            CorpusOffer(
+                marker: 1,
+                length: 2,
+                edgeMask: 6,
+                hitCount: 1,
+                isMutable: true,
+                isBoundaryDerived: false,
+                hasPrecomputedHash: false
+            ),
+            CorpusOffer(
+                marker: 2,
+                length: 3,
+                edgeMask: 2,
+                hitCount: 1,
+                isMutable: true,
+                isBoundaryDerived: false,
+                hasPrecomputedHash: false
+            ),
         ] {
             try spec.offer(request: request)
             #expect(spec.stateMatches())
@@ -44,7 +76,15 @@ struct FuzzCorpusLifecycleTests {
     func quarantineSelection() throws {
         let spec = CorpusLifecycleSpec()
         for index in 0 ..< 4 {
-            try spec.offer(request: CorpusOffer(marker: index, length: 1, edgeMask: 1 << index, hitCount: 1, mutable: true, boundary: false, precomputed: false))
+            try spec.offer(request: CorpusOffer(
+                marker: index,
+                length: 1,
+                edgeMask: 1 << index,
+                hitCount: 1,
+                isMutable: true,
+                isBoundaryDerived: false,
+                hasPrecomputedHash: false
+            ))
         }
         #expect(spec.corpus.parentIndices.count == 4)
         spec.quarantine(marker: 1, length: 1)
@@ -64,10 +104,23 @@ struct FuzzCorpusLifecycleTests {
 @StateMachine
 private final class CorpusLifecycleSpec {
     static let offers = #gen(
-        .int(in: 0 ... 15), .int(in: 1 ... 8), .int(in: 0 ... 255), .uint8(in: 1 ... 255),
-        .bool(), .bool(), .bool()
+        .int(in: 0 ... 15),
+        .int(in: 1 ... 8),
+        .int(in: 0 ... 255),
+        .uint8(in: 1 ... 255),
+        .bool(),
+        .bool(),
+        .bool()
     ) { marker, length, edgeMask, hitCount, mutable, boundary, precomputed in
-        CorpusOffer(marker: marker, length: length, edgeMask: edgeMask, hitCount: hitCount, mutable: mutable, boundary: boundary, precomputed: precomputed)
+        CorpusOffer(
+            marker: marker,
+            length: length,
+            edgeMask: edgeMask,
+            hitCount: hitCount,
+            isMutable: mutable,
+            isBoundaryDerived: boundary,
+            hasPrecomputedHash: precomputed
+        )
     }
 
     @SystemUnderTest var corpus = FuzzCorpus(edgeCount: 8)
@@ -88,11 +141,11 @@ private final class CorpusLifecycleSpec {
             sequence: request.identity.sequence,
             tree: .just,
             hits: request.hits,
-            convergence: request.mutable ? 0.5 : 0.49,
+            convergence: request.isMutable ? 0.5 : 0.49,
             generation: 0,
             phase: .sampling,
-            isBoundaryDerived: request.boundary,
-            precomputedHash: request.precomputed ? ZobristHash.hash(of: request.identity.sequence) : nil
+            isBoundaryDerived: request.isBoundaryDerived,
+            precomputedHash: request.hasPrecomputedHash ? ZobristHash.hash(of: request.identity.sequence) : nil
         )
         if admitted.contains(where: { $0.identity == request.identity }) {
             try check(actual == .rejectedDuplicate, "duplicate was admitted or misclassified")
@@ -100,7 +153,7 @@ private final class CorpusLifecycleSpec {
         }
         incidenceRows += 1
         incidenceTotal += request.edges.count
-        guard novel || request.boundary else {
+        guard novel || request.isBoundaryDerived else {
             try check(actual == .rejectedNotNovel, "non-novel candidate was admitted")
             return
         }
@@ -108,8 +161,11 @@ private final class CorpusLifecycleSpec {
         admitted.append(request)
         novelty.formUnion(signature)
         covered.formUnion(request.edges)
-        try check(actual == .admitted(index: index, tier: request.mutable ? .mutable : .discovery), "wrong admission or tier")
-        if request.mutable, quarantined.contains(request.identity) == false {
+        try check(
+            actual == .admitted(index: index, tier: request.isMutable ? .mutable : .discovery),
+            "wrong admission or tier"
+        )
+        if request.isMutable, quarantined.contains(request.identity) == false {
             for edge in request.edges {
                 let contenders = [champions[edge], index].compactMap { $0 }
                 champions[edge] = contenders.min {
@@ -128,7 +184,7 @@ private final class CorpusLifecycleSpec {
         }
         var request = admitted[index % admitted.count]
         request.edgeMask = edgeMask
-        request.precomputed = precomputed
+        request.hasPrecomputedHash = precomputed
         try offer(request: request)
     }
 
@@ -173,7 +229,10 @@ private final class CorpusLifecycleSpec {
                 return
             }
             try check(Set(champions.values).contains(selected.index), "selected a non-champion")
-            try check(selected.entry.sequence == admitted[selected.index].identity.sequence, "returned the wrong parent entry")
+            try check(
+                selected.entry.sequence == admitted[selected.index].identity.sequence,
+                "returned the wrong parent entry"
+            )
         }
     }
 
@@ -200,9 +259,9 @@ private struct CorpusOffer: Sendable {
     let length: Int
     var edgeMask: Int
     let hitCount: UInt8
-    let mutable: Bool
-    let boundary: Bool
-    var precomputed: Bool
+    let isMutable: Bool
+    let isBoundaryDerived: Bool
+    var hasPrecomputedHash: Bool
 
     var identity: CorpusIdentity {
         CorpusIdentity(marker: marker, length: length)

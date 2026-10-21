@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Meta-Generator Property Tests", .tags(.dogfood))
 struct MetaGeneratorPropertyTests {
-    // MARK: 1. Reflection Round-Trip
+    // MARK: - Reflection Round-Trip
 
     @Test("Reflection, replay and exact materialization preserve generated values", arguments: metaRecipeTypes)
     func reflectionRoundTrip(type: RecipeType) throws {
@@ -42,11 +42,7 @@ struct MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "Round-trip sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
-    // MARK: 2. Materialize Agreement
-
-    // MARK: 3. Reflect Stabilization
-
-    // MARK: 4. Fast-Path Parity
+    // MARK: - Fast-Path Parity
 
     /// `nextValueOnly()` (the tree-free fast path, backed by ValueInterpreter) and `reproduceWithTree()` (the tree-building path) must produce the same value for the same run. This is the spec the sampling pipeline relies on; `reproduceFailureTree()` asserts it at runtime and falls back to `.just` when it breaks. Sweeping it over the recipe space checks it for every generator shape, not just the ones the pipeline happened to hit.
     ///

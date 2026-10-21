@@ -9,7 +9,7 @@ struct DateLargeDomainCoverageAnalysis {
     @Test("Every emitted row addresses valid date and string values", arguments: [100, 200, 600, 2000], [false, true])
     func coverage(budget: Int, balanced: Bool) throws {
         let date = try ReflectiveGenerator<Date>.date(
-            between: DateBudgetFixture.year, interval: .hours(1),
+            between: DateTestRanges.year, interval: .hours(1),
             timeZone: #require(TimeZone(identifier: "America/New_York"))
         )
         let generator = #gen(date, date, .string(length: 1 ... 20))

@@ -4,10 +4,6 @@ import Testing
 
 @Suite("BinarySearchStepper")
 struct BinarySearchStepperTests {
-    // MARK: - findSmallest
-
-    // MARK: - findLargest
-
     @Test("findLargest biases midpoint above findSmallest for odd ranges")
     func findLargestRoundsUpOdd() {
         var largestStepper = BinarySearchStepper(lo: 0, hi: 99, direction: .findLargest)
@@ -163,18 +159,17 @@ struct InterpolationSearchStepperTests {
 
 @Suite("Search stepper boundary contracts")
 struct SearchStepperContractTests {
-    @Test("Both steppers find the boundary of a monotone predicate", arguments: [false, true])
-    func monotoneBoundary(largest: Bool) throws {
+    @Test("Both steppers find the boundary of a monotone predicate", arguments: [SearchDirection.findSmallest, .findLargest])
+    func monotoneBoundary(direction: SearchDirection) throws {
         // Bounded intervals make a linear scan an independent oracle. The existing UInt64.max
         // vector separately covers arithmetic overflow beyond this generated resource bound.
         let inputs = Gen.zip(Gen.choose(in: 0 ... 1000), Gen.choose(in: 0 ... 10000), Gen.choose(in: -1 ... 10001))
         try exhaustCheck(inputs, maxIterations: 300) { lower, width, offset in
             let upper = lower + width
             let threshold = lower + min(offset, width + 1)
-            let accepted: (Int) -> Bool = { largest ? $0 <= threshold : $0 >= threshold }
+            let accepted: (Int) -> Bool = { direction == .findLargest ? $0 <= threshold : $0 >= threshold }
             let permitted = (lower ... upper).filter(accepted)
-            let expected = largest ? (permitted.last ?? lower) : (permitted.first ?? upper)
-            let direction: SearchDirection = largest ? .findLargest : .findSmallest
+            let expected = direction == .findLargest ? (permitted.last ?? lower) : (permitted.first ?? upper)
             var binary = BinarySearchStepper(lo: UInt64(lower), hi: UInt64(upper), direction: direction)
             var interpolation = InterpolationSearchStepper(lo: UInt64(lower), hi: UInt64(upper), direction: direction)
             var binaryProbe = binary.start()

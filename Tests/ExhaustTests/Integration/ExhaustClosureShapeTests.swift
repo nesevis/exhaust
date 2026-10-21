@@ -3,12 +3,12 @@ import Testing
 
 @Suite("#exhaust closure shapes")
 struct ExhaustClosureShapeTests {
-    @Test("syncPredicate preserves passing and failing behavior in both phases", arguments: [false, true], [false, true])
-    func syncPredicate(screening: Bool, fails: Bool) throws {
+    @Test("syncPredicate preserves passing and failing behavior in both phases", arguments: PropertyTestPhase.allCases, [false, true])
+    func syncPredicate(phase: PropertyTestPhase, fails: Bool) throws {
         var report: ExhaustReport?
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.custom(screening: screening ? 200 : 0, sampling: screening ? 0 : 200)),
+            .budget(phase.budget(iterations: 200)),
             .replay(42),
             .suppress(.all),
             .onReport { report = $0 }
@@ -20,12 +20,12 @@ struct ExhaustClosureShapeTests {
         #expect(completed.propertyInvocations > 0)
     }
 
-    @Test("syncAssertion preserves passing and failing behavior in both phases", arguments: [false, true], [false, true])
-    func syncAssertion(screening: Bool, fails: Bool) throws {
+    @Test("syncAssertion preserves passing and failing behavior in both phases", arguments: PropertyTestPhase.allCases, [false, true])
+    func syncAssertion(phase: PropertyTestPhase, fails: Bool) throws {
         var report: ExhaustReport?
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.custom(screening: screening ? 200 : 0, sampling: screening ? 0 : 200)),
+            .budget(phase.budget(iterations: 200)),
             .replay(42),
             .suppress(.all),
             .onReport { report = $0 }
@@ -39,12 +39,12 @@ struct ExhaustClosureShapeTests {
         #expect(completed.propertyInvocations > 0)
     }
 
-    @Test("asyncPredicate preserves passing and failing behavior in both phases", arguments: [false, true], [false, true])
-    func asyncPredicate(screening: Bool, fails: Bool) async throws {
+    @Test("asyncPredicate preserves passing and failing behavior in both phases", arguments: PropertyTestPhase.allCases, [false, true])
+    func asyncPredicate(phase: PropertyTestPhase, fails: Bool) async throws {
         var report: ExhaustReport?
         let result: Int? = await #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.custom(screening: screening ? 200 : 0, sampling: screening ? 0 : 200)),
+            .budget(phase.budget(iterations: 200)),
             .replay(42),
             .suppress(.all),
             .onReport { report = $0 }
@@ -56,12 +56,12 @@ struct ExhaustClosureShapeTests {
         #expect(completed.propertyInvocations > 0)
     }
 
-    @Test("asyncAssertion preserves passing and failing behavior in both phases", arguments: [false, true], [false, true])
-    func asyncAssertion(screening: Bool, fails: Bool) async throws {
+    @Test("asyncAssertion preserves passing and failing behavior in both phases", arguments: PropertyTestPhase.allCases, [false, true])
+    func asyncAssertion(phase: PropertyTestPhase, fails: Bool) async throws {
         var report: ExhaustReport?
         let result: Int? = await #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.custom(screening: screening ? 200 : 0, sampling: screening ? 0 : 200)),
+            .budget(phase.budget(iterations: 200)),
             .replay(42),
             .suppress(.all),
             .onReport { report = $0 }

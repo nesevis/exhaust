@@ -3,7 +3,7 @@ import ExhaustTestSupport
 import Testing
 
 extension MetaGeneratorPropertyTests {
-    // MARK: 17. unique — choice-sequence deduplication
+    // MARK: - unique — choice-sequence deduplication
 
     /// A `unique` (nil key extractor) generator must yield distinct flattened choice sequences within one run. High-cardinality inner so the retry budget is not exhausted.
     @Test("Unique yields distinct choice sequences within a run")
@@ -23,7 +23,7 @@ extension MetaGeneratorPropertyTests {
         #expect(count == 30, "unique must fill its requested sample")
     }
 
-    // MARK: 18. classify — transparency
+    // MARK: - classify — transparency
 
     /// Classify is a generation-time passthrough: a classified recipe and its unwrapped twin produce identical values from the same seed. The classifier evaluation consumes no randomness, so PRNG consumption is unchanged.
     @Test("Classify is transparent: same values as the unwrapped generator", arguments: metaRecipeTypes)
@@ -57,7 +57,7 @@ extension MetaGeneratorPropertyTests {
         #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
     }
 
-    // MARK: 19. scaledArray — length scales with size
+    // MARK: - scaledArray — length scales with size
 
     /// Mean generated length is non-decreasing in the size parameter for `.linear` and `.exponential`, and size-independent for `.constant`. Sampled at a small and a large size override.
     @Test("scaledArray mean length scales with size per scaling mode")
@@ -76,7 +76,7 @@ extension MetaGeneratorPropertyTests {
         }
     }
 
-    // MARK: 20. weightedOneOf — observed frequencies match declared weights
+    // MARK: - weightedOneOf — observed frequencies match declared weights
 
     /// Observed branch selection frequencies track the declared weights. A `[1, 3]` split over distinguishable `just` branches should land near 25% / 75% across a large sample.
     @Test("weightedOneOf branch frequencies track declared weights")

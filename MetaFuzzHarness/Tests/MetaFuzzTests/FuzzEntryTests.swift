@@ -7,9 +7,9 @@ import Testing
 @Suite("Fuzz entry", .serialized, .enabled(if: ProcessInfo.processInfo.environment["METAFUZZ_FUZZ"] == "1"))
 struct FuzzEntryTests {
     /// Cases run serially because coverage counters are process-global.
-    @Test("The pipeline and screening oracles hold under pinned fuzzing", arguments: [false, true])
-    func oracleCampaign(screening: Bool) {
-        let budgetSeconds = (screening ? ProcessInfo.processInfo.environment["METAFUZZ_SCREENING_BUDGET"] : nil).flatMap(Int.init)
+    @Test("The pipeline and screening oracles hold under pinned fuzzing", arguments: Campaign.allCases)
+    private func oracleCampaign(campaign: Campaign) {
+        let budgetSeconds = ProcessInfo.processInfo.environment[campaign.budgetEnvironmentVariable].flatMap(Int.init)
             ?? ProcessInfo.processInfo.environment["METAFUZZ_BUDGET"].flatMap(Int.init)
             ?? 60
         let seed = ProcessInfo.processInfo.environment["METAFUZZ_SEED"].flatMap(UInt64.init) ?? 1
@@ -21,17 +21,9 @@ struct FuzzEntryTests {
             .replay(.numeric(seed))
         ) { fuzzCase in
             do {
-                if screening {
-                    try MetaFuzz.checkScreening(fuzzCase)
-                } else {
-                    try MetaFuzz.check(fuzzCase)
-                }
+                try campaign.check(fuzzCase)
             } catch {
-                if screening {
-                    MetaFuzz.recordFinding(fuzzCase, kind: .screeningCase, violation: error, in: findings)
-                } else {
-                    MetaFuzz.recordFinding(fuzzCase, violation: error, in: findings)
-                }
+                MetaFuzz.recordFinding(fuzzCase, kind: campaign.findingKind, violation: error, in: findings)
                 throw error
             }
         }
@@ -41,10 +33,47 @@ struct FuzzEntryTests {
 
         #expect(
             report.clusters.isEmpty,
-            "Engine defects found. Freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
+            "\(campaign.failureLabel) defects found. Freeze candidates written to \(findings.path): \(report.clusters.map(\.reducedDescription))"
         )
     }
 }
+
+// MARK: - Campaigns
+
+private enum Campaign: CaseIterable, Sendable {
+    case pipeline
+    case screening
+
+    var check: @Sendable (MetaFuzzCase) throws -> Void {
+        switch self {
+            case .pipeline: MetaFuzz.check
+            case .screening: { _ = try MetaFuzz.checkScreening($0) }
+        }
+    }
+
+    var findingKind: MetaFuzzFrozenCase.Kind {
+        switch self {
+            case .pipeline: .pipelineCase
+            case .screening: .screeningCase
+        }
+    }
+
+    var budgetEnvironmentVariable: String {
+        switch self {
+            case .pipeline: "METAFUZZ_BUDGET"
+            case .screening: "METAFUZZ_SCREENING_BUDGET"
+        }
+    }
+
+    var failureLabel: String {
+        switch self {
+            case .pipeline: "Engine"
+            case .screening: "Screening"
+        }
+    }
+}
+
+// MARK: - Helpers
 
 private func printProbeMetrics(_ report: FuzzReport) {
     let percentage: (TimeSpan) -> String = { duration in

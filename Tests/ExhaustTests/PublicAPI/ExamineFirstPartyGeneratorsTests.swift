@@ -7,7 +7,7 @@ import Testing
 @Suite("#examine first-party generators")
 struct ExamineFirstPartyGeneratorsTests {
     @Test("Generation, reflection and replay agree", arguments: GeneratorCase.all)
-    func generatorContract(fixture: GeneratorCase) {
+    private func generatorContract(fixture: GeneratorCase) {
         let report = fixture.examine()
         #expect(report.passed)
         #expect(report.valuesGenerated == report.sampleCount)
@@ -131,7 +131,7 @@ struct ExamineFirstPartyGeneratorsTests {
 
 // MARK: - Fixtures
 
-struct GeneratorCase: Sendable, CustomTestStringConvertible {
+private struct GeneratorCase: Sendable, CustomTestStringConvertible {
     let name: String
     let examine: @Sendable () -> ExamineReport
 

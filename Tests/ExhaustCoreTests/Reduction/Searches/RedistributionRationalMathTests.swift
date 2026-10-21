@@ -78,7 +78,9 @@ struct RedistributionRationalMathTests {
         ) == nil)
     }
 
-    private func context(_ source: ChoiceValue, _ sink: ChoiceValue) -> RedistributionSearch.MixedRedistributionContext? {
+    private func context(_ source: ChoiceValue, _ sink: ChoiceValue) -> RedistributionSearch
+        .MixedRedistributionContext?
+    {
         RedistributionSearch.makeMixedRedistributionContext(
             sourceChoice: source, sinkChoice: sink, sourceValidRange: nil, sourceIsRangeExplicit: false
         )

@@ -5,8 +5,11 @@ import Testing
 @Suite("Sequence length bounds in mutation targets")
 struct SequenceLengthBoundTests {
     @Test("Deletion and duplication obey both length bounds", arguments: [
-        (2, UInt64(2) ... 5), (3, UInt64(2) ... 5),
-        (3, UInt64(1) ... 3), (2, UInt64(1) ... 5), (2, UInt64(2) ... 2),
+        (2, UInt64(2) ... 5),
+        (3, UInt64(2) ... 5),
+        (3, UInt64(1) ... 3),
+        (2, UInt64(1) ... 5),
+        (2, UInt64(2) ... 2),
     ])
     func lengthBounds(count: Int, range: ClosedRange<UInt64>) {
         let tree = ChoiceTree.group([

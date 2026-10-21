@@ -3,26 +3,33 @@ import Testing
 
 @Suite("PhaseSession reproducer smoke tests")
 struct PhaseSessionSmokeTests {
-    @Test("Completed cycles trigger only at the threshold, in both coverage variants", arguments: [4, 5], [false, true])
-    func completedCycles(count: Int, laddered: Bool) {
-        for configured in [false, true] {
-            var session = PhaseSession(laddered: laddered)
-            for _ in 0 ..< count {
-                session.open()
-                if configured {
-                    session.configure(3)
-                }
-                session.use()
-                session.close()
-            }
-            #expect(session.cycleCount == count)
-            #expect(session.isCorrupted == false)
-            session.use()
-            #expect(session.isCorrupted == (count >= 5))
-        }
-    }
+    // MARK: - Completed Cycles and Fault O
 
-    // MARK: - Fault O (order-gated: cycles, then use while closed)
+    @Test("Completed cycles trigger only at the threshold, in both coverage variants", arguments: [
+        (4, false, false),
+        (4, false, true),
+        (4, true, false),
+        (4, true, true),
+        (5, false, false),
+        (5, false, true),
+        (5, true, false),
+        (5, true, true),
+    ])
+    func completedCycles(count: Int, laddered: Bool, configured: Bool) {
+        var session = PhaseSession(laddered: laddered)
+        for _ in 0 ..< count {
+            session.open()
+            if configured {
+                session.configure(3)
+            }
+            session.use()
+            session.close()
+        }
+        #expect(session.cycleCount == count)
+        #expect(session.isCorrupted == false)
+        session.use()
+        #expect(session.isCorrupted == (count >= 5))
+    }
 
     @Test("Fault O does not fire when the stray use lands while open")
     func faultONeedsClosedPhase() {

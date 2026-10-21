@@ -3,10 +3,14 @@ import Testing
 
 @Suite("Fixture reproducer smoke tests")
 struct FixtureSmokeTests {
+    @Test("The registry's default queue capacity is 24")
+    func defaultCapacity() {
+        #expect(BoundedQueue().capacity == 24)
+    }
+
     @Test("Fault A fires at capacity, after a safe prefix", arguments: [24, 32])
     func faultAThreshold(capacity: Int) throws {
-        // Exercise both the default constructor from the registry and explicit capacity.
-        var queue = capacity == 24 ? BoundedQueue() : BoundedQueue(capacity: capacity)
+        var queue = BoundedQueue(capacity: capacity)
         for value in 0 ..< capacity - 1 {
             _ = queue.enqueue(value)
         }

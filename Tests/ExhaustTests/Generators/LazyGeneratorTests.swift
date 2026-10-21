@@ -9,8 +9,11 @@ import Testing
 
 @Suite("lazy generator")
 struct LazyGeneratorTests {
-    @Test("Lazy construction is deferred and runs once, including parallel draws", arguments: [false, true])
-    func constructionRunsOnceAndLaterDrawsReuseTheBuiltGenerator(parallel: Bool) {
+    @Test(
+        "Lazy construction is deferred and runs once, including parallel draws",
+        arguments: [(ConcurrencyLevel.one, 200), (.four, 2000)]
+    )
+    func constructionRunsOnceAndLaterDrawsReuseTheBuiltGenerator(concurrency: ConcurrencyLevel, runs: Int) {
         let counter = ConstructionCounter()
         let generator: ReflectiveGenerator<Int> = .lazy {
             counter.increment()
@@ -18,7 +21,11 @@ struct LazyGeneratorTests {
         }
 
         #expect(counter.isEmpty)
-        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: parallel ? 2000 : 200)), .parallelize(lanes: parallel ? .four : .one)) { value in
+        #exhaust(
+            #gen(generator),
+            .budget(.custom(screening: 0, sampling: runs)),
+            .parallelize(lanes: concurrency)
+        ) { value in
             (0 ... 9).contains(value)
         }
 
@@ -105,7 +112,8 @@ struct LazyGeneratorTests {
             }
         )
 
-        // An eagerly constructed branch rebuilds its whole recursive subtree every time the enclosing generator is constructed, before any value is generated.
+        // An eagerly constructed branch rebuilds its whole recursive subtree every time the enclosing generator is
+        // constructed, before any value is generated.
         #expect(counter.isEmpty)
 
         #exhaust(#gen(generator), .budget(.quick)) { value in
