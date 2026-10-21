@@ -122,7 +122,7 @@ extension Reducer {
     ) -> Evaluation {
         let passCounts = context.report.counts
         context.report.counts = ReductionProbeCounts()
-        let evaluation = evaluate(candidate, configuration: slot.configuration, recoveryMutation: slot.recoveryMutation, context: &context)
+        let evaluation = evaluateAndCommit(candidate, configuration: slot.configuration, recoveryMutation: slot.recoveryMutation, context: &context)
         let candidateCounts = context.report.counts
         context.report.counts = passCounts
         context.report.counts.merge(candidateCounts)

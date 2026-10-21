@@ -72,14 +72,22 @@ extension ReductionSession {
                 return completeWithoutPerturbation(tally)
             }
             tally.probeCounts.recordEmission()
-            let outcome = decoder.decode(candidate, using: .exact(materializePicks: true), against: incumbent)
-            tally.probeCounts.recordOutcome(outcome)
-            guard let result = outcome.reduction else {
+            // Perturbations may be larger than the incumbent, so ordinary reduction's cached rejections do not answer for them.
+            let decoding = CandidateEvaluator.evaluate(
+                candidate,
+                against: incumbent,
+                using: .exact(materializePicks: true, admission: .standard),
+                decoder: decoder,
+                cacheKey: nil,
+                cache: &rejectCache,
+                counts: &tally.probeCounts
+            )
+            guard let recovered = decoding?.recovered else {
                 tally.materializationsUsed += 1
                 continue
             }
             tally.probeCounts.recordAcceptance()
-            incumbent = Counterexample(result)
+            incumbent = recovered
             tally.perturbationAccepted = true
             ReductionLog.reducer("relax_round_perturbation_accepted", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(incumbent.sequence.count)",

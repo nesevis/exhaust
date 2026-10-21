@@ -6,7 +6,7 @@
 // MARK: - Evaluation
 
 extension Reducer {
-    /// What evaluating one candidate produced.
+    /// What evaluating and, when admitted, committing one search candidate produced.
     struct Evaluation {
         /// `.initial` when the candidate was interrupted before decoding, so the search has no feedback waiting.
         let feedback: SearchFeedback
@@ -18,7 +18,7 @@ extension Reducer {
     /// Takes one candidate through the rejection cache, decoding, and the ordering check, and commits it when admitted.
     ///
     /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
-    static func evaluate(_ candidate: ReductionCandidate, configuration: SearchConfiguration, recoveryMutation: ProjectedMutation? = nil, context: inout Context) -> Evaluation {
+    static func evaluateAndCommit(_ candidate: ReductionCandidate, configuration: SearchConfiguration, recoveryMutation: ProjectedMutation? = nil, context: inout Context) -> Evaluation {
         let mutation: ProjectedMutation
         let admission: DecoderAdmission
         let probeHash: UInt64
@@ -45,11 +45,12 @@ extension Reducer {
             incumbentHash: context.baseHash
         )
 
+        let cacheHit = context.rejectCache.contains(cacheKey)
         if case let .sparse(probe, baseSequence, _) = candidate {
             // The buffer is restored from `baseSequence` and the hash starts from the incumbent's, so both are right only when the two are the same sequence.
             assert(baseSequence == context.incumbent.sequence, "A sparse candidate's base must be the incumbent's sequence")
             // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
-            if context.rejectCache.contains(cacheKey) == false || context.observer != nil {
+            if cacheHit == false || context.observer != nil {
                 if let previousSparseProbe = context.previousSparseProbe {
                     previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
                 } else {
@@ -59,7 +60,6 @@ extension Reducer {
                 context.previousSparseProbe = probe
             }
         }
-        let cacheHit = context.rejectCache.contains(cacheKey)
 
         context.report.counts.recordEmission()
         var observationID: Int?
@@ -71,24 +71,26 @@ extension Reducer {
 
         context.probeTiming?.chargeEncode()
 
-        if cacheHit {
-            context.report.counts.recordCacheRejection()
-            terminate(observationID, .cacheRejected, context: &context)
-            return Evaluation(feedback: .rejected(.cached), isAccepted: false, stop: nil)
-        }
-
         // Selection is reported after decoding, so a probe interrupted here has no selection event.
-        if context.isExpired {
+        if cacheHit == false, context.isExpired {
             terminate(observationID, .interrupted, context: &context)
             return Evaluation(feedback: .initial, isAccepted: false, stop: .deadline)
         }
 
-        let decoding = context.decoder.decode(
+        guard let decoding = CandidateEvaluator.evaluate(
             context.candidateBuffer,
             against: context.incumbent,
-            selection: selection,
-            precomputedHash: probeHash
-        )
+            using: selection,
+            decoder: context.decoder,
+            probeHash: probeHash,
+            cacheKey: cacheKey,
+            cache: &context.rejectCache,
+            counts: &context.report.counts
+        ) else {
+            terminate(observationID, .cacheRejected, context: &context)
+            return Evaluation(feedback: .rejected(.cached), isAccepted: false, stop: nil)
+        }
+
         if let observationID {
             context.observer?(.decoderSelected(
                 probeID: observationID,
@@ -97,15 +99,18 @@ extension Reducer {
             ))
         }
         let outcome = decoding.outcome
-        context.report.counts.recordOutcome(outcome)
         if let observationID, let result = outcome.reduction {
             context.observer?(.decoded(probeID: observationID, sequence: result.sequence))
         }
 
-        if let recovered = decoding.recovered, context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
-            let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, isLifted: recoveryMutation != nil, observationID: observationID, context: &context)
-            context.probeTiming?.chargeDecode()
-            return evaluation
+        if let recovered = decoding.recovered {
+            if context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
+                let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, isLifted: recoveryMutation != nil, observationID: observationID, context: &context)
+                context.probeTiming?.chargeDecode()
+                return evaluation
+            }
+            // Decoding succeeded; this rejection belongs to the caller's adoption policy.
+            context.rejectCache.insert(cacheKey)
         }
 
         let disposition: ProbeDisposition = switch outcome {
@@ -120,7 +125,6 @@ extension Reducer {
         }
         terminate(observationID, disposition, materializationAttempts: outcome.materializationAttempts, context: &context)
 
-        context.rejectCache.insert(cacheKey)
         if context.isInstrumented {
             ReductionLog.replacementProbeRejection(
                 mutation: mutation,

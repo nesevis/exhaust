@@ -84,10 +84,9 @@ extension ReductionSession {
             stats.record(counts, for: .convergenceConfirmation)
         }
 
-        let sequenceDecoder: SequenceDecoder = hasBind
-            ? .guided(fallbackTree: incumbent.tree, materializePicks: false)
-            : .exact(materializePicks: false)
-        let decision = ProbeDecision(sequenceDecoder)
+        let selection: ReductionDecoder.Selection = hasBind
+            ? .guided(materializePicks: false)
+            : .exact(materializePicks: false, admission: .standard)
 
         for nodeID in graph.leafNodes {
             if deadline.isExpired {
@@ -112,8 +111,7 @@ extension ReductionSession {
             let result = probeCloser(
                 value: nearerBitPattern,
                 at: range.lowerBound,
-                decoder: sequenceDecoder,
-                decision: decision,
+                selection: selection,
                 counts: &counts
             )
 
@@ -128,8 +126,7 @@ extension ReductionSession {
                 let gapResult = probeCloser(
                     value: gapBitPattern,
                     at: range.lowerBound,
-                    decoder: sequenceDecoder,
-                    decision: decision,
+                    selection: selection,
                     counts: &counts
                 )
                 if gapResult == .accepted {
@@ -165,8 +162,7 @@ extension ReductionSession {
     private mutating func probeCloser(
         value: UInt64,
         at sequenceIndex: Int,
-        decoder sequenceDecoder: SequenceDecoder,
-        decision: ProbeDecision,
+        selection: ReductionDecoder.Selection,
         counts: inout ReductionProbeCounts
     ) -> ConfirmationProbeResult {
         var candidate = incumbent.sequence
@@ -182,20 +178,28 @@ extension ReductionSession {
             baseSequence: incumbent.sequence,
             probe: candidate
         )
-        let cacheKey = rejectCache.key(probeHash: probeHash, decision: decision, incumbentHash: incumbentHash)
-        if rejectCache.contains(cacheKey) {
-            counts.recordCacheRejection()
+        let cacheKey = rejectCache.key(
+            probeHash: probeHash,
+            decision: ProbeDecision(selection),
+            incumbentHash: incumbentHash
+        )
+        guard let decoding = CandidateEvaluator.evaluate(
+            candidate,
+            against: incumbent,
+            using: selection,
+            decoder: decoder,
+            probeHash: probeHash,
+            cacheKey: cacheKey,
+            cache: &rejectCache,
+            counts: &counts
+        ) else {
             return .skipped
         }
-
-        let outcome = decoder.decode(candidate, using: sequenceDecoder, against: incumbent, precomputedHash: probeHash)
-        counts.recordOutcome(outcome)
-        if outcome.reduction != nil {
+        if decoding.recovered != nil {
             counts.recordAcceptance()
             return .accepted
         }
 
-        rejectCache.insert(cacheKey)
         return .rejected
     }
 
@@ -290,15 +294,24 @@ extension ReductionSession {
             let candidate = probe.sequence
             probesUsed += 1
             probeCounts.recordEmission()
-            let outcome = decoder.decode(candidate, using: .exact(materializePicks: true), against: incumbent, precomputedHash: probe.probeHash)
-            probeCounts.recordOutcome(outcome)
-
-            guard let result = outcome.reduction, result.sequence.shortLexPrecedes(incumbent.sequence) else {
+            guard let decoding = CandidateEvaluator.evaluate(
+                candidate,
+                against: incumbent,
+                using: .exact(materializePicks: true, admission: .standard),
+                decoder: decoder,
+                probeHash: probe.probeHash,
+                cacheKey: probe.cacheKey,
+                cache: &rejectCache,
+                counts: &probeCounts
+            ), let recovered = decoding.recovered else {
+                continue
+            }
+            guard recovered.sequence.shortLexPrecedes(incumbent.sequence) else {
                 rejectCache.insert(probe.cacheKey)
                 continue
             }
             probeCounts.recordAcceptance()
-            incumbent = Counterexample(result)
+            incumbent = recovered
             if collectStats {
                 stats.relaxImprovingAcceptances += 1
             }

@@ -33,15 +33,6 @@ struct ProbeDecision {
                 self.init(isGuided: true)
         }
     }
-
-    init(_ decoder: SequenceDecoder) {
-        switch decoder {
-            case let .exact(_, admission):
-                self.init(isGuided: false, admission: admission)
-            case .guided:
-                self.init(isGuided: true)
-        }
-    }
 }
 
 // MARK: - Probe Cache
