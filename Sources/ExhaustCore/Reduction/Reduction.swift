@@ -131,23 +131,23 @@ struct ChainLimits {
 
 /// What the interpreter does with a search's candidates.
 struct SearchConfiguration {
-    var acceptance: AcceptancePolicy = .continue
+    var graphUpdate: GraphUpdatePolicy = .applyMutation
     /// Forces exact decoding, whatever decoder the candidate's mutation would otherwise select.
     var requiresExactDecoder = false
 
-    /// Keeps searching after an unlifted acceptance and lets the mutation select the decoder. Lifted context supplies recovery and termination independently of this configuration.
+    /// Applies unlifted mutations in place when possible and lets the mutation select the decoder. Lifted context supplies recovery and termination independently of this configuration.
     static let standard = SearchConfiguration()
 }
 
-/// What an unlifted search does after one of its candidates is accepted. A lifted search always ends the pass and requires a rebuild.
-enum AcceptancePolicy {
-    /// Applies each acceptance to the graph in place and keeps searching. An acceptance whose mutation the graph cannot apply in place ends the pass with a rebuild.
-    case `continue`
-    /// Keeps searching after any acceptance without applying it to the graph, and rebuilds once the pass ends. For searches whose acceptances the graph cannot apply in place but whose later candidates need only the recovered sequence.
-    case rebuildAndContinue
+/// How to maintain the graph after committing an unlifted candidate. Admission is decided separately by decoding and the encoder's ``ReductionOrder``. A lifted acceptance always requires a rebuild and ends the pass.
+enum GraphUpdatePolicy {
+    /// Applies the decoded mutation in place. If the graph cannot apply it, ends the pass so the runner can rebuild before further exploration.
+    case applyMutation
+    /// Defers graph updates until the pass ends and allows searching to continue. Use only when subsequent candidates remain valid with the dispatch-time graph and recovered sequence.
+    case rebuildAfterPass
 }
 
-/// Summarizes a search that ran out of candidates, for the encoder's reduction that requested it. Only exhaustion resumes the reduction; an acceptance that stops the search, a probe cap, or the deadline ends the pass instead.
+/// Summarizes a search that ran out of candidates, for the encoder's reduction that requested it. Only exhaustion resumes the reduction; graph invalidation, a probe cap, or the deadline ends the pass instead.
 struct SearchOutcome {
     let anyAccepted: Bool
     /// Probes this search alone spent.

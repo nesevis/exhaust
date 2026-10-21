@@ -11,7 +11,7 @@ extension Reducer {
         /// `.initial` when the candidate was interrupted before decoding, so the search has no feedback waiting.
         let feedback: SearchFeedback
         let isAccepted: Bool
-        /// Set when this candidate ends the search: an acceptance in lifted context or a rebuild, or the deadline before decoding.
+        /// Set when further exploration requires rebuilding the graph, or the deadline passes before decoding. Acceptance alone does not stop a search.
         let stop: SearchStopReason?
     }
 
@@ -105,9 +105,10 @@ extension Reducer {
 
         if let recovered = decoding.recovered {
             if context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
-                let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, isLifted: recoveryMutation != nil, observationID: observationID, context: &context)
+                commit(recovered, mutation: mutation, decoding: decoding, observationID: observationID, context: &context)
+                let stop = updateGraphAfterAcceptance(mutation, policy: configuration.graphUpdate, isLifted: recoveryMutation != nil, context: &context)
                 context.probeTiming?.chargeDecode()
-                return evaluation
+                return Evaluation(feedback: .accepted(recovered: recovered.sequence), isAccepted: true, stop: stop)
             }
             // Decoding succeeded; this rejection belongs to the caller's adoption policy.
             context.rejectCache.insert(cacheKey)
@@ -147,16 +148,14 @@ extension Reducer {
         return Evaluation(feedback: .rejected(rejection), isAccepted: false, stop: nil)
     }
 
-    /// Makes `recovered` the incumbent and applies what the search does after an acceptance.
+    /// Makes an admitted counterexample the incumbent and records acceptance independently of how the graph will be maintained.
     private static func commit(
         _ recovered: Counterexample,
         mutation: ProjectedMutation,
         decoding: ReductionDecoding,
-        configuration: SearchConfiguration,
-        isLifted: Bool,
         observationID: Int?,
         context: inout Context
-    ) -> Evaluation {
+    ) {
         context.report.counts.recordAcceptance()
         // The buffer holds the candidate, which decoding may have changed, so the next sparse probe starts from the new base rather than restoring the last one's positions.
         context.previousSparseProbe = nil
@@ -171,29 +170,36 @@ extension Reducer {
             }
         }
         context.report.latestTreeIsStripped = decoding.selection.materializePicks == false
+    }
 
-        let feedback = SearchFeedback.accepted(recovered: recovered.sequence)
-        // Lifted node IDs cannot update the incumbent graph, and acceptance invalidates every other branch's lifted snapshot.
+    /// Maintains the graph after the incumbent has been committed. Returns a stop reason only when the pass must end before further exploration; deferred rebuilds allow the search to continue.
+    private static func updateGraphAfterAcceptance(
+        _ mutation: ProjectedMutation,
+        policy: GraphUpdatePolicy,
+        isLifted: Bool,
+        context: inout Context
+    ) -> SearchStopReason? {
+        // Lifted node IDs cannot update the incumbent graph, and acceptance invalidates every other attempt's lifted snapshot.
         if isLifted {
             context.report.anyRequiresRebuild = true
-            return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
+            return .graphInvalidated
         }
-        switch configuration.acceptance {
-            case .rebuildAndContinue:
+        switch policy {
+            case .rebuildAfterPass:
                 context.report.anyRequiresRebuild = true
-                return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
-            case .continue:
+                return nil
+            case .applyMutation:
                 let application = context.graph.apply(Self.decodedMutation(
                     mutation,
-                    recovered: recovered.sequence,
+                    recovered: context.incumbent.sequence,
                     candidateCount: context.candidateBuffer.count,
                     graph: context.graph
                 ))
                 if application.requiresFullRebuild {
                     context.report.anyRequiresRebuild = true
-                    return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
+                    return .graphInvalidated
                 }
-                return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
+                return nil
         }
     }
 

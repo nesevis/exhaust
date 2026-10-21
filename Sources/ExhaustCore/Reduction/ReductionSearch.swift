@@ -39,8 +39,8 @@ enum CandidateRejection {
 
 /// Why a candidate ended its search, and with it the pass.
 enum SearchStopReason {
-    /// An acceptance ended the search: a lifted context, or a rebuild under ``AcceptancePolicy/continue``.
-    case accepted
+    /// The accepted candidate invalidated the graph or lifted context needed for further exploration. The runner must rebuild before another pass.
+    case graphInvalidated
     /// The deadline passed before the candidate was decoded.
     case deadline
 }

@@ -7,8 +7,8 @@ struct LiftContextTests {
         case immediate, sequential, proposed, lifted, failedLift
     }
 
-    @Test("Lifted acceptance recovers through the first lift and ends the pass", arguments: ContinuationPath.allCases, [AcceptancePolicy.continue, .rebuildAndContinue])
-    func inheritedRecovery(path: ContinuationPath, acceptance: AcceptancePolicy) throws {
+    @Test("Lifted acceptance recovers through the first lift and ends the pass", arguments: ContinuationPath.allCases, [GraphUpdatePolicy.applyMutation, .rebuildAfterPass])
+    func inheritedRecovery(path: ContinuationPath, graphUpdate: GraphUpdatePolicy) throws {
         let fixture = try LiftFixture()
         let proposal = try fixture.proposal(value: 4)
         let nestedProposal = try fixture.proposal(value: 3, nodeID: 999)
@@ -18,7 +18,7 @@ struct LiftContextTests {
         var observedChanges: [LeafChange] = []
         let terminal: Reduction = .search(
             SingleCandidateSearch(candidate: candidate, mutation: nestedProposal.mutation),
-            configuration: SearchConfiguration(acceptance: acceptance)
+            configuration: SearchConfiguration(graphUpdate: graphUpdate)
         ) { _ in
             resumedAfterAcceptance = true
             return .pure(.finished)

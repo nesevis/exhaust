@@ -9,7 +9,7 @@
 struct ReductionPassReport {
     var counts = ReductionProbeCounts()
     var anyAccepted = false
-    /// Whether an acceptance left the graph needing a full rebuild, because a lift, its acceptance policy, or its mutation ruled out an in-place update.
+    /// Whether an acceptance left the graph needing a full rebuild, because a lift, its graph update policy, or its mutation ruled out an in-place update.
     var anyRequiresRebuild = false
     /// Whether the latest accepted decoding skipped materializing unselected branches, so the incumbent's tree lacks them and pick nodes cannot offer pivots.
     var latestTreeIsStripped = false

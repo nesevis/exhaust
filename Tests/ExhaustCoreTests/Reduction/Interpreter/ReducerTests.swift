@@ -7,7 +7,7 @@ struct ReducerTests {
     func attemptSearchContinues(insidePropose: Bool) throws {
         let fixture = try InterpreterFixture()
         let candidate = try fixture.candidate(value: 3)
-        let configuration = SearchConfiguration(acceptance: .continue, requiresExactDecoder: false)
+        let configuration = SearchConfiguration(graphUpdate: .applyMutation, requiresExactDecoder: false)
         var continuationOutcome: SearchOutcome?
         let sequenced: Reduction = .search(SingleCandidateSearch(), configuration: configuration) { outcome in
             continuationOutcome = outcome

@@ -46,17 +46,17 @@ enum RemovalEncoder: ReductionEncoder {
             case let .window(windowScope):
                 return Self.search(
                     WindowRemovalSearch(scope: windowScope, baseSequence: sequence, graph: graph),
-                    acceptance: .rebuildAndContinue
+                    graphUpdate: .rebuildAfterPass
                 )
         }
     }
 
     // MARK: - Helpers
 
-    private static func search(_ search: any ReductionSearch, acceptance: AcceptancePolicy = .continue) -> Reduction {
+    private static func search(_ search: any ReductionSearch, graphUpdate: GraphUpdatePolicy = .applyMutation) -> Reduction {
         .search(
             search,
-            configuration: SearchConfiguration(acceptance: acceptance)
+            configuration: SearchConfiguration(graphUpdate: graphUpdate)
         )
     }
 }
