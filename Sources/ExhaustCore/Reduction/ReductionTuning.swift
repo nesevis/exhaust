@@ -15,16 +15,16 @@ package struct ReductionTuning: Sendable {
     /// Maximum probes a bound value scope may emit on a bind fingerprint's first dispatch of the run. Zero means uncapped.
     public var composedFirstDispatchProbeCap: Int
 
-    /// Probes each controller candidate's downstream search emits per turn in a nested bind chain before the next candidate gets a turn. Applies only under ``ChoiceScheduling/turnBased``; diagonal scheduling selects again after every candidate.
+    /// Probes each controller candidate's attempt emits per turn in a nested bind chain before the next candidate gets a turn. Applies only under ``ChoiceScheduling/turnBased``; diagonal scheduling selects again after every candidate.
     public var probesPerControllerCandidateTurn: Int
 
-    /// Downstream builds one dispatch of a nested bind chain of three or fewer searches may spend across all its searches, counting failed builds and builds whose search emits nothing. Each build materializes the generator, and nesting multiplies them, so the chain root owns one pool for the whole chain.
+    /// Downstream builds one dispatch of a nested bind chain of three or fewer levels may spend across all its attempts, counting failed builds and builds whose search emits nothing. Each build materializes the generator, and nesting multiplies them, so the chain root owns one pool for the whole chain.
     public var nestedChainBaseBuildPool: Int
 
     /// Upper bound on ``nestedChainBuildPool(chainLength:)``, whatever the chain's length.
     public var nestedChainMaxBuildPool: Int
 
-    /// Builds the chain root may spend per start. Deeper searches get less; see ``nestedChainBuildsPerStart(depth:)``.
+    /// Builds the chain root may spend per start. Deeper levels get less; see ``nestedChainBuildsPerStart(depth:)``.
     public var nestedChainRootBuildsPerStart: Int
 
     /// Lifts a bound exchange scope may keep, counting only lifts that preserve the proposal's expected sink value.
@@ -180,7 +180,7 @@ package struct ReductionTuning: Sendable {
         }
     }
 
-    /// Builds a chain of `chainLength` searches may spend: ``nestedChainBaseBuildPool`` for three or fewer searches, quadrupled for each search beyond that, and at most ``nestedChainMaxBuildPool``. A fixed pool spread over more searches leaves each controller fewer candidates.
+    /// Builds a chain of `chainLength` bind levels may spend: ``nestedChainBaseBuildPool`` for three or fewer levels, quadrupled for each level beyond that, and at most ``nestedChainMaxBuildPool``. A fixed pool spread over more levels leaves each controller fewer candidates.
     func nestedChainBuildPool(chainLength: Int) -> Int {
         var pool = nestedChainBaseBuildPool
         var length = 3

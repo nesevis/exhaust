@@ -80,10 +80,10 @@ struct LiftContextTests {
         let proposal = try fixture.proposal(value: 4)
         var finished = 0
         let search: Reduction = .search(KnowledgeSearch(nodeID: fixture.leafNodeID, onFinish: { finished += 1 }), configuration: .standard)
-        let branch: Reduction = lifted
+        let attempt: Reduction = lifted
             ? .lift(proposal, fallbackTree: fixture.tree) { _ in search }
             : search
-        let reduction: Reduction = proposed ? fixture.propose { _ in branch } : branch
+        let reduction: Reduction = proposed ? fixture.propose { _ in attempt } : attempt
 
         let result = fixture.run(reduction)
 
@@ -144,7 +144,7 @@ struct LiftContextTests {
         #expect(metadata.value.bitPattern64 == 4)
     }
 
-    @Test("A suspended lifted branch does not change its sibling's search context")
+    @Test("A suspended lifted attempt does not change its sibling's search context")
     func siblingsAreIndependent() throws {
         let fixture = try LiftFixture()
         let liftedProposal = try fixture.proposal(value: 4)
@@ -205,7 +205,7 @@ private struct LiftFixture {
     func propose(count: Int = 1, then build: @escaping (Int) -> Reduction) -> Reduction {
         .propose(
             { IndexedProposals(base: base, count: count) },
-            configuration: ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
+            configuration: ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: nil, totalProbeCap: 0),
             then: { proposal in build(Int(proposal.prefix[0].value!.choice.bitPattern64)) }
         )
     }

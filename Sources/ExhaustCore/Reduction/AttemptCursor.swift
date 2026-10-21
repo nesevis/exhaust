@@ -8,13 +8,13 @@ protocol ProposalCursor {
 extension LeafProposalCursor: ProposalCursor {}
 extension BoundExchangeProposalCursor: ProposalCursor {}
 
-/// Creates a `propose` level's cursor when the interpreter first selects an unopened branch, after deadline and build-budget checks. Nil when the level has no proposals.
+/// Creates a `propose` level's cursor when the interpreter first selects an unopened attempt, after deadline and build-budget checks. Nil when the level has no proposals.
 typealias ProposalFactory = () -> (any ProposalCursor)?
 
-/// Owns one pool execution's proposals, setting up the cursor and constructing each prefix only when a branch is selected.
+/// Owns one pool execution's proposals, setting up the cursor and constructing each prefix only when an attempt is selected.
 ///
-/// A branch's position is its index and its starting grade under diagonal scheduling, so only the next unopened branch needs a scheduling entry.
-struct BranchCursor {
+/// An attempt's position is its index and its starting grade under diagonal scheduling, so only the next unopened attempt needs a scheduling entry.
+struct AttemptCursor {
     private enum Storage {
         case unstarted(ProposalFactory)
         case started(any ProposalCursor)
@@ -28,7 +28,7 @@ struct BranchCursor {
         storage = .unstarted(makeProposals)
     }
 
-    /// The next branch's index, without constructing its prefix. The cursor discovers exhaustion only when asked for a proposal, so this can name a branch that does not exist.
+    /// The next attempt's index, without constructing its prefix. The cursor discovers exhaustion only when asked for a proposal, so this can name an attempt that does not exist.
     var nextIndex: Int? {
         switch storage {
             case .unstarted, .started:
@@ -38,7 +38,7 @@ struct BranchCursor {
         }
     }
 
-    /// Advances only after deadline and build-budget checks. Exhaustion constructs no branch and spends no build allowance.
+    /// Advances only after deadline and build-budget checks. Exhaustion constructs no attempt and spends no build allowance.
     mutating func next() -> LiftProposal? {
         switch storage {
             case let .unstarted(makeProposals):

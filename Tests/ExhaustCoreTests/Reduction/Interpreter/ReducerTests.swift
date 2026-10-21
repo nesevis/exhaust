@@ -3,8 +3,8 @@ import Testing
 
 @Suite("Reduction interpreter")
 struct ReducerTests {
-    @Test("A search inside a propose branch continues with its outcome, as a top-level search does", arguments: [false, true])
-    func branchSearchContinues(insidePropose: Bool) throws {
+    @Test("A search inside a propose attempt continues with its outcome, as a top-level search does", arguments: [false, true])
+    func attemptSearchContinues(insidePropose: Bool) throws {
         let fixture = try InterpreterFixture()
         let candidate = try fixture.candidate(value: 3)
         let configuration = SearchConfiguration(acceptance: .continue, requiresExactDecoder: false)
@@ -22,7 +22,7 @@ struct ReducerTests {
             case true:
                 .propose(
                     { RepeatedProposals(prefix: fixture.sequence, count: 1) },
-                    configuration: ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
+                    configuration: ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: nil, totalProbeCap: 0),
                     then: { _ in
                         sequenced
                     }
@@ -37,25 +37,25 @@ struct ReducerTests {
         #expect(outcome.counts.emitted == 0)
     }
 
-    @Test("A level whose branches fail construction stops building at the deadline")
+    @Test("A level whose attempts fail construction stops building at the deadline")
     func failedBuildsStopAtDeadline() throws {
         let fixture = try InterpreterFixture()
-        var branchesBuilt = 0
+        var attemptsBuilt = 0
         let reduction: Reduction = .propose(
             { RepeatedProposals(prefix: fixture.sequence, count: 4) },
-            configuration: ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
+            configuration: ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: nil, totalProbeCap: 0),
             then: { proposal in
-                branchesBuilt += 1
+                attemptsBuilt += 1
                 return .lift(proposal, fallbackTree: fixture.tree) { _ in
                     .fail(.bindNotFound)
                 }
             }
         )
 
-        // Expires once the second branch has started building, so only the first branch's lift runs.
-        let report = fixture.run(reduction, deadline: ReductionDeadline(start: 0, budget: 2, clock: { UInt64(branchesBuilt) }))
+        // Expires once the second attempt has started building, so only the first attempt's lift runs.
+        let report = fixture.run(reduction, deadline: ReductionDeadline(start: 0, budget: 2, clock: { UInt64(attemptsBuilt) }))
 
-        #expect(branchesBuilt == 2)
+        #expect(attemptsBuilt == 2)
         #expect(report.liftAttempts == 1)
         #expect(report.buildOutcomes[CompositionBuildRecord(depth: 1, outcome: .failed(.bindNotFound))] == 1)
     }

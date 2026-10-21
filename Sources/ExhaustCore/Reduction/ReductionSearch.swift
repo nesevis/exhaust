@@ -33,7 +33,7 @@ enum CandidateRejection {
     case propertyPassed
     /// The property still failed, but decoding returned no counterexample or one the encoder's ``ReductionOrder`` does not admit.
     case failedNotAdmitted
-    /// The outcome withheld, for searches whose composition cannot guarantee that branches emit disjoint candidates.
+    /// The outcome withheld, for searches whose composition cannot guarantee that attempts emit disjoint candidates.
     case undifferentiated
 }
 

@@ -7,7 +7,7 @@
 
 /// Lowers a bind's controller value and searches the bound content each lower value generates.
 ///
-/// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the branch either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``BinarySearch`` for one leaf or a ``CoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ChoiceConfiguration``; every budget comes from ``ReductionTuning``.
+/// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the attempt either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``BinarySearch`` for one leaf or a ``CoveringSearch`` for several. Attempt turns, construction limits, chain build limits, the shared build pool, and the build tally belong to the interpreter, driven by each level's ``ChoiceConfiguration``; every budget comes from ``ReductionTuning``.
 enum BoundValueEncoder: ReductionEncoder {
     static let name: EncoderName = .boundValueSearch
     static let isPathChanging = false
@@ -88,8 +88,8 @@ enum BoundValueEncoder: ReductionEncoder {
         // The probe cap is sized for turns: two-probe turns give the controller candidate at index k its second probe after 2(k + 1) probes, where diagonal grades by index need (k + 2)(k + 3) / 2 - 1.
         let scheduling: ChoiceScheduling = totalProbeCap > 0 ? .turnBased : .diagonal
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: chainLimits == nil ? nil : scope.tuning.probesPerControllerCandidateTurn,
-            searchBudget: chain.upstreamBudget,
+            probesPerAttemptTurn: chainLimits == nil ? nil : scope.tuning.probesPerControllerCandidateTurn,
+            constructedAttemptLimit: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
             chainLimits: chainLimits,
             scheduling: scheduling

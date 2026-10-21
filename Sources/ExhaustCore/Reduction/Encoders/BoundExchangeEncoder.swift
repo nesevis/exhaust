@@ -15,8 +15,8 @@ enum BoundExchangeEncoder: ReductionEncoder {
 
     static func reduce(_ exchange: BoundExchangeScope, input scope: EncoderInput) -> Reduction {
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: scope.tuning.keptExchangeLiftBudget,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: scope.tuning.keptExchangeLiftBudget,
             totalProbeCap: 0
         )
         return .propose(
