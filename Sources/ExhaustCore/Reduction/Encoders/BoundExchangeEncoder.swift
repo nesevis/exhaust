@@ -23,7 +23,7 @@ enum BoundExchangeEncoder: ReductionEncoder {
             { BoundExchangeProposalCursor(graph: scope.graph, baseSequence: scope.baseSequence, exchange: exchange) },
             configuration: configuration,
             then: { proposal in
-                .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
+                .lift(proposal, fallbackTree: scope.tree) { lifted in
                     guard let lifted else {
                         return .fail(.materializationFailed)
                     }
@@ -60,11 +60,7 @@ enum BoundExchangeEncoder: ReductionEncoder {
         }
         return .search(
             SingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation),
-            configuration: SearchConfiguration(
-                acceptance: .stop,
-                requiresExactDecoder: true,
-                reportedMutation: ReductionComposition.reshaping(proposal.mutation)
-            )
+            configuration: SearchConfiguration(requiresExactDecoder: true)
         )
     }
 }

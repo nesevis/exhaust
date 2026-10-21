@@ -56,11 +56,7 @@ enum RemovalEncoder: ReductionEncoder {
     private static func search(_ search: any ReductionSearch, acceptance: AcceptancePolicy = .continue) -> Reduction {
         .search(
             search,
-            configuration: SearchConfiguration(
-                acceptance: acceptance,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: SearchConfiguration(acceptance: acceptance)
         )
     }
 }

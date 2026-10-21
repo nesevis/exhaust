@@ -39,13 +39,13 @@ enum CandidateRejection {
 
 /// Why a candidate ended its search, and with it the pass.
 enum SearchStopReason {
-    /// An acceptance ended the search: ``AcceptancePolicy/stop``, or a rebuild under ``AcceptancePolicy/continue``.
+    /// An acceptance ended the search: a lifted context, or a rebuild under ``AcceptancePolicy/continue``.
     case accepted
     /// The deadline passed before the candidate was decoded.
     case deadline
 }
 
-/// One root search's share of a pass's probe counts.
+/// One unlifted search's share of a pass's probe counts.
 struct SearchCounts: Equatable {
     /// The number of leaves each candidate moves when the search is a staged joint stage, which the runner attributes counts to. Nil for every other search.
     let stagedJointArity: Int?

@@ -97,7 +97,7 @@ struct ReducerRegressionTests {
             decoder: ReductionDecoder(generator: generator.erase(), property: { _ in false }, probeWrapper: nil, hasBind: true),
             encoder: ValueSearchEncoder.self
         )
-        let configuration = SearchConfiguration(acceptance: .stop, requiresExactDecoder: true, reportedMutation: nil)
+        let configuration = SearchConfiguration(requiresExactDecoder: true)
 
         context.candidateBuffer = candidate
         let strict = Reducer.evaluate(.written(mutation: .leafValues([]), admission: .numericJoint([])), configuration: configuration, context: &context)

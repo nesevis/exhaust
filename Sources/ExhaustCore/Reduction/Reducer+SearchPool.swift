@@ -62,7 +62,7 @@ extension Reducer {
                             return .deadline
                         }
                         // The branch keeps its grade and remaining turn across sequential searches. Exhausting a search emits no candidate.
-                        switch buildBranch(slot.continuation(.outcome(slot.outcome)), depth: pool.depth, context: &context) {
+                        switch buildBranch(slot.continuation(.outcome(slot.outcome)), depth: pool.depth, recoveryMutation: slot.recoveryMutation, context: &context) {
                             case let .built(next):
                                 member.source = next
                                 pool.active = member
@@ -122,7 +122,7 @@ extension Reducer {
     ) -> Evaluation {
         let passCounts = context.report.counts
         context.report.counts = ReductionProbeCounts()
-        let evaluation = evaluate(candidate, configuration: slot.configuration, context: &context)
+        let evaluation = evaluate(candidate, configuration: slot.configuration, recoveryMutation: slot.recoveryMutation, context: &context)
         let candidateCounts = context.report.counts
         context.report.counts = passCounts
         context.report.counts.merge(candidateCounts)
@@ -231,7 +231,7 @@ extension Reducer {
         if pool.scheduling == .diagonal {
             pool.enqueueNextBranch()
         }
-        let built = buildBranch(continuation(.proposal(proposal)), depth: pool.depth, context: &context)
+        let built = buildBranch(continuation(.proposal(proposal)), depth: pool.depth, recoveryMutation: pool.recoveryMutation, context: &context)
         let source: SearchPool.Source
         switch built {
             case let .built(builtSource):
@@ -261,25 +261,28 @@ extension Reducer {
     /// The deadline is checked before each lift, because a branch can lift more than once before it reaches a search.
     ///
     /// - Parameter depth: How many `propose` levels enclose the branch's level, or nil for the root, whose builds are not recorded.
+    /// - Parameter recoveryMutation: The first successful lift's mutation, inherited through continuations and nested pools. Nil before any lift succeeds.
     static func buildBranch(
         _ reduction: Reduction,
         depth: Int?,
+        recoveryMutation: ProjectedMutation? = nil,
         context: inout Context
     ) -> BuildResult<SearchPool.Source> {
         switch reduction {
             case .pure:
                 return .nothing
-            case let .impure(.lift(prefix, fallbackTree, maximumSequenceCount), continuation):
+            case let .impure(.lift(proposal, fallbackTree, maximumSequenceCount), continuation):
                 guard context.isExpired == false else {
                     return .deadline
                 }
                 let lifted = lift(
-                    prefix,
+                    proposal.prefix,
                     fallbackTree: fallbackTree,
                     maximumSequenceCount: maximumSequenceCount,
                     context: &context
                 )
-                return buildBranch(continuation(.lifted(lifted)), depth: depth, context: &context)
+                let inheritedMutation = recoveryMutation ?? lifted.map { _ in reshaping(proposal.mutation) }
+                return buildBranch(continuation(.lifted(lifted)), depth: depth, recoveryMutation: inheritedMutation, context: &context)
             case let .impure(.fail(reason), _):
                 if let depth {
                     recordBuildOutcome(.failed(reason), depth: depth + 1, context: &context)
@@ -293,18 +296,28 @@ extension Reducer {
                     search: search,
                     configuration: configuration,
                     continuation: continuation,
-                    isRoot: depth == nil
+                    recoveryMutation: recoveryMutation
                 )))
             case let .impure(.propose(branches, configuration), continuation):
                 guard let depth else {
-                    return .built(.level(SearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: 0)))
+                    return .built(.level(SearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: 0, recoveryMutation: recoveryMutation)))
                 }
                 recordBuildOutcome(.nestedLevel, depth: depth + 1, context: &context)
-                return .built(.level(SearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: depth + 1)))
+                return .built(.level(SearchPool(branches: branches, continuation: continuation, configuration: configuration, depth: depth + 1, recoveryMutation: recoveryMutation)))
         }
     }
 
     // MARK: - Lift
+
+    /// The first lift can change graph structure, so its mutation must select a decoder that can recover that change. Nested mutations address lifted graphs and cannot replace it.
+    private static func reshaping(_ mutation: ProjectedMutation) -> ProjectedMutation {
+        guard case let .leafValues(changes) = mutation else {
+            return mutation
+        }
+        return .leafValues(changes.map { change in
+            LeafChange(leafNodeID: change.leafNodeID, newValue: change.newValue, mayReshape: true)
+        })
+    }
 
     static func lift(
         _ prefix: ChoiceSequence,
@@ -353,10 +366,10 @@ extension Reducer {
         }
     }
 
-    /// Finishes the search. A root search keeps its report and, once asked for a candidate, records its own counts; a search inside a `propose` discards its report, since its node IDs belong to a lifted graph.
+    /// Finishes the search. Only unlifted searches export reports and individual counts: lifted reports address another graph, regardless of how many `propose` levels surround the search.
     private static func finishSearch(_ slot: SearchPool.SearchSlot, pending: SearchFeedback, context: inout Context) {
         let searchReport = slot.search.finish(pending: pending)
-        guard slot.isRoot else {
+        guard slot.recoveryMutation == nil else {
             return
         }
         context.report.searchReport.convergenceRecords.merge(searchReport.convergenceRecords) { _, new in new }
@@ -384,11 +397,11 @@ final class SearchPool {
         var feedback: SearchFeedback = .initial
         /// What the branch does after the search exhausts.
         let continuation: (ReductionResponse) -> Reduction
-        /// Whether the search was built outside any `propose`, so it keeps its report and records its own counts.
-        let isRoot: Bool
+        /// The first successful lift's mutation, in the incumbent graph. Nil while searches still address that graph directly.
+        let recoveryMutation: ProjectedMutation?
         /// Whether any of the search's candidates was accepted, for its outcome.
         var anyAccepted = false
-        /// Whether the search was asked for a candidate. A root search stopped before then, by the deadline, records no counts.
+        /// Whether the search was asked for a candidate. An unlifted search stopped before then, by the deadline, records no counts.
         var wasAskedForCandidate = false
         /// Probes this search alone spent, for its outcome.
         var counts = ReductionProbeCounts()
@@ -397,12 +410,12 @@ final class SearchPool {
             search: any ReductionSearch,
             configuration: SearchConfiguration,
             continuation: @escaping (ReductionResponse) -> Reduction,
-            isRoot: Bool
+            recoveryMutation: ProjectedMutation?
         ) {
             self.search = search
             self.configuration = configuration
             self.continuation = continuation
-            self.isRoot = isRoot
+            self.recoveryMutation = recoveryMutation
         }
 
         /// The outcome of a search that ran out of candidates.
@@ -442,6 +455,8 @@ final class SearchPool {
     let continuation: ((ReductionResponse) -> Reduction)?
     /// How many `propose` levels enclose this level, or nil for the root pool, which holds the root branch alone.
     let depth: Int?
+    /// The lifted context inherited by every branch this pool builds. Each branch can establish its own context without changing its siblings.
+    let recoveryMutation: ProjectedMutation?
     /// Probes a member emits before it is suspended behind the others.
     let turn: Int
     let scheduling: ChoiceScheduling
@@ -465,11 +480,13 @@ final class SearchPool {
         branches: @escaping ProposalFactory,
         continuation: @escaping (ReductionResponse) -> Reduction,
         configuration: ChoiceConfiguration,
-        depth: Int
+        depth: Int,
+        recoveryMutation: ProjectedMutation?
     ) {
         self.branches = BranchCursor(branches)
         self.continuation = continuation
         self.depth = depth
+        self.recoveryMutation = recoveryMutation
         scheduling = configuration.scheduling
         turn = scheduling == .diagonal ? 1 : configuration.probesPerSearchTurn ?? .max
         searchBudget = configuration.searchBudget ?? .max
@@ -494,6 +511,7 @@ final class SearchPool {
         branches = BranchCursor { nil }
         continuation = nil
         depth = nil
+        recoveryMutation = nil
         turn = .max
         scheduling = .turnBased
         searchBudget = 0

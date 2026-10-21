@@ -11,25 +11,25 @@ extension Reducer {
         /// `.initial` when the candidate was interrupted before decoding, so the search has no feedback waiting.
         let feedback: SearchFeedback
         let isAccepted: Bool
-        /// Set when this candidate ends the search: an acceptance under `.stop` or a rebuild, or the deadline before decoding.
+        /// Set when this candidate ends the search: an acceptance in lifted context or a rebuild, or the deadline before decoding.
         let stop: SearchStopReason?
     }
 
     /// Takes one candidate through the rejection cache, decoding, and the ordering check, and commits it when admitted.
     ///
     /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
-    static func evaluate(_ candidate: ReductionCandidate, configuration: SearchConfiguration, context: inout Context) -> Evaluation {
+    static func evaluate(_ candidate: ReductionCandidate, configuration: SearchConfiguration, recoveryMutation: ProjectedMutation? = nil, context: inout Context) -> Evaluation {
         let mutation: ProjectedMutation
         let admission: DecoderAdmission
         let probeHash: UInt64
         switch candidate {
             case let .written(writtenMutation, writtenAdmission):
-                mutation = configuration.reportedMutation ?? writtenMutation
+                mutation = recoveryMutation ?? writtenMutation
                 admission = writtenAdmission
                 probeHash = ZobristHash.incrementalHash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence, probe: context.candidateBuffer)
                 context.previousSparseProbe = nil
             case let .sparse(probe, baseSequence, sparseAdmission):
-                mutation = configuration.reportedMutation ?? probe.mutation
+                mutation = recoveryMutation ?? probe.mutation
                 admission = sparseAdmission
                 probeHash = probe.hash(baseHash: context.baseHash, baseSequence: baseSequence)
         }
@@ -103,7 +103,7 @@ extension Reducer {
         }
 
         if let recovered = decoding.recovered, context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
-            let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, observationID: observationID, context: &context)
+            let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, isLifted: recoveryMutation != nil, observationID: observationID, context: &context)
             context.probeTiming?.chargeDecode()
             return evaluation
         }
@@ -149,6 +149,7 @@ extension Reducer {
         mutation: ProjectedMutation,
         decoding: ReductionDecoding,
         configuration: SearchConfiguration,
+        isLifted: Bool,
         observationID: Int?,
         context: inout Context
     ) -> Evaluation {
@@ -168,10 +169,12 @@ extension Reducer {
         context.report.latestTreeIsStripped = decoding.selection.materializePicks == false
 
         let feedback = SearchFeedback.accepted(recovered: recovered.sequence)
+        // Lifted node IDs cannot update the incumbent graph, and acceptance invalidates every other branch's lifted snapshot.
+        if isLifted {
+            context.report.anyRequiresRebuild = true
+            return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
+        }
         switch configuration.acceptance {
-            case .stop:
-                context.report.anyRequiresRebuild = true
-                return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
             case .rebuildAndContinue:
                 context.report.anyRequiresRebuild = true
                 return Evaluation(feedback: feedback, isAccepted: true, stop: nil)

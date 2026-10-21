@@ -33,14 +33,16 @@ extension Reduction {
             .bind { next($0.proposal) }
     }
 
-    /// Lifts `prefix` and continues with the lifted tree and sequence, or nil when materialization failed.
+    /// Materializes the proposal and establishes a lifted context for its continuation on success. Sequential searches and nested proposals inherit that context; sibling branches do not.
+    ///
+    /// The first successful lift supplies the mutation used to recover candidates against the incumbent. An accepted candidate ends the pass and requires a rebuild; search reports from the lifted graph are discarded. A failed lift returns nil without changing the inherited context.
     static func lift(
-        _ prefix: ChoiceSequence,
+        _ proposal: LiftProposal,
         fallbackTree: ChoiceTree,
         maximumSequenceCount: Int? = nil,
         then next: @escaping (LiftResult?) -> Reduction
     ) -> Reduction {
-        request(.lift(prefix, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount))
+        request(.lift(proposal, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount))
             .bind { next($0.lifted) }
     }
 
@@ -88,7 +90,7 @@ enum ReductionOperation {
     /// Offers alternatives. The interpreter resumes the continuation once per branch it visits, so continuations must be re-entrant and capture only values.
     case propose(ProposalFactory, configuration: ChoiceConfiguration)
     /// Materializes a prefix through the generator in guided mode, without running the property. `fallbackTree` resolves entries the prefix does not fix; a lift longer than `maximumSequenceCount` fails.
-    case lift(ChoiceSequence, fallbackTree: ChoiceTree, maximumSequenceCount: Int?)
+    case lift(LiftProposal, fallbackTree: ChoiceTree, maximumSequenceCount: Int?)
     /// Abandons the current branch. Never resumed.
     case fail(DownstreamBuildFailure)
     /// Runs a feedback-driven search until it finishes, then resumes with its outcome.
@@ -129,24 +131,20 @@ struct ChainLimits {
 
 /// What the interpreter does with a search's candidates.
 struct SearchConfiguration {
-    let acceptance: AcceptancePolicy
+    var acceptance: AcceptancePolicy = .continue
     /// Forces exact decoding, whatever decoder the candidate's mutation would otherwise select.
-    let requiresExactDecoder: Bool
-    /// Replaces every candidate's mutation when set. A composition reports its upstream mutation, because the downstream search's node IDs refer to the lifted graph.
-    let reportedMutation: ProjectedMutation?
+    var requiresExactDecoder = false
 
-    /// Keeps searching after an acceptance, decodes as the candidate's mutation allows, and reports each candidate's own mutation.
-    static let standard = SearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+    /// Keeps searching after an unlifted acceptance and lets the mutation select the decoder. Lifted context supplies recovery and termination independently of this configuration.
+    static let standard = SearchConfiguration()
 }
 
-/// What a search does after one of its candidates is accepted.
+/// What an unlifted search does after one of its candidates is accepted. A lifted search always ends the pass and requires a rebuild.
 enum AcceptancePolicy {
     /// Applies each acceptance to the graph in place and keeps searching. An acceptance whose mutation the graph cannot apply in place ends the pass with a rebuild.
     case `continue`
     /// Keeps searching after any acceptance without applying it to the graph, and rebuilds once the pass ends. For searches whose acceptances the graph cannot apply in place but whose later candidates need only the recovered sequence.
     case rebuildAndContinue
-    /// The first acceptance ends every search. Compositions use it because an accepted lift makes every other branch's lifted graph stale.
-    case stop
 }
 
 /// Summarizes a search that ran out of candidates, for the encoder's reduction that requested it. Only exhaustion resumes the reduction; an acceptance that stops the search, a probe cap, or the deadline ends the pass instead.

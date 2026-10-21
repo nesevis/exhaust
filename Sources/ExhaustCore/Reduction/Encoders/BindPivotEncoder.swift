@@ -24,7 +24,7 @@ enum BindPivotEncoder: ReductionEncoder {
             { PivotProposals(pivotScope: pivotScope, scope: scope) },
             configuration: configuration,
             then: { proposal in
-                .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
+                .lift(proposal, fallbackTree: scope.tree) { lifted in
                     guard let lifted else {
                         return .fail(.materializationFailed)
                     }
@@ -52,14 +52,9 @@ enum BindPivotEncoder: ReductionEncoder {
         else {
             return .fail(.bindNotFound)
         }
-        let configuration = SearchConfiguration(
-            acceptance: .continue,
-            requiresExactDecoder: false,
-            reportedMutation: ReductionComposition.reshaping(proposal.mutation)
-        )
         return .search(
             SingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation),
-            configuration: configuration
+            configuration: .standard
         ) { _ in
             .search(
                 CoveringSearch(
@@ -68,7 +63,7 @@ enum BindPivotEncoder: ReductionEncoder {
                     tuning: parent.tuning,
                     rowCache: parent.coveringRowCache
                 ),
-                configuration: configuration
+                configuration: .standard
             )
         }
     }

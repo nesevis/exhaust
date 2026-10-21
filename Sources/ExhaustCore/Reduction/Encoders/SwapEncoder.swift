@@ -16,11 +16,7 @@ enum SwapEncoder: ReductionEncoder {
     static func reduce(_ scope: PermutationScope, input: EncoderInput) -> Reduction {
         .search(
             SwapSearch(scope: scope, sequence: input.baseSequence, graph: input.graph),
-            configuration: SearchConfiguration(
-                acceptance: .rebuildAndContinue,
-                requiresExactDecoder: false,
-                reportedMutation: nil
-            )
+            configuration: SearchConfiguration(acceptance: .rebuildAndContinue)
         )
     }
 }

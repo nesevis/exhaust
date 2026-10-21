@@ -7,7 +7,7 @@ struct ReducerTests {
     func branchSearchContinues(insidePropose: Bool) throws {
         let fixture = try InterpreterFixture()
         let candidate = try fixture.candidate(value: 3)
-        let configuration = SearchConfiguration(acceptance: .continue, requiresExactDecoder: false, reportedMutation: nil)
+        let configuration = SearchConfiguration(acceptance: .continue, requiresExactDecoder: false)
         var continuationOutcome: SearchOutcome?
         let sequenced: Reduction = .search(SingleCandidateSearch(), configuration: configuration) { outcome in
             continuationOutcome = outcome
@@ -46,7 +46,7 @@ struct ReducerTests {
             configuration: ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
             then: { proposal in
                 branchesBuilt += 1
-                return .lift(proposal.prefix, fallbackTree: fixture.tree) { _ in
+                return .lift(proposal, fallbackTree: fixture.tree) { _ in
                     .fail(.bindNotFound)
                 }
             }

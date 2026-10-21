@@ -176,12 +176,9 @@ struct DiagonalSchedulingTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let reduction = fixture.pool(count: 2, recorder: recorder) { index in
-            fixture.search(
-                ["A", "B"][index],
-                values: [0],
-                recorder: recorder,
-                configuration: SearchConfiguration(acceptance: .stop, requiresExactDecoder: false, reportedMutation: nil)
-            )
+            .lift(LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
+                fixture.search(["A", "B"][index], values: [0], recorder: recorder)
+            }
         }
 
         let report = fixture.run(reduction, property: { _ in false })
@@ -395,12 +392,9 @@ struct LazyProposalTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let reduction = fixture.pool(count: 1_000_000, recorder: recorder) { _ in
-            fixture.search(
-                "A",
-                values: [0],
-                recorder: recorder,
-                configuration: SearchConfiguration(acceptance: .stop, requiresExactDecoder: false, reportedMutation: nil)
-            )
+            .lift(LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
+                fixture.search("A", values: [0], recorder: recorder)
+            }
         }
 
         let report = fixture.run(reduction, property: { _ in false })
