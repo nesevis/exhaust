@@ -52,10 +52,12 @@ let package = Package(
                 .product(name: "Exhaust", package: "Exhaust"),
             ]
         ),
+        .target(name: "HarnessTestSupport"),
         // Uninstrumented: the test module measures the fixture's coverage, not its own.
         .testTarget(
             name: "ExploreTests",
             dependencies: [
+                "HarnessTestSupport",
                 "ExploreFixture",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ExhaustCore", package: "Exhaust"),
@@ -65,6 +67,7 @@ let package = Package(
         .testTarget(
             name: "SpecTests",
             dependencies: [
+                "HarnessTestSupport",
                 "SpecFixture",
                 "MatrixSpecs",
                 .product(name: "Exhaust", package: "Exhaust"),

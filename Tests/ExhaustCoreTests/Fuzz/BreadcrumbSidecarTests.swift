@@ -5,6 +5,27 @@ import Testing
 /// The sidecar's crash consistency: a process killed partway through a record must never hand the next run a blend of two candidates.
 @Suite("Breadcrumb sidecar")
 struct BreadcrumbSidecarTests {
+    @Test("Legacy C1 records remain readable")
+    func legacyRecordRemainsReadable() throws {
+        try withBreadcrumb { _, fileURL in
+            let header: [UInt8] = [
+                0x31, 0x43, 0x54, 0x53, 0x55, 0x48, 0x58, 0x45,
+                1, 0, 0, 0, 0, 0, 0, 0,
+                7, 0, 0, 0, 0, 0, 0, 0,
+                8, 0, 0, 0, 0, 0, 0, 0,
+                2, 0, 0, 0, 0, 0, 0, 0,
+                0xC5, 0x9D, 0x1C, 0x81, 0, 0, 0, 0,
+            ]
+            let record = header + Array(repeating: UInt8(0), count: FuzzBreadcrumb.mappingSize - header.count)
+            try Data(record).write(to: fileURL)
+            let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
+            #expect(survivor.candidateHash == 7)
+            #expect(survivor.parentHash == 8)
+            #expect(survivor.kind == .reduction)
+            #expect(survivor.candidateSequence == nil)
+        }
+    }
+
     @Test("The candidate sequence round-trips")
     func sequenceRoundTrips() throws {
         try withBreadcrumb { breadcrumb, url in
@@ -64,6 +85,7 @@ struct BreadcrumbSidecarTests {
                 let byteOffset = newer * FuzzBreadcrumb.slotSize + offset
                 let original = bytes[byteOffset]
                 breadcrumb.corruptByte(at: byteOffset, with: original ^ 0xFF)
+                defer { breadcrumb.corruptByte(at: byteOffset, with: original) }
 
                 let survivor = try #require(
                     FuzzBreadcrumb.readSurvivor(fileURL: url),

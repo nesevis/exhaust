@@ -68,7 +68,7 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
     ///   24  u64  parent hash
     ///   32  u32  probe kind
     ///   36  u32  payload length in bytes (0 when the candidate exceeded the cap)
-    ///   40  u32  FNV-1a checksum over the payload
+    ///   40  u32  FNV-1a checksum over bytes 8..<40 and the payload
     ///   44  u32  reserved
     ///   48       payload
     ///
@@ -79,7 +79,10 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
     package static let mappingSize = slotSize * 2
 
     /// Written into a slot's first word once every other field is in place.
-    private static let slotCommitted: UInt64 = 0x4558_4855_5354_4331 // "EXHUSTC1"
+    private static let slotCommitted: UInt64 = 0x4558_4855_5354_4332 // "EXHUSTC2"
+
+    /// The previous layout checksummed only the payload. Read it for existing crash records.
+    private static let legacySlotCommitted: UInt64 = 0x4558_4855_5354_4331
 
     private static let candidateHashOffset = 16
     private static let parentHashOffset = 24
@@ -220,7 +223,9 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
         slot.storeBytes(of: parentHash.littleEndian, toByteOffset: Self.parentHashOffset, as: UInt64.self)
         slot.storeBytes(of: UInt32(kind.rawValue).littleEndian, toByteOffset: Self.kindOffset, as: UInt32.self)
         slot.storeBytes(of: UInt32(storedPayload.count).littleEndian, toByteOffset: Self.payloadLengthOffset, as: UInt32.self)
-        slot.storeBytes(of: Self.checksum(of: storedPayload).littleEndian, toByteOffset: Self.checksumOffset, as: UInt32.self)
+        let header = UnsafeRawBufferPointer(start: slot.advanced(by: 8), count: Self.checksumOffset - 8)
+        let checksum = Self.checksum(of: storedPayload, startingWith: Self.checksum(of: header))
+        slot.storeBytes(of: checksum.littleEndian, toByteOffset: Self.checksumOffset, as: UInt32.self)
         if storedPayload.isEmpty == false {
             storedPayload.withUnsafeBytes { source in
                 slot.advanced(by: Self.payloadOffset).copyMemory(from: source.baseAddress!, byteCount: source.count)
@@ -249,10 +254,10 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
         mapping.storeBytes(of: byte, toByteOffset: offset, as: UInt8.self)
     }
 
-    /// FNV-1a over the payload, so a slot torn partway through its bytes fails to validate even when its length and marker survived.
-    private static func checksum(of payload: [UInt8]) -> UInt32 {
-        var hash: UInt32 = 0x811C_9DC5
-        for byte in payload {
+    /// Extends an FNV-1a checksum across the record header and payload.
+    private static func checksum(of bytes: some Sequence<UInt8>, startingWith initialHash: UInt32 = 0x811C_9DC5) -> UInt32 {
+        var hash = initialHash
+        for byte in bytes {
             hash ^= UInt32(byte)
             hash = hash &* 0x0100_0193
         }
@@ -291,7 +296,8 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
         func half(_ offset: Int) -> UInt32 {
             bytes.withUnsafeBytes { UInt32(littleEndian: $0.loadUnaligned(fromByteOffset: base + offset, as: UInt32.self)) }
         }
-        guard word(0) == slotCommitted else {
+        let marker = word(0)
+        guard marker == slotCommitted || marker == legacySlotCommitted else {
             return nil
         }
         let candidateHash = word(candidateHashOffset)
@@ -303,7 +309,10 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
             return nil
         }
         let payload = Array(bytes[(base + payloadOffset) ..< (base + payloadOffset + length)])
-        guard checksum(of: payload) == half(checksumOffset) else {
+        let initialHash: UInt32 = marker == slotCommitted
+            ? checksum(of: bytes[(base + 8) ..< (base + checksumOffset)])
+            : 0x811C_9DC5
+        guard checksum(of: payload, startingWith: initialHash) == half(checksumOffset) else {
             return nil
         }
         return Survivor(
