@@ -143,7 +143,7 @@ extension ChoiceGraph {
         materializations += 1
         guard let freshTree = Materializer.guidedLift(
             generator: gen,
-            prefix: candidate,
+            prefix: .init(candidate),
             fallbackTree: fallbackTree
         ) else {
             return nil

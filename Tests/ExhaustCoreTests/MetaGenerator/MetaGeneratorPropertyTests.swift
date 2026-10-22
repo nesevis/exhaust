@@ -25,7 +25,7 @@ struct MetaGeneratorPropertyTests {
                           let reflectedAgain = try Interpreters.reflect(gen, with: replayed),
                           let replayedAgain = try Interpreters.replay(gen, using: reflectedAgain),
                           case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-                              prefix: ChoiceSequence(tree), mode: .exact, fallbackTree: tree
+                              prefix: .init(ChoiceSequence(tree)), mode: .exact, fallbackTree: tree
                           ))
                     else {
                         return false

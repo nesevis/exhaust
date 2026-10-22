@@ -8,7 +8,7 @@ struct MaterializerContextTests {
         let prefix: ChoiceSequence = [
             .value(.init(choice: ChoiceValue(UInt64(7), tag: .uint64), validRange: 0 ... 10)),
         ]
-        var context = Materializer.Context(prefix: prefix, mode: .exact, materializePicks: materializePicks)
+        var context = Materializer.Context(prefix: .init(prefix), mode: .exact, materializePicks: materializePicks)
         var expected = Xoshiro256(seed: materializePicks ? ZobristHash.hash(of: prefix) : 0)
         #expect(context.prng.next() == expected.next())
         #expect(context.mode == .exact)
@@ -20,7 +20,7 @@ struct MaterializerContextTests {
     @Test("Exact precomputed seeds bypass default seed selection", arguments: [false, true])
     func exactPrecomputedSeed(materializePicks: Bool) {
         var context = Materializer.Context(
-            prefix: ChoiceSequence(),
+            prefix: .init(ChoiceSequence()),
             mode: .exact,
             materializePicks: materializePicks,
             precomputedSeed: 1337
@@ -35,7 +35,7 @@ struct MaterializerContextTests {
         let embedded = try #require(try Interpreters.reflect(generator, with: UInt64(7)))
         let supplied = try #require(try Interpreters.reflect(generator, with: UInt64(9)))
         let context = Materializer.Context(
-            prefix: ChoiceSequence(),
+            prefix: .init(ChoiceSequence()),
             mode: .guided(seed: 42, fallbackTree: embedded),
             fallbackTree: supplied,
             precomputedSeed: 1337,
@@ -56,7 +56,7 @@ struct MaterializerContextTests {
         let generator = Gen.choose(in: UInt64(0) ... 10)
         let supplied = try #require(try Interpreters.reflect(generator, with: UInt64(9)))
         let context = Materializer.Context(
-            prefix: ChoiceSequence(),
+            prefix: .init(ChoiceSequence()),
             mode: .guided(seed: 42, fallbackTree: nil),
             fallbackTree: supplied
         )
@@ -72,7 +72,7 @@ struct MaterializerContextTests {
         let result = Materializer.materialize(
             Gen.chooseDepth(in: UInt64(0) ... 5),
             context: .init(
-                prefix: ChoiceSequence(),
+                prefix: .init(ChoiceSequence()),
                 mode: .guided(seed: 42, fallbackTree: nil),
                 skipTree: skipTree,
                 collectDecodingReport: false,

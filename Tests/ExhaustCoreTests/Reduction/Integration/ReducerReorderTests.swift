@@ -20,7 +20,7 @@ struct ReducerReorderTests {
         #expect(output == values.sorted())
         #expect(ChoiceSequence.validate(sequence))
         guard case let .success(replayed, _, _) = Materializer.materialize(
-            generator, context: .init(prefix: sequence, mode: .exact, fallbackTree: tree)
+            generator, context: .init(prefix: .init(sequence), mode: .exact, fallbackTree: tree)
         ) else {
             Issue.record("Reordered history failed exact replay")
             return

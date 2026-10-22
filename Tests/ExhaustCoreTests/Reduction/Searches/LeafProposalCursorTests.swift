@@ -64,11 +64,11 @@ struct LeafProposalCursorTests {
                     return
                 }
                 #expect(Array(candidate) == Array(expected))
-                #expect(Array(proposal.prefix) == Array(expected))
+                #expect(Array(proposal.prefix.materialized()) == Array(expected))
                 let nextSharedProposal = sharedCursor.next()
                 let sharedProposal = try #require(nextSharedProposal)
-                #expect(sharedProposal.prefix == expected)
-                #expect(sharedProposal.basePrefix == sequence)
+                #expect(sharedProposal.prefix.materialized() == expected)
+                #expect(sharedProposal.prefix.base == sequence)
                 #expect(ProbeTraceRecorder.Mutation(sharedProposal.mutation) == ProbeTraceRecorder.Mutation(proposal.mutation))
                 #expect(ProbeTraceRecorder.Mutation(proposal.mutation) == ProbeTraceRecorder.Mutation(emittedCandidate.mutation))
             }

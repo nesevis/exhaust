@@ -146,7 +146,7 @@ struct FuzzMutatorTests {
                 let result = Materializer.materializeAny(
                     erased,
                     context: .init(
-                        prefix: mutated,
+                        prefix: .init(mutated),
                         mode: .guided(seed: UInt64(round) &+ seed, fallbackTree: tree)
                     )
                 )
@@ -180,7 +180,7 @@ struct FuzzMutatorTests {
         let result = Materializer.materializeAny(
             gen.erase(),
             context: .init(
-                prefix: spliced,
+                prefix: .init(spliced),
                 mode: .guided(seed: 1, fallbackTree: recipientTree)
             )
         )

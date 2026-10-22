@@ -13,7 +13,7 @@ struct JustArmBindZipExactDecodeTests {
         let result = Materializer.materialize(
             justArmBoundZip,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact,
                 fallbackTree: generated.tree,
                 materializePicks: materializePicks

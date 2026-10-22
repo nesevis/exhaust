@@ -115,6 +115,6 @@ private struct RepeatedProposals: ProposalCursor {
         }
         emitted += 1
         buffer = prefix
-        return LiftProposal(prefix: buffer, mutation: .leafValues([]))
+        return LiftProposal(prefix: .init(buffer), mutation: .leafValues([]))
     }
 }

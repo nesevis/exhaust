@@ -4,21 +4,17 @@ extension Materializer {
     /// A non-nil ceiling rejects oversized scalar arrays before element generation and checks the full history afterwards. Intermediate composition stages must omit it so downstream controllers can compensate for growth.
     static func guidedLift(
         generator: AnyGenerator,
-        prefix: ChoiceSequence,
+        prefix: EditedChoiceSequence,
         fallbackTree: ChoiceTree,
-        maximumSequenceCount: Int? = nil,
-        valueReplacement: ChoiceSequenceValueReplacement? = nil
+        maximumSequenceCount: Int? = nil
     ) -> ChoiceTree? {
-        var context = Context(
+        let context = Context(
             prefix: prefix,
             mode: .guided(seed: 0, fallbackTree: fallbackTree),
             fallbackTree: fallbackTree,
             materializePicks: true,
             maximumSequenceCount: maximumSequenceCount
         )
-        if let valueReplacement {
-            context.cursor = Cursor(from: prefix, valueReplacement: valueReplacement)
-        }
         guard case let .success(_, tree, _) = materializeAny(
             generator,
             context: consume context

@@ -60,7 +60,7 @@ extension ReplayCorpusTests {
                         let result = Materializer.materializeAny(
                             erased,
                             context: .init(
-                                prefix: ChoiceSequence(tree),
+                                prefix: .init(ChoiceSequence(tree)),
                                 mode: .exact,
                                 fallbackTree: shouldUseFallback ? tree : nil
                             )
@@ -97,7 +97,7 @@ extension ReplayCorpusTests {
                         let result = Materializer.materializeAny(
                             erased,
                             context: .init(
-                                prefix: sequence,
+                                prefix: .init(sequence),
                                 mode: .exact,
                                 fallbackTree: tree,
                                 skipTree: shouldSkipTree
@@ -114,7 +114,7 @@ extension ReplayCorpusTests {
                     let flat = Materializer.materializeAnyFlat(
                         erased,
                         context: .init(
-                            prefix: sequence,
+                            prefix: .init(sequence),
                             mode: .exact,
                             fallbackTree: tree
                         )

@@ -10,7 +10,7 @@ struct MaterializerLeafReuseTests {
             ChoiceMetadata(validRange: 0 ... 10, isRangeExplicit: false)
         )
         var context = Materializer.Context(
-            prefix: [],
+            prefix: .init([]),
             mode: .guided(seed: 42, fallbackTree: fallback)
         )
         let resolved = try Materializer.resolveChooseBits(
@@ -40,7 +40,7 @@ struct MaterializerLeafReuseTests {
             ChoiceValue(UInt64(7), tag: .uint64),
             ChoiceMetadata(validRange: 0 ... 100)
         )
-        var context = Materializer.Context(prefix: [], mode: .guided(seed: 42, fallbackTree: fallback))
+        var context = Materializer.Context(prefix: .init([]), mode: .guided(seed: 42, fallbackTree: fallback))
         let resolved = try Materializer.resolveChooseBits(
             min: 0, max: 10, tag: .uint64,
             isRangeExplicit: false, scaling: nil, typeTagPayload: nil,
@@ -66,7 +66,7 @@ struct MaterializerLeafReuseTests {
         ]
         for prefixChoice in prefixChoices {
             var context = Materializer.Context(
-                prefix: [.value(.init(choice: prefixChoice, validRange: 0 ... 100))],
+                prefix: .init([.value(.init(choice: prefixChoice, validRange: 0 ... 100))]),
                 mode: .guided(seed: 42, fallbackTree: fallback)
             )
             let resolved = try Materializer.resolveChooseBits(
@@ -95,7 +95,7 @@ struct MaterializerLeafReuseTests {
             ChoiceMetadata(validRange: 0 ... 100)
         )
         for maximum in [UInt64(5), 10] {
-            var context = Materializer.Context(prefix: [], mode: .guided(seed: 42, fallbackTree: fallback))
+            var context = Materializer.Context(prefix: .init([]), mode: .guided(seed: 42, fallbackTree: fallback))
             let resolved = try Materializer.resolveChooseBits(
                 min: 0, max: maximum, tag: .uint64,
                 isRangeExplicit: true, scaling: nil, typeTagPayload: nil,
@@ -120,7 +120,7 @@ struct MaterializerLeafReuseTests {
             ChoiceMetadata(validRange: 0 ... 10, isRangeExplicit: true, typeTagPayload: oldPayload)
         )
         for payload in [newPayload, nil] {
-            var context = Materializer.Context(prefix: [], mode: .guided(seed: 42, fallbackTree: fallback))
+            var context = Materializer.Context(prefix: .init([]), mode: .guided(seed: 42, fallbackTree: fallback))
             let resolved = try Materializer.resolveChooseBits(
                 min: 0, max: 10, tag: .character,
                 isRangeExplicit: true, scaling: nil, typeTagPayload: payload,

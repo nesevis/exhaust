@@ -135,7 +135,7 @@ struct ElementRunOperatorTests {
             guard case let .success(_, child, _) = Materializer.materializeAnyFlat(
                 gen.erase(),
                 context: .init(
-                    prefix: cut.candidate,
+                    prefix: .init(cut.candidate),
                     mode: .guided(seed: seed, fallbackTree: parentTree),
                     reseedRanges: cut.reseedRanges
                 )

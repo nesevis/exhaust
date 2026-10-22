@@ -33,7 +33,7 @@ struct MaterializerSequenceLengthTests {
         let result = Materializer.materializeAnyFlat(
             gen.erase(),
             context: .init(
-                prefix: ChoiceSequence(),
+                prefix: .init(ChoiceSequence()),
                 mode: .guided(seed: 0xF00D, fallbackTree: fallback)
             )
         )
@@ -64,7 +64,7 @@ struct MaterializerSequenceLengthTests {
                 let result = Materializer.materializeAnyFlat(
                     erased,
                     context: .init(
-                        prefix: candidate,
+                        prefix: .init(candidate),
                         mode: .guided(seed: prng.next(), fallbackTree: tree)
                     )
                 )

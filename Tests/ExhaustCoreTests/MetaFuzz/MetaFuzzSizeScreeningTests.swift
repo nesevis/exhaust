@@ -32,7 +32,7 @@ struct MetaFuzzSizeScreeningTests {
                         let replay = Materializer.materializeAny(
                             generator,
                             context: .init(
-                                prefix: ChoiceSequence(tree),
+                                prefix: .init(ChoiceSequence(tree)),
                                 mode: .exact,
                                 fallbackTree: usesFallback ? tree : nil
                             )
@@ -101,7 +101,7 @@ struct MetaFuzzSizeScreeningTests {
             #expect(try Interpreters.replay(publicGenerator.gen, using: reflected) == value)
             let replay = Materializer.materialize(
                 publicGenerator.gen,
-                context: .init(prefix: ChoiceSequence(tree), mode: .exact)
+                context: .init(prefix: .init(ChoiceSequence(tree)), mode: .exact)
             )
             guard case let .success(replayed, _, _) = replay else {
                 Issue.record("Public size generator failed exact materialization")

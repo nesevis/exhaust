@@ -149,7 +149,7 @@ private func checkRecipeRoundTrips(
         let replayed = try #require(try Interpreters.replay(generator, using: tree), "Must replay: \(recipe)")
         #expect(anyEquals(value, replayed), "Replay changed value: \(recipe)")
         guard case let .success(materialized, _, _) = Materializer.materialize(generator, context: .init(
-            prefix: ChoiceSequence(tree), mode: .exact, fallbackTree: tree
+            prefix: .init(ChoiceSequence(tree)), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Must materialize: \(recipe)")
             continue

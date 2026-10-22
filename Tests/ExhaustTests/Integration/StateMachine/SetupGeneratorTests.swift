@@ -199,7 +199,7 @@ struct SetupChoiceSequenceTests {
             let materialized = Materializer.materialize(
                 setupGen.gen,
                 context: .init(
-                    prefix: setupSequence,
+                    prefix: .init(setupSequence),
                     mode: .exact,
                     fallbackTree: split.setupTree
                 )

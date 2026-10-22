@@ -437,7 +437,7 @@ private func assertTreeRoundTrip<Value>(
     let result = Materializer.materialize(
         generator,
         context: .init(
-            prefix: ChoiceSequence(generated.tree),
+            prefix: .init(ChoiceSequence(generated.tree)),
             mode: .exact,
             fallbackTree: generated.tree
         )

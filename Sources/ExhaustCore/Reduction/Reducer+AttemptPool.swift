@@ -276,11 +276,10 @@ extension Reducer {
                     return .deadline
                 }
                 let lifted = lift(
-                    proposal.basePrefix,
+                    proposal.prefix,
                     fallbackTree: fallbackTree,
                     maximumSequenceCount: maximumSequenceCount,
-                    context: &context,
-                    valueReplacement: proposal.valueReplacement
+                    context: &context
                 )
                 let inheritedMutation = recoveryMutation ?? lifted.map { _ in reshaping(proposal.mutation) }
                 return buildAttempt(continuation(.lifted(lifted)), depth: depth, recoveryMutation: inheritedMutation, context: &context)
@@ -321,14 +320,13 @@ extension Reducer {
     }
 
     static func lift(
-        _ prefix: ChoiceSequence,
+        _ prefix: EditedChoiceSequence,
         fallbackTree: ChoiceTree,
         maximumSequenceCount: Int?,
-        context: inout Context,
-        valueReplacement: ChoiceSequenceValueReplacement? = nil
+        context: inout Context
     ) -> LiftResult? {
         context.report.liftAttempts += 1
-        return context.decoder.lift(prefix, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount, valueReplacement: valueReplacement)
+        return context.decoder.lift(prefix, fallbackTree: fallbackTree, maximumSequenceCount: maximumSequenceCount)
     }
 
     // MARK: - Accounting

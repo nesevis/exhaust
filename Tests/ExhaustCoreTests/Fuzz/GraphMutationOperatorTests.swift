@@ -283,7 +283,7 @@ struct GraphMutationOperatorTests {
             let result = Materializer.materializeAny(
                 erased,
                 context: .init(
-                    prefix: candidate,
+                    prefix: .init(candidate),
                     mode: .guided(seed: seed, fallbackTree: tree)
                 )
             )

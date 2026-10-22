@@ -38,7 +38,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         guard case let .success(materialized, _, _) = Materializer.materialize(personGen, context: .init(
-            prefix: sequence, mode: .exact, fallbackTree: tree
+            prefix: .init(sequence), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Expected .success")
             return
@@ -63,7 +63,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         guard case let .success(materialized, _, _) = Materializer.materialize(coordGen, context: .init(
-            prefix: sequence, mode: .exact, fallbackTree: tree
+            prefix: .init(sequence), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Expected .success")
             return
@@ -87,7 +87,7 @@ struct GenerateMacroIntegrationTests {
             let reflectedTree = try #require(try Interpreters.reflect(personGen, with: generated))
             let sequence = ChoiceSequence(reflectedTree)
             guard case let .success(roundTripped, _, _) = Materializer.materialize(personGen, context: .init(
-                prefix: sequence, mode: .exact, fallbackTree: reflectedTree
+                prefix: .init(sequence), mode: .exact, fallbackTree: reflectedTree
             )) else {
                 Issue.record("Expected .success")
                 continue

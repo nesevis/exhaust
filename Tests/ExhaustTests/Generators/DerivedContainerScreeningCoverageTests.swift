@@ -81,7 +81,7 @@ struct DerivedContainerScreeningCoverageTests {
                             let replay = Materializer.materializeAny(
                                 generator.gen.erase(),
                                 context: .init(
-                                    prefix: ChoiceSequence(tree),
+                                    prefix: .init(ChoiceSequence(tree)),
                                     mode: .exact,
                                     fallbackTree: usesFallback ? tree : nil
                                 )

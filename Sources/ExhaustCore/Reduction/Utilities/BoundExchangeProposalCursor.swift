@@ -48,7 +48,7 @@ struct BoundExchangeProposalCursor {
                 continue
             }
             candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(raised)
-            return LiftProposal(prefix: candidate, mutation: proposal.mutation)
+            return LiftProposal(prefix: .init(candidate), mutation: proposal.mutation)
         }
         return nil
     }

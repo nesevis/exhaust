@@ -28,7 +28,7 @@ extension MetaGeneratorPropertyTests {
                 reductions += 1
                 #expect(property(reducedValue) == false, "Reduction lost the failure for \(recipe)")
                 if case let .success(materialized, _, _) = Materializer.materialize(
-                    generator, context: .init(prefix: sequence, mode: .exact, fallbackTree: reducedTree)
+                    generator, context: .init(prefix: .init(sequence), mode: .exact, fallbackTree: reducedTree)
                 ) {
                     #expect(anyEquals(materialized, reducedValue), "Reduced history disagrees with the reported value for \(recipe)")
                 } else {

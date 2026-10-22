@@ -113,7 +113,7 @@ enum BindPivotEncoder: ReductionEncoder {
             if emittedPivot == false {
                 emittedPivot = true
                 buffer = pivotCandidate
-                return LiftProposal(prefix: buffer, mutation: mutation)
+                return LiftProposal(prefix: .init(buffer), mutation: mutation)
             }
             guard let boundRange, let shiftedBoundRange else {
                 return nil
@@ -143,7 +143,7 @@ enum BindPivotEncoder: ReductionEncoder {
                 )
                 buffer = pivotCandidate
                 buffer.replaceSubrange(shiftedBoundRange, with: expanded)
-                return LiftProposal(prefix: buffer, mutation: mutation)
+                return LiftProposal(prefix: .init(buffer), mutation: mutation)
             }
             return nil
         }

@@ -22,7 +22,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -39,7 +39,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -56,7 +56,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -85,7 +85,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Expected .success")
             return
@@ -109,7 +109,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -130,7 +130,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -151,7 +151,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -168,7 +168,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -185,7 +185,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -212,7 +212,7 @@ struct ReflectAndFlattenTests {
         #expect(validRange.contains(firstChoice.choice.bitPattern64))
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -229,7 +229,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -250,7 +250,7 @@ struct ReflectAndFlattenTests {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let flattened = ChoiceSequence.flatten(tree)
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -269,7 +269,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -296,7 +296,7 @@ struct ReflectAndFlattenTests {
         #expect(groupCount % 2 == 0)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Materialize failed for reflected tree")
             return
@@ -326,7 +326,7 @@ struct ReflectAndFlattenTests {
         flattened.remove(at: 2)
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Expected .success")
             return
@@ -356,7 +356,7 @@ struct ReflectAndFlattenTests {
         flattened[2] = .value(.init(choice: ChoiceValue(64 as UInt64, tag: .uint64), validRange: nil))
 
         guard case let .success(materialized, _, _) = Materializer.materialize(gen, context: .init(
-            prefix: flattened, mode: .exact, fallbackTree: tree
+            prefix: .init(flattened), mode: .exact, fallbackTree: tree
         )) else {
             Issue.record("Expected .success")
             return
@@ -390,7 +390,7 @@ func reflectOneOfWithDisjointCharacterSetBranch() throws {
         let flattened = ChoiceSequence.flatten(tree)
         guard case let .success(materialized, _, _) = Materializer.materialize(
             gen, context: .init(
-                prefix: flattened, mode: .exact, fallbackTree: tree
+                prefix: .init(flattened), mode: .exact, fallbackTree: tree
             )
         ) else {
             Issue.record("Materialize failed for \"\(word)\"")

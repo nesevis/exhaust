@@ -45,7 +45,7 @@ struct MaterializerPrefixPickObservationTests {
         while let draw = try interpreter.next() {
             var observations: [Materializer.PrefixPickObservation] = []
             var context = Materializer.Context(
-                prefix: ChoiceSequence.flatten(draw.tree),
+                prefix: .init(ChoiceSequence.flatten(draw.tree)),
                 mode: .guided(seed: 0, fallbackTree: draw.tree)
             )
             context.observePrefixPick = { observations.append($0) }
@@ -86,7 +86,7 @@ private func exactObservations(
     replaying sequence: ChoiceSequence
 ) throws -> [Materializer.PrefixPickObservation] {
     var observations: [Materializer.PrefixPickObservation] = []
-    var context = Materializer.Context(prefix: sequence, mode: .exact, skipTree: true, collectDecodingReport: false)
+    var context = Materializer.Context(prefix: .init(sequence), mode: .exact, skipTree: true, collectDecodingReport: false)
     context.observePrefixPick = { observations.append($0) }
     guard case .success = Materializer.materializeAny(generator, context: context) else {
         Issue.record("Exact replay of a drawn sequence failed")

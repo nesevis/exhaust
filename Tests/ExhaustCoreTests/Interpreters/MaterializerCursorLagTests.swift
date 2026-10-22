@@ -13,7 +13,7 @@ struct MaterializerCursorLagTests {
             let sequence = ChoiceSequence.flatten(generated.tree)
             for replayWithPicks in [false, true] {
                 let result = Materializer.materialize(generator, context: .init(
-                    prefix: sequence,
+                    prefix: .init(sequence),
                     mode: .exact,
                     fallbackTree: generated.tree,
                     materializePicks: replayWithPicks
@@ -33,7 +33,7 @@ struct MaterializerCursorLagTests {
         let generator = lagGenerator(producer, consumer)
         let generated = try generate(generator, materializePicks: false)
         let result = Materializer.materialize(generator, context: .init(
-            prefix: ChoiceSequence.flatten(generated.tree),
+            prefix: .init(ChoiceSequence.flatten(generated.tree)),
             mode: .guided(seed: 99, fallbackTree: nil)
         ))
         guard case let .success(value, _, report) = result else {
@@ -57,7 +57,7 @@ struct MaterializerCursorLagTests {
         })
 
         let result = Materializer.materialize(generator, context: .init(
-            prefix: sequence,
+            prefix: .init(sequence),
             mode: .guided(seed: 99, fallbackTree: generated.tree),
             reseedRanges: [valueIndex ... valueIndex]
         ))
@@ -256,7 +256,7 @@ private func flattened(_ generator: Generator<[UInt64]>) throws -> ChoiceSequenc
 
 /// A cursor over `sequence` standing at `position`, as one does after the reads before it.
 private func parkedCursor(on sequence: ChoiceSequence, at position: Int) -> Materializer.Cursor {
-    var cursor = Materializer.Cursor(from: sequence)
+    var cursor = Materializer.Cursor(from: .init(sequence))
     if position > 0 {
         cursor.jump(past: 0 ... position - 1)
     }

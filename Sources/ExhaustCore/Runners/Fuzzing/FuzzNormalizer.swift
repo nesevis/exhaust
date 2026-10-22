@@ -133,7 +133,7 @@ package enum FuzzNormalizer {
         erasedGen: AnyGenerator
     ) -> NormalizedForm<Output>? {
         let result = Materializer.materializeAny(erasedGen, context: .init(
-            prefix: sequence, mode: .exact
+            prefix: .init(sequence), mode: .exact
         ))
         guard case let .success(anyValue, tree, _) = result, let value = anyValue as? Output else {
             return nil

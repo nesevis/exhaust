@@ -35,7 +35,7 @@ extension FuzzRunner {
         guard case let .success(anyParent, _, _) = Materializer.materializeAny(
             erasedGen,
             context: .init(
-                prefix: parent.sequence,
+                prefix: .init(parent.sequence),
                 mode: .exact
             )
         ),
@@ -55,7 +55,7 @@ extension FuzzRunner {
         guard case let .success(anyValue, _, _) = Materializer.materializeAny(
             erasedGen,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact
             )
         ),

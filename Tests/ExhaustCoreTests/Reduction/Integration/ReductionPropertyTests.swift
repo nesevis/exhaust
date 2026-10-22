@@ -119,7 +119,7 @@ struct ReductionPropertyTests {
         guard case let .success(_, secondTree, _) = Materializer.materialize(
             gen,
             context: .init(
-                prefix: firstSequence,
+                prefix: .init(firstSequence),
                 mode: .exact,
                 fallbackTree: tree
             )

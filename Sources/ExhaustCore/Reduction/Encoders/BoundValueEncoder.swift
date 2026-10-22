@@ -280,7 +280,7 @@ enum BoundValueEncoder: ReductionEncoder {
     /// The controller's proposed bit pattern, for logging. Nil when the controller position falls outside the proposed prefix.
     private static func controllerBitPattern(in proposal: LiftProposal, at index: Int?) -> UInt64? {
         index.flatMap { sequenceIndex in
-            sequenceIndex < proposal.basePrefix.count ? proposal.value(at: sequenceIndex)?.choice.bitPattern64 : nil
+            proposal.prefix.value(at: sequenceIndex)?.choice.bitPattern64
         }
     }
 

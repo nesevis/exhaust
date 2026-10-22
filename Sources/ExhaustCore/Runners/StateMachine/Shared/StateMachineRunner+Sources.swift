@@ -209,7 +209,7 @@ package extension __ExhaustRuntime {
         guard case let .success(step, freshSetupTree, _) = Materializer.materialize(
             setupGen.gen,
             context: .init(
-                prefix: ChoiceSequence(),
+                prefix: .init(ChoiceSequence()),
                 mode: .guided(seed: 0, fallbackTree: setupTree)
             )
         ) else {

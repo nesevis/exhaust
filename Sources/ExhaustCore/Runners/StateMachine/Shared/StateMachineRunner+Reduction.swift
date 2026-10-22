@@ -84,7 +84,7 @@ package extension __ExhaustRuntime {
         let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: prunedTree)
         if case let .success(rematerialized, rematerializedTree, _) = Materializer.materialize(
             generator, context: .init(
-                prefix: prunedSequence, mode: prunedMode
+                prefix: .init(prunedSequence), mode: prunedMode
             )
         ) {
             if requireFailurePreserved == false || property(rematerialized) == false {
@@ -182,7 +182,7 @@ package extension __ExhaustRuntime {
             currentSequence = structuralRun.sequence
             if case let .success(value, tree, _) = Materializer.materialize(
                 generator, context: .init(
-                    prefix: structuralRun.sequence, mode: .exact
+                    prefix: .init(structuralRun.sequence), mode: .exact
                 )
             ) {
                 currentOutput = value
@@ -216,7 +216,7 @@ package extension __ExhaustRuntime {
                 currentSequence = valueRun.sequence
                 if case let .success(value, tree, _) = Materializer.materialize(
                     generator, context: .init(
-                        prefix: valueRun.sequence, mode: .exact
+                        prefix: .init(valueRun.sequence), mode: .exact
                     )
                 ) {
                     currentOutput = value

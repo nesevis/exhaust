@@ -19,7 +19,7 @@ package func roundTripBatch<Output: Equatable>(
         guard case let .success(materialized, _, _) = Materializer.materialize(
             generator,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact,
                 fallbackTree: tree
             )

@@ -64,7 +64,7 @@ struct MaterializeEdgeCaseTests {
         ]
         guard case let .success(guidedValue, guidedTree, _) = Materializer.materialize(
             gen, context: .init(
-                prefix: prefix, mode: .guided(seed: 1, fallbackTree: nil)
+                prefix: .init(prefix), mode: .guided(seed: 1, fallbackTree: nil)
             )
         ) else {
             Issue.record("guided materialization rejected the prefix")
@@ -72,7 +72,7 @@ struct MaterializeEdgeCaseTests {
         }
         let emitted = ChoiceSequence.flatten(guidedTree)
         guard case let .success(exactValue, exactTree, _) = Materializer.materialize(gen, context: .init(
-            prefix: emitted, mode: .exact
+            prefix: .init(emitted), mode: .exact
         )) else {
             Issue.record("exact materialization rejected the sequence guided materialization emitted")
             return

@@ -13,8 +13,11 @@
 /// Bind handling (skip/suspend/resume) is mode-dependent — callers decide whether to invoke them.
 extension Materializer {
     struct Cursor: ~Copyable {
-        private let entries: ChoiceSequence
-        private let valueReplacement: ChoiceSequenceValueReplacement?
+        private let sequence: EditedChoiceSequence
+        private var entries: ChoiceSequence {
+            sequence.base
+        }
+
         private(set) var position: Int = 0
         var exhausted: Bool = false
 
@@ -36,7 +39,7 @@ extension Materializer {
         }
 
         static var empty: Cursor {
-            Cursor(from: ChoiceSequence())
+            Cursor(from: .init(ChoiceSequence()))
         }
 
         /// Whether the cursor can never produce another entry: already marked exhausted or positioned past the final entry. Spent is monotonic within a walk; the position never decreases except through ``rewind(to:)``, which a backtrack audition uses to hand every arm the same prefix, and popping a scope cannot revive entries behind it. Zip scoping consults this to skip span computation whose only effect would be limiting reads that fail regardless.
@@ -84,13 +87,9 @@ extension Materializer {
             position = min(range.upperBound &+ 1, entries.count)
         }
 
-        init(from sequence: consuming ChoiceSequence, valueReplacement: ChoiceSequenceValueReplacement? = nil) {
-            if let valueReplacement {
-                precondition(sequence.indices.contains(valueReplacement.index) && sequence[valueReplacement.index].value != nil)
-            }
-            entries = sequence
-            self.valueReplacement = valueReplacement
-            effectiveEnd = entries.count
+        init(from sequence: consuming EditedChoiceSequence) {
+            effectiveEnd = sequence.count
+            self.sequence = sequence
         }
 
         // MARK: - Checkpoints
@@ -273,6 +272,11 @@ extension Materializer {
             return ends
         }
 
+        @inline(__always)
+        private func value(at index: Int) -> ChoiceSequenceValue.Value? {
+            sequence.value(at: index)
+        }
+
         // MARK: - Consume entries
 
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
@@ -286,22 +290,16 @@ extension Materializer {
                 exhausted = true
                 return nil
             }
-            switch entries[position] {
-                case let .value(v):
-                    var value = v
-                    if let valueReplacement, valueReplacement.index == position {
-                        value = valueReplacement.value
-                    }
-                    if let expected, Cursor.tagIsCompatible(value.choice.tag, with: expected) == false {
-                        exhausted = true
-                        return nil
-                    }
-                    position &+= 1
-                    return value
-                default:
-                    exhausted = true
-                    return nil
+            guard let value = value(at: position) else {
+                exhausted = true
+                return nil
             }
+            if let expected, Self.tagIsCompatible(value.choice.tag, with: expected) == false {
+                exhausted = true
+                return nil
+            }
+            position &+= 1
+            return value
         }
 
         /// Lets bulk replay reject an invalid leading value before allocating its buffer.
@@ -309,15 +307,9 @@ extension Materializer {
             guard suspended == false,
                   exhausted == false,
                   position < effectiveEnd,
-                  case let .value(original) = entries[position]
+                  let value = value(at: position),
+                  Self.tagIsCompatible(value.choice.tag, with: expected)
             else {
-                return nil
-            }
-            var value = original
-            if let valueReplacement, valueReplacement.index == position {
-                value = valueReplacement.value
-            }
-            guard Self.tagIsCompatible(value.choice.tag, with: expected) else {
                 return nil
             }
             return value.choice.bitPattern64
@@ -342,25 +334,16 @@ extension Materializer {
                 }
             }
             let start = position
-            let replacement = valueReplacement
-            let values = entries.withUnsafeBufferPointer { source in
-                [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
-                    initializedCount = 0
-                    for index in 0 ..< count {
-                        guard case let .value(original) = source[start + index]
-                        else {
-                            return
-                        }
-                        var value = original
-                        if let replacement, replacement.index == start + index {
-                            value = replacement.value
-                        }
-                        guard Self.tagIsCompatible(value.choice.tag, with: expected) else {
-                            return
-                        }
-                        destination[index] = value.choice.bitPattern64
-                        initializedCount += 1
+            let values = [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
+                initializedCount = 0
+                for index in 0 ..< count {
+                    guard let value = value(at: start + index),
+                          Self.tagIsCompatible(value.choice.tag, with: expected)
+                    else {
+                        return
                     }
+                    destination[index] = value.choice.bitPattern64
+                    initializedCount += 1
                 }
             }
             guard values.count == count else {

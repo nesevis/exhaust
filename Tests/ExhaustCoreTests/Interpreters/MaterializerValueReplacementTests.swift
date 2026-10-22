@@ -14,8 +14,8 @@ struct MaterializerValueReplacementTests {
         )
         var copied = original
         copied[index] = .value(replacement.value)
-        var sharedCursor = Materializer.Cursor(from: original, valueReplacement: replacement)
-        var copiedCursor = Materializer.Cursor(from: copied)
+        var sharedCursor = Materializer.Cursor(from: .init(original, replacement: replacement))
+        var copiedCursor = Materializer.Cursor(from: .init(copied))
         let checkpoint = sharedCursor.checkpoint
         for _ in 0 ..< original.count {
             #expect(sharedCursor.peekScalarValue(expecting: .uint64) == copiedCursor.peekScalarValue(expecting: .uint64))
@@ -31,7 +31,7 @@ struct MaterializerValueReplacementTests {
     func cursorBoundaries() {
         let original: ChoiceSequence = [.value(.init(choice: ChoiceValue(UInt64(1), tag: .uint64), validRange: nil))]
         let replacement = ChoiceSequenceValueReplacement(index: 0, value: .init(choice: ChoiceValue(UInt64(2), tag: .depthControl), validRange: nil))
-        var cursor = Materializer.Cursor(from: original, valueReplacement: replacement)
+        var cursor = Materializer.Cursor(from: .init(original, replacement: replacement))
         #expect(cursor.peekScalarValue(expecting: .uint64) == nil)
         #expect(cursor.tryConsumeScalarValues(count: 1, expecting: .uint64) == nil)
         #expect(cursor.position == 0)
@@ -66,11 +66,11 @@ struct MaterializerValueReplacementTests {
                 copied[index] = .value(replacement.value)
                 for ceiling in [nil, original.count, 1] {
                     let shared = Materializer.guidedLift(
-                        generator: generator.erase(), prefix: original, fallbackTree: tree,
-                        maximumSequenceCount: ceiling, valueReplacement: replacement
+                        generator: generator.erase(), prefix: .init(original, replacement: replacement), fallbackTree: tree,
+                        maximumSequenceCount: ceiling
                     )
                     let eager = Materializer.guidedLift(
-                        generator: generator.erase(), prefix: copied, fallbackTree: tree,
+                        generator: generator.erase(), prefix: .init(copied), fallbackTree: tree,
                         maximumSequenceCount: ceiling
                     )
                     #expect(shared.map { ChoiceSequence($0) } == eager.map { ChoiceSequence($0) })

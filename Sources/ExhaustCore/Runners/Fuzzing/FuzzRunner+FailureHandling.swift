@@ -212,7 +212,7 @@ extension FuzzRunner {
             if case let .success(value, _, _) = Materializer.materializeAny(
                 erasedGen,
                 context: .init(
-                    prefix: parent.sequence,
+                    prefix: .init(parent.sequence),
                     mode: .exact,
                     fallbackTree: parent.tree,
                     skipTree: true,

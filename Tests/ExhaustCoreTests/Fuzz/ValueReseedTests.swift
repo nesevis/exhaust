@@ -165,7 +165,7 @@ private func flatChild(
     guard case let .success(_, sequence, report) = Materializer.materializeAnyFlat(
         generator.erase(),
         context: .init(
-            prefix: prefix,
+            prefix: .init(prefix),
             mode: .guided(seed: seed, fallbackTree: tree),
             reseedRanges: ranges
         )

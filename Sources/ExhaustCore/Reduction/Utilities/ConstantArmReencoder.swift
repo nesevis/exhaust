@@ -26,7 +26,7 @@ package enum ConstantArmReencoder {
         if case let .success(_, materializedTree, _) = Materializer.materializeAny(
             gen,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact,
                 fallbackTree: tree,
                 materializePicks: true
@@ -63,7 +63,7 @@ package enum ConstantArmReencoder {
         }
 
         var capturedSites: [Materializer.PrefixPickObservation] = []
-        var captureContext = Materializer.Context(prefix: sequence, mode: .exact, skipTree: true, collectDecodingReport: false)
+        var captureContext = Materializer.Context(prefix: .init(sequence), mode: .exact, skipTree: true, collectDecodingReport: false)
         // Only non-backtracking picks can hold constant arms that need re-encoding or exclusion.
         captureContext.observePrefixPick = { observation in
             guard observation.choices.count >= 2,
@@ -137,7 +137,7 @@ package enum ConstantArmReencoder {
         materializations += 1
         guard case let .success(reencodedOutput, freshTree, _) = Materializer.materializeAny(
             gen,
-            context: .init(prefix: candidate, mode: .exact, materializePicks: true, collectDecodingReport: false)
+            context: .init(prefix: .init(candidate), mode: .exact, materializePicks: true, collectDecodingReport: false)
         ), reproduces(reencodedOutput, originalOutput) else {
             return nil
         }

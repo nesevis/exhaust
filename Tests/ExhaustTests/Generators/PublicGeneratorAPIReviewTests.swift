@@ -148,7 +148,7 @@ struct PublicGeneratorAPIReviewTests {
         switch Materializer.materialize(
             generator.gen,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact,
                 fallbackTree: tree
             )
@@ -178,7 +178,7 @@ struct PublicGeneratorAPIReviewTests {
         switch Materializer.materialize(
             generator.gen,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact,
                 fallbackTree: tree
             )

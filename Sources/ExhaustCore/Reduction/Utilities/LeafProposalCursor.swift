@@ -41,8 +41,8 @@ struct LeafProposalCursor {
         guard let proposal = next() else {
             return nil
         }
-        candidate = proposal.prefix
-        return LiftProposal(prefix: candidate, mutation: proposal.mutation)
+        candidate = proposal.prefix.materialized()
+        return LiftProposal(prefix: .init(candidate), mutation: proposal.mutation)
     }
 
     /// Retains the scope's sequence and records the single edit, avoiding a full copy for every unopened attempt.
@@ -59,9 +59,8 @@ struct LeafProposalCursor {
             isRangeExplicit: isRangeExplicit
         )
         return LiftProposal(
-            prefix: baseSequence,
-            mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)]),
-            valueReplacement: .init(index: sequenceIndex, value: value)
+            prefix: .init(baseSequence, replacement: .init(index: sequenceIndex, value: value)),
+            mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)])
         )
     }
 }

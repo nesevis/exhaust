@@ -26,7 +26,7 @@ struct ConstantArmReencoderTests {
         #expect(branchIDs(in: result.sequence).first == 0)
         guard case let .success(value, _, _) = Materializer.materialize(
             generator,
-            context: .init(prefix: result.sequence, mode: .exact, fallbackTree: result.tree)
+            context: .init(prefix: .init(result.sequence), mode: .exact, fallbackTree: result.tree)
         ) else {
             Issue.record("The normalized sequence did not materialize")
             return
@@ -55,7 +55,7 @@ struct ConstantArmReencoderTests {
         #expect(branchIDs(in: result.sequence).first == 2)
         guard case let .success(value, _, _) = Materializer.materialize(
             generator,
-            context: .init(prefix: result.sequence, mode: .exact, fallbackTree: result.tree)
+            context: .init(prefix: .init(result.sequence), mode: .exact, fallbackTree: result.tree)
         ) else {
             Issue.record("The re-encoded sequence did not materialize")
             return
@@ -128,7 +128,7 @@ struct ConstantArmReencoderTests {
         if let result {
             guard case let .success(value, _, _) = Materializer.materializeAny(
                 generator,
-                context: .init(prefix: result.sequence, mode: .exact)
+                context: .init(prefix: .init(result.sequence), mode: .exact)
             ) else {
                 Issue.record("The re-encoded sequence did not materialize")
                 return
@@ -144,7 +144,7 @@ struct ConstantArmReencoderTests {
         let materialized = Materializer.materializeAny(
             generator.erase(),
             context: .init(
-                prefix: ChoiceSequence.flatten(initialTree),
+                prefix: .init(ChoiceSequence.flatten(initialTree)),
                 mode: .exact,
                 fallbackTree: initialTree,
                 materializePicks: true

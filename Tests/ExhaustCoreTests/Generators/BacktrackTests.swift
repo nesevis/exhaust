@@ -114,7 +114,7 @@ struct BacktrackTests {
         #expect(branch.branchCount == 2)
 
         let result = Materializer.materialize(gen, context: .init(
-            prefix: ChoiceSequence.flatten(tree), mode: .exact
+            prefix: .init(ChoiceSequence.flatten(tree)), mode: .exact
         ))
         guard case let .success(value, _, _) = result else {
             Issue.record("Expected exact replay of the reflected tree to succeed, got \(result)")
@@ -131,7 +131,7 @@ struct BacktrackTests {
         #expect(branch.id == 1)
 
         let result = Materializer.materialize(gen, context: .init(
-            prefix: ChoiceSequence.flatten(tree), mode: .exact
+            prefix: .init(ChoiceSequence.flatten(tree)), mode: .exact
         ))
         guard case let .success(value, _, _) = result else {
             Issue.record("Expected exact replay of the reflected tree to succeed, got \(result)")
@@ -148,7 +148,7 @@ struct BacktrackTests {
         #expect(branch.id == 2)
 
         let result = Materializer.materialize(gen, context: .init(
-            prefix: ChoiceSequence.flatten(tree), mode: .exact
+            prefix: .init(ChoiceSequence.flatten(tree)), mode: .exact
         ))
         guard case let .success(value, _, _) = result else {
             Issue.record("Expected exact replay of the reflected absence to succeed, got \(result)")
@@ -205,7 +205,7 @@ struct BacktrackTests {
         let pivoted = try pivotingBranch(in: ChoiceSequence.flatten(tree), to: 0)
 
         let exact = Materializer.materialize(gen, context: .init(
-            prefix: pivoted, mode: .exact
+            prefix: .init(pivoted), mode: .exact
         ))
         guard case .rejected = exact else {
             Issue.record("Expected exact mode to reject the withdrawn arm, got \(exact)")
@@ -213,7 +213,7 @@ struct BacktrackTests {
         }
 
         let guided = Materializer.materialize(gen, context: .init(
-            prefix: pivoted, mode: .guided(seed: 9, fallbackTree: nil)
+            prefix: .init(pivoted), mode: .guided(seed: 9, fallbackTree: nil)
         ))
         guard case let .success(value, guidedTree, _) = guided else {
             Issue.record("Expected guided mode to re-audition, got \(guided)")
@@ -232,7 +232,7 @@ struct BacktrackTests {
         let pivoted = try pivotingBranch(in: ChoiceSequence.flatten(tree), to: 0)
 
         let flat = Materializer.materializeAnyFlat(gen.erase(), context: .init(
-            prefix: pivoted, mode: .guided(seed: 9, fallbackTree: nil)
+            prefix: .init(pivoted), mode: .guided(seed: 9, fallbackTree: nil)
         ))
         guard case let .success(_, sequence, _) = flat else {
             Issue.record("Expected flat guided materialization to succeed, got \(flat)")
@@ -248,7 +248,7 @@ struct BacktrackTests {
         #expect(markers.first?.id == 1)
 
         let treeResult = Materializer.materialize(gen, context: .init(
-            prefix: pivoted, mode: .guided(seed: 9, fallbackTree: nil)
+            prefix: .init(pivoted), mode: .guided(seed: 9, fallbackTree: nil)
         ))
         guard case let .success(_, guidedTree, _) = treeResult else {
             Issue.record("Expected guided materialization to succeed, got \(treeResult)")
@@ -266,7 +266,7 @@ struct BacktrackTests {
 
         for mode in [Materializer.Mode.exact, .guided(seed: 3, fallbackTree: nil)] {
             let result = Materializer.materialize(gen, context: .init(
-                prefix: pivoted, mode: mode
+                prefix: .init(pivoted), mode: mode
             ))
             guard case let .success(value, _, _) = result else {
                 Issue.record("Expected the absent arm to materialize, got \(result)")
@@ -292,7 +292,7 @@ struct BacktrackTests {
         let prefix = try ChoiceSequence.flatten(#require(tree))
 
         let result = Materializer.materialize(outer, context: .init(
-            prefix: prefix, mode: .exact, materializePicks: true
+            prefix: .init(prefix), mode: .exact, materializePicks: true
         ))
         guard case let .success(_, fullTree, _) = result else {
             Issue.record("Expected exact materialization with branch alternatives to succeed, got \(result)")
