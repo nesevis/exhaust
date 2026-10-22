@@ -213,7 +213,7 @@ private func assertReplayMaterializerEquivalence<Output>(
         let materializeResult = Materializer.materialize(
             gen,
             context: .init(
-                prefix: ChoiceSequence.flatten(tree),
+                prefix: .init(ChoiceSequence.flatten(tree)),
                 mode: .exact,
                 fallbackTree: tree
             )

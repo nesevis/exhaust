@@ -75,7 +75,7 @@ struct CoverageGuidedReviewTests {
         let materialized = Materializer.materializeAny(
             generator.erase(),
             context: .init(
-                prefix: entry.sequence,
+                prefix: .init(entry.sequence),
                 mode: .exact
             )
         )

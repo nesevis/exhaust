@@ -136,7 +136,7 @@ package struct ReductionSession {
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             erasedGenerator,
             context: .init(
-                prefix: sequence,
+                prefix: .init(sequence),
                 mode: .exact,
                 fallbackTree: initialTree,
                 materializePicks: true
@@ -381,7 +381,7 @@ package struct ReductionSession {
         if case let .success(_, fullTree, _) = Materializer.materializeAny(
             generator,
             context: .init(
-                prefix: incumbent.sequence,
+                prefix: .init(incumbent.sequence),
                 mode: .exact,
                 fallbackTree: incumbent.tree,
                 materializePicks: true

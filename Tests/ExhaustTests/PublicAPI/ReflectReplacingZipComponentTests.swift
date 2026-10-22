@@ -121,7 +121,7 @@ private func materialize<Output: Equatable>(
     guard case let .success(value, _, _) = Materializer.materialize(
         gen.gen,
         context: .init(
-            prefix: sequence,
+            prefix: .init(sequence),
             mode: .exact,
             fallbackTree: tree
         )

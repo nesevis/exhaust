@@ -102,7 +102,7 @@ package extension Interpreters {
             let resultTree = Materializer.materialize(
                 gen,
                 context: .init(
-                    prefix: resultSequence,
+                    prefix: .init(resultSequence),
                     mode: .exact,
                     fallbackTree: tree
                 )
@@ -126,7 +126,7 @@ package extension Interpreters {
         let prefix = ChoiceSequence.flatten(tree)
         guard case let .success(output, _, _) = Materializer.materialize(
             gen, context: .init(
-                prefix: prefix, mode: .exact, fallbackTree: tree,
+                prefix: .init(prefix), mode: .exact, fallbackTree: tree,
                 materializePicks: true
             )
         ) else {

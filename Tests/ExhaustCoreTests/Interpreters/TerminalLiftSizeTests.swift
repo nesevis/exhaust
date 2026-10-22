@@ -11,7 +11,7 @@ struct TerminalLiftSizeTests {
             let generator = Gen.zip(array, array).erase()
             guard let unrestricted = Materializer.guidedLift(
                 generator: generator,
-                prefix: [],
+                prefix: .init([]),
                 fallbackTree: .just
             ) else {
                 return false
@@ -19,7 +19,7 @@ struct TerminalLiftSizeTests {
             let fits = unrestricted.flattenedEntryCount <= ceiling
             guard let bounded = Materializer.guidedLift(
                 generator: generator,
-                prefix: [],
+                prefix: .init([]),
                 fallbackTree: .just,
                 maximumSequenceCount: ceiling
             ) else {
@@ -35,10 +35,10 @@ struct TerminalLiftSizeTests {
         let result = Materializer.materializeAny(
             generator.erase(),
             context: .init(
-                prefix: [
+                prefix: .init([
                     .sequence(true, validRange: 100_000 ... 100_000, isLengthExplicit: true),
                     .sequence(false),
-                ],
+                ]),
                 mode: .guided(seed: 0, fallbackTree: nil),
                 maximumSequenceCount: 71
             )
@@ -55,20 +55,20 @@ struct TerminalLiftSizeTests {
         let generator = Gen.arrayOf(Gen.choose(in: 0 ... 1), exactly: 24).erase()
         let unrestricted = try #require(Materializer.guidedLift(
             generator: generator,
-            prefix: [],
+            prefix: .init([]),
             fallbackTree: .just
         ))
         let count = ChoiceSequence(unrestricted).count
         let equal = try #require(Materializer.guidedLift(
             generator: generator,
-            prefix: [],
+            prefix: .init([]),
             fallbackTree: .just,
             maximumSequenceCount: count
         ))
         #expect(ChoiceSequence(equal) == ChoiceSequence(unrestricted))
         #expect(Materializer.guidedLift(
             generator: generator,
-            prefix: [],
+            prefix: .init([]),
             fallbackTree: .just,
             maximumSequenceCount: count - 1
         ) == nil)
@@ -84,12 +84,12 @@ struct TerminalLiftSizeTests {
         ]
         let unrestricted = try #require(Materializer.guidedLift(
             generator: generator.erase(),
-            prefix: prefix,
+            prefix: .init(prefix),
             fallbackTree: .just
         ))
         let bounded = try #require(Materializer.guidedLift(
             generator: generator.erase(),
-            prefix: prefix,
+            prefix: .init(prefix),
             fallbackTree: .just,
             maximumSequenceCount: ChoiceSequence(unrestricted).count
         ))
@@ -102,13 +102,13 @@ struct TerminalLiftSizeTests {
         let generator = Gen.zip(array, array).erase()
         #expect(Materializer.guidedLift(
             generator: generator,
-            prefix: [],
+            prefix: .init([]),
             fallbackTree: .just,
             maximumSequenceCount: 20
         ) == nil)
         #expect(Materializer.guidedLift(
             generator: generator,
-            prefix: [],
+            prefix: .init([]),
             fallbackTree: .just
         ) != nil)
     }

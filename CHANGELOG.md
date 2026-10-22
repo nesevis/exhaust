@@ -6,6 +6,17 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.7.4] - 2026-10-23
+
+### Changed
+
+- Improved reduction performance.
+
+### Fixed
+
+- `#examine` could report a generator as replaying deterministically when replay failed.
+- Improved the reliability of crash recovery during coverage-guided fuzzing.
+
 ## [1.7.3] - 2026-10-20
 
 ### Changed
@@ -317,7 +328,9 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.2...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.4...HEAD
+[1.7.4]: https://github.com/nesevis/exhaust/compare/v1.7.3...v1.7.4
+[1.7.3]: https://github.com/nesevis/exhaust/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/nesevis/exhaust/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/nesevis/exhaust/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/nesevis/exhaust/compare/v1.6.0...v1.7.0

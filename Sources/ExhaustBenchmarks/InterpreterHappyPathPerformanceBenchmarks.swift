@@ -108,7 +108,7 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let result = Materializer.materializeAny(
                     erased,
                     context: .init(
-                        prefix: ChoiceSequence(),
+                        prefix: .init(ChoiceSequence()),
                         mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil),
                         fallbackTree: fixture.tree,
                         skipTree: true,
@@ -136,7 +136,7 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let result = Materializer.materializeAny(
                     erased,
                     context: .init(
-                        prefix: fixture.sequence,
+                        prefix: .init(fixture.sequence),
                         mode: .exact,
                         fallbackTree: fixture.tree
                     )
@@ -167,7 +167,7 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let result = Materializer.materializeAny(
                     erased,
                     context: .init(
-                        prefix: candidate,
+                        prefix: .init(candidate),
                         mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
                     )
                 )
@@ -200,7 +200,7 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let result = Materializer.materializeAnyFlat(
                     erased,
                     context: .init(
-                        prefix: candidate,
+                        prefix: .init(candidate),
                         mode: .guided(seed: prng.next(), fallbackTree: fixture.tree)
                     )
                 )
@@ -232,7 +232,7 @@ func registerInterpreterHappyPathPerformanceBenchmarks() {
                 let result = Materializer.materializeAny(
                     erased,
                     context: .init(
-                        prefix: candidate,
+                        prefix: .init(candidate),
                         mode: .guided(seed: prng.next(), fallbackTree: fixture.tree),
                         skipTree: true
                     )

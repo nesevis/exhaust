@@ -51,7 +51,7 @@ private func checkExactReplay(_ gen: AnyGenerator, maxRuns: UInt64 = 10, tally: 
             let sequence = ChoiceSequence.flatten(tree)
             for replayWithPicks in [false, true] {
                 let result = Materializer.materialize(gen, context: .init(
-                    prefix: sequence,
+                    prefix: .init(sequence),
                     mode: .exact,
                     fallbackTree: tree,
                     materializePicks: replayWithPicks

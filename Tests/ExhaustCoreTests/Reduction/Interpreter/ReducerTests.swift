@@ -109,12 +109,11 @@ private struct RepeatedProposals: ProposalCursor {
     let count: Int
     var emitted = 0
 
-    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+    mutating func next() -> LiftProposal? {
         guard emitted < count else {
             return nil
         }
         emitted += 1
-        buffer = prefix
-        return LiftProposal(prefix: buffer, mutation: .leafValues([]))
+        return LiftProposal(prefix: .init(prefix), mutation: .leafValues([]))
     }
 }

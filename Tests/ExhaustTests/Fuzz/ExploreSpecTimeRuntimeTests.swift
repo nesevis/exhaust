@@ -244,7 +244,7 @@ struct ExploreSpecTimeRuntimeTests {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
                 adapter.generator, context: .init(
-                    prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
+                    prefix: .init(entry.sequence), mode: .exact, fallbackTree: entry.tree
                 )
             ) else {
                 continue
@@ -363,7 +363,7 @@ struct ExploreSpecTimeRuntimeTests {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
                 adapter.generator, context: .init(
-                    prefix: entry.sequence, mode: .exact, fallbackTree: entry.tree
+                    prefix: .init(entry.sequence), mode: .exact, fallbackTree: entry.tree
                 )
             ) else {
                 continue

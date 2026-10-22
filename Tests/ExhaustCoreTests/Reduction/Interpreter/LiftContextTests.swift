@@ -124,7 +124,7 @@ struct LiftContextTests {
         var continued = false
         let reduction: Reduction = .lift(proposal, fallbackTree: fixture.tree, maximumSequenceCount: 0) { lifted in
             #expect(lifted == nil)
-            return .search(SingleCandidateSearch(candidate: proposal.prefix, mutation: proposal.mutation), configuration: .standard) { _ in
+            return .search(SingleCandidateSearch(candidate: proposal.prefix.materialized(), mutation: proposal.mutation), configuration: .standard) { _ in
                 continued = true
                 return .search(KnowledgeSearch(nodeID: fixture.leafNodeID), configuration: .standard)
             }
@@ -160,7 +160,7 @@ struct LiftContextTests {
                     }
                 }
             }
-            return .search(SingleCandidateSearch(candidate: ordinaryProposal.prefix, mutation: ordinaryProposal.mutation), configuration: .standard) { _ in
+            return .search(SingleCandidateSearch(candidate: ordinaryProposal.prefix.materialized(), mutation: ordinaryProposal.mutation), configuration: .standard) { _ in
                 ordinaryContinued = true
                 return .search(KnowledgeSearch(nodeID: fixture.leafNodeID), configuration: .standard)
             }
@@ -197,7 +197,7 @@ private struct LiftFixture {
     }
 
     func proposal(value: UInt64, nodeID: Int? = nil) throws -> LiftProposal {
-        try LiftProposal(prefix: sequence(value: value), mutation: .leafValues([
+        try LiftProposal(prefix: .init(sequence(value: value)), mutation: .leafValues([
             LeafChange(leafNodeID: nodeID ?? leafNodeID, newValue: ChoiceValue(value, tag: .uint64), mayReshape: false),
         ]))
     }
@@ -206,7 +206,7 @@ private struct LiftFixture {
         .propose(
             { IndexedProposals(base: base, count: count) },
             configuration: ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: nil, totalProbeCap: 0),
-            then: { proposal in build(Int(proposal.prefix[0].value!.choice.bitPattern64)) }
+            then: { proposal in build(Int(proposal.prefix.value(at: 0)!.choice.bitPattern64)) }
         )
     }
 
@@ -229,14 +229,14 @@ private struct IndexedProposals: ProposalCursor {
     let count: Int
     var index = 0
 
-    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+    mutating func next() -> LiftProposal? {
         guard index < count else {
             return nil
         }
-        buffer = base
+        var buffer = base
         buffer[0] = buffer[0].withBitPattern(UInt64(index))
         index += 1
-        return LiftProposal(prefix: buffer, mutation: .leafValues([]))
+        return LiftProposal(prefix: .init(buffer), mutation: .leafValues([]))
     }
 }
 

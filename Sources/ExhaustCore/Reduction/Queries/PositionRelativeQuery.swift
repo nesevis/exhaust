@@ -42,7 +42,7 @@ enum PositionRelativeQuery {
                     }
                     return Role(
                         owner: .sequence(nodeID: currentID),
-                        path: Array(leaf.choicePath.dropFirst(parent.choicePath.count + 1)),
+                        path: ChoicePath(leaf.choicePath.dropFirst(parent.choicePath.count + 1)),
                         contexts: contexts,
                         metadata: metadata
                     )
@@ -52,7 +52,7 @@ enum PositionRelativeQuery {
                         if contexts.contains(.zip) {
                             nearestPickRole = Role(
                                 owner: .pick(fingerprint: pickMetadata.fingerprint),
-                                path: Array(leaf.choicePath.dropFirst(parent.choicePath.count)),
+                                path: ChoicePath(leaf.choicePath.dropFirst(parent.choicePath.count)),
                                 contexts: contexts,
                                 metadata: metadata
                             )

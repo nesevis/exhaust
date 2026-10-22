@@ -113,11 +113,7 @@ package extension ChoiceSequence {
     ) {
         switch tree {
             case let .choice(value, meta):
-                output.append(.value(.init(
-                    choice: value,
-                    validRange: meta.validRange,
-                    isRangeExplicit: meta.isRangeExplicit
-                )))
+                output.append(.init(choice: value, metadata: meta))
             case .just:
                 output.append(.just)
             case .getSize:
@@ -127,7 +123,12 @@ package extension ChoiceSequence {
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var eIdx = 0
                 while eIdx < elements.count {
-                    flatten(elements[eIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
+                    // Scalar arrays dominate lifted histories. Emit their leaves here rather than recursively dispatching each element.
+                    if case let .choice(value, metadata) = elements[eIdx] {
+                        output.append(.init(choice: value, metadata: metadata))
+                    } else {
+                        flatten(elements[eIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
+                    }
                     eIdx += 1
                 }
                 output.append(.sequence(false))

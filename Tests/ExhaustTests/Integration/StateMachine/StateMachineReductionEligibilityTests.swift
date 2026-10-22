@@ -52,7 +52,7 @@ struct StateMachineReductionEligibilityTests {
         #expect(result.stats.reductionProbes == result.stats.encoderCounts.values.reduce(0) { $0 + $1.emitted })
         guard case let .success(replayed, _, _) = Materializer.materialize(
             generator,
-            context: .init(prefix: result.sequence, mode: .exact)
+            context: .init(prefix: .init(result.sequence), mode: .exact)
         ) else {
             Issue.record("The reduced value must replay from its authoritative choice sequence")
             return

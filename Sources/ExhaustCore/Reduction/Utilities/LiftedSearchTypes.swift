@@ -7,7 +7,7 @@
 
 /// Keeps a candidate prefix and its reported mutation together without feeding acceptance back into proposal generation.
 struct LiftProposal {
-    let prefix: ChoiceSequence
+    let prefix: EditedChoiceSequence
     let mutation: ProjectedMutation
 }
 

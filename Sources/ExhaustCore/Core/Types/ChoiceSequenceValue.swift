@@ -29,6 +29,15 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
     /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``Materializer``).
     case just
 
+    /// Preserves range metadata but drops ``ChoiceMetadata/typeTagPayload`` and ``ChoiceMetadata/isPinnedToSize``, which the flat sequence does not represent.
+    init(choice: ChoiceValue, metadata: ChoiceMetadata) {
+        self = .value(.init(
+            choice: choice,
+            validRange: metadata.validRange,
+            isRangeExplicit: metadata.isRangeExplicit
+        ))
+    }
+
     /// Extracts the numeric ``Value`` payload from a ``value`` entry, returning `nil` for structural markers.
     @inline(__always)
     public var value: Value? {

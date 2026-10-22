@@ -7,23 +7,28 @@ import Testing
 struct BreadcrumbSidecarTests {
     @Test("Legacy C1 records remain readable")
     func legacyRecordRemainsReadable() throws {
-        try withBreadcrumb { _, fileURL in
-            let header: [UInt8] = [
-                0x31, 0x43, 0x54, 0x53, 0x55, 0x48, 0x58, 0x45,
-                1, 0, 0, 0, 0, 0, 0, 0,
-                7, 0, 0, 0, 0, 0, 0, 0,
-                8, 0, 0, 0, 0, 0, 0, 0,
-                2, 0, 0, 0, 0, 0, 0, 0,
-                0xC5, 0x9D, 0x1C, 0x81, 0, 0, 0, 0,
-            ]
-            let record = header + Array(repeating: UInt8(0), count: FuzzBreadcrumb.mappingSize - header.count)
-            try Data(record).write(to: fileURL)
-            let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
-            #expect(survivor.candidateHash == 7)
-            #expect(survivor.parentHash == 8)
-            #expect(survivor.kind == .reduction)
-            #expect(survivor.candidateSequence == nil)
+        // A legacy record is left behind by an earlier process, so no breadcrumb holds the file open. Windows also refuses to overwrite a file another handle has mapped.
+        let directory = scratchDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
         }
+        let fileURL = directory.appendingPathComponent("breadcrumb.bin")
+        let header: [UInt8] = [
+            0x31, 0x43, 0x54, 0x53, 0x55, 0x48, 0x58, 0x45,
+            1, 0, 0, 0, 0, 0, 0, 0,
+            7, 0, 0, 0, 0, 0, 0, 0,
+            8, 0, 0, 0, 0, 0, 0, 0,
+            2, 0, 0, 0, 0, 0, 0, 0,
+            0xC5, 0x9D, 0x1C, 0x81, 0, 0, 0, 0,
+        ]
+        let record = header + Array(repeating: UInt8(0), count: FuzzBreadcrumb.mappingSize - header.count)
+        try Data(record).write(to: fileURL)
+        let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
+        #expect(survivor.candidateHash == 7)
+        #expect(survivor.parentHash == 8)
+        #expect(survivor.kind == .reduction)
+        #expect(survivor.candidateSequence == nil)
     }
 
     @Test("The candidate sequence round-trips")

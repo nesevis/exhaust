@@ -99,7 +99,7 @@ private func materializedParent(_ gen: Generator<([UInt64], [UInt64])>) throws -
 
 private func lists(_ gen: Generator<([UInt64], [UInt64])>, _ sequence: ChoiceSequence, _ tree: ChoiceTree, seed: UInt64) -> ([UInt64], [UInt64])? {
     guard case let .success(value, _, _) = Materializer.materializeAnyFlat(gen.erase(), context: .init(
-        prefix: sequence, mode: .guided(seed: seed, fallbackTree: tree)
+        prefix: .init(sequence), mode: .guided(seed: seed, fallbackTree: tree)
     )) else {
         return nil
     }

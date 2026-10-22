@@ -320,7 +320,7 @@ extension Reducer {
     }
 
     static func lift(
-        _ prefix: ChoiceSequence,
+        _ prefix: EditedChoiceSequence,
         fallbackTree: ChoiceTree,
         maximumSequenceCount: Int?,
         context: inout Context

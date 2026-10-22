@@ -45,7 +45,7 @@ enum BoundExchangeEncoder: ReductionEncoder {
         else {
             return .fail(.bindNotFound)
         }
-        guard let expected = proposal.prefix[parentSinkIndex].value?.choice.bitPattern64 else {
+        guard let expected = proposal.prefix.value(at: parentSinkIndex)?.choice.bitPattern64 else {
             return .fail(.sinkValueMismatch)
         }
         let graph = ChoiceGraph.build(from: lifted.tree)

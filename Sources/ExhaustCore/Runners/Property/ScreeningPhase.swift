@@ -307,7 +307,7 @@ package enum ScreeningPhase {
         switch Materializer.materializeAny(
             erasedGen,
             context: .init(
-                prefix: ChoiceSequence(),
+                prefix: .init(ChoiceSequence()),
                 mode: mode,
                 fallbackTree: tree,
                 skipTree: needsTree == false,

@@ -379,7 +379,7 @@ public extension __ExhaustRuntime {
             let result = Materializer.materialize(
                 gen,
                 context: .init(
-                    prefix: cluster.reducedSequence,
+                    prefix: .init(cluster.reducedSequence),
                     mode: .exact
                 )
             )
@@ -405,7 +405,7 @@ public extension __ExhaustRuntime {
             let result = Materializer.materialize(
                 gen,
                 context: .init(
-                    prefix: cluster.reducedSequence,
+                    prefix: .init(cluster.reducedSequence),
                     mode: .exact
                 )
             )

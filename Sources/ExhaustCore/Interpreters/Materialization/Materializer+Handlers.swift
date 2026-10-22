@@ -197,18 +197,25 @@ extension Materializer {
                 isRangeExplicit: isRangeExplicit
             )))
         }
-        let choiceTree: ChoiceTree = context.skipTree
-            ? .just
-            : .choice(
-                reusedChoice ?? ChoiceValue(randomBits, tag: tag),
-                .init(
-                    validRange: min ... max,
-                    isRangeExplicit: isRangeExplicit,
-                    typeTagPayload: typeTagPayload,
-                    isPinnedToSize: scaling?.isPinnedToSize == true
-                )
-            )
-        return (randomBits, choiceTree, calleeStart)
+        guard context.skipTree == false else {
+            return (randomBits, .just, calleeStart)
+        }
+        let choice = reusedChoice ?? ChoiceValue(randomBits, tag: tag)
+        let metadata = ChoiceMetadata(
+            validRange: min ... max,
+            isRangeExplicit: isRangeExplicit,
+            typeTagPayload: typeTagPayload,
+            isPinnedToSize: scaling?.isPinnedToSize == true
+        )
+        // Lifts repeatedly carry unchanged scalar leaves through new trees. Reuse their immutable boxes only after resolving the value and checking every piece of fresh metadata.
+        if let calleeFallback,
+           case let .choice(fallbackChoice, fallbackMetadata) = calleeFallback,
+           fallbackChoice == choice,
+           fallbackMetadata == metadata
+        {
+            return (randomBits, calleeFallback, calleeStart)
+        }
+        return (randomBits, .choice(choice, metadata), calleeStart)
     }
 
     // MARK: - pick (with materialized alternatives)

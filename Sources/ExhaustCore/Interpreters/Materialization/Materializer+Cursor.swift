@@ -13,7 +13,11 @@
 /// Bind handling (skip/suspend/resume) is mode-dependent — callers decide whether to invoke them.
 extension Materializer {
     struct Cursor: ~Copyable {
-        private let entries: ChoiceSequence
+        private let sequence: EditedChoiceSequence
+        private var entries: ChoiceSequence {
+            sequence.base
+        }
+
         private(set) var position: Int = 0
         var exhausted: Bool = false
 
@@ -35,7 +39,7 @@ extension Materializer {
         }
 
         static var empty: Cursor {
-            Cursor(from: ChoiceSequence())
+            Cursor(from: .init(ChoiceSequence()))
         }
 
         /// Whether the cursor can never produce another entry: already marked exhausted or positioned past the final entry. Spent is monotonic within a walk; the position never decreases except through ``rewind(to:)``, which a backtrack audition uses to hand every arm the same prefix, and popping a scope cannot revive entries behind it. Zip scoping consults this to skip span computation whose only effect would be limiting reads that fail regardless.
@@ -83,9 +87,9 @@ extension Materializer {
             position = min(range.upperBound &+ 1, entries.count)
         }
 
-        init(from sequence: consuming ChoiceSequence) {
-            entries = sequence
-            effectiveEnd = entries.count
+        init(from sequence: consuming EditedChoiceSequence) {
+            effectiveEnd = sequence.count
+            self.sequence = sequence
         }
 
         // MARK: - Checkpoints
@@ -281,18 +285,16 @@ extension Materializer {
                 exhausted = true
                 return nil
             }
-            switch entries[position] {
-                case let .value(v):
-                    if let expected, Cursor.tagIsCompatible(v.choice.tag, with: expected) == false {
-                        exhausted = true
-                        return nil
-                    }
-                    position &+= 1
-                    return v
-                default:
-                    exhausted = true
-                    return nil
+            guard let value = sequence.value(at: position) else {
+                exhausted = true
+                return nil
             }
+            if let expected, Self.tagIsCompatible(value.choice.tag, with: expected) == false {
+                exhausted = true
+                return nil
+            }
+            position &+= 1
+            return value
         }
 
         /// Lets bulk replay reject an invalid leading value before allocating its buffer.
@@ -300,7 +302,7 @@ extension Materializer {
             guard suspended == false,
                   exhausted == false,
                   position < effectiveEnd,
-                  case let .value(value) = entries[position],
+                  let value = sequence.value(at: position),
                   Self.tagIsCompatible(value.choice.tag, with: expected)
             else {
                 return nil
@@ -327,18 +329,16 @@ extension Materializer {
                 }
             }
             let start = position
-            let values = entries.withUnsafeBufferPointer { source in
-                [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
-                    initializedCount = 0
-                    for index in 0 ..< count {
-                        guard case let .value(value) = source[start + index],
-                              Self.tagIsCompatible(value.choice.tag, with: expected)
-                        else {
-                            return
-                        }
-                        destination[index] = value.choice.bitPattern64
-                        initializedCount += 1
+            let values = [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
+                initializedCount = 0
+                for index in 0 ..< count {
+                    guard let value = sequence.value(at: start + index),
+                          Self.tagIsCompatible(value.choice.tag, with: expected)
+                    else {
+                        return
                     }
+                    destination[index] = value.choice.bitPattern64
+                    initializedCount += 1
                 }
             }
             guard values.count == count else {

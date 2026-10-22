@@ -826,7 +826,7 @@ struct CharacterProblematicIndicesTests {
                 let mode = Materializer.Mode.guided(seed: UInt64(rowsTested), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
                     gen, context: .init(
-                        prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                        prefix: .init(ChoiceSequence()), mode: mode, fallbackTree: tree
                     )
                 ) else {
                     continue
@@ -850,7 +850,7 @@ struct CharacterProblematicIndicesTests {
                 let mode = Materializer.Mode.guided(seed: UInt64(i), fallbackTree: nil)
                 guard case let .success(chars, _, _) = Materializer.materialize(
                     gen, context: .init(
-                        prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                        prefix: .init(ChoiceSequence()), mode: mode, fallbackTree: tree
                     )
                 ) else {
                     continue

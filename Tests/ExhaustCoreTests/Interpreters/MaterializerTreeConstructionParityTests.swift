@@ -95,7 +95,7 @@ private func assertTreeConstructionParity<Output: Equatable>(
     let valueOnlyResult = Materializer.materializeAny(
         generator.erase(),
         context: .init(
-            prefix: prefix,
+            prefix: .init(prefix),
             mode: mode,
             fallbackTree: fallbackTree,
             materializePicks: false,
@@ -106,7 +106,7 @@ private func assertTreeConstructionParity<Output: Equatable>(
     let treeBuildingResult = Materializer.materializeAny(
         generator.erase(),
         context: .init(
-            prefix: prefix,
+            prefix: .init(prefix),
             mode: mode,
             fallbackTree: fallbackTree,
             materializePicks: materializePicks,

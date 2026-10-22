@@ -23,7 +23,7 @@ extension ChoiceGraph {
     /// Transparent variants (``ChoiceTree/branch``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step in `remainingPath`.
     private static func walkForPathMatch(
         tree: ChoiceTree,
-        remainingPath: ArraySlice<ChoicePathStep>
+        remainingPath: ChoicePath.SubSequence
     ) -> ChoiceTree? {
         switch tree {
             case .choice, .just, .getSize:

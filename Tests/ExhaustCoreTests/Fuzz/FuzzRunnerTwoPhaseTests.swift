@@ -43,7 +43,7 @@ struct FuzzRunnerTwoPhaseTests {
         // Decode the stored sequence: encoded bits are not the generated integer values.
         for cluster in result.clusters {
             guard case let .success(values, _, _) = Materializer.materialize(
-                arrayGenerator(), context: .init(prefix: cluster.reducedSequence, mode: .exact)
+                arrayGenerator(), context: .init(prefix: .init(cluster.reducedSequence), mode: .exact)
             ) else {
                 Issue.record("A reduced failure could not be replayed")
                 continue

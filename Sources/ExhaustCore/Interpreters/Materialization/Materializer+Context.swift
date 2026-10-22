@@ -15,7 +15,7 @@ package extension Materializer.Context {
     ///   - maximumSequenceCount: Terminal-lift ceiling used to reject scalar arrays whose minimum history already exceeds the complete candidate allowance.
     ///   - reseedRanges: Ordered, disjoint prefix spans to regenerate during guided replay.
     init(
-        prefix: consuming ChoiceSequence,
+        prefix: consuming EditedChoiceSequence,
         mode: Materializer.Mode,
         fallbackTree: ChoiceTree? = nil,
         materializePicks: Bool = false,
@@ -32,7 +32,7 @@ package extension Materializer.Context {
         switch mode {
             case .exact:
                 // Without alternative materialization exact replay never needs randomness, so skip the prefix hash.
-                seed = precomputedSeed ?? (materializePicks ? ZobristHash.hash(of: prefix) : 0)
+                seed = precomputedSeed ?? (materializePicks ? ZobristHash.hash(of: prefix.materialized()) : 0)
                 resolvedFallbackTree = fallbackTree
                 maximizeBoundRegionIndices = nil
             case let .guided(guidedSeed, guidedFallback, indices):

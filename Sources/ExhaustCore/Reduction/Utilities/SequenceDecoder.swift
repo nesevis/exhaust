@@ -105,7 +105,7 @@ enum SequenceDecoder {
     ) -> SequenceDecodingOutcome {
         let candidateForPhase2 = copy candidate
         let phaseOneContext = Materializer.Context(
-            prefix: consume candidate,
+            prefix: .init(consume candidate),
             mode: .exact, fallbackTree: fallbackTree,
             materializePicks: false,
             precomputedSeed: precomputedHash,
@@ -125,7 +125,7 @@ enum SequenceDecoder {
 
             switch Materializer.materializeAny(
                 gen, context: .init(
-                    prefix: candidateForPhase2,
+                    prefix: .init(candidateForPhase2),
                     mode: .exact, fallbackTree: fallbackTree,
                     materializePicks: materializePicks,
                     precomputedSeed: precomputedHash
@@ -192,7 +192,7 @@ enum SequenceDecoder {
         switch Materializer.materializeAny(
             gen,
             context: .init(
-                prefix: consume candidate,
+                prefix: .init(consume candidate),
                 mode: .guided(
                     seed: seed,
                     fallbackTree: fallbackTree,
@@ -216,7 +216,7 @@ enum SequenceDecoder {
                 switch Materializer.materializeAny(
                     gen,
                     context: .init(
-                        prefix: candidateForPhase2,
+                        prefix: .init(candidateForPhase2),
                         mode: .guided(
                             seed: seed,
                             fallbackTree: fallbackTree,

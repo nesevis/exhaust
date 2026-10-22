@@ -10,6 +10,23 @@ import Testing
 
 @Suite("Choice Sequence Tests")
 struct ChoiceSequenceTests {
+    @Test("Scalar sequence fast paths preserve the same flattened metadata as standalone leaves", arguments: [false, true])
+    func scalarSequenceMetadata(isRangeExplicit: Bool) {
+        for range: ClosedRange<UInt64>? in [nil, 0 ... 10, 3 ... 7] {
+            let choice = ChoiceValue(UInt64(5), tag: .uint8)
+            let metadata = ChoiceMetadata(validRange: range, isRangeExplicit: isRangeExplicit)
+            let expected = ChoiceSequenceValue.value(.init(
+                choice: choice,
+                validRange: range,
+                isRangeExplicit: isRangeExplicit
+            ))
+            let leaf = ChoiceTree.choice(choice, metadata)
+            #expect(ChoiceSequence(leaf) == [expected])
+            let tree = ChoiceTree.sequence(elements: [leaf], metadata: .init(validRange: nil))
+            #expect(Array(ChoiceSequence(tree).dropFirst().dropLast()) == [expected])
+        }
+    }
+
     @Test("Operative hash ignores generator-derived metadata")
     func operativeHashIgnoresMetadata() {
         let first: ChoiceSequence = [

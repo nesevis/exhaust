@@ -256,7 +256,7 @@ struct InterpreterFlatEmissionTests {
         while let (_, sequence) = try interpreter.nextFlat() {
             defer { run += 1 }
             guard case let .success(_, tree, _) = Materializer.materializeAny(erased, context: .init(
-                prefix: sequence, mode: .exact
+                prefix: .init(sequence), mode: .exact
             )) else {
                 Issue.record("run \(run): exact materialization rejected a sequence the flat draw emitted")
                 continue
@@ -429,9 +429,9 @@ private func assertBothPathsAgree(
     sourceLocation: SourceLocation
 ) {
     // A raw getSize read is not encoded in the prefix, so both paths need the original ambient size.
-    var treeContext = Materializer.Context(prefix: prefix, mode: mode, fallbackTree: fallbackTree)
+    var treeContext = Materializer.Context(prefix: .init(prefix), mode: mode, fallbackTree: fallbackTree)
     treeContext.size = size
-    var flatContext = Materializer.Context(prefix: prefix, mode: mode, fallbackTree: fallbackTree)
+    var flatContext = Materializer.Context(prefix: .init(prefix), mode: mode, fallbackTree: fallbackTree)
     flatContext.size = size
     let treeResult = Materializer.materializeAny(erased, context: treeContext)
     let flatResult = Materializer.materializeAnyFlat(erased, context: flatContext)

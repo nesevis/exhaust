@@ -178,7 +178,7 @@ struct DiagonalSchedulingTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let reduction = fixture.pool(count: 2, recorder: recorder) { index in
-            .lift(LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
+            .lift(LiftProposal(prefix: .init(fixture.sequence), mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
                 fixture.search(["A", "B"][index], values: [0], recorder: recorder)
             }
         }
@@ -394,7 +394,7 @@ struct LazyProposalTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let reduction = fixture.pool(count: 1_000_000, recorder: recorder) { _ in
-            .lift(LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
+            .lift(LiftProposal(prefix: .init(fixture.sequence), mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
                 fixture.search("A", values: [0], recorder: recorder)
             }
         }
@@ -483,17 +483,17 @@ private struct RecordingProposalCursor: ProposalCursor {
     let recorder: SchedulingRecorder
     var position = 0
 
-    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+    mutating func next() -> LiftProposal? {
         recorder.proposalRequests += 1
         guard position < count else {
             return nil
         }
         recorder.proposals.append(position)
         recorder.events.append("proposal \(position)")
-        buffer = base
+        var buffer = base
         buffer[0] = buffer[0].withBitPattern(UInt64(position))
         position += 1
-        return LiftProposal(prefix: buffer, mutation: .leafValues([]))
+        return LiftProposal(prefix: .init(buffer), mutation: .leafValues([]))
     }
 }
 
@@ -550,7 +550,7 @@ private struct SchedulingFixture {
             },
             configuration: configuration,
             then: { proposal in
-                guard let value = proposal.prefix[0].value else {
+                guard let value = proposal.prefix.value(at: 0) else {
                     preconditionFailure("Every fixture prefix starts with a value entry")
                 }
                 let index = Int(value.choice.bitPattern64)

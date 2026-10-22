@@ -149,7 +149,7 @@ struct RecursiveOperationTests {
         while let (value, tree) = try iterator.next() {
             let sequence = ChoiceSequence(tree)
             switch Materializer.materialize(gen, context: .init(
-                prefix: sequence, mode: .exact, fallbackTree: tree
+                prefix: .init(sequence), mode: .exact, fallbackTree: tree
             )) {
                 case let .success(materialized, _, _):
                     #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")
@@ -237,7 +237,7 @@ struct RecursiveOperationTests {
             while let (value, tree) = try iterator.next() {
                 let sequence = ChoiceSequence(tree)
                 switch Materializer.materialize(gen, context: .init(
-                    prefix: sequence, mode: .exact, fallbackTree: tree
+                    prefix: .init(sequence), mode: .exact, fallbackTree: tree
                 )) {
                     case let .success(materialized, _, _):
                         #expect(materialized == value, "Materialized value should match original. Original: \(value), materialized: \(String(describing: materialized))")

@@ -736,7 +736,7 @@ package final class FuzzRunner<Output> {
         let result = Materializer.materializeAnyFlat(
             erasedGen,
             context: .init(
-                prefix: mutated,
+                prefix: .init(mutated),
                 mode: .guided(seed: guidedSeed, fallbackTree: parent.tree),
                 reseedRanges: reseedRanges
             )
@@ -879,7 +879,7 @@ package final class FuzzRunner<Output> {
             if case let .success(_, fullTree, _) = Materializer.materializeAny(
                 erasedGen,
                 context: .init(
-                    prefix: corpus.entries[admittedIndex].sequence,
+                    prefix: .init(corpus.entries[admittedIndex].sequence),
                     mode: .exact,
                     materializePicks: true
                 )
@@ -950,7 +950,7 @@ package final class FuzzRunner<Output> {
     /// The comparison ignores size-derived length ranges: a fresh draw made at size *s* records `0 ... s` on a default `.array()`'s sequence marker, and the exact rebuild at size 100 records `0 ... 100` for the same choices. Comparing those as identity rejected every fresh draw not made at size 100, which held those draws' failures unreduced with no cluster and kept them out of the corpus.
     private func rebuildTree(for sequence: ChoiceSequence) -> ChoiceTree? {
         guard case let .success(_, tree, _) = Materializer.materializeAny(erasedGen, context: .init(
-            prefix: sequence, mode: .exact
+            prefix: .init(sequence), mode: .exact
         )),
             ChoiceSequence.flatten(tree).matchesIgnoringDerivedLengthRanges(sequence)
         else {

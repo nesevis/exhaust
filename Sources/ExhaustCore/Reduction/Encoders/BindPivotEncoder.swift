@@ -109,11 +109,10 @@ enum BindPivotEncoder: ReductionEncoder {
             }
         }
 
-        mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+        mutating func next() -> LiftProposal? {
             if emittedPivot == false {
                 emittedPivot = true
-                buffer = pivotCandidate
-                return LiftProposal(prefix: buffer, mutation: mutation)
+                return LiftProposal(prefix: .init(pivotCandidate), mutation: mutation)
             }
             guard let boundRange, let shiftedBoundRange else {
                 return nil
@@ -141,9 +140,9 @@ enum BindPivotEncoder: ReductionEncoder {
                     donorRangeStart: donorRange.lowerBound,
                     graph: scope.graph
                 )
-                buffer = pivotCandidate
+                var buffer = pivotCandidate
                 buffer.replaceSubrange(shiftedBoundRange, with: expanded)
-                return LiftProposal(prefix: buffer, mutation: mutation)
+                return LiftProposal(prefix: .init(buffer), mutation: mutation)
             }
             return nil
         }
