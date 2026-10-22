@@ -67,12 +67,16 @@ struct IntegerSearchTests {
         // The property fails while the last four leaves are all at least 10, so only the first leaf zeroes on its own, leaving four leaves for batch bisection.
         var feedback = SearchFeedback.initial
         var buffer = sequence
+        var baseline = sequence
         while search.state.phase != .batchBisect {
-            _ = try #require(search.next(feedback, into: &buffer))
+            _ = try #require(search.nextMaterialized(feedback, from: baseline, into: &buffer))
             let fails = leafIndices.dropFirst().allSatisfy { index in
                 (buffer[index].value?.choice.bitPattern64 ?? 0) >= 10
             }
             feedback = fails ? .accepted(recovered: buffer) : .rejected(.propertyPassed)
+            if fails {
+                baseline = buffer
+            }
         }
 
         let firstLeaf = try #require(search.state.leafPositions.firstIndex { $0.nodeID == leafNodeIDs[0] })
@@ -84,13 +88,13 @@ struct IntegerSearchTests {
     func nextCandidateBuildsOnRecoveredSequence() throws {
         var fixture = try TwoLeafSearch()
         var buffer = fixture.sequence
-        _ = try #require(fixture.search.next(.initial, into: &buffer))
-        _ = try #require(fixture.search.next(.rejected(.propertyPassed), into: &buffer))
+        _ = try #require(fixture.search.nextMaterialized(.initial, from: fixture.sequence, into: &buffer))
+        _ = try #require(fixture.search.nextMaterialized(.rejected(.propertyPassed), from: fixture.sequence, into: &buffer))
 
         // Decoding rewrote the leaf the search does not touch.
         var recovered = buffer
         recovered[fixture.otherLeafIndex] = recovered[fixture.otherLeafIndex].withBitPattern(7)
-        _ = try #require(fixture.search.next(.accepted(recovered: recovered), into: &buffer))
+        _ = try #require(fixture.search.nextMaterialized(.accepted(recovered: recovered), from: recovered, into: &buffer))
 
         #expect(buffer[fixture.otherLeafIndex].value?.choice.bitPattern64 == 7)
     }
@@ -99,13 +103,13 @@ struct IntegerSearchTests {
     func recoveredLengthChangeEndsSearch() throws {
         var fixture = try TwoLeafSearch()
         var buffer = fixture.sequence
-        _ = try #require(fixture.search.next(.initial, into: &buffer))
+        _ = try #require(fixture.search.nextMaterialized(.initial, from: fixture.sequence, into: &buffer))
         // A rejected direct shot leaves the stepper with candidates, so only the length change can end the search.
-        _ = try #require(fixture.search.next(.rejected(.propertyPassed), into: &buffer))
+        _ = try #require(fixture.search.nextMaterialized(.rejected(.propertyPassed), from: fixture.sequence, into: &buffer))
         let longer = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
         let recovered = try ChoiceSequence(#require(try Interpreters.reflect(longer, with: [50, 50, 50])))
 
-        #expect(fixture.search.next(.accepted(recovered: recovered), into: &buffer) == nil)
+        #expect(fixture.search.nextMaterialized(.accepted(recovered: recovered), from: recovered, into: &buffer) == nil)
     }
 
     @Test("Integer reduction can cross zero from a negative range endpoint", arguments: [-1 ... 1, -10 ... 10])

@@ -18,7 +18,10 @@ struct StagedJointSparseProbeTests {
         for arity in 2 ... 4 {
             let selected = Array(leaves.prefix(arity))
             let patterns = selected.map { leaf in NumericPairCandidates.values(for: leaf, simplifying: true).first ?? leaf.choice.bitPattern64 }
-            let probe = SparseEncoderProbe(leaves: selected, patterns: patterns)
+            var probe = SequencePatch()
+            for (leaf, pattern) in zip(selected, patterns) {
+                probe.append(.init(position: leaf.position, replacement: base[leaf.position].withBitPattern(pattern)))
+            }
             var candidate = base
             probe.write(into: &candidate)
             #expect(probe.hash(baseHash: hash, baseSequence: base) == ZobristHash.hash(of: candidate))

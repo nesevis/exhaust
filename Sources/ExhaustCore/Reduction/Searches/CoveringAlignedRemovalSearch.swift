@@ -78,7 +78,7 @@ struct CoveringAlignedRemovalSearch: ReductionSearch {
             }
 
             buffer = built
-            return .written(mutation: .sequenceElementsRemoved(removedPairs), admission: .standard)
+            return .eager(mutation: .sequenceElementsRemoved(removedPairs), admission: .standard)
         }
 
         isExhausted = true

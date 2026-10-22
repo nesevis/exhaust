@@ -51,7 +51,7 @@ struct NumericJointRankEnumerationTests {
     private func cartesianProposals(groups: [NumericJointPlan]) -> [Snapshot] {
         var rescalings: [(priority: Int, index: Int, patterns: [UInt64])] = []
         for (index, group) in groups.enumerated() {
-            rescalings += group.priorityProposals.map { (priority: $0.priority, index: index, patterns: $0.probe.patterns) }
+            rescalings += group.priorityProposals.map { (priority: $0.priority, index: index, patterns: $0.patterns) }
         }
         rescalings.sort {
             $0.priority == $1.priority ? $0.index < $1.index : $0.priority < $1.priority
@@ -66,7 +66,7 @@ struct NumericJointRankEnumerationTests {
                 return
             }
             let patterns = indices.indices.map { group.samples[$0][indices[$0]] }
-            guard group.priorityProposals.contains(where: { $0.probe.patterns == patterns }) == false else {
+            guard group.priorityProposals.contains(where: { $0.patterns == patterns }) == false else {
                 return
             }
             result.append(.init(nodeIDs: group.leaves.map(\.nodeID), patterns: patterns))
@@ -109,8 +109,8 @@ struct NumericJointRankEnumerationTests {
             )
         }
         let ratios: [NumericPriorityProposal] = rescaled
-            ? [.init(priority: 0, probe: SparseEncoderProbe(leaves: leaves, patterns: Array(repeating: 1, count: counts.count))),
-               .init(priority: 2, probe: SparseEncoderProbe(leaves: leaves, patterns: Array(repeating: 7, count: counts.count)))]
+            ? [.init(priority: 0, leaves: leaves, patterns: Array(repeating: 1, count: counts.count)),
+               .init(priority: 2, leaves: leaves, patterns: Array(repeating: 7, count: counts.count))]
             : []
         return .init(
             leaves: leaves,

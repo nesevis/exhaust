@@ -64,12 +64,31 @@ struct SearchReport {
 
 // MARK: - Candidate
 
-/// A search's next candidate. The complete candidate is in the interpreter's buffer, or described as sparse edits that the interpreter hashes against the rejection cache before writing.
+/// Separates a candidate's sequence representation from its graph effects and decoding requirements.
 ///
-/// Each candidate carries its own admission, so a search can vary the checks decoding applies from one candidate to the next.
-enum ReductionCandidate {
-    case written(mutation: ProjectedMutation, admission: DecoderAdmission)
-    case sparse(SparseEncoderProbe, baseSequence: ChoiceSequence, admission: DecoderAdmission)
+/// Eager candidates already occupy the interpreter's buffer. Lazy candidates defer their writes until after the rejection-cache check; their patches are applied to the current incumbent.
+struct ReductionCandidate {
+    let contents: Contents
+    let mutation: ProjectedMutation
+    let admission: DecoderAdmission
+
+    /// The eager case borrows the interpreter's existing buffer rather than retaining another array reference that could trigger copy-on-write.
+    enum Contents {
+        case eager
+        case lazy(SequencePatch)
+    }
+
+    static func eager(mutation: ProjectedMutation, admission: DecoderAdmission) -> Self {
+        Self(contents: .eager, mutation: mutation, admission: admission)
+    }
+
+    static func lazy(
+        _ patch: SequencePatch,
+        mutation: ProjectedMutation,
+        admission: DecoderAdmission
+    ) -> Self {
+        Self(contents: .lazy(patch), mutation: mutation, admission: admission)
+    }
 }
 
 // MARK: - Search Protocol

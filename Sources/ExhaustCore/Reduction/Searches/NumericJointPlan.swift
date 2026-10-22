@@ -45,7 +45,7 @@ struct NumericJointPlan {
         let leaves = entries.map(\.leaf)
         let priorityProposals = NumericPriorityProposal.build(for: leaves)
         let extraWork = priorityProposals.count { proposal in
-            samples.indices.allSatisfy { samples[$0].contains(proposal.probe.patterns[$0]) } == false
+            samples.indices.allSatisfy { samples[$0].contains(proposal.patterns[$0]) } == false
         }
         let estimatedWork = gridWork + extraWork
         guard estimatedWork <= workLimit else {

@@ -26,7 +26,7 @@ struct GraphUpdatePolicyTests {
             context.candidateBuffer = candidate
 
             let evaluation = Reducer.evaluateAndCommit(
-                .written(mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)]), admission: .standard),
+                .eager(mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)]), admission: .standard),
                 configuration: SearchConfiguration(graphUpdate: graphUpdate),
                 context: &context
             )

@@ -9,7 +9,7 @@
 ///
 /// Runs four phases, cheapest first: batch zero, per-leaf zero, batch bisection, and per-leaf search. Per-leaf search probes the target directly, then runs ``InterpolationSearchStepper`` (binary search below ``ReductionTuning/interpolationBinaryThreshold``). After it converges, a small non-monotone gap is scanned linearly, a character leaf tries its simpler forms, and a signed leaf tries values across zero that bit-pattern search cannot reach.
 ///
-/// All leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions, and an acceptance advances the baseline to the accepted candidate.
+/// All leaves have position ranges in the current sequence. Batch phases construct complete candidates; per-leaf phases emit sparse edits at pre-resolved positions. An acceptance advances the baseline to the recovered sequence.
 ///
 /// The phases live in `IntegerSearch+Probing.swift`.
 struct IntegerSearch: ReductionSearch {
@@ -224,12 +224,7 @@ struct IntegerSearch: ReductionSearch {
             }
             state.sequence = recovered
         }
-        guard let built = Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted) else {
-            return nil
-        }
-        buffer = built
-        let mutation = state.leafPositions.leafValuesMutation(candidate: buffer, baseline: state.sequence)
-        return .written(mutation: mutation, admission: .standard)
+        return Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted, into: &buffer)
     }
 
     /// Reports the convergence records gathered so far, first recording the progress of the leaf in progress so its search resumes from there on the next dispatch.

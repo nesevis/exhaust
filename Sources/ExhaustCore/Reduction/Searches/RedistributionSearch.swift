@@ -88,6 +88,6 @@ struct RedistributionSearch: ReductionSearch {
         buffer = built
         let mutation = valueState.buildLeafValuesMutation(candidate: buffer)
         mode = .active(state)
-        return .written(mutation: mutation, admission: .standard)
+        return .eager(mutation: mutation, admission: .standard)
     }
 }

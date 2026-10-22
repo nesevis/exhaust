@@ -57,7 +57,7 @@ enum StagedJointQuery {
             guard stalled[sinkIndex], let signFlip = SignFlipProposal.build(leaves: [leaves[sourceIndex], leaves[sinkIndex]]) else {
                 return nil
             }
-            return NumericPriorityProposal(priority: SignFlipProposal.priority, probe: signFlip)
+            return signFlip
         }
     }
 

@@ -64,7 +64,7 @@ struct CoveringSearch: ReductionSearch {
         }
         // The composition replaces this mutation with the upstream's reshape mutation, so the empty leafValues is a placeholder; the candidate carries the downstream values.
         buffer = built
-        return .written(mutation: .leafValues([]), admission: .standard)
+        return .eager(mutation: .leafValues([]), admission: .standard)
     }
 }
 

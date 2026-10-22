@@ -516,7 +516,7 @@ private struct RecordingScheduleSearch: ReductionSearch {
         buffer = base
         buffer[0] = buffer[0].withBitPattern(values[nextIndex])
         nextIndex += 1
-        return .written(mutation: .leafValues([]), admission: .standard)
+        return .eager(mutation: .leafValues([]), admission: .standard)
     }
 
     consuming func finish(pending: SearchFeedback) -> SearchReport {

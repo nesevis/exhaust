@@ -44,7 +44,7 @@ struct ReorderSearch: ReductionSearch {
                 ranges: ranges,
                 permutation: sortedIndices
             )
-            return .written(mutation: .sequenceReordered, admission: .standard)
+            return .eager(mutation: .sequenceReordered, admission: .standard)
         }
         return nil
     }

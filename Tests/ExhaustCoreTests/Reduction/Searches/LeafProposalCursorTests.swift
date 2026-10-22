@@ -57,13 +57,14 @@ struct LeafProposalCursorTests {
             var expected = sequence
             while let proposal = cursor.next(into: &candidate) {
                 let next = adaptive.next(.rejected(.propertyPassed), into: &expected)
-                guard case let .written(mutation, _) = try #require(next) else {
+                let emittedCandidate = try #require(next)
+                guard case .eager = emittedCandidate.contents else {
                     Issue.record("Expected a complete binary-search candidate")
                     return
                 }
                 #expect(Array(candidate) == Array(expected))
                 #expect(Array(proposal.prefix) == Array(expected))
-                #expect(ProbeTraceRecorder.Mutation(proposal.mutation) == ProbeTraceRecorder.Mutation(mutation))
+                #expect(ProbeTraceRecorder.Mutation(proposal.mutation) == ProbeTraceRecorder.Mutation(emittedCandidate.mutation))
             }
             #expect(adaptive.next(.rejected(.propertyPassed), into: &expected) == nil)
         }

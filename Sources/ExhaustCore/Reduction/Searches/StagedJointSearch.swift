@@ -7,7 +7,7 @@
 
 /// Searches one stage of a staged joint checkpoint, pairs or the groups of one higher arity, trying each group's sign flip before its rescalings and samples.
 ///
-/// Stops after the first acceptance, because every group's addresses and domain samples belong to the checkpoint the acceptance replaced. Candidates are sparse, so the interpreter checks their hash against the rejection cache before writing them.
+/// Stops after the first acceptance, because every group's addresses and domain samples belong to the checkpoint the acceptance replaced. Candidates are lazy, so the interpreter checks their hash against the rejection cache before writing them.
 struct StagedJointSearch: ReductionSearch {
     /// Leaves each candidate moves.
     let arity: Int
@@ -48,9 +48,9 @@ struct StagedJointSearch: ReductionSearch {
                 return nil
             }
             emitted += 1
-            return .sparse(
-                SparseEncoderProbe(leaves: proposal.leaves, patterns: proposal.patterns),
-                baseSequence: base,
+            return candidate(
+                leaves: proposal.leaves,
+                patterns: proposal.patterns,
                 admission: .numericJoint(proposal.leaves)
             )
         }
@@ -58,14 +58,36 @@ struct StagedJointSearch: ReductionSearch {
             return nil
         }
         emitted += 1
-        return .sparse(
-            SparseEncoderProbe(
-                leaves: [proposal.pair.source, proposal.pair.sink],
-                patterns: [proposal.sourceBitPattern, proposal.sinkBitPattern]
-            ),
-            baseSequence: base,
+        return candidate(
+            leaves: [proposal.pair.source, proposal.pair.sink],
+            patterns: [proposal.sourceBitPattern, proposal.sinkBitPattern],
             admission: .numericPair(proposal.pair)
         )
+    }
+
+    /// Converts numeric planning metadata at the emission boundary; sequence patches themselves carry no graph or numeric-search state.
+    private func candidate(
+        leaves: [ReductionLeaf],
+        patterns: [UInt64],
+        admission: DecoderAdmission
+    ) -> ReductionCandidate {
+        precondition(leaves.count == patterns.count)
+        var patch = SequencePatch(minimumCapacity: leaves.count)
+        var changes: [LeafChange] = []
+        changes.reserveCapacity(leaves.count)
+        for (leaf, pattern) in zip(leaves, patterns) {
+            let replacement = base[leaf.position].withBitPattern(pattern)
+            patch.append(.init(position: leaf.position, replacement: replacement))
+            guard pattern != leaf.choice.bitPattern64 else {
+                continue
+            }
+            changes.append(LeafChange(
+                leafNodeID: leaf.nodeID,
+                newValue: ChoiceValue(pattern, tag: leaf.choice.tag),
+                mayReshape: leaf.mayReshapeOnAcceptance
+            ))
+        }
+        return .lazy(patch, mutation: .leafValues(changes), admission: admission)
     }
 
     consuming func finish(pending _: SearchFeedback) -> SearchReport {

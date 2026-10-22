@@ -26,12 +26,12 @@ struct NumericJointSearchCursor {
             guard samples.allSatisfy({ $0.isEmpty == false }) else {
                 return nil
             }
-            return Grid(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.priorityProposals.map(\.probe.patterns)))
+            return Grid(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.priorityProposals.map(\.patterns)))
         }
         self.plans = plans
         rescalingProposals = groups.enumerated().flatMap { groupIndex, group in
             group.priorityProposals.map { priorityProposal in
-                (priority: priorityProposal.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: priorityProposal.probe.patterns))
+                (priority: priorityProposal.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: priorityProposal.patterns))
             }
         }.sorted { first, second in
             if first.priority != second.priority {

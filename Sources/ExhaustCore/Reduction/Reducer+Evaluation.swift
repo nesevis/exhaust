@@ -19,19 +19,19 @@ extension Reducer {
     ///
     /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
     static func evaluateAndCommit(_ candidate: ReductionCandidate, configuration: SearchConfiguration, recoveryMutation: ProjectedMutation? = nil, context: inout Context) -> Evaluation {
-        let mutation: ProjectedMutation
-        let admission: DecoderAdmission
+        let mutation = recoveryMutation ?? candidate.mutation
+        let admission = candidate.admission
         let probeHash: UInt64
-        switch candidate {
-            case let .written(writtenMutation, writtenAdmission):
-                mutation = recoveryMutation ?? writtenMutation
-                admission = writtenAdmission
-                probeHash = ZobristHash.incrementalHash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence, probe: context.candidateBuffer)
-                context.previousSparseProbe = nil
-            case let .sparse(probe, baseSequence, sparseAdmission):
-                mutation = recoveryMutation ?? probe.mutation
-                admission = sparseAdmission
-                probeHash = probe.hash(baseHash: context.baseHash, baseSequence: baseSequence)
+        switch candidate.contents {
+            case .eager:
+                probeHash = ZobristHash.incrementalHash(
+                    baseHash: context.baseHash,
+                    baseSequence: context.incumbent.sequence,
+                    probe: context.candidateBuffer
+                )
+                context.previousPatch = nil
+            case let .lazy(patch):
+                probeHash = patch.hash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence)
         }
 
         let selection = context.decoder.selection(for: DecodingRequirement(
@@ -46,18 +46,16 @@ extension Reducer {
         )
 
         let cacheHit = context.rejectCache.contains(cacheKey)
-        if case let .sparse(probe, baseSequence, _) = candidate {
-            // The buffer is restored from `baseSequence` and the hash starts from the incumbent's, so both are right only when the two are the same sequence.
-            assert(baseSequence == context.incumbent.sequence, "A sparse candidate's base must be the incumbent's sequence")
+        if case let .lazy(patch) = candidate.contents {
             // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
             if cacheHit == false || context.observer != nil {
-                if let previousSparseProbe = context.previousSparseProbe {
-                    previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
+                if let previousPatch = context.previousPatch {
+                    previousPatch.restore(into: &context.candidateBuffer, baseSequence: context.incumbent.sequence)
                 } else {
-                    context.candidateBuffer = baseSequence
+                    context.candidateBuffer = context.incumbent.sequence
                 }
-                probe.write(into: &context.candidateBuffer)
-                context.previousSparseProbe = probe
+                patch.write(into: &context.candidateBuffer)
+                context.previousPatch = patch
             }
         }
 
@@ -157,8 +155,8 @@ extension Reducer {
         context: inout Context
     ) {
         context.report.counts.recordAcceptance()
-        // The buffer holds the candidate, which decoding may have changed, so the next sparse probe starts from the new base rather than restoring the last one's positions.
-        context.previousSparseProbe = nil
+        // The buffer holds the candidate, which decoding may have changed, so the next lazy probe starts from the new base rather than restoring the last one's positions.
+        context.previousPatch = nil
         context.incumbent = recovered
         context.baseHash = ZobristHash.hash(of: recovered.sequence)
         context.report.anyAccepted = true

@@ -28,11 +28,11 @@ struct StagedPairSearchCursor {
         var ranked: [(priority: Int, pairIndex: Int, proposal: NumericPairSearchCursor.Proposal)] = []
         for (pairIndex, pair) in pairs.enumerated() {
             for priorityProposal in NumericPriorityProposal.build(for: [pair.source, pair.sink]) {
-                ranked.append((priorityProposal.priority, pairIndex, Self.pairProposal(priorityProposal.probe)))
+                ranked.append((priorityProposal.priority, pairIndex, Self.pairProposal(priorityProposal)))
             }
         }
         for (offset, signFlip) in signFlipProposals.enumerated() {
-            ranked.append((signFlip.priority, pairs.count + offset, Self.pairProposal(signFlip.probe)))
+            ranked.append((signFlip.priority, pairs.count + offset, Self.pairProposal(signFlip)))
         }
         rescalingProposals = ranked.sorted { first, second in
             if first.priority != second.priority {
@@ -73,7 +73,7 @@ struct StagedPairSearchCursor {
     }
 
     /// Reads a two-leaf probe as a pair proposal, whose first leaf is the source.
-    private static func pairProposal(_ probe: SparseEncoderProbe) -> NumericPairSearchCursor.Proposal {
+    private static func pairProposal(_ probe: NumericPriorityProposal) -> NumericPairSearchCursor.Proposal {
         NumericPairSearchCursor.Proposal(
             pair: NumericPair(source: probe.leaves[0], sink: probe.leaves[1]),
             sourceBitPattern: probe.patterns[0],

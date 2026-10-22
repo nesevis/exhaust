@@ -6,7 +6,7 @@ enum SignFlipProposal {
     static let priority = -1
 
     /// Builds one sign flip for this pair or higher-order group, leaving unrelated leaves untouched.
-    static func build(leaves: [ReductionLeaf]) -> SparseEncoderProbe? {
+    static func build(leaves: [ReductionLeaf]) -> NumericPriorityProposal? {
         var patterns: [UInt64] = []
         for leaf in leaves {
             guard let pattern = counterpart(of: leaf.choice), leaf.range.contains(pattern) else {
@@ -20,7 +20,7 @@ enum SignFlipProposal {
         else {
             return nil
         }
-        return SparseEncoderProbe(leaves: leaves, patterns: patterns)
+        return NumericPriorityProposal(priority: priority, leaves: leaves, patterns: patterns)
     }
 
     /// Flips the signs of non-NaN floats and of signed integers other than their unpaired minimum; unsigned zero can remain in a group unchanged.

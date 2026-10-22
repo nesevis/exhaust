@@ -6,7 +6,7 @@ enum CandidateEvaluator {
     ///
     /// Callers own emission and admission counts, deadline checks, and observations. They can discard cached candidates before emission, interrupt an emitted probe, or use a recovered failure without adopting it.
     ///
-    /// Sparse callers may leave their candidate buffer unwritten on a cache hit: it is read only after the cache lookup.
+    /// Callers with lazy candidates may leave their candidate buffer unwritten on a cache hit: it is read only after the cache lookup.
     ///
     /// - Parameters:
     ///   - cacheKey: The key for this candidate, decoder selection, and incumbent. Nil bypasses both cache lookup and insertion, as relaxation requires when trying perturbations rejected under ordinary reduction.

@@ -99,7 +99,7 @@ extension Reducer {
         var report = ReductionPassReport()
         var baseHash: UInt64
         var candidateBuffer: ChoiceSequence
-        var previousSparseProbe: SparseEncoderProbe?
+        var previousPatch: SequencePatch?
         var nextProbeID = 0
         /// Builds left to a nested chain, shared by every level that has chain limits. Created by the outermost such level.
         var buildPoolRemaining: Int?

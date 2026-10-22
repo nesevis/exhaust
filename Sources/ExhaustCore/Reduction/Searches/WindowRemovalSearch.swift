@@ -46,7 +46,7 @@ struct WindowRemovalSearch: ReductionSearch {
                 current.awaitingFeedback = true
                 state = current
                 buffer = built
-                return .written(
+                return .eager(
                     mutation: .sequenceElementsRemoved([(
                         seqNodeID: current.scope.sequenceNodeID,
                         removedNodeIDs: elementNodeIDs

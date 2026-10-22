@@ -43,7 +43,7 @@ struct SingleCandidateSearch: ReductionSearch {
         }
         pending = nil
         buffer = emitted.candidate
-        return .written(mutation: emitted.mutation, admission: .standard)
+        return .eager(mutation: emitted.mutation, admission: .standard)
     }
 
     consuming func finish(pending _: SearchFeedback) -> SearchReport {

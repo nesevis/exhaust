@@ -105,11 +105,11 @@ struct ReducerRegressionTests {
         let configuration = SearchConfiguration(requiresExactDecoder: true)
 
         context.candidateBuffer = candidate
-        let strict = Reducer.evaluateAndCommit(.written(mutation: .leafValues([]), admission: .numericJoint([])), configuration: configuration, context: &context)
+        let strict = Reducer.evaluateAndCommit(.eager(mutation: .leafValues([]), admission: .numericJoint([])), configuration: configuration, context: &context)
         #expect(strict.isAccepted == false)
 
         context.candidateBuffer = candidate
-        let standard = Reducer.evaluateAndCommit(.written(mutation: .leafValues([]), admission: .standard), configuration: configuration, context: &context)
+        let standard = Reducer.evaluateAndCommit(.eager(mutation: .leafValues([]), admission: .standard), configuration: configuration, context: &context)
         #expect(context.report.counts.rejectedByCache == 0)
         #expect(standard.isAccepted)
     }
