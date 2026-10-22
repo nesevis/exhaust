@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import ExhaustTestSupport
 import Testing
 @testable import ExhaustCore
 
@@ -88,6 +89,39 @@ struct ChoiceGraphScopeQueryTests {
 
         #expect(singleTargetScopes.count == 1)
         #expect(singleTargetScopes[0].maxBatch == 1)
+    }
+
+    @Test(
+        "Per-parent removal preserves nested scope and element order while excluding inactive and fixed sequences"
+    )
+    func perParentRemovalNestedOrder() {
+        let tree = ChoiceTree.group([
+            .sequence(
+                elements: [.uint64Sequence([1, 2]), .just, .uint64(3)],
+                metadata: .init(validRange: 1 ... 3, isRangeExplicit: true)
+            ),
+            .pickSite(fingerprint: 42, selected: 1, branches: [
+                .uint64Sequence([4, 5, 6]),
+                .uint64Sequence([7]),
+            ]),
+            .sequence(elements: [.uint64(8)], metadata: .init(validRange: 1 ... 1, isRangeExplicit: true)),
+            .uint64Sequence([]),
+        ])
+        let graph = ChoiceGraph.build(from: tree)
+        let scopes = RemovalQuery.elementRemovalScopes(graph: graph)
+
+        #expect(scopes.map { scope in scope.targets.map { graph.nodes[$0.sequenceNodeID].choicePath } } == [
+            [[.groupChild(0)]],
+            [[.groupChild(0), .sequenceChild(0)]],
+            [[.groupChild(1), .pickBranch(1)]],
+        ])
+        #expect(scopes.map(\.maxBatch) == [2, 2, 1])
+        #expect(scopes.map(\.maxElementYield) == [4, 1, 1])
+        #expect(scopes.first?.targets.first?.elementNodeIDs.map { graph.nodes[$0].choicePath } == [
+            [.groupChild(0), .sequenceChild(0)],
+            [.groupChild(0), .sequenceChild(1)],
+            [.groupChild(0), .sequenceChild(2)],
+        ])
     }
 
     // MARK: - Minimization
