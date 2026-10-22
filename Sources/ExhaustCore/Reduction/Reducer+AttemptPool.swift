@@ -299,11 +299,11 @@ extension Reducer {
                     recoveryMutation: recoveryMutation
                 )))
             case let .impure(.propose(attempts, configuration), continuation):
-                guard let depth else {
-                    return .built(.level(AttemptPool(attempts: attempts, continuation: continuation, configuration: configuration, depth: 0, recoveryMutation: recoveryMutation)))
+                let nextDepth = depth.map { $0 + 1 } ?? 0
+                if depth != nil {
+                    recordBuildOutcome(.nestedLevel, depth: nextDepth, context: &context)
                 }
-                recordBuildOutcome(.nestedLevel, depth: depth + 1, context: &context)
-                return .built(.level(AttemptPool(attempts: attempts, continuation: continuation, configuration: configuration, depth: depth + 1, recoveryMutation: recoveryMutation)))
+                return .built(.level(AttemptPool(attempts: attempts, continuation: continuation, configuration: configuration, depth: nextDepth, recoveryMutation: recoveryMutation)))
         }
     }
 

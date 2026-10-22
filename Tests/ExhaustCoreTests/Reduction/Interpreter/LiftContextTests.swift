@@ -89,7 +89,7 @@ struct LiftContextTests {
 
         #expect(finished == 1)
         #expect(result.report.searchReport.convergenceRecords.isEmpty == lifted)
-        #expect(result.report.searchReport.hadUnresolvedReplacement == !lifted)
+        #expect(result.report.searchReport.hadUnresolvedReplacement == (lifted == false))
         #expect(result.report.searchCounts.count == (lifted ? 0 : 1))
     }
 

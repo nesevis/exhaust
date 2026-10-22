@@ -100,8 +100,8 @@ struct ValueSearchLazyProbeTests {
                 Issue.record("A batch probe must report its leaf changes")
                 return
             }
-            let changedLeaves = leaves.filter { nodeID in
-                let position = graph.nodes[nodeID].positionRange!.lowerBound
+            let changedLeaves = try leaves.filter { nodeID in
+                let position = try #require(graph.nodes[nodeID].positionRange).lowerBound
                 return expected[position] != baseline[position]
             }
             #expect(changes.map(\.leafNodeID) == changedLeaves)

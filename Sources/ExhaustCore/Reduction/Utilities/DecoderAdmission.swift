@@ -32,9 +32,30 @@ enum DecoderAdmission {
             case .standard:
                 true
             case let .numericPair(pair):
-                NumericRecoveryCheck.preservesIdentity(of: pair, in: tree)
+                Self.preservesIdentity(of: [pair.source, pair.sink], in: tree)
             case let .numericJoint(leaves):
-                NumericRecoveryCheck.preservesIdentity(of: leaves, in: tree)
+                Self.preservesIdentity(of: leaves, in: tree)
         }
+    }
+}
+
+private extension DecoderAdmission {
+    /// Checks all joint edits against fresh bind ancestry using one graph construction per surviving failure.
+    static func preservesIdentity(of leaves: [ReductionLeaf], in tree: ChoiceTree) -> Bool {
+        guard leaves.contains(where: { $0.bindFingerprints.isEmpty == false }) else {
+            return true
+        }
+        let graph = ChoiceGraph.build(from: tree)
+        for leaf in leaves {
+            guard let nodeID = graph.leafNodes.first(where: { graph.nodes[$0].positionRange?.lowerBound == leaf.position }),
+                  graph.nodes[nodeID].choicePath == leaf.path,
+                  ReductionLeaf.bindFingerprints(above: nodeID, graph: graph) == leaf.bindFingerprints,
+                  case let .chooseBits(metadata) = graph.nodes[nodeID].kind,
+                  metadata.supportsNumericSearch
+            else {
+                return false
+            }
+        }
+        return true
     }
 }

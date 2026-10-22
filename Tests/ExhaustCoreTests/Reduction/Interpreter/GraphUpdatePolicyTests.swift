@@ -39,7 +39,7 @@ struct GraphUpdatePolicyTests {
             #expect(context.baseHash == ZobristHash.hash(of: context.incumbent.sequence))
             #expect(context.report.anyAccepted == accepted)
             #expect(context.report.counts.accepted == (accepted ? 1 : 0))
-            #expect(context.report.anyRequiresRebuild == (accepted && !appliesInPlace))
+            #expect(context.report.anyRequiresRebuild == (accepted && appliesInPlace == false))
             if accepted {
                 guard case let .accepted(recovered) = evaluation.feedback else {
                     Issue.record("An admitted candidate must deliver its recovered sequence")

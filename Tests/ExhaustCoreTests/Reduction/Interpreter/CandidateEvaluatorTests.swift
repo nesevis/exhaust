@@ -25,10 +25,21 @@ struct CandidateEvaluatorTests {
         let probeHash = ZobristHash.hash(of: candidate)
         let cacheKey = cache.key(probeHash: probeHash, decision: ProbeDecision(selection), incumbentHash: fixture.incumbentHash)
 
-        let first = CandidateEvaluator.evaluate(candidate, against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in
-            Issue.record("Rejected decoding must not invoke admission")
-            return true
-        }, probeHash: probeHash, cacheHit: cache.contains(cacheKey), cacheKey: cacheKey, cache: &cache, counts: &counts)
+        let first = CandidateEvaluator.evaluate(
+            candidate,
+            against: fixture.incumbent,
+            using: selection,
+            decoder: decoder,
+            admits: { _ in
+                Issue.record("Rejected decoding must not invoke admission")
+                return true
+            },
+            probeHash: probeHash,
+            cacheHit: cache.contains(cacheKey),
+            cacheKey: cacheKey,
+            cache: &cache,
+            counts: &counts
+        )
         guard case let .rejected(decoding) = first else {
             Issue.record("Expected a decoded rejection")
             return
@@ -44,10 +55,21 @@ struct CandidateEvaluatorTests {
         let attempts = counts.materializationAttempts
 
         // Lazy searches may leave the candidate buffer unwritten on a hit. This empty buffer must never reach decoding.
-        let cached = CandidateEvaluator.evaluate([], against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in
-            Issue.record("A cache hit must not invoke admission")
-            return true
-        }, probeHash: probeHash, cacheHit: cache.contains(cacheKey), cacheKey: cacheKey, cache: &cache, counts: &counts)
+        let cached = CandidateEvaluator.evaluate(
+            [],
+            against: fixture.incumbent,
+            using: selection,
+            decoder: decoder,
+            admits: { _ in
+                Issue.record("A cache hit must not invoke admission")
+                return true
+            },
+            probeHash: probeHash,
+            cacheHit: cache.contains(cacheKey),
+            cacheKey: cacheKey,
+            cache: &cache,
+            counts: &counts
+        )
 
         guard case .cached = cached else {
             Issue.record("Expected a cached rejection")
@@ -71,7 +93,18 @@ struct CandidateEvaluatorTests {
         let probeHash = ZobristHash.hash(of: candidate)
         let cacheKey = cache.key(probeHash: probeHash, decision: ProbeDecision(selection), incumbentHash: fixture.incumbentHash)
 
-        let evaluation = CandidateEvaluator.evaluate(candidate, against: fixture.incumbent, using: selection, decoder: fixture.decoder { _ in false }, admits: { _ in true }, probeHash: probeHash, cacheHit: cache.contains(cacheKey), cacheKey: cacheKey, cache: &cache, counts: &counts)
+        let evaluation = CandidateEvaluator.evaluate(
+            candidate,
+            against: fixture.incumbent,
+            using: selection,
+            decoder: fixture.decoder { _ in false },
+            admits: { _ in true },
+            probeHash: probeHash,
+            cacheHit: cache.contains(cacheKey),
+            cacheKey: cacheKey,
+            cache: &cache,
+            counts: &counts
+        )
         guard case let .admitted(recovered, decoding) = evaluation else {
             Issue.record("Confirmation must admit every recovered failure")
             return
@@ -160,9 +193,29 @@ struct CandidateEvaluatorTests {
         let existingKey = ZobristHash.hash(of: cachedCandidate)
         cache.insert(existingKey)
 
-        let first = CandidateEvaluator.evaluate(cachedCandidate, against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in true }, cacheHit: false, cacheKey: nil, cache: &cache, counts: &counts)
+        let first = CandidateEvaluator.evaluate(
+            cachedCandidate,
+            against: fixture.incumbent,
+            using: selection,
+            decoder: decoder,
+            admits: { _ in true },
+            cacheHit: false,
+            cacheKey: nil,
+            cache: &cache,
+            counts: &counts
+        )
         let freshCandidate = fixture.candidate(8)
-        let second = CandidateEvaluator.evaluate(freshCandidate, against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in true }, cacheHit: false, cacheKey: nil, cache: &cache, counts: &counts)
+        let second = CandidateEvaluator.evaluate(
+            freshCandidate,
+            against: fixture.incumbent,
+            using: selection,
+            decoder: decoder,
+            admits: { _ in true },
+            cacheHit: false,
+            cacheKey: nil,
+            cache: &cache,
+            counts: &counts
+        )
 
         for result in [first, second] {
             switch result {

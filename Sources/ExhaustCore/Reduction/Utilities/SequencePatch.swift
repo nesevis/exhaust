@@ -8,7 +8,7 @@ struct SequencePatch: RandomAccessCollection, Equatable {
         let replacement: ChoiceSequenceValue
     }
 
-    private var first: Edit?
+    private var firstEdit: Edit?
     private var additional: [Edit] = []
 
     init(minimumCapacity: Int = 0) {
@@ -16,7 +16,7 @@ struct SequencePatch: RandomAccessCollection, Equatable {
     }
 
     init(_ edit: Edit) {
-        first = edit
+        firstEdit = edit
     }
 
     var startIndex: Int {
@@ -24,18 +24,24 @@ struct SequencePatch: RandomAccessCollection, Equatable {
     }
 
     var endIndex: Int {
-        first == nil ? 0 : additional.count + 1
+        firstEdit == nil ? 0 : additional.count + 1
     }
 
     subscript(index: Int) -> Edit {
-        index == 0 ? first! : additional[index - 1]
+        guard index == 0 else {
+            return additional[index - 1]
+        }
+        guard let firstEdit else {
+            preconditionFailure("Index zero requires a nonempty sequence patch")
+        }
+        return firstEdit
     }
 
     /// Duplicate positions would cancel hash contributions incorrectly, even though the last write would win during materialization.
     mutating func append(_ edit: Edit) {
         assert(contains(where: { $0.position == edit.position }) == false)
-        guard first != nil else {
-            first = edit
+        guard firstEdit != nil else {
+            firstEdit = edit
             return
         }
         additional.append(edit)

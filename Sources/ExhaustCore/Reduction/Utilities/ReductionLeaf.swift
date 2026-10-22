@@ -33,19 +33,4 @@ extension ReductionLeaf {
         }
         return fingerprints
     }
-
-    /// Boolean generators use UInt8 in 0...1; exclude that domain, including numeric generators with the same representation.
-    static func supportsNumericSearch(_ metadata: ChooseBitsMetadata) -> Bool {
-        guard metadata.typeTag != .uint8 || metadata.validRange != 0 ... 1 else {
-            return false
-        }
-        switch metadata.typeTag {
-            case .int, .int8, .int16, .int32, .int64, .uint, .uint8, .uint16, .uint32, .uint64:
-                return true
-            case .float, .float16, .double:
-                return metadata.value.decodedDoubleValue.isFinite
-            case .date, .bits, .character, .depthControl, .laneControl:
-                return false
-        }
-    }
 }

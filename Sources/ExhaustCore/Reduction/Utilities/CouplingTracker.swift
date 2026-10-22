@@ -61,6 +61,6 @@ struct CouplingTracker {
         else {
             return false
         }
-        return ReductionLeaf.supportsNumericSearch(metadata)
+        return metadata.supportsNumericSearch
     }
 }

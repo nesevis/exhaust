@@ -68,7 +68,7 @@ enum StagedJointQuery {
             let node = graph.nodes[nodeID]
             guard case let .chooseBits(metadata) = node.kind,
                   let position = node.positionRange?.lowerBound,
-                  ReductionLeaf.supportsNumericSearch(metadata),
+                  metadata.supportsNumericSearch,
                   supportsBinds(above: nodeID, graph: graph)
             else {
                 return nil
