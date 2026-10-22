@@ -14,7 +14,9 @@ struct MaterializerLeafReuseTests {
             mode: .guided(seed: 42, fallbackTree: fallback)
         )
         let resolved = try Materializer.resolveChooseBits(
-            min: 0, max: 10, tag: .uint64,
+            min: 0,
+            max: 10,
+            tag: .uint64,
             isRangeExplicit: isRangeExplicit,
             scaling: isPinnedToSize ? .size : nil,
             typeTagPayload: nil,
@@ -42,9 +44,14 @@ struct MaterializerLeafReuseTests {
         )
         var context = Materializer.Context(prefix: .init([]), mode: .guided(seed: 42, fallbackTree: fallback))
         let resolved = try Materializer.resolveChooseBits(
-            min: 0, max: 10, tag: .uint64,
-            isRangeExplicit: false, scaling: nil, typeTagPayload: nil,
-            context: &context, calleeFallback: fallback
+            min: 0,
+            max: 10,
+            tag: .uint64,
+            isRangeExplicit: false,
+            scaling: nil,
+            typeTagPayload: nil,
+            context: &context,
+            calleeFallback: fallback
         )
         guard case let .choice(choice, metadata) = resolved.tree else {
             Issue.record("Expected a resolved leaf")
@@ -70,9 +77,14 @@ struct MaterializerLeafReuseTests {
                 mode: .guided(seed: 42, fallbackTree: fallback)
             )
             let resolved = try Materializer.resolveChooseBits(
-                min: 0, max: 10, tag: .uint64,
-                isRangeExplicit: true, scaling: nil, typeTagPayload: nil,
-                context: &context, calleeFallback: fallback
+                min: 0,
+                max: 10,
+                tag: .uint64,
+                isRangeExplicit: true,
+                scaling: nil,
+                typeTagPayload: nil,
+                context: &context,
+                calleeFallback: fallback
             )
             guard case let .choice(choice, freshMetadata) = resolved.tree else {
                 Issue.record("Expected a resolved leaf")
@@ -97,9 +109,14 @@ struct MaterializerLeafReuseTests {
         for maximum in [UInt64(5), 10] {
             var context = Materializer.Context(prefix: .init([]), mode: .guided(seed: 42, fallbackTree: fallback))
             let resolved = try Materializer.resolveChooseBits(
-                min: 0, max: maximum, tag: .uint64,
-                isRangeExplicit: true, scaling: nil, typeTagPayload: nil,
-                context: &context, calleeFallback: fallback
+                min: 0,
+                max: maximum,
+                tag: .uint64,
+                isRangeExplicit: true,
+                scaling: nil,
+                typeTagPayload: nil,
+                context: &context,
+                calleeFallback: fallback
             )
             guard case let .choice(choice, metadata) = resolved.tree else {
                 Issue.record("Expected a resolved leaf")
@@ -122,9 +139,14 @@ struct MaterializerLeafReuseTests {
         for payload in [newPayload, nil] {
             var context = Materializer.Context(prefix: .init([]), mode: .guided(seed: 42, fallbackTree: fallback))
             let resolved = try Materializer.resolveChooseBits(
-                min: 0, max: 10, tag: .character,
-                isRangeExplicit: true, scaling: nil, typeTagPayload: payload,
-                context: &context, calleeFallback: fallback
+                min: 0,
+                max: 10,
+                tag: .character,
+                isRangeExplicit: true,
+                scaling: nil,
+                typeTagPayload: payload,
+                context: &context,
+                calleeFallback: fallback
             )
             guard case let .choice(choice, metadata) = resolved.tree else {
                 Issue.record("Expected a resolved leaf")

@@ -29,8 +29,13 @@ struct MaterializerValueReplacementTests {
 
     @Test("Replacement tags, scope limits and suspension match an edited prefix")
     func cursorBoundaries() {
-        let original: ChoiceSequence = [.value(.init(choice: ChoiceValue(UInt64(1), tag: .uint64), validRange: nil))]
-        let replacement = ChoiceSequenceValueReplacement(index: 0, value: .init(choice: ChoiceValue(UInt64(2), tag: .depthControl), validRange: nil))
+        let original: ChoiceSequence = [
+            .value(.init(choice: ChoiceValue(UInt64(1), tag: .uint64), validRange: nil)),
+        ]
+        let replacement = ChoiceSequenceValueReplacement(
+            index: 0,
+            value: .init(choice: ChoiceValue(UInt64(2), tag: .depthControl), validRange: nil)
+        )
         var cursor = Materializer.Cursor(from: .init(original, replacement: replacement))
         #expect(cursor.peekScalarValue(expecting: .uint64) == nil)
         #expect(cursor.tryConsumeScalarValues(count: 1, expecting: .uint64) == nil)
@@ -57,23 +62,42 @@ struct MaterializerValueReplacementTests {
                 guard let value = original[index].value else {
                     continue
                 }
-                let replacement = ChoiceSequenceValueReplacement(index: index, value: .init(
-                    choice: ChoiceValue(UInt64(2), tag: value.choice.tag),
-                    validRange: value.validRange,
-                    isRangeExplicit: value.isRangeExplicit
-                ))
-                var copied = original
-                copied[index] = .value(replacement.value)
-                for ceiling in [nil, original.count, 1] {
-                    let shared = Materializer.guidedLift(
-                        generator: generator.erase(), prefix: .init(original, replacement: replacement), fallbackTree: tree,
-                        maximumSequenceCount: ceiling
-                    )
-                    let eager = Materializer.guidedLift(
-                        generator: generator.erase(), prefix: .init(copied), fallbackTree: tree,
-                        maximumSequenceCount: ceiling
-                    )
-                    #expect(shared.map { ChoiceSequence($0) } == eager.map { ChoiceSequence($0) })
+                let range = try #require(value.validRange)
+                var patterns: Set<UInt64> = [2, range.lowerBound, range.upperBound]
+                if range.lowerBound > 0 {
+                    patterns.insert(range.lowerBound - 1)
+                }
+                if range.upperBound < UInt64.max {
+                    patterns.insert(range.upperBound + 1)
+                }
+                for pattern in patterns.sorted() {
+                    for tag in [value.choice.tag, .uint8, .depthControl] {
+                        let replacement = ChoiceSequenceValueReplacement(
+                            index: index,
+                            value: .init(
+                                choice: ChoiceValue(pattern, tag: tag),
+                                validRange: value.validRange,
+                                isRangeExplicit: value.isRangeExplicit
+                            )
+                        )
+                        var copied = original
+                        copied[index] = .value(replacement.value)
+                        for ceiling in [nil, original.count, 1] {
+                            let shared = Materializer.guidedLift(
+                                generator: generator.erase(),
+                                prefix: .init(original, replacement: replacement),
+                                fallbackTree: tree,
+                                maximumSequenceCount: ceiling
+                            )
+                            let eager = Materializer.guidedLift(
+                                generator: generator.erase(),
+                                prefix: .init(copied),
+                                fallbackTree: tree,
+                                maximumSequenceCount: ceiling
+                            )
+                            #expect(shared.map { ChoiceSequence($0) } == eager.map { ChoiceSequence($0) })
+                        }
+                    }
                 }
             }
             count += 1

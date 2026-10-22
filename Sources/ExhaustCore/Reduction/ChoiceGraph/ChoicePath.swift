@@ -81,7 +81,11 @@ package struct ChoicePath: Sendable, Hashable {
         }
     }
 
-    /// Each nonzero byte identifies one step: the top two bits select indexed step kinds and the bottom six hold their index. Codes one and two denote bind steps; zero is reserved for unused bytes.
+    // MARK: - Compact step layout
+
+    // Each nonzero byte identifies one step: the top two bits select indexed step kinds and the bottom six hold their index. Codes one and two denote bind steps; zero is reserved for unused bytes.
+
+    /// Returns nil for coordinates that require expanded storage, preserving their full range.
     private static func code(for step: ChoicePathStep) -> UInt64? {
         switch step {
             case .bindInner:

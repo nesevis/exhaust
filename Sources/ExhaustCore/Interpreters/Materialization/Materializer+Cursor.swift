@@ -272,11 +272,6 @@ extension Materializer {
             return ends
         }
 
-        @inline(__always)
-        private func value(at index: Int) -> ChoiceSequenceValue.Value? {
-            sequence.value(at: index)
-        }
-
         // MARK: - Consume entries
 
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
@@ -290,7 +285,7 @@ extension Materializer {
                 exhausted = true
                 return nil
             }
-            guard let value = value(at: position) else {
+            guard let value = sequence.value(at: position) else {
                 exhausted = true
                 return nil
             }
@@ -307,7 +302,7 @@ extension Materializer {
             guard suspended == false,
                   exhausted == false,
                   position < effectiveEnd,
-                  let value = value(at: position),
+                  let value = sequence.value(at: position),
                   Self.tagIsCompatible(value.choice.tag, with: expected)
             else {
                 return nil
@@ -337,7 +332,7 @@ extension Materializer {
             let values = [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
                 initializedCount = 0
                 for index in 0 ..< count {
-                    guard let value = value(at: start + index),
+                    guard let value = sequence.value(at: start + index),
                           Self.tagIsCompatible(value.choice.tag, with: expected)
                     else {
                         return

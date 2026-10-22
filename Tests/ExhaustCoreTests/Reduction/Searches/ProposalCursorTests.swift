@@ -19,7 +19,7 @@ struct ProposalCursorTests {
         let expected = [UInt64(50), 75, 88, 94, 97, 99].map { value in
             ChoiceSequence(ChoiceTree.uint64(value, in: 0 ... 1000))
         }
-        try assertIndependentCopies(cursor, expected: expected)
+        try ProposalCursorTestSupport.assertIndependentCopies(cursor, expected: expected)
     }
 
     @Test("Bound exchanges preserve order while skipping overflowing transfers", arguments: [false, true])
@@ -44,7 +44,7 @@ struct ProposalCursorTests {
             candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(sink + (30 - source))
             return candidate
         }
-        try assertIndependentCopies(cursor, expected: expected)
+        try ProposalCursorTestSupport.assertIndependentCopies(cursor, expected: expected)
     }
 
     @Test("Bind pivots emit the plain pivot then donors from smallest to largest across copies")
@@ -82,41 +82,43 @@ struct ProposalCursorTests {
             candidate.replaceSubrange(boundRange, with: ChoiceSequence(donor))
             return candidate
         }
-        try assertIndependentCopies(cursor, expected: [plain] + transplants)
+        try ProposalCursorTestSupport.assertIndependentCopies(cursor, expected: [plain] + transplants)
     }
 }
 
-/// Exhausts one copy while retaining every proposal, then advances its sibling to expose shared mutable state or reused candidate storage. Copies both before and after starting a cursor, including through the interpreter's existential storage.
-private func assertIndependentCopies(_ source: any ProposalCursor, expected: [ChoiceSequence]) throws {
-    for consumedCount in [0, 1, 2] {
-        var cursor = AttemptCursor { source }
-        var retained: [LiftProposal] = []
-        for index in 0 ..< consumedCount {
-            let next = cursor.next()
-            let proposal = try #require(next)
-            #expect(proposal.prefix.materialized() == expected[index])
-            retained.append(proposal)
+private enum ProposalCursorTestSupport {
+    /// Exhausts one copy while retaining every proposal, then advances its sibling to expose shared mutable state or reused candidate storage. Copies both before and after starting a cursor, including through the interpreter's existential storage.
+    static func assertIndependentCopies(_ source: any ProposalCursor, expected: [ChoiceSequence]) throws {
+        for consumedCount in [0, 1, 2] {
+            var cursor = AttemptCursor { source }
+            var retained: [LiftProposal] = []
+            for index in 0 ..< consumedCount {
+                let next = cursor.next()
+                let proposal = try #require(next)
+                #expect(proposal.prefix.materialized() == expected[index])
+                retained.append(proposal)
+            }
+            var sibling = cursor
+            for index in consumedCount ..< expected.count {
+                #expect(cursor.nextIndex == index)
+                let next = cursor.next()
+                let proposal = try #require(next)
+                #expect(proposal.prefix.materialized() == expected[index])
+                retained.append(proposal)
+            }
+            #expect(cursor.next() == nil)
+            #expect(cursor.next() == nil)
+            #expect(cursor.nextIndex == nil)
+            for index in consumedCount ..< expected.count {
+                #expect(sibling.nextIndex == index)
+                let next = sibling.next()
+                let proposal = try #require(next)
+                #expect(proposal.prefix.materialized() == expected[index])
+                #expect(ProbeTraceRecorder.Mutation(proposal.mutation) == ProbeTraceRecorder.Mutation(retained[index].mutation))
+            }
+            #expect(sibling.next() == nil)
+            #expect(sibling.nextIndex == nil)
+            #expect(retained.map { $0.prefix.materialized() } == expected)
         }
-        var sibling = cursor
-        for index in consumedCount ..< expected.count {
-            #expect(cursor.nextIndex == index)
-            let next = cursor.next()
-            let proposal = try #require(next)
-            #expect(proposal.prefix.materialized() == expected[index])
-            retained.append(proposal)
-        }
-        #expect(cursor.next() == nil)
-        #expect(cursor.next() == nil)
-        #expect(cursor.nextIndex == nil)
-        for index in consumedCount ..< expected.count {
-            #expect(sibling.nextIndex == index)
-            let next = sibling.next()
-            let proposal = try #require(next)
-            #expect(proposal.prefix.materialized() == expected[index])
-            #expect(ProbeTraceRecorder.Mutation(proposal.mutation) == ProbeTraceRecorder.Mutation(retained[index].mutation))
-        }
-        #expect(sibling.next() == nil)
-        #expect(sibling.nextIndex == nil)
-        #expect(retained.map { $0.prefix.materialized() } == expected)
     }
 }
