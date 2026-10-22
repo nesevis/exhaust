@@ -16,6 +16,9 @@ extension ChoiceGraphBuilder {
             return nil
         }
         var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
+        // Lifted bind scopes repeatedly grow through the first few buffer capacities. Start at eight to avoid those copies; larger subtrees still grow normally.
+        builder.nodes.reserveCapacity(8)
+        builder.containmentEdges.reserveCapacity(8)
         _ = builder.walk(location.bind, offset: location.offset, parent: nil, bindDepth: location.bindDepth, path: bindPath)
         return (builder.finishedGraph(), 0)
     }
@@ -23,7 +26,7 @@ extension ChoiceGraphBuilder {
     /// Locates an active bind with the full walk's offset and depth, counting skipped siblings through ``ChoiceTree/flattenedEntryCount``.
     private static func locateBind(
         in tree: ChoiceTree,
-        remainingPath: ArraySlice<ChoicePathStep>,
+        remainingPath: ChoicePath.SubSequence,
         offset: Int,
         bindDepth: Int,
         fingerprint: UInt64

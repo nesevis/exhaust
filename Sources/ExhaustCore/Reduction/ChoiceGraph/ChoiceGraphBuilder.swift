@@ -266,7 +266,7 @@ struct ChoiceGraphBuilder {
                 offset: elementStart,
                 parent: nodeID,
                 bindDepth: bindDepth,
-                path: path + [.sequenceChild(elementIndex)]
+                path: path.appending(.sequenceChild(elementIndex))
             )
             consumed += elementConsumed
             if childStartID < nextNodeID, elementConsumed > 0 {
@@ -347,7 +347,7 @@ struct ChoiceGraphBuilder {
                     offset: offset + consumed,
                     parent: nodeID,
                     bindDepth: bindDepth,
-                    path: path + [.groupChild(childIndex)]
+                    path: path.appending(.groupChild(childIndex))
                 )
                 consumed += childConsumed
             } else {
@@ -418,7 +418,7 @@ struct ChoiceGraphBuilder {
                     offset: offset + consumed,
                     parent: nodeID,
                     bindDepth: bindDepth,
-                    path: path + [.pickBranch(selectedBranch.selectedID)]
+                    path: path.appending(.pickBranch(selectedBranch.selectedID))
                 )
                 consumed += childConsumed
             } else {
@@ -504,7 +504,7 @@ struct ChoiceGraphBuilder {
 
         let innerStartID = nextNodeID
         if isActive {
-            let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth, path: path + [.bindInner])
+            let innerConsumed = walk(inner, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth, path: path.appending(.bindInner))
             consumed += innerConsumed
         } else {
             walk(inner, offset: 0, parent: nodeID, bindDepth: bindDepth, path: [], isActive: false)
@@ -521,7 +521,7 @@ struct ChoiceGraphBuilder {
         walkedBranch = false
         let boundStartID = nextNodeID
         if isActive {
-            let boundConsumed = walk(bound, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth + 1, path: path + [.bindBound])
+            let boundConsumed = walk(bound, offset: offset + consumed, parent: nodeID, bindDepth: bindDepth + 1, path: path.appending(.bindBound))
             consumed += boundConsumed
             consumed += 1 // bind close
         } else {
@@ -570,7 +570,7 @@ struct ChoiceGraphBuilder {
     ) -> Int {
         var consumed = 1 // group open
         for (index, child) in children.enumerated() {
-            consumed += walk(child, offset: offset + consumed, parent: parent, bindDepth: bindDepth, path: path + [.groupChild(index)])
+            consumed += walk(child, offset: offset + consumed, parent: parent, bindDepth: bindDepth, path: path.appending(.groupChild(index)))
         }
         consumed += 1 // group close
         return consumed
