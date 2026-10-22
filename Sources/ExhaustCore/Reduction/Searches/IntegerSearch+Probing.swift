@@ -61,43 +61,33 @@ extension IntegerSearch {
         )
     }
 
-    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning a batch candidate or sparse leaf edit, or nil when all phases are exhausted. The caller has already made the recovered sequence the baseline, so subsequent probes build on it.
+    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning a lazy candidate, or nil when all phases are exhausted. The caller has already made the recovered sequence the baseline, so subsequent probes build on it.
     static func nextProbe(
         state: inout State,
-        lastAccepted: Bool,
-        into buffer: inout ChoiceSequence
+        lastAccepted: Bool
     ) -> ReductionCandidate? {
         switch state.phase {
             case .batchZero:
                 // Try every leaf at its target at once.
-                var candidate = state.sequence
-                for leaf in state.leafPositions {
-                    candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                        .withBitPattern(leaf.targetBitPattern)
-                }
-                if candidate.shortLexPrecedes(state.sequence) {
+                if let candidate = batchProbe(leaves: state.leafPositions[...], in: state.sequence, bitPattern: { _, leaf in leaf.targetBitPattern }) {
                     // If the batch-zero probe is accepted, per-leaf zero sees the acceptance and converges every leaf. If it is rejected, per-leaf zero tries each leaf at its target alone.
                     state.phase = .perLeafZero
                     state.perLeafZero = PerLeafZeroState()
-                    buffer = candidate
-                    return .eager(
-                        mutation: state.leafPositions.leafValuesMutation(candidate: candidate, baseline: state.sequence),
-                        admission: .standard
-                    )
+                    return candidate
                 }
                 // Batch zero does not precede the sequence, so skip to per-leaf search.
                 state.batchRejected = true
                 state.phase = .perLeaf
-                return nextProbe(state: &state, lastAccepted: false, into: &buffer)
+                return nextProbe(state: &state, lastAccepted: false)
 
             case .perLeafZero:
-                return nextPerLeafZeroProbe(state: &state, lastAccepted: lastAccepted, into: &buffer)
+                return nextPerLeafZeroProbe(state: &state, lastAccepted: lastAccepted)
 
             case .batchBisect:
                 if lastAccepted == false {
                     state.batchRejected = true
                 }
-                return nextBatchBisectProbe(state: &state, lastAccepted: lastAccepted, into: &buffer)
+                return nextBatchBisectProbe(state: &state, lastAccepted: lastAccepted)
 
             case .perLeaf:
                 return nextPerLeafProbe(state: &state, lastAccepted: lastAccepted)
@@ -109,12 +99,11 @@ extension IntegerSearch {
     /// Tries each leaf individually at its reduction target. Leaves that accept converge immediately and are excluded from batch bisection. After all leaves are tried, transitions to batch bisection with only the survivors.
     static func nextPerLeafZeroProbe(
         state: inout State,
-        lastAccepted: Bool,
-        into buffer: inout ChoiceSequence
+        lastAccepted: Bool
     ) -> ReductionCandidate? {
         guard var perLeafZero = state.perLeafZero else {
             state.phase = .perLeaf
-            return nextProbe(state: &state, lastAccepted: lastAccepted, into: &buffer)
+            return nextProbe(state: &state, lastAccepted: lastAccepted)
         }
 
         // Process feedback from the previous per-leaf-zero probe.
@@ -166,11 +155,11 @@ extension IntegerSearch {
                 awaitingFeedback: false,
                 convergedIndices: perLeafZero.convergedIndices
             )
-            return nextProbe(state: &state, lastAccepted: false, into: &buffer)
+            return nextProbe(state: &state, lastAccepted: false)
         }
 
         state.phase = .perLeaf
-        return nextProbe(state: &state, lastAccepted: false, into: &buffer)
+        return nextProbe(state: &state, lastAccepted: false)
     }
 
     // MARK: - Batch Bisection
@@ -180,8 +169,7 @@ extension IntegerSearch {
     /// Each probe moves every unconverged leaf in the group to `1 / divisor` of its remaining distance from its target. An acceptance resets the divisor and the group keeps stepping. A rejection halves the divisor; once the divisor reaches the binary threshold, a group of two or more leaves splits into halves searched independently. Single-leaf groups are left to the per-leaf phase.
     static func nextBatchBisectProbe(
         state: inout State,
-        lastAccepted: Bool,
-        into buffer: inout ChoiceSequence
+        lastAccepted: Bool
     ) -> ReductionCandidate? {
         guard var bisection = state.bisection else {
             state.phase = .perLeaf
@@ -250,25 +238,12 @@ extension IntegerSearch {
                 break
             }
 
-            let hasWork = (group.start ..< group.end).contains { index in
-                bisection.convergedIndices.contains(index) == false
-                    && state.leafPositions[index].currentBitPattern != state.leafPositions[index].targetBitPattern
-            }
-            if hasWork == false {
-                bisection.activeGroup = nil
-                continue
-            }
-
             // Move each unconverged leaf to `1 / divisor` of its distance from its target.
-            var candidate = state.sequence
-            var anyChanged = false
-            for index in group.start ..< group.end {
-                guard bisection.convergedIndices.contains(index) == false else {
-                    continue
-                }
-                let leaf = state.leafPositions[index]
-                guard leaf.currentBitPattern != leaf.targetBitPattern else {
-                    continue
+            let candidate = batchProbe(leaves: state.leafPositions[group.start ..< group.end], in: state.sequence) { index, leaf in
+                guard bisection.convergedIndices.contains(index) == false,
+                      leaf.currentBitPattern != leaf.targetBitPattern
+                else {
+                    return nil
                 }
 
                 let probeBitPattern: UInt64
@@ -281,15 +256,10 @@ extension IntegerSearch {
                     let step = range / bisection.divisor
                     probeBitPattern = step > 0 ? leaf.targetBitPattern - step : leaf.targetBitPattern
                 }
-
-                if probeBitPattern != leaf.currentBitPattern {
-                    candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                        .withBitPattern(probeBitPattern)
-                    anyChanged = true
-                }
+                return probeBitPattern != leaf.currentBitPattern ? probeBitPattern : nil
             }
 
-            guard anyChanged, candidate.shortLexPrecedes(state.sequence) else {
+            guard let candidate else {
                 // The group cannot move, which counts as a stall.
                 bisection.activeGroup = nil
                 continue
@@ -297,11 +267,7 @@ extension IntegerSearch {
 
             bisection.awaitingFeedback = true
             state.bisection = bisection
-            buffer = candidate
-            return .eager(
-                mutation: state.leafPositions.leafValuesMutation(candidate: candidate, baseline: state.sequence),
-                admission: .standard
-            )
+            return candidate
         }
 
         // All groups exhausted: continue with per-leaf search, skipping converged leaves.
@@ -314,6 +280,41 @@ extension IntegerSearch {
             state.semanticSimplestProbed = false
         }
         return nextPerLeafProbe(state: &state, lastAccepted: false)
+    }
+
+    /// Value-only edits preserve length and structure, so the earliest differing position decides shortlex order even when leaves arrive out of order.
+    private static func batchProbe(
+        leaves: ArraySlice<LeafPosition>,
+        in baseline: ChoiceSequence,
+        bitPattern: (Int, LeafPosition) -> UInt64?
+    ) -> ReductionCandidate? {
+        var patch = SequencePatch(minimumCapacity: leaves.count)
+        var changes: [LeafChange] = []
+        changes.reserveCapacity(leaves.count)
+        var firstDifferencePosition = Int.max
+        var precedes = false
+        for index in leaves.indices {
+            let leaf = leaves[index]
+            guard let pattern = bitPattern(index, leaf) else {
+                continue
+            }
+            let original = baseline[leaf.sequenceIndex]
+            let replacement = original.withBitPattern(pattern)
+            guard let choice = replacement.value?.choice, choice != original.value?.choice else {
+                continue
+            }
+            patch.append(.init(position: leaf.sequenceIndex, replacement: replacement))
+            changes.append(LeafChange(leafNodeID: leaf.nodeID, newValue: choice, mayReshape: leaf.mayReshape))
+            let order = replacement.shortLexCompare(original)
+            if order != .eq, leaf.sequenceIndex < firstDifferencePosition {
+                firstDifferencePosition = leaf.sequenceIndex
+                precedes = order == .lt
+            }
+        }
+        guard precedes else {
+            return nil
+        }
+        return .lazy(patch, mutation: .leafValues(changes), admission: .standard)
     }
 
     // MARK: - Per-Leaf Orchestrator

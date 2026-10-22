@@ -65,6 +65,80 @@ struct ValueSearchLazyProbeTests {
         #expect(cached.incumbent.sequence == fixture.incumbent.sequence)
     }
 
+    @Test(
+        "Integer batch probes preserve order, skip converged leaves, and rebase after acceptance without writing the buffer",
+        arguments: [false, true], [false, true]
+    )
+    func integerBatchCandidates(reversesLeaves: Bool, acceptsFirstLeaf: Bool) throws {
+        let generator = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: 5)
+        let values: [UInt64] = [512, 512, 512, 512, 512]
+        let tree = try #require(try Interpreters.reflect(generator, with: values))
+        let graph = ChoiceGraph.build(from: tree)
+        let sequence = ChoiceSequence(tree)
+        let leaves = reversesLeaves ? Array(graph.leafNodes.reversed()) : graph.leafNodes
+        let positions = try leaves.map { try #require(graph.nodes[$0].positionRange).lowerBound }
+        var search = IntegerSearch(
+            scope: ValueMinimizationScope(leaves: leaves.map { LeafEntry(nodeID: $0) }, batchZeroEligible: true),
+            sequence: sequence,
+            graph: graph,
+            warmStarts: [:],
+            tuning: .init(valueBisectionInitialDivisor: 16)
+        )
+        var baseline = sequence
+        var feedback = SearchFeedback.initial
+        var untouched: ChoiceSequence = [.just]
+
+        func expectProbe(_ expected: ChoiceSequence) throws {
+            let candidate = try #require(search.next(feedback, into: &untouched))
+            let patch = try requireLazy(candidate)
+            #expect(untouched == [.just])
+            var materialized = baseline
+            patch.write(into: &materialized)
+            #expect(materialized == expected)
+            #expect(patch.hash(baseHash: ZobristHash.hash(of: baseline), baseSequence: baseline) == ZobristHash.hash(of: expected))
+            guard case let .leafValues(changes) = candidate.mutation else {
+                Issue.record("A batch probe must report its leaf changes")
+                return
+            }
+            let changedLeaves = leaves.filter { nodeID in
+                let position = graph.nodes[nodeID].positionRange!.lowerBound
+                return expected[position] != baseline[position]
+            }
+            #expect(changes.map(\.leafNodeID) == changedLeaves)
+            for change in changes {
+                let position = try #require(graph.nodes[change.leafNodeID].positionRange).lowerBound
+                #expect(change.newValue == expected[position].value?.choice)
+            }
+            feedback = .rejected(.propertyPassed)
+        }
+
+        var expected = sequence
+        for position in positions {
+            expected[position] = expected[position].withBitPattern(0)
+        }
+        try expectProbe(expected)
+        for (index, position) in positions.enumerated() {
+            expected = baseline
+            expected[position] = expected[position].withBitPattern(0)
+            try expectProbe(expected)
+            if acceptsFirstLeaf, index == 0 {
+                baseline = expected
+                feedback = .accepted(recovered: expected)
+            }
+        }
+        expected = baseline
+        for position in positions where baseline[position].value?.choice.bitPattern64 != 0 {
+            expected[position] = expected[position].withBitPattern(32)
+        }
+        try expectProbe(expected)
+        baseline = expected
+        feedback = .accepted(recovered: expected)
+        for position in positions where baseline[position].value?.choice.bitPattern64 != 0 {
+            expected[position] = expected[position].withBitPattern(2)
+        }
+        try expectProbe(expected)
+    }
+
     @Test("Float acceptance preserves the decoder's adjusted value when moving to the next leaf")
     func floatRecoveredBaseline() throws {
         let fixture = try Fixture(isFloatingPoint: true)
@@ -120,8 +194,8 @@ struct ValueSearchLazyProbeTests {
                     )
                 case false:
                     try Fixture(
-                        generator: Gen.arrayOf(Gen.choose(in: Int64(-100) ... 100), exactly: 3),
-                        values: [-50, 50, 7],
+                        generator: Gen.arrayOf(Gen.choose(in: Int64(-100) ... 100), exactly: 5),
+                        values: [-50, 50, 7, 12, -10],
                         isFloatingPoint: false
                     )
             }
@@ -140,7 +214,7 @@ struct ValueSearchLazyProbeTests {
         }
 
         /// Bypasses integer batch probes so both fixtures exercise the single-leaf candidate contract.
-        func search() -> any ReductionSearch {
+        func search(batchZeroEligible: Bool = false) -> any ReductionSearch {
             let leaves = graph.leafNodes.map { LeafEntry(nodeID: $0) }
             if isFloatingPoint {
                 return FloatSearch(
@@ -150,7 +224,7 @@ struct ValueSearchLazyProbeTests {
                 )
             }
             return IntegerSearch(
-                scope: ValueMinimizationScope(leaves: leaves, batchZeroEligible: false),
+                scope: ValueMinimizationScope(leaves: leaves, batchZeroEligible: batchZeroEligible),
                 sequence: incumbent.sequence,
                 graph: graph,
                 warmStarts: [:],
@@ -160,7 +234,7 @@ struct ValueSearchLazyProbeTests {
 
         /// Rejects every decoded candidate so a second run can replay the entire stream from the first run's cache.
         func run(cache: ProbeCache, observer: @escaping (ProbeObservation) -> Void) -> Reducer.Result {
-            Reducer.reduce(.search(search(), configuration: .standard), context: Reducer.Context(
+            Reducer.reduce(.search(search(batchZeroEligible: true), configuration: .standard), context: Reducer.Context(
                 incumbent: incumbent,
                 incumbentHash: ZobristHash.hash(of: incumbent.sequence),
                 graph: graph,

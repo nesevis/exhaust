@@ -9,7 +9,7 @@
 ///
 /// Runs four phases, cheapest first: batch zero, per-leaf zero, batch bisection, and per-leaf search. Per-leaf search probes the target directly, then runs ``InterpolationSearchStepper`` (binary search below ``ReductionTuning/interpolationBinaryThreshold``). After it converges, a small non-monotone gap is scanned linearly, a character leaf tries its simpler forms, and a signed leaf tries values across zero that bit-pattern search cannot reach.
 ///
-/// All leaves have position ranges in the current sequence. Batch phases construct complete candidates; per-leaf phases emit sparse edits at pre-resolved positions. An acceptance advances the baseline to the recovered sequence.
+/// All leaves have position ranges in the current sequence. All phases emit lazy candidates with edits at pre-resolved positions. An acceptance advances the baseline to the recovered sequence.
 ///
 /// The phases live in `IntegerSearch+Probing.swift`.
 struct IntegerSearch: ReductionSearch {
@@ -216,7 +216,7 @@ struct IntegerSearch: ReductionSearch {
         state = Self.initialState(scope: scope, sequence: sequence, graph: graph, warmStarts: warmStarts, tuning: tuning)
     }
 
-    mutating func next(_ feedback: SearchFeedback, into buffer: inout ChoiceSequence) -> ReductionCandidate? {
+    mutating func next(_ feedback: SearchFeedback, into _: inout ChoiceSequence) -> ReductionCandidate? {
         if case let .accepted(recovered) = feedback {
             // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
             guard recovered.count == state.sequence.count else {
@@ -224,7 +224,7 @@ struct IntegerSearch: ReductionSearch {
             }
             state.sequence = recovered
         }
-        return Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted, into: &buffer)
+        return Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted)
     }
 
     /// Reports the convergence records gathered so far, first recording the progress of the leaf in progress so its search resumes from there on the next dispatch.
