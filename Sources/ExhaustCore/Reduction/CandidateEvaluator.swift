@@ -1,36 +1,47 @@
-/// Evaluates a candidate without adopting it or changing the incumbent graph.
+/// Evaluates a candidate under the caller's admission policy without adopting it or changing the incumbent graph.
 ///
-/// A recovered failure is evidence for the caller: ordinary reduction may commit it, convergence confirmation may invalidate a floor, and relaxation may adopt it provisionally. Only outcomes without a recovered failure are cached here; rejecting a recovered failure under a caller's ordering policy remains that caller's responsibility.
+/// Cache keys and bypass decisions remain caller-owned because a rejection under one policy need not answer for another.
 enum CandidateEvaluator {
-    /// Returns nil for a cached rejection, otherwise the decoder's result, recording the terminal probe outcome exactly once.
+    enum Result {
+        case cached
+        case rejected(ReductionDecoding)
+        case admitted(Counterexample, ReductionDecoding)
+    }
+
+    /// Records the terminal probe outcome once and caches every rejection when a key is supplied. Admission does not record acceptance: confirmation may use a failure as evidence without committing it.
     ///
-    /// Callers own emission and admission counts, deadline checks, and observations. They can discard cached candidates before emission, interrupt an emitted probe, or use a recovered failure without adopting it.
-    ///
-    /// Callers with lazy candidates may leave their candidate buffer unwritten on a cache hit: it is read only after the cache lookup.
+    /// Callers own emission and acceptance counts, deadline checks, and observations. They perform the cache lookup before calling, so lazy candidates can remain unwritten on a hit.
     ///
     /// - Parameters:
-    ///   - cacheKey: The key for this candidate, decoder selection, and incumbent. Nil bypasses both cache lookup and insertion, as relaxation requires when trying perturbations rejected under ordinary reduction.
+    ///   - admits: Whether a recovered counterexample satisfies the caller's policy.
+    ///   - cacheHit: The caller's lookup result, or false when bypassing the cache or when a cursor has already established a miss.
+    ///   - cacheKey: The rejection key, or nil to bypass insertion. Relaxation bypasses both lookup and insertion when trying perturbations rejected under ordinary reduction.
     ///   - probeHash: The candidate's precomputed hash, when already available.
     static func evaluate(
         _ candidate: ChoiceSequence,
         against incumbent: Counterexample,
         using selection: ReductionDecoder.Selection,
         decoder: ReductionDecoder,
+        admits: (Counterexample) -> Bool,
         probeHash: UInt64? = nil,
+        cacheHit: Bool,
         cacheKey: UInt64?,
         cache: inout ProbeCache,
         counts: inout ReductionProbeCounts
-    ) -> ReductionDecoding? {
-        if let cacheKey, cache.contains(cacheKey) {
+    ) -> Result {
+        if cacheHit {
             counts.recordCacheRejection()
-            return nil
+            return .cached
         }
 
         let decoding = decoder.decode(candidate, against: incumbent, selection: selection, precomputedHash: probeHash)
         counts.recordOutcome(decoding.outcome)
-        if decoding.recovered == nil, let cacheKey {
+        if let recovered = decoding.recovered, admits(recovered) {
+            return .admitted(recovered, decoding)
+        }
+        if let cacheKey {
             cache.insert(cacheKey)
         }
-        return decoding
+        return .rejected(decoding)
     }
 }

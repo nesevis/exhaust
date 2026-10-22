@@ -25,8 +25,14 @@ struct CandidateEvaluatorTests {
         let probeHash = ZobristHash.hash(of: candidate)
         let cacheKey = cache.key(probeHash: probeHash, decision: ProbeDecision(selection), incumbentHash: fixture.incumbentHash)
 
-        let first = CandidateEvaluator.evaluate(candidate, against: fixture.incumbent, using: selection, decoder: decoder, probeHash: probeHash, cacheKey: cacheKey, cache: &cache, counts: &counts)
-        let decoding = try #require(first)
+        let first = CandidateEvaluator.evaluate(candidate, against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in
+            Issue.record("Rejected decoding must not invoke admission")
+            return true
+        }, probeHash: probeHash, cacheHit: cache.contains(cacheKey), cacheKey: cacheKey, cache: &cache, counts: &counts)
+        guard case let .rejected(decoding) = first else {
+            Issue.record("Expected a decoded rejection")
+            return
+        }
         #expect(decoding.recovered == nil)
         #expect(cache.contains(cacheKey))
         switch (rejection, decoding.outcome) {
@@ -37,10 +43,16 @@ struct CandidateEvaluatorTests {
         }
         let attempts = counts.materializationAttempts
 
-        // Sparse searches may leave the candidate buffer unwritten on a hit. This empty buffer must never reach decoding.
-        let cached = CandidateEvaluator.evaluate([], against: fixture.incumbent, using: selection, decoder: decoder, probeHash: probeHash, cacheKey: cacheKey, cache: &cache, counts: &counts)
+        // Lazy searches may leave the candidate buffer unwritten on a hit. This empty buffer must never reach decoding.
+        let cached = CandidateEvaluator.evaluate([], against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in
+            Issue.record("A cache hit must not invoke admission")
+            return true
+        }, probeHash: probeHash, cacheHit: cache.contains(cacheKey), cacheKey: cacheKey, cache: &cache, counts: &counts)
 
-        #expect(cached == nil)
+        guard case .cached = cached else {
+            Issue.record("Expected a cached rejection")
+            return
+        }
         #expect(propertyCalls == (rejection == .materializationRejected ? 0 : 1))
         #expect(counts.terminalOutcomes == 2)
         #expect(counts.rejectedByCache == 1)
@@ -59,8 +71,12 @@ struct CandidateEvaluatorTests {
         let probeHash = ZobristHash.hash(of: candidate)
         let cacheKey = cache.key(probeHash: probeHash, decision: ProbeDecision(selection), incumbentHash: fixture.incumbentHash)
 
-        let evaluation = CandidateEvaluator.evaluate(candidate, against: fixture.incumbent, using: selection, decoder: fixture.decoder { _ in false }, probeHash: probeHash, cacheKey: cacheKey, cache: &cache, counts: &counts)
-        let recovered = try #require(evaluation?.recovered)
+        let evaluation = CandidateEvaluator.evaluate(candidate, against: fixture.incumbent, using: selection, decoder: fixture.decoder { _ in false }, admits: { _ in true }, probeHash: probeHash, cacheHit: cache.contains(cacheKey), cacheKey: cacheKey, cache: &cache, counts: &counts)
+        guard case let .admitted(recovered, decoding) = evaluation else {
+            Issue.record("Confirmation must admit every recovered failure")
+            return
+        }
+        #expect(decoding.recovered?.sequence == recovered.sequence)
 
         #expect(recovered.output as? UInt64 == value)
         #expect(fixture.incumbent.output as? UInt64 == 5)
@@ -68,6 +84,65 @@ struct CandidateEvaluatorTests {
         #expect(cache.contains(cacheKey) == false)
         #expect(counts.propertyFailed == 1)
         #expect(counts.accepted == 0)
+    }
+
+    @Test(
+        "Caller ordering determines admission and caches recovered rejections",
+        arguments: [UInt64(3), 5, 7], [false, true]
+    )
+    func recoveredAdmission(value: UInt64, requiresStrictImprovement: Bool) throws {
+        let fixture = try EvaluationFixture()
+        var cache = ProbeCache(keying: .decisionAndIncumbent)
+        var counts = ReductionProbeCounts()
+        var propertyCalls = 0
+        var admissionCalls = 0
+        let decoder = fixture.decoder { _ in
+            propertyCalls += 1
+            return false
+        }
+        let selection = ReductionDecoder.Selection.exact(materializePicks: false, admission: .standard)
+        let candidate = fixture.candidate(value)
+        let probeHash = ZobristHash.hash(of: candidate)
+        let cacheKey = cache.key(probeHash: probeHash, decision: ProbeDecision(selection), incumbentHash: fixture.incumbentHash)
+        let shouldAdmit = requiresStrictImprovement ? value < 5 : value <= 5
+        for _ in 0 ..< 2 {
+            let evaluation = CandidateEvaluator.evaluate(
+                candidate,
+                against: fixture.incumbent,
+                using: selection,
+                decoder: decoder,
+                admits: { recovered in
+                    admissionCalls += 1
+                    return requiresStrictImprovement
+                        ? recovered.sequence.shortLexPrecedes(fixture.incumbent.sequence)
+                        : fixture.incumbent.admits(recovered, under: .notLarger)
+                },
+                probeHash: probeHash,
+                cacheHit: cache.contains(cacheKey),
+                cacheKey: cacheKey,
+                cache: &cache,
+                counts: &counts
+            )
+            switch evaluation {
+                case .cached:
+                    #expect(shouldAdmit == false)
+                case let .rejected(decoding):
+                    #expect(shouldAdmit == false)
+                    #expect(decoding.recovered?.output as? UInt64 == value)
+                case let .admitted(recovered, decoding):
+                    #expect(shouldAdmit)
+                    #expect(recovered.output as? UInt64 == value)
+                    #expect(decoding.recovered?.sequence == recovered.sequence)
+            }
+        }
+        #expect(cache.contains(cacheKey) == (shouldAdmit == false))
+        #expect(propertyCalls == (shouldAdmit ? 2 : 1))
+        #expect(admissionCalls == propertyCalls)
+        #expect(counts.propertyFailed == propertyCalls)
+        #expect(counts.rejectedByCache == (shouldAdmit ? 0 : 1))
+        #expect(counts.terminalOutcomes == 2)
+        #expect(counts.accepted == 0)
+        #expect(fixture.incumbent.output as? UInt64 == 5)
     }
 
     @Test("Uncached evaluation ignores ordinary rejections and does not add new ones", arguments: [false, true])
@@ -85,14 +160,22 @@ struct CandidateEvaluatorTests {
         let existingKey = ZobristHash.hash(of: cachedCandidate)
         cache.insert(existingKey)
 
-        let first = CandidateEvaluator.evaluate(cachedCandidate, against: fixture.incumbent, using: selection, decoder: decoder, cacheKey: nil, cache: &cache, counts: &counts)
+        let first = CandidateEvaluator.evaluate(cachedCandidate, against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in true }, cacheHit: false, cacheKey: nil, cache: &cache, counts: &counts)
         let freshCandidate = fixture.candidate(8)
-        let second = CandidateEvaluator.evaluate(freshCandidate, against: fixture.incumbent, using: selection, decoder: decoder, cacheKey: nil, cache: &cache, counts: &counts)
+        let second = CandidateEvaluator.evaluate(freshCandidate, against: fixture.incumbent, using: selection, decoder: decoder, admits: { _ in true }, cacheHit: false, cacheKey: nil, cache: &cache, counts: &counts)
 
-        #expect(first != nil)
-        #expect(second != nil)
-        #expect((first?.recovered != nil) == !propertyPasses)
-        #expect((second?.recovered != nil) == !propertyPasses)
+        for result in [first, second] {
+            switch result {
+                case .cached:
+                    Issue.record("Bypassed cache must never reject a candidate")
+                case let .rejected(decoding):
+                    #expect(propertyPasses)
+                    #expect(decoding.recovered == nil)
+                case let .admitted(_, decoding):
+                    #expect(propertyPasses == false)
+                    #expect(decoding.recovered != nil)
+            }
+        }
         #expect(calls == 2)
         #expect(cache.contains(existingKey))
         #expect(cache.contains(ZobristHash.hash(of: freshCandidate)) == false)

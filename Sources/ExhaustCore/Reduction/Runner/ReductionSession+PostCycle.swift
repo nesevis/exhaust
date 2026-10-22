@@ -183,24 +183,27 @@ extension ReductionSession {
             decision: ProbeDecision(selection),
             incumbentHash: incumbentHash
         )
-        guard let decoding = CandidateEvaluator.evaluate(
+        let evaluation = CandidateEvaluator.evaluate(
             candidate,
             against: incumbent,
             using: selection,
             decoder: decoder,
+            admits: { _ in true },
             probeHash: probeHash,
+            cacheHit: rejectCache.contains(cacheKey),
             cacheKey: cacheKey,
             cache: &rejectCache,
             counts: &counts
-        ) else {
-            return .skipped
+        )
+        switch evaluation {
+            case .cached:
+                return .skipped
+            case .rejected:
+                return .rejected
+            case .admitted:
+                counts.recordAcceptance()
+                return .accepted
         }
-        if decoding.recovered != nil {
-            counts.recordAcceptance()
-            return .accepted
-        }
-
-        return .rejected
     }
 
     // MARK: - Relation Pass
@@ -294,20 +297,19 @@ extension ReductionSession {
             let candidate = probe.sequence
             probesUsed += 1
             probeCounts.recordEmission()
-            guard let decoding = CandidateEvaluator.evaluate(
+            // The cursor checked its cache snapshot and suppresses every probe it has returned since.
+            guard case let .admitted(recovered, _) = CandidateEvaluator.evaluate(
                 candidate,
                 against: incumbent,
                 using: .exact(materializePicks: true, admission: .standard),
                 decoder: decoder,
+                admits: { [baseline = incumbent.sequence] in $0.sequence.shortLexPrecedes(baseline) },
                 probeHash: probe.probeHash,
+                cacheHit: false,
                 cacheKey: probe.cacheKey,
                 cache: &rejectCache,
                 counts: &probeCounts
-            ), let recovered = decoding.recovered else {
-                continue
-            }
-            guard recovered.sequence.shortLexPrecedes(incumbent.sequence) else {
-                rejectCache.insert(probe.cacheKey)
+            ) else {
                 continue
             }
             probeCounts.recordAcceptance()

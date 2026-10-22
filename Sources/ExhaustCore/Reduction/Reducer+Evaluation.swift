@@ -75,18 +75,27 @@ extension Reducer {
             return Evaluation(feedback: .initial, isAccepted: false, stop: .deadline)
         }
 
-        guard let decoding = CandidateEvaluator.evaluate(
+        let evaluation = CandidateEvaluator.evaluate(
             context.candidateBuffer,
             against: context.incumbent,
             using: selection,
             decoder: context.decoder,
+            admits: { [incumbent = context.incumbent, order = context.encoder.admissionOrder] in
+                incumbent.admits($0, under: order)
+            },
             probeHash: probeHash,
+            cacheHit: cacheHit,
             cacheKey: cacheKey,
             cache: &context.rejectCache,
             counts: &context.report.counts
-        ) else {
-            terminate(observationID, .cacheRejected, context: &context)
-            return Evaluation(feedback: .rejected(.cached), isAccepted: false, stop: nil)
+        )
+        let decoding: ReductionDecoding
+        switch evaluation {
+            case .cached:
+                terminate(observationID, .cacheRejected, context: &context)
+                return Evaluation(feedback: .rejected(.cached), isAccepted: false, stop: nil)
+            case let .rejected(result), let .admitted(_, result):
+                decoding = result
         }
 
         if let observationID {
@@ -101,15 +110,11 @@ extension Reducer {
             context.observer?(.decoded(probeID: observationID, sequence: result.sequence))
         }
 
-        if let recovered = decoding.recovered {
-            if context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
-                commit(recovered, mutation: mutation, decoding: decoding, observationID: observationID, context: &context)
-                let stop = updateGraphAfterAcceptance(mutation, policy: configuration.graphUpdate, isLifted: recoveryMutation != nil, context: &context)
-                context.probeTiming?.chargeDecode()
-                return Evaluation(feedback: .accepted(recovered: recovered.sequence), isAccepted: true, stop: stop)
-            }
-            // Decoding succeeded; this rejection belongs to the caller's adoption policy.
-            context.rejectCache.insert(cacheKey)
+        if case let .admitted(recovered, _) = evaluation {
+            commit(recovered, mutation: mutation, decoding: decoding, observationID: observationID, context: &context)
+            let stop = updateGraphAfterAcceptance(mutation, policy: configuration.graphUpdate, isLifted: recoveryMutation != nil, context: &context)
+            context.probeTiming?.chargeDecode()
+            return Evaluation(feedback: .accepted(recovered: recovered.sequence), isAccepted: true, stop: stop)
         }
 
         let disposition: ProbeDisposition = switch outcome {

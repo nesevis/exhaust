@@ -73,16 +73,18 @@ extension ReductionSession {
             }
             tally.probeCounts.recordEmission()
             // Perturbations may be larger than the incumbent, so ordinary reduction's cached rejections do not answer for them.
-            let decoding = CandidateEvaluator.evaluate(
+            let evaluation = CandidateEvaluator.evaluate(
                 candidate,
                 against: incumbent,
                 using: .exact(materializePicks: true, admission: .standard),
                 decoder: decoder,
+                admits: { _ in true },
+                cacheHit: false,
                 cacheKey: nil,
                 cache: &rejectCache,
                 counts: &tally.probeCounts
             )
-            guard let recovered = decoding?.recovered else {
+            guard case let .admitted(recovered, _) = evaluation else {
                 tally.materializationsUsed += 1
                 continue
             }
