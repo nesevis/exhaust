@@ -39,14 +39,15 @@ struct BoundExchangeProposalCursor {
         self.currentSink = currentSink
     }
 
-    mutating func next(into candidate: inout ChoiceSequence) -> LiftProposal? {
-        while let proposal = source.next(into: &candidate) {
-            guard let proposedSource = candidate[sourceIndex].value?.choice.bitPattern64,
+    mutating func next() -> LiftProposal? {
+        while let proposal = source.next() {
+            guard let proposedSource = proposal.prefix.value(at: sourceIndex)?.choice.bitPattern64,
                   proposedSource != currentSource,
                   let raised = raisedSink(for: proposedSource)
             else {
                 continue
             }
+            var candidate = proposal.prefix.materialized()
             candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(raised)
             return LiftProposal(prefix: .init(candidate), mutation: proposal.mutation)
         }

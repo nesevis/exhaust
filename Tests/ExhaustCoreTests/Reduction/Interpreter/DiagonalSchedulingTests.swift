@@ -483,14 +483,14 @@ private struct RecordingProposalCursor: ProposalCursor {
     let recorder: SchedulingRecorder
     var position = 0
 
-    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+    mutating func next() -> LiftProposal? {
         recorder.proposalRequests += 1
         guard position < count else {
             return nil
         }
         recorder.proposals.append(position)
         recorder.events.append("proposal \(position)")
-        buffer = base
+        var buffer = base
         buffer[0] = buffer[0].withBitPattern(UInt64(position))
         position += 1
         return LiftProposal(prefix: .init(buffer), mutation: .leafValues([]))

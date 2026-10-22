@@ -36,15 +36,6 @@ struct LeafProposalCursor {
         self.candidates = candidates
     }
 
-    /// Replaces only the controller's value entry so surrounding bind and group markers survive each proposal.
-    mutating func next(into candidate: inout ChoiceSequence) -> LiftProposal? {
-        guard let proposal = next() else {
-            return nil
-        }
-        candidate = proposal.prefix.materialized()
-        return LiftProposal(prefix: .init(candidate), mutation: proposal.mutation)
-    }
-
     /// Retains the scope's sequence and records the single edit, avoiding a full copy for every unopened attempt.
     mutating func next() -> LiftProposal? {
         guard candidateIndex < candidates.count else {

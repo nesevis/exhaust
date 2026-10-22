@@ -229,11 +229,11 @@ private struct IndexedProposals: ProposalCursor {
     let count: Int
     var index = 0
 
-    mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal? {
+    mutating func next() -> LiftProposal? {
         guard index < count else {
             return nil
         }
-        buffer = base
+        var buffer = base
         buffer[0] = buffer[0].withBitPattern(UInt64(index))
         index += 1
         return LiftProposal(prefix: .init(buffer), mutation: .leafValues([]))

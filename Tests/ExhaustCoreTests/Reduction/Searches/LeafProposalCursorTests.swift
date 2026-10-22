@@ -54,9 +54,9 @@ struct LeafProposalCursorTests {
                 baseSequence: sequence
             )
             var sharedCursor = cursor
-            var candidate = sequence
             var expected = sequence
-            while let proposal = cursor.next(into: &candidate) {
+            while let proposal = cursor.next() {
+                let candidate = proposal.prefix.materialized()
                 let next = adaptive.next(.rejected(.propertyPassed), into: &expected)
                 let emittedCandidate = try #require(next)
                 guard case .eager = emittedCandidate.contents else {
