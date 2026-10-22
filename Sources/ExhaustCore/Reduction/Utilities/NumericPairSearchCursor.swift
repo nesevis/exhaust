@@ -3,7 +3,7 @@
 /// Rejection never removes an interval: isolated failure points remain reachable within the bounded domain samples. The cursor owns no candidate sequence copies.
 struct NumericPairSearchCursor {
     private struct Plan {
-        let pair: NumericPairQuery.Pair
+        let pair: NumericPair
         let sources: [UInt64]
         let sinks: [UInt64]
     }
@@ -14,7 +14,7 @@ struct NumericPairSearchCursor {
     private var planIndex = 0
     private let maximumDiagonal: Int
 
-    init(pairs: [NumericPairQuery.Pair]) {
+    init(pairs: [NumericPair]) {
         var sourceSamples: [Int: [UInt64]] = [:]
         var sinkSamples: [Int: [UInt64]] = [:]
         plans = pairs.map { pair in
@@ -35,7 +35,7 @@ struct NumericPairSearchCursor {
 
     /// The pair a probe edits and the bit patterns written into its candidate.
     struct Proposal {
-        let pair: NumericPairQuery.Pair
+        let pair: NumericPair
         let sourceBitPattern: UInt64
         let sinkBitPattern: UInt64
 

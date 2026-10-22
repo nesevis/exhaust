@@ -7,7 +7,7 @@
 
 /// Switches a pick inside a bind inner to another branch, then searches the bound content the new branch generates.
 ///
-/// Each seed is the plain pivot candidate or a variant that transplants a smaller descendant of the bound subtree into it, up to ``ReductionTuning/maxPivotTransplants``. Changing the pick regenerates the bound subtree, so each seed is lifted through the generator and the bind relocated in the lifted graph before anything is probed. The lifted seed is a ``SingleCandidateSearch``, and the branch continues with a ``CoveringSearch`` over the seed's bound range once the seed is evaluated. Both run in the branch's member, so the pool schedules them as one. Seeds share the pivot choice and differ only in the bound subtree, so branches are not known to emit disjoint candidates and the level delivers uniform feedback.
+/// Each seed is the plain pivot candidate or a variant that transplants a smaller descendant of the bound subtree into it, up to ``ReductionTuning/maxPivotTransplants``. Changing the pick regenerates the bound subtree, so each seed is lifted through the generator and the bind relocated in the lifted graph before anything is probed. The lifted seed is a ``SingleCandidateSearch``, and the attempt continues with a ``CoveringSearch`` over the seed's bound range once the seed is evaluated. Both run in the same ``ReductionAttempt``, so the pool schedules them as one. Seeds share the pivot choice and differ only in the bound subtree, so attempts are not known to emit disjoint candidates and the level delivers uniform feedback.
 enum BindPivotEncoder: ReductionEncoder {
     static let name: EncoderName = .bindPivot
     static let isPathChanging = false
@@ -15,8 +15,8 @@ enum BindPivotEncoder: ReductionEncoder {
 
     static func reduce(_ pivotScope: BindPivotScope, input scope: EncoderInput) -> Reduction {
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: nil,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: nil,
             totalProbeCap: 0,
             deliversUniformFeedback: true
         )
@@ -24,7 +24,7 @@ enum BindPivotEncoder: ReductionEncoder {
             { PivotProposals(pivotScope: pivotScope, scope: scope) },
             configuration: configuration,
             then: { proposal in
-                .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
+                .lift(proposal, fallbackTree: scope.tree) { lifted in
                     guard let lifted else {
                         return .fail(.materializationFailed)
                     }
@@ -52,14 +52,9 @@ enum BindPivotEncoder: ReductionEncoder {
         else {
             return .fail(.bindNotFound)
         }
-        let configuration = SearchConfiguration(
-            acceptance: .continue,
-            requiresExactDecoder: false,
-            reportedMutation: ReductionComposition.reshaping(proposal.mutation)
-        )
         return .search(
             SingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation),
-            configuration: configuration
+            configuration: .standard
         ) { _ in
             .search(
                 CoveringSearch(
@@ -68,7 +63,7 @@ enum BindPivotEncoder: ReductionEncoder {
                     tuning: parent.tuning,
                     rowCache: parent.coveringRowCache
                 ),
-                configuration: configuration
+                configuration: .standard
             )
         }
     }

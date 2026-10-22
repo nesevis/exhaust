@@ -7,7 +7,7 @@
 
 /// Lowers a bind's controller value and searches the bound content each lower value generates.
 ///
-/// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the branch either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``BinarySearch`` for one leaf or a ``CoveringSearch`` for several. Turns, search budgets, chain build limits, the shared pool, and the build tally belong to the interpreter, driven by each level's ``ChoiceConfiguration``; every budget comes from ``ReductionTuning``.
+/// Each controller proposal is lifted through the generator, because the bound subtree depends on the controller. After relocating the bind in the lifted graph, the attempt either descends into the next nested bind or searches the bound leaves. A chain of nested binds is a chain of nested `propose`s, written as recursion that follows the generator's nesting. The terminal search is a ``BinarySearch`` for one leaf or a ``CoveringSearch`` for several. Attempt turns, construction limits, chain build limits, the shared build pool, and the build tally belong to the interpreter, driven by each level's ``ChoiceConfiguration``; every budget comes from ``ReductionTuning``.
 enum BoundValueEncoder: ReductionEncoder {
     static let name: EncoderName = .boundValueSearch
     static let isPathChanging = false
@@ -42,8 +42,7 @@ enum BoundValueEncoder: ReductionEncoder {
                 depth: 0,
                 buildPoolCapacity: input.tuning.nestedChainBuildPool(chainLength: chainLength)
             ),
-            totalProbeCap: budget.totalProbeCap,
-            rootMutation: nil
+            totalProbeCap: budget.totalProbeCap
         )
     }
 
@@ -68,15 +67,14 @@ enum BoundValueEncoder: ReductionEncoder {
         }
     }
 
-    /// One composition level. `rootMutation` is the outermost proposal's reshaped mutation, which every candidate in the chain reports, because an acceptance has to rebuild from the outermost controller's change.
+    /// One composition level. Each successful lift establishes the context its downstream searches inherit.
     private static func level(
         scope: EncoderInput,
         bindNodeID: Int,
         controllerLeafNodeID: Int,
         stage: BoundValueStage,
         chain: Chain,
-        totalProbeCap: Int,
-        rootMutation: ProjectedMutation?
+        totalProbeCap: Int
     ) -> Reduction {
         let chainLimits: ChainLimits? = switch stage {
             case .single:
@@ -90,8 +88,8 @@ enum BoundValueEncoder: ReductionEncoder {
         // The probe cap is sized for turns: two-probe turns give the controller candidate at index k its second probe after 2(k + 1) probes, where diagonal grades by index need (k + 2)(k + 3) / 2 - 1.
         let scheduling: ChoiceScheduling = totalProbeCap > 0 ? .turnBased : .diagonal
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: chainLimits == nil ? nil : scope.tuning.probesPerControllerCandidateTurn,
-            searchBudget: chain.upstreamBudget,
+            probesPerAttemptTurn: chainLimits == nil ? nil : scope.tuning.probesPerControllerCandidateTurn,
+            constructedAttemptLimit: chain.upstreamBudget,
             totalProbeCap: totalProbeCap,
             chainLimits: chainLimits,
             scheduling: scheduling
@@ -100,9 +98,8 @@ enum BoundValueEncoder: ReductionEncoder {
             { controllerProposals(scope: scope, controllerLeafNodeID: controllerLeafNodeID, stage: stage) },
             configuration: configuration,
             then: { proposal in
-                let reportedMutation = rootMutation ?? ReductionComposition.reshaping(proposal.mutation)
-                return .lift(
-                    proposal.prefix,
+                .lift(
+                    proposal,
                     fallbackTree: scope.tree,
                     maximumSequenceCount: stage.canRecurseIntoNestedBind ? nil : chain.rootSequence.count
                 ) { lifted in
@@ -116,8 +113,7 @@ enum BoundValueEncoder: ReductionEncoder {
                         bindNodeID: bindNodeID,
                         controllerLeafNodeID: controllerLeafNodeID,
                         stage: stage,
-                        chain: chain,
-                        reportedMutation: reportedMutation
+                        chain: chain
                     )
                 }
             }
@@ -132,8 +128,7 @@ enum BoundValueEncoder: ReductionEncoder {
         bindNodeID: Int,
         controllerLeafNodeID: Int,
         stage: BoundValueStage,
-        chain: Chain,
-        reportedMutation: ProjectedMutation
+        chain: Chain
     ) -> Reduction {
         let upstreamSequenceIndex = scope.graph.nodes[controllerLeafNodeID].positionRange?.lowerBound
         let upstreamProposedBitPattern = controllerBitPattern(in: proposal.prefix, at: upstreamSequenceIndex)
@@ -179,8 +174,7 @@ enum BoundValueEncoder: ReductionEncoder {
                 controllerLeafNodeID: nestedControllerLeafNodeID,
                 stage: nestedHasDescendant ? .chainInterior : .chainTail,
                 chain: nestedChain,
-                totalProbeCap: 0,
-                rootMutation: reportedMutation
+                totalProbeCap: 0
             )
         }
 
@@ -188,8 +182,7 @@ enum BoundValueEncoder: ReductionEncoder {
             lifted: liftedBind,
             upstreamProposedBitPattern: upstreamProposedBitPattern,
             parent: scope,
-            rootSequence: chain.rootSequence,
-            reportedMutation: reportedMutation
+            rootSequence: chain.rootSequence
         )
     }
 
@@ -198,8 +191,7 @@ enum BoundValueEncoder: ReductionEncoder {
         lifted: LiftedBind,
         upstreamProposedBitPattern: UInt64?,
         parent: EncoderInput,
-        rootSequence: ChoiceSequence,
-        reportedMutation: ProjectedMutation
+        rootSequence: ChoiceSequence
     ) -> Reduction {
         if BoundValueTerminalOrder.rejectsTerminal(lifted, incumbent: rootSequence) {
             return .fail(.nonImprovingPrefix)
@@ -249,11 +241,7 @@ enum BoundValueEncoder: ReductionEncoder {
         ])
         return .search(
             search,
-            configuration: SearchConfiguration(
-                acceptance: .stop,
-                requiresExactDecoder: true,
-                reportedMutation: reportedMutation
-            )
+            configuration: SearchConfiguration(requiresExactDecoder: true)
         )
     }
 

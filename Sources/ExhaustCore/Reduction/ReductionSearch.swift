@@ -33,19 +33,19 @@ enum CandidateRejection {
     case propertyPassed
     /// The property still failed, but decoding returned no counterexample or one the encoder's ``ReductionOrder`` does not admit.
     case failedNotAdmitted
-    /// The outcome withheld, for searches whose composition cannot guarantee that branches emit disjoint candidates.
+    /// The outcome withheld, for searches whose composition cannot guarantee that attempts emit disjoint candidates.
     case undifferentiated
 }
 
 /// Why a candidate ended its search, and with it the pass.
 enum SearchStopReason {
-    /// An acceptance ended the search: ``AcceptancePolicy/stop``, or a rebuild under ``AcceptancePolicy/continue``.
-    case accepted
+    /// The accepted candidate invalidated the graph or lifted context needed for further exploration. The runner must rebuild before another pass.
+    case graphInvalidated
     /// The deadline passed before the candidate was decoded.
     case deadline
 }
 
-/// One root search's share of a pass's probe counts.
+/// One unlifted search's share of a pass's probe counts.
 struct SearchCounts: Equatable {
     /// The number of leaves each candidate moves when the search is a staged joint stage, which the runner attributes counts to. Nil for every other search.
     let stagedJointArity: Int?
@@ -64,12 +64,31 @@ struct SearchReport {
 
 // MARK: - Candidate
 
-/// A search's next candidate. The complete candidate is in the interpreter's buffer, or described as sparse edits that the interpreter hashes against the rejection cache before writing.
+/// Separates a candidate's sequence representation from its graph effects and decoding requirements.
 ///
-/// Each candidate carries its own admission, so a search can vary the checks decoding applies from one candidate to the next.
-enum ReductionCandidate {
-    case written(mutation: ProjectedMutation, admission: DecoderAdmission)
-    case sparse(SparseEncoderProbe, baseSequence: ChoiceSequence, admission: DecoderAdmission)
+/// Eager candidates already occupy the interpreter's buffer. Lazy candidates defer their writes until after the rejection-cache check; their patches are applied to the current incumbent.
+struct ReductionCandidate {
+    let contents: Contents
+    let mutation: ProjectedMutation
+    let admission: DecoderAdmission
+
+    /// The eager case borrows the interpreter's existing buffer rather than retaining another array reference that could trigger copy-on-write.
+    enum Contents {
+        case eager
+        case lazy(SequencePatch)
+    }
+
+    static func eager(mutation: ProjectedMutation, admission: DecoderAdmission) -> Self {
+        Self(contents: .eager, mutation: mutation, admission: admission)
+    }
+
+    static func lazy(
+        _ patch: SequencePatch,
+        mutation: ProjectedMutation,
+        admission: DecoderAdmission
+    ) -> Self {
+        Self(contents: .lazy(patch), mutation: mutation, admission: admission)
+    }
 }
 
 // MARK: - Search Protocol

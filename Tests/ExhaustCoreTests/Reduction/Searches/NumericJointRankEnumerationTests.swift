@@ -33,7 +33,7 @@ struct NumericJointRankEnumerationTests {
         let patterns: [UInt64]
     }
 
-    private func compare(groups: [NumericJointQuery.Group]) throws {
+    private func compare(groups: [NumericJointPlan]) throws {
         let expected = cartesianProposals(groups: groups)
         var cursor = NumericJointSearchCursor(groups: groups)
         var actual: [Snapshot] = []
@@ -48,10 +48,10 @@ struct NumericJointRankEnumerationTests {
     }
 
     /// Builds the whole Cartesian product and sorts it independently of the production successor algorithm.
-    private func cartesianProposals(groups: [NumericJointQuery.Group]) -> [Snapshot] {
+    private func cartesianProposals(groups: [NumericJointPlan]) -> [Snapshot] {
         var rescalings: [(priority: Int, index: Int, patterns: [UInt64])] = []
         for (index, group) in groups.enumerated() {
-            rescalings += group.priorityProposals.map { (priority: $0.priority, index: index, patterns: $0.probe.patterns) }
+            rescalings += group.priorityProposals.map { (priority: $0.priority, index: index, patterns: $0.patterns) }
         }
         rescalings.sort {
             $0.priority == $1.priority ? $0.index < $1.index : $0.priority < $1.priority
@@ -61,12 +61,12 @@ struct NumericJointRankEnumerationTests {
         guard let arity = plans.first?.leaves.count else {
             return result
         }
-        func append(_ indices: [Int], group: NumericJointQuery.Group) {
+        func append(_ indices: [Int], group: NumericJointPlan) {
             guard indices.indices.allSatisfy({ indices[$0] < group.samples[$0].count }) else {
                 return
             }
             let patterns = indices.indices.map { group.samples[$0][indices[$0]] }
-            guard group.priorityProposals.contains(where: { $0.probe.patterns == patterns }) == false else {
+            guard group.priorityProposals.contains(where: { $0.patterns == patterns }) == false else {
                 return
             }
             result.append(.init(nodeIDs: group.leaves.map(\.nodeID), patterns: patterns))
@@ -96,7 +96,7 @@ struct NumericJointRankEnumerationTests {
         return result
     }
 
-    private func group(counts: [Int], index: Int, rescaled: Bool) -> NumericJointQuery.Group {
+    private func group(counts: [Int], index: Int, rescaled: Bool) -> NumericJointPlan {
         let leaves = counts.indices.map { position in
             ReductionLeaf(
                 nodeID: index * counts.count + position,
@@ -108,9 +108,9 @@ struct NumericJointRankEnumerationTests {
                 mayReshapeOnAcceptance: false
             )
         }
-        let ratios: [StagedJointQuery.PriorityProposal] = rescaled
-            ? [.init(priority: 0, probe: SparseEncoderProbe(leaves: leaves, patterns: Array(repeating: 1, count: counts.count))),
-               .init(priority: 2, probe: SparseEncoderProbe(leaves: leaves, patterns: Array(repeating: 7, count: counts.count)))]
+        let ratios: [NumericPriorityProposal] = rescaled
+            ? [.init(priority: 0, leaves: leaves, patterns: Array(repeating: 1, count: counts.count)),
+               .init(priority: 2, leaves: leaves, patterns: Array(repeating: 7, count: counts.count))]
             : []
         return .init(
             leaves: leaves,

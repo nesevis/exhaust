@@ -23,16 +23,16 @@ struct StagedPairSearchCursor {
     /// Interleaves each tactic across scopes so one pair cannot spend the rescaling prefix before another pair reaches its primitive tuple.
     ///
     /// Each of `signFlipProposals` belongs to a pair searched only by that flip: it ranks after the sampled pairs' proposals of the same priority, and its pair joins neither the rescalings nor the grid.
-    init(pairs: [NumericPairQuery.Pair], signFlipProposals: [StagedJointQuery.PriorityProposal] = []) {
+    init(pairs: [NumericPair], signFlipProposals: [NumericPriorityProposal] = []) {
         cursor = NumericPairSearchCursor(pairs: pairs)
         var ranked: [(priority: Int, pairIndex: Int, proposal: NumericPairSearchCursor.Proposal)] = []
         for (pairIndex, pair) in pairs.enumerated() {
-            for priorityProposal in StagedJointQuery.priorityProposals(for: [pair.source, pair.sink]) {
-                ranked.append((priorityProposal.priority, pairIndex, Self.pairProposal(priorityProposal.probe)))
+            for priorityProposal in NumericPriorityProposal.build(for: [pair.source, pair.sink]) {
+                ranked.append((priorityProposal.priority, pairIndex, Self.pairProposal(priorityProposal)))
             }
         }
         for (offset, signFlip) in signFlipProposals.enumerated() {
-            ranked.append((signFlip.priority, pairs.count + offset, Self.pairProposal(signFlip.probe)))
+            ranked.append((signFlip.priority, pairs.count + offset, Self.pairProposal(signFlip)))
         }
         rescalingProposals = ranked.sorted { first, second in
             if first.priority != second.priority {
@@ -73,9 +73,9 @@ struct StagedPairSearchCursor {
     }
 
     /// Reads a two-leaf probe as a pair proposal, whose first leaf is the source.
-    private static func pairProposal(_ probe: SparseEncoderProbe) -> NumericPairSearchCursor.Proposal {
+    private static func pairProposal(_ probe: NumericPriorityProposal) -> NumericPairSearchCursor.Proposal {
         NumericPairSearchCursor.Proposal(
-            pair: NumericPairQuery.Pair(source: probe.leaves[0], sink: probe.leaves[1]),
+            pair: NumericPair(source: probe.leaves[0], sink: probe.leaves[1]),
             sourceBitPattern: probe.patterns[0],
             sinkBitPattern: probe.patterns[1]
         )

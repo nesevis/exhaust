@@ -135,12 +135,12 @@ struct SwapSearch: ReductionSearch {
         if let initial = initialProbe {
             initialProbe = nil
             buffer = initial.candidate
-            return .written(mutation: initial.mutation, admission: .standard)
+            return .eager(mutation: initial.mutation, admission: .standard)
         }
 
         if extensionState != nil {
             return nextExtensionProbe(into: &buffer, lastAccepted: feedback.isAccepted)
-                .map { .written(mutation: $0, admission: .standard) }
+                .map { .eager(mutation: $0, admission: .standard) }
         }
 
         return nil

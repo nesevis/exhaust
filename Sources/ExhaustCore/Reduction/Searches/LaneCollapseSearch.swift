@@ -58,7 +58,7 @@ struct LaneCollapseSearch: ReductionSearch {
 
             buffer = Self.stablePartitionByPrefix(buffer, elements: elements, laneControlValues: Self.collectLaneControlValues(in: buffer, elements: elements))
 
-            return .written(mutation: .sequenceReordered, admission: .standard)
+            return .eager(mutation: .sequenceReordered, admission: .standard)
         }
         return nil
     }

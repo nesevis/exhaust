@@ -6,32 +6,32 @@
 // MARK: - Evaluation
 
 extension Reducer {
-    /// What evaluating one candidate produced.
+    /// What evaluating and, when admitted, committing one search candidate produced.
     struct Evaluation {
         /// `.initial` when the candidate was interrupted before decoding, so the search has no feedback waiting.
         let feedback: SearchFeedback
         let isAccepted: Bool
-        /// Set when this candidate ends the search: an acceptance under `.stop` or a rebuild, or the deadline before decoding.
+        /// Set when further exploration requires rebuilding the graph, or the deadline passes before decoding. Acceptance alone does not stop a search.
         let stop: SearchStopReason?
     }
 
     /// Takes one candidate through the rejection cache, decoding, and the ordering check, and commits it when admitted.
     ///
     /// The decoder is selected before the cache is consulted, because the cache key records how the candidate is decided as well as what it is.
-    static func evaluate(_ candidate: ReductionCandidate, configuration: SearchConfiguration, context: inout Context) -> Evaluation {
-        let mutation: ProjectedMutation
-        let admission: DecoderAdmission
+    static func evaluateAndCommit(_ candidate: ReductionCandidate, configuration: SearchConfiguration, recoveryMutation: ProjectedMutation? = nil, context: inout Context) -> Evaluation {
+        let mutation = recoveryMutation ?? candidate.mutation
+        let admission = candidate.admission
         let probeHash: UInt64
-        switch candidate {
-            case let .written(writtenMutation, writtenAdmission):
-                mutation = configuration.reportedMutation ?? writtenMutation
-                admission = writtenAdmission
-                probeHash = ZobristHash.incrementalHash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence, probe: context.candidateBuffer)
-                context.previousSparseProbe = nil
-            case let .sparse(probe, baseSequence, sparseAdmission):
-                mutation = configuration.reportedMutation ?? probe.mutation
-                admission = sparseAdmission
-                probeHash = probe.hash(baseHash: context.baseHash, baseSequence: baseSequence)
+        switch candidate.contents {
+            case .eager:
+                probeHash = ZobristHash.incrementalHash(
+                    baseHash: context.baseHash,
+                    baseSequence: context.incumbent.sequence,
+                    probe: context.candidateBuffer
+                )
+                context.previousPatch = nil
+            case let .lazy(patch):
+                probeHash = patch.hash(baseHash: context.baseHash, baseSequence: context.incumbent.sequence)
         }
 
         let selection = context.decoder.selection(for: DecodingRequirement(
@@ -45,21 +45,19 @@ extension Reducer {
             incumbentHash: context.baseHash
         )
 
-        if case let .sparse(probe, baseSequence, _) = candidate {
-            // The buffer is restored from `baseSequence` and the hash starts from the incumbent's, so both are right only when the two are the same sequence.
-            assert(baseSequence == context.incumbent.sequence, "A sparse candidate's base must be the incumbent's sequence")
+        let cacheHit = context.rejectCache.contains(cacheKey)
+        if case let .lazy(patch) = candidate.contents {
             // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
-            if context.rejectCache.contains(cacheKey) == false || context.observer != nil {
-                if let previousSparseProbe = context.previousSparseProbe {
-                    previousSparseProbe.restore(into: &context.candidateBuffer, baseSequence: baseSequence)
+            if cacheHit == false || context.observer != nil {
+                if let previousPatch = context.previousPatch {
+                    previousPatch.restore(into: &context.candidateBuffer, baseSequence: context.incumbent.sequence)
                 } else {
-                    context.candidateBuffer = baseSequence
+                    context.candidateBuffer = context.incumbent.sequence
                 }
-                probe.write(into: &context.candidateBuffer)
-                context.previousSparseProbe = probe
+                patch.write(into: &context.candidateBuffer)
+                context.previousPatch = patch
             }
         }
-        let cacheHit = context.rejectCache.contains(cacheKey)
 
         context.report.counts.recordEmission()
         var observationID: Int?
@@ -71,24 +69,35 @@ extension Reducer {
 
         context.probeTiming?.chargeEncode()
 
-        if cacheHit {
-            context.report.counts.recordCacheRejection()
-            terminate(observationID, .cacheRejected, context: &context)
-            return Evaluation(feedback: .rejected(.cached), isAccepted: false, stop: nil)
-        }
-
         // Selection is reported after decoding, so a probe interrupted here has no selection event.
-        if context.isExpired {
+        if cacheHit == false, context.isExpired {
             terminate(observationID, .interrupted, context: &context)
             return Evaluation(feedback: .initial, isAccepted: false, stop: .deadline)
         }
 
-        let decoding = context.decoder.decode(
+        let evaluation = CandidateEvaluator.evaluate(
             context.candidateBuffer,
             against: context.incumbent,
-            selection: selection,
-            precomputedHash: probeHash
+            using: selection,
+            decoder: context.decoder,
+            admits: { [incumbent = context.incumbent, order = context.encoder.admissionOrder] in
+                incumbent.admits($0, under: order)
+            },
+            probeHash: probeHash,
+            cacheHit: cacheHit,
+            cacheKey: cacheKey,
+            cache: &context.rejectCache,
+            counts: &context.report.counts
         )
+        let decoding: ReductionDecoding
+        switch evaluation {
+            case .cached:
+                terminate(observationID, .cacheRejected, context: &context)
+                return Evaluation(feedback: .rejected(.cached), isAccepted: false, stop: nil)
+            case let .rejected(result), let .admitted(_, result):
+                decoding = result
+        }
+
         if let observationID {
             context.observer?(.decoderSelected(
                 probeID: observationID,
@@ -97,15 +106,15 @@ extension Reducer {
             ))
         }
         let outcome = decoding.outcome
-        context.report.counts.recordOutcome(outcome)
         if let observationID, let result = outcome.reduction {
             context.observer?(.decoded(probeID: observationID, sequence: result.sequence))
         }
 
-        if let recovered = decoding.recovered, context.incumbent.admits(recovered, under: context.encoder.admissionOrder) {
-            let evaluation = commit(recovered, mutation: mutation, decoding: decoding, configuration: configuration, observationID: observationID, context: &context)
+        if case let .admitted(recovered, _) = evaluation {
+            commit(recovered, mutation: mutation, decoding: decoding, observationID: observationID, context: &context)
+            let stop = updateGraphAfterAcceptance(mutation, policy: configuration.graphUpdate, isLifted: recoveryMutation != nil, context: &context)
             context.probeTiming?.chargeDecode()
-            return evaluation
+            return Evaluation(feedback: .accepted(recovered: recovered.sequence), isAccepted: true, stop: stop)
         }
 
         let disposition: ProbeDisposition = switch outcome {
@@ -120,7 +129,6 @@ extension Reducer {
         }
         terminate(observationID, disposition, materializationAttempts: outcome.materializationAttempts, context: &context)
 
-        context.rejectCache.insert(cacheKey)
         if context.isInstrumented {
             ReductionLog.replacementProbeRejection(
                 mutation: mutation,
@@ -143,18 +151,17 @@ extension Reducer {
         return Evaluation(feedback: .rejected(rejection), isAccepted: false, stop: nil)
     }
 
-    /// Makes `recovered` the incumbent and applies what the search does after an acceptance.
+    /// Makes an admitted counterexample the incumbent and records acceptance independently of how the graph will be maintained.
     private static func commit(
         _ recovered: Counterexample,
         mutation: ProjectedMutation,
         decoding: ReductionDecoding,
-        configuration: SearchConfiguration,
         observationID: Int?,
         context: inout Context
-    ) -> Evaluation {
+    ) {
         context.report.counts.recordAcceptance()
-        // The buffer holds the candidate, which decoding may have changed, so the next sparse probe starts from the new base rather than restoring the last one's positions.
-        context.previousSparseProbe = nil
+        // The buffer holds the candidate, which decoding may have changed, so the next lazy probe starts from the new base rather than restoring the last one's positions.
+        context.previousPatch = nil
         context.incumbent = recovered
         context.baseHash = ZobristHash.hash(of: recovered.sequence)
         context.report.anyAccepted = true
@@ -166,27 +173,36 @@ extension Reducer {
             }
         }
         context.report.latestTreeIsStripped = decoding.selection.materializePicks == false
+    }
 
-        let feedback = SearchFeedback.accepted(recovered: recovered.sequence)
-        switch configuration.acceptance {
-            case .stop:
+    /// Maintains the graph after the incumbent has been committed. Returns a stop reason only when the pass must end before further exploration; deferred rebuilds allow the search to continue.
+    private static func updateGraphAfterAcceptance(
+        _ mutation: ProjectedMutation,
+        policy: GraphUpdatePolicy,
+        isLifted: Bool,
+        context: inout Context
+    ) -> SearchStopReason? {
+        // Lifted node IDs cannot update the incumbent graph, and acceptance invalidates every other attempt's lifted snapshot.
+        if isLifted {
+            context.report.anyRequiresRebuild = true
+            return .graphInvalidated
+        }
+        switch policy {
+            case .rebuildAfterPass:
                 context.report.anyRequiresRebuild = true
-                return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
-            case .rebuildAndContinue:
-                context.report.anyRequiresRebuild = true
-                return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
-            case .continue:
+                return nil
+            case .applyMutation:
                 let application = context.graph.apply(Self.decodedMutation(
                     mutation,
-                    recovered: recovered.sequence,
+                    recovered: context.incumbent.sequence,
                     candidateCount: context.candidateBuffer.count,
                     graph: context.graph
                 ))
                 if application.requiresFullRebuild {
                     context.report.anyRequiresRebuild = true
-                    return Evaluation(feedback: feedback, isAccepted: true, stop: .accepted)
+                    return .graphInvalidated
                 }
-                return Evaluation(feedback: feedback, isAccepted: true, stop: nil)
+                return nil
         }
     }
 

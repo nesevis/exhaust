@@ -20,50 +20,41 @@ enum RemovalQuery {
 
     /// Computes per-parent removal scopes for all sequence nodes with deletable elements.
     ///
-    /// Groups deletable elements by their parent sequence node. Each scope contains a single ``SequenceRemovalTarget`` with elements in position order.
+    /// Visits sequences in node order and their active children in element order, both established by the graph builder. Each scope contains a single ``SequenceRemovalTarget``.
     private static func perParentElementScopes(graph: ChoiceGraph) -> [ElementRemovalScope] {
-        var parentGroups: [Int: [Int]] = [:]
+        var scopes: [ElementRemovalScope] = []
 
         for nodeID in graph.liveNodeIDs {
             let node = graph.nodes[nodeID]
-            guard let parentID = node.parent else {
+            guard case let .sequence(metadata) = node.kind else {
                 continue
             }
-            guard case let .sequence(metadata) = graph.nodes[parentID].kind else {
+            let minimumLength = metadata.lengthConstraint?.lowerBound ?? 0
+            guard UInt64(metadata.elementCount) > minimumLength else {
                 continue
             }
-            let minLength = metadata.lengthConstraint?.lowerBound ?? 0
-            guard UInt64(metadata.elementCount) > minLength else {
+            var elementNodeIDs: [Int] = []
+            var maximumElementYield = 0
+            for childID in node.children {
+                guard let range = graph.nodes[childID].positionRange else {
+                    continue
+                }
+                elementNodeIDs.append(childID)
+                maximumElementYield = max(maximumElementYield, range.count)
+            }
+            guard elementNodeIDs.isEmpty == false else {
                 continue
             }
-            parentGroups[parentID, default: []].append(nodeID)
-        }
-
-        return parentGroups.sorted(by: { $0.key < $1.key }).map { parentID, elementNodeIDs in
-            let sortedElements = elementNodeIDs.sorted { nodeA, nodeB in
-                let rangeA = graph.nodes[nodeA].positionRange?.lowerBound ?? 0
-                let rangeB = graph.nodes[nodeB].positionRange?.lowerBound ?? 0
-                return rangeA < rangeB
-            }
-            let maxElementYield = sortedElements.reduce(0) { maxSoFar, nodeID in
-                max(maxSoFar, graph.nodes[nodeID].positionRange?.count ?? 0)
-            }
-            let deletable: Int
-            if case let .sequence(metadata) = graph.nodes[parentID].kind {
-                let minLength = Int(metadata.lengthConstraint?.lowerBound ?? 0)
-                deletable = metadata.elementCount - minLength
-            } else {
-                deletable = sortedElements.count
-            }
-            return ElementRemovalScope(
+            scopes.append(ElementRemovalScope(
                 targets: [SequenceRemovalTarget(
-                    sequenceNodeID: parentID,
-                    elementNodeIDs: sortedElements
+                    sequenceNodeID: nodeID,
+                    elementNodeIDs: elementNodeIDs
                 )],
-                maxBatch: deletable,
-                maxElementYield: maxElementYield
-            )
+                maxBatch: metadata.elementCount - Int(minimumLength),
+                maxElementYield: maximumElementYield
+            ))
         }
+        return scopes
     }
 
     // MARK: - Covering Aligned Removal Scopes

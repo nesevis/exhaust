@@ -91,27 +91,11 @@ struct ReductionDecoder {
         _ candidate: ChoiceSequence,
         against incumbent: Counterexample,
         selection: Selection,
-        precomputedHash: UInt64
-    ) -> ReductionDecoding {
-        let outcome = decode(
-            candidate,
-            using: selection.decoder(fallbackTree: incumbent.tree),
-            against: incumbent,
-            precomputedHash: precomputedHash
-        )
-        return ReductionDecoding(outcome: outcome, selection: selection)
-    }
-
-    /// Decodes `candidate` with `decoder`, running the property, against `incumbent`. For callers that fix their decoder rather than selecting one per candidate.
-    func decode(
-        _ candidate: ChoiceSequence,
-        using decoder: SequenceDecoder,
-        against incumbent: Counterexample,
         precomputedHash: UInt64? = nil
-    ) -> SequenceDecodingOutcome {
+    ) -> ReductionDecoding {
         // Admission does not read filter observations, so they are collected and discarded.
         var filterObservations: [UInt64: FilterObservation] = [:]
-        return decoder.decodeAny(
+        let outcome = selection.decoder(fallbackTree: incumbent.tree).decodeAny(
             candidate: candidate,
             gen: generator,
             tree: incumbent.tree,
@@ -120,6 +104,7 @@ struct ReductionDecoder {
             filterObservations: &filterObservations,
             precomputedHash: precomputedHash
         )
+        return ReductionDecoding(outcome: outcome, selection: selection)
     }
 
     /// Materializes `prefix` in guided mode without running the property, so a composition can inspect the lifted structure before emitting any candidate.

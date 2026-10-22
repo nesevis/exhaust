@@ -88,6 +88,6 @@ struct BinarySearch: ReductionSearch {
             newValue: newChoice,
             mayReshape: mayReshape
         )
-        return .written(mutation: .leafValues([change]), admission: .standard)
+        return .eager(mutation: .leafValues([change]), admission: .standard)
     }
 }

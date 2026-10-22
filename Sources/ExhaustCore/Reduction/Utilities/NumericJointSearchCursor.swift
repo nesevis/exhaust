@@ -1,12 +1,13 @@
 /// Tries sign flips, then primitive, small-scale, geometric, and nearby rescalings before coherent proposals, then shares each Cartesian diagonal across retained groups. Only index tuples are enumerated; candidate histories are written into the caller's reusable buffer.
 struct NumericJointSearchCursor {
-    private struct Plan {
+    /// Holds only the grid and deduplication state the cursor needs after discovery has ranked the plans.
+    private struct Grid {
         let leaves: [ReductionLeaf]
         let samples: [[UInt64]]
         let ratioPatterns: Set<[UInt64]>
     }
 
-    private let plans: [Plan]
+    private let plans: [Grid]
     private let rescalingProposals: [Proposal]
     private var rescalingIndex = 0
     private var coherentRank = 0
@@ -19,18 +20,18 @@ struct NumericJointSearchCursor {
     private let maximumDiagonal: Int
 
     /// Preserves scope rank within each rescaling priority and records membership once for deduplicating the later grid.
-    init(groups: [NumericJointQuery.Group]) {
-        let plans: [Plan] = groups.compactMap { group in
+    init(groups: [NumericJointPlan]) {
+        let plans: [Grid] = groups.compactMap { group in
             let samples = group.samples
             guard samples.allSatisfy({ $0.isEmpty == false }) else {
                 return nil
             }
-            return Plan(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.priorityProposals.map(\.probe.patterns)))
+            return Grid(leaves: group.leaves, samples: samples, ratioPatterns: Set(group.priorityProposals.map(\.patterns)))
         }
         self.plans = plans
         rescalingProposals = groups.enumerated().flatMap { groupIndex, group in
             group.priorityProposals.map { priorityProposal in
-                (priority: priorityProposal.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: priorityProposal.probe.patterns))
+                (priority: priorityProposal.priority, groupIndex: groupIndex, proposal: Proposal(leaves: group.leaves, patterns: priorityProposal.patterns))
             }
         }.sorted { first, second in
             if first.priority != second.priority {
@@ -109,7 +110,7 @@ struct NumericJointSearchCursor {
         }
     }
 
-    private func proposal(plan: Plan, indices: [Int]) -> Proposal? {
+    private func proposal(plan: Grid, indices: [Int]) -> Proposal? {
         guard indices.indices.allSatisfy({ indices[$0] < plan.samples[$0].count }) else {
             return nil
         }

@@ -32,6 +32,11 @@ struct ReducerRegressionTests {
 
         #expect(clearedStaleFloor)
         #expect(runner.graph.convergenceStore[leafNodeID] == nil)
+        #expect(runner.incumbent.output as? Int64 == confirmation.start)
+        #expect(runner.incumbent.sequence == ChoiceSequence(tree))
+        #expect(runner.incumbentHash == ZobristHash.hash(of: ChoiceSequence(tree)))
+        #expect(runner.stats.reductionProbes == 1)
+        #expect(runner.stats.reductionProbesAccepted == 1)
     }
 
     // MARK: - Dispatch After Rejection
@@ -97,14 +102,14 @@ struct ReducerRegressionTests {
             decoder: ReductionDecoder(generator: generator.erase(), property: { _ in false }, probeWrapper: nil, hasBind: true),
             encoder: ValueSearchEncoder.self
         )
-        let configuration = SearchConfiguration(acceptance: .stop, requiresExactDecoder: true, reportedMutation: nil)
+        let configuration = SearchConfiguration(requiresExactDecoder: true)
 
         context.candidateBuffer = candidate
-        let strict = Reducer.evaluate(.written(mutation: .leafValues([]), admission: .numericJoint([])), configuration: configuration, context: &context)
+        let strict = Reducer.evaluateAndCommit(.eager(mutation: .leafValues([]), admission: .numericJoint([])), configuration: configuration, context: &context)
         #expect(strict.isAccepted == false)
 
         context.candidateBuffer = candidate
-        let standard = Reducer.evaluate(.written(mutation: .leafValues([]), admission: .standard), configuration: configuration, context: &context)
+        let standard = Reducer.evaluateAndCommit(.eager(mutation: .leafValues([]), admission: .standard), configuration: configuration, context: &context)
         #expect(context.report.counts.rejectedByCache == 0)
         #expect(standard.isAccepted)
     }
@@ -152,8 +157,8 @@ struct ReducerRegressionTests {
 
     // MARK: - Relax Round
 
-    @Test("A committed relax round flags a graph its exploitation rebuilt without unselected branches")
-    func committedRelaxRoundFlagsStrippedGraph() throws {
+    @Test("A committed relax round flags a graph its exploitation rebuilt without unselected branches", arguments: [false, true])
+    func committedRelaxRoundFlagsStrippedGraph(perturbationCached: Bool) throws {
         let arms = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64(0) ... 100)),
             (1, Gen.choose(in: UInt64(200) ... 300)),
@@ -172,7 +177,15 @@ struct ReducerRegressionTests {
             property: { $0.isEmpty }
         )
 
-        // The substitution perturbation decodes with picks materialized; exploitation then removes an element, whose decoding leaves picks unmaterialized and rebuilds the graph from that tree.
+        if perturbationCached {
+            var candidates = RelaxCandidateCursor(sequence: runner.incumbent.sequence, graph: runner.graph, limit: 1, isEncoderEnabled: runner.isEncoderEnabled)
+            let next = candidates.next()
+            let candidate = try #require(next)
+            let key = runner.rejectCache.key(probeHash: ZobristHash.hash(of: candidate), decision: ProbeDecision(isGuided: false), incumbentHash: runner.incumbentHash)
+            runner.rejectCache.insert(key)
+        }
+
+        // The substitution perturbation decodes with picks materialized, even if ordinary reduction cached its rejection; exploitation then removes an element, whose decoding leaves picks unmaterialized and rebuilds the graph from that tree.
         let committed = runner.runRelaxRound()
 
         #expect(committed)

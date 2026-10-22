@@ -133,10 +133,10 @@ struct FloatSearchTests {
             graph: graph
         )
         var buffer = sequence
-        _ = try #require(search.next(.initial, into: &buffer))
+        _ = try #require(search.nextMaterialized(.initial, from: sequence, into: &buffer))
         #expect(buffer[positions[0]].value?.choice.decodedDoubleValue == 0)
 
-        _ = try #require(search.next(.accepted(recovered: buffer), into: &buffer))
+        _ = try #require(search.nextMaterialized(.accepted(recovered: buffer), from: buffer, into: &buffer))
         #expect(buffer[positions[0]].value?.choice.decodedDoubleValue == 0)
         #expect(buffer[positions[1]].value?.choice.decodedDoubleValue == 2)
     }

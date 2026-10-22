@@ -170,6 +170,21 @@ package struct ChooseBitsMetadata: Sendable {
     /// The generator's payload, carried over from ``ChoiceMetadata``. Nil for tags without one.
     package let typeTagPayload: TypeTagPayload?
 
+    /// Boolean generators use UInt8 in 0...1; exclude that domain, including numeric generators with the same representation.
+    var supportsNumericSearch: Bool {
+        guard typeTag != .uint8 || validRange != 0 ... 1 else {
+            return false
+        }
+        switch typeTag {
+            case .int, .int8, .int16, .int32, .int64, .uint, .uint8, .uint16, .uint32, .uint64:
+                return true
+            case .float, .float16, .double:
+                return value.decodedDoubleValue.isFinite
+            case .date, .bits, .character, .depthControl, .laneControl:
+                return false
+        }
+    }
+
     /// Simpler forms of this leaf's characters in index space, or nil when the leaf is not a character.
     package var characterSimplifications: CharacterSimplifications? {
         guard case let .character(_, simplifications, _) = typeTagPayload else {

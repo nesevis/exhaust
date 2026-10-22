@@ -18,11 +18,7 @@ enum ReorderEncoder: ReductionEncoder {
     static func reduce(_ scope: ReorderingScope, input: EncoderInput) -> Reduction {
         .search(
             ReorderSearch(scope: scope, baseSequence: input.baseSequence),
-            configuration: SearchConfiguration(
-                acceptance: .continue,
-                requiresExactDecoder: true,
-                reportedMutation: nil
-            )
+            configuration: SearchConfiguration(requiresExactDecoder: true)
         )
     }
 }

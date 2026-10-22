@@ -7,7 +7,7 @@
 
 /// Drives float leaves toward their semantic simplest values without changing graph structure, through five stages: special values, boundaries, precision walk, integral binary search, and ratio binary search.
 ///
-/// All leaves have position ranges in the current sequence. Candidates are constructed by modifying leaf values at pre-resolved positions, and an acceptance advances the baseline to the accepted candidate.
+/// Each candidate is a sparse edit at a pre-resolved leaf position. An acceptance advances the baseline to the recovered sequence.
 ///
 /// The stages live in `FloatSearch+Probing.swift`.
 struct FloatSearch: ReductionSearch {
@@ -104,7 +104,7 @@ struct FloatSearch: ReductionSearch {
         state = Self.initialState(scope: scope, sequence: sequence, graph: graph)
     }
 
-    mutating func next(_ feedback: SearchFeedback, into buffer: inout ChoiceSequence) -> ReductionCandidate? {
+    mutating func next(_ feedback: SearchFeedback, into _: inout ChoiceSequence) -> ReductionCandidate? {
         if case let .accepted(recovered) = feedback {
             // Leaf positions were resolved against the dispatch-time sequence, so a recovered sequence of a different length ends the search.
             guard recovered.count == state.sequence.count else {
@@ -112,12 +112,7 @@ struct FloatSearch: ReductionSearch {
             }
             state.sequence = recovered
         }
-        guard let built = Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted) else {
-            return nil
-        }
-        buffer = built
-        let mutation = state.targets.leafValuesMutation(candidate: buffer, baseline: state.sequence)
-        return .written(mutation: mutation, admission: .standard)
+        return Self.nextProbe(state: &state, lastAccepted: feedback.isAccepted)
     }
 
     /// Reports the convergence records gathered so far.

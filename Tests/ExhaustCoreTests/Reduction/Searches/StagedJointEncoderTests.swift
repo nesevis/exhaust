@@ -68,8 +68,8 @@ struct StagedJointEncoderTests {
         var emitted = 0
         while let candidate = search.next(feedback, into: &buffer) {
             emitted += 1
-            if case let .sparse(probe, _, _) = candidate {
-                #expect(probe.patterns != flipped)
+            if case let .lazy(probe) = candidate.contents {
+                #expect(probe.map { $0.replacement.value!.choice.bitPattern64 } != flipped)
             }
             feedback = .rejected(.propertyPassed)
         }
@@ -143,21 +143,24 @@ struct StagedJointEncoderTests {
         let values = [Int8.min, -1, 1].map { ChoiceValue($0, tag: .int8) }
         let members = leaves(values)
         let pairs = [
-            NumericPairQuery.Pair(source: members[0], sink: members[1]),
-            NumericPairQuery.Pair(source: members[1], sink: members[2]),
+            NumericPair(source: members[0], sink: members[1]),
+            NumericPair(source: members[1], sink: members[2]),
         ]
-        var search = StagedJointSearch(pairs: pairs, base: [], probeBudget: 10000)
-        var buffer: ChoiceSequence = []
+        let base = ChoiceSequence(values.map {
+            ChoiceSequenceValue.value(.init(choice: $0, validRange: $0.tag.bitPatternRange))
+        })
+        var search = StagedJointSearch(pairs: pairs, base: base, probeBudget: 10000)
+        var buffer = base
         let first = try #require(search.next(.initial, into: &buffer))
-        guard case let .sparse(signFlip, _, _) = first else {
-            Issue.record("Expected a sparse sign flip")
+        guard case let .lazy(signFlip) = first.contents else {
+            Issue.record("Expected a lazy sign flip")
             return
         }
-        #expect(signFlip.leaves.map(\.position) == [1, 2])
-        #expect(signFlip.patterns == [Int8(1).bitPattern64, Int8(-1).bitPattern64])
+        #expect(signFlip.map(\.position) == [1, 2])
+        #expect(signFlip.map { $0.replacement.value!.choice.bitPattern64 } == [Int8(1).bitPattern64, Int8(-1).bitPattern64])
         while let candidate = search.next(.rejected(.propertyPassed), into: &buffer) {
-            guard case let .sparse(probe, _, _) = candidate else {
-                Issue.record("Expected sparse joint proposals")
+            guard case let .lazy(probe) = candidate.contents else {
+                Issue.record("Expected lazy joint proposals")
                 return
             }
             #expect(probe != signFlip)

@@ -16,3 +16,21 @@ struct ReductionLeaf: Equatable {
             && lhs.range == rhs.range && lhs.bindFingerprints == rhs.bindFingerprints
     }
 }
+
+// MARK: - Numeric Leaf Metadata
+
+extension ReductionLeaf {
+    /// Captures bind sites from nearest to farthest so recovery can compare ancestry after replay.
+    static func bindFingerprints(above nodeID: Int, graph: ChoiceGraph) -> [UInt64] {
+        var fingerprints: [UInt64] = []
+        var ancestor = graph.nodes[nodeID].parent
+        while let ancestorID = ancestor {
+            let node = graph.nodes[ancestorID]
+            if case let .bind(metadata) = node.kind {
+                fingerprints.append(metadata.fingerprint)
+            }
+            ancestor = node.parent
+        }
+        return fingerprints
+    }
+}

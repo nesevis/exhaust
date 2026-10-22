@@ -11,9 +11,9 @@
 enum StagedJointEncoder: ReductionEncoder {
     /// One checkpoint: the pairs to search, the sign flips of pairs searched only by that flip, and the candidate pool for wider groups, all discovered against the same graph.
     struct Scope: Equatable {
-        let pairs: [NumericPairQuery.Pair]
-        let signFlipProposals: [StagedJointQuery.PriorityProposal]
-        let candidatePool: [StagedJointQuery.Entry]
+        let pairs: [NumericPair]
+        let signFlipProposals: [NumericPriorityProposal]
+        let candidatePool: [NumericJointPlan.LeafSamples]
     }
 
     static let maximumArity = 4
@@ -36,7 +36,7 @@ enum StagedJointEncoder: ReductionEncoder {
     /// Probes a stage of `arity` may spend out of `remaining`: half when the search can widen after it, so the wider stage keeps a share, otherwise all of it. A single remaining probe goes to this stage, and an exhausted budget gives it none.
     static func stageBudget(
         arity: Int,
-        candidatePool: [StagedJointQuery.Entry],
+        candidatePool: [NumericJointPlan.LeafSamples],
         remaining: Int,
         calculationsRemaining: Int,
         tuning: ReductionTuning
@@ -51,15 +51,15 @@ enum StagedJointEncoder: ReductionEncoder {
     // MARK: - Helpers
 
     private enum Candidates {
-        case pairs([NumericPairQuery.Pair], signFlipProposals: [StagedJointQuery.PriorityProposal])
-        case groups([NumericJointQuery.Group])
+        case pairs([NumericPair], signFlipProposals: [NumericPriorityProposal])
+        case groups([NumericJointPlan])
     }
 
     /// Searches one arity, then widens to the next while the stage stalls and the search can widen.
     private static func stage(
         arity: Int,
         candidates: Candidates,
-        candidatePool: [StagedJointQuery.Entry],
+        candidatePool: [NumericJointPlan.LeafSamples],
         remaining: Int,
         calculationsRemaining: Int,
         input: EncoderInput
@@ -115,9 +115,9 @@ enum StagedJointEncoder: ReductionEncoder {
     }
 
     /// Whether a stage of one more leaf per group can follow a stage of `arity`: the four-way stage is the last, and a wider stage needs a group whose cheapest sampled grid fits that arity's work limit.
-    private static func canWidenSearch(after arity: Int, candidatePool: [StagedJointQuery.Entry], tuning: ReductionTuning) -> Bool {
-        arity < maximumArity && StagedJointQuery.canWiden(
-            to: arity + 1,
+    private static func canWidenSearch(after arity: Int, candidatePool: [NumericJointPlan.LeafSamples], tuning: ReductionTuning) -> Bool {
+        arity < maximumArity && NumericJointPlan.canFit(
+            arity: arity + 1,
             candidatePool: candidatePool,
             workLimit: tuning.jointWorkLimit(arity: arity + 1)
         )

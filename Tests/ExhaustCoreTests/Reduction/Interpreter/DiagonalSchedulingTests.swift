@@ -3,7 +3,7 @@ import Testing
 
 @Suite("Diagonal scheduling")
 struct DiagonalSchedulingTests {
-    @Test("Branch positions and candidate counts form diagonals, and later branches are built only when selected")
+    @Test("Attempt positions and candidate counts form diagonals, and later attempts are built only when selected")
     func diagonalOrderAndLazyBuilds() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
@@ -18,12 +18,12 @@ struct DiagonalSchedulingTests {
             "setup", "proposal 0", "build 0", "A0", "A1", "proposal 1", "build 1", "B0", "A2", "B1", "proposal 2", "build 2", "C0",
         ])
         #expect(report.counts.emitted == 9)
-        #expect(report.constructedSearches == 3)
+        #expect(report.constructedAttempts == 3)
         #expect(recorder.finished.values.allSatisfy { $0 == ["initial"] })
         #expect(recorder.finished.count == 3)
     }
 
-    @Test("A failed build returns to priority selection before a more expensive branch is built")
+    @Test("A failed build returns to priority selection before a more expensive attempt is built")
     func failedBuildReselects() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
@@ -41,11 +41,11 @@ struct DiagonalSchedulingTests {
         let report = fixture.run(reduction)
 
         #expect(recorder.events == ["setup", "proposal 0", "build 0", "A0", "A1", "proposal 1", "build 1", "A2", "proposal 2", "build 2", "C0"])
-        #expect(report.constructedSearches == 2)
+        #expect(report.constructedAttempts == 2)
         #expect(report.buildOutcomes[CompositionBuildRecord(depth: 1, outcome: .failed(.bindNotFound))] == 1)
     }
 
-    @Test("Sequential searches keep their branch's accumulated grade")
+    @Test("Sequential searches keep their attempt's accumulated grade")
     func continuationKeepsProgress() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
@@ -62,9 +62,11 @@ struct DiagonalSchedulingTests {
             }
         }
 
-        _ = fixture.run(reduction)
+        let report = fixture.run(reduction)
 
         #expect(recorder.emissions == ["first0", "first1", "B0", "second0", "B1", "second1", "B2"])
+        #expect(report.constructedAttempts == 2)
+        #expect(report.nestedConstructedAttempts == 0)
     }
 
     @Test("Nested pools schedule independently without adding their grades to the parent")
@@ -87,15 +89,15 @@ struct DiagonalSchedulingTests {
         let report = fixture.run(reduction)
 
         #expect(recorder.emissions == ["X0", "X1", "B0"])
-        #expect(report.constructedSearches == 2)
-        #expect(report.nestedConstructedSearches == 1)
+        #expect(report.constructedAttempts == 2)
+        #expect(report.nestedConstructedAttempts == 1)
     }
 
-    @Test("The probe cap stops before opening another branch and finishes the pending search once")
+    @Test("The probe cap stops before opening another attempt and finishes the pending search once")
     func probeCapAndFinishing() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let configuration = ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 2)
+        let configuration = ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: nil, totalProbeCap: 2)
         let reduction = fixture.pool(count: 2, configuration: configuration, recorder: recorder) { index in
             fixture.search(["A", "B"][index], recorder: recorder)
         }
@@ -106,14 +108,14 @@ struct DiagonalSchedulingTests {
         #expect(recorder.builds == [0])
         #expect(recorder.finished == ["A": ["passed"]])
         #expect(report.counts.emitted == 2)
-        #expect(report.constructedSearches == 1)
+        #expect(report.constructedAttempts == 1)
     }
 
-    @Test("Failed builds do not consume the search budget, while an empty search does")
-    func searchBudgetCountsEmptySearches() throws {
+    @Test("Failed builds do not consume the attempt limit, while an attempt with an empty search does")
+    func attemptLimitCountsAttemptsWithEmptySearches() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let configuration = ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: 1, totalProbeCap: 0)
+        let configuration = ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: 1, totalProbeCap: 0)
         let reduction = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { index in
             guard index > 0 else {
                 return .fail(.bindNotFound)
@@ -126,16 +128,16 @@ struct DiagonalSchedulingTests {
         #expect(recorder.builds == [0, 1])
         #expect(recorder.emissions.isEmpty)
         #expect(recorder.finished == ["empty": ["initial"]])
-        #expect(report.constructedSearches == 1)
+        #expect(report.constructedAttempts == 1)
     }
 
-    @Test("Chain build limits count failed builds before another branch can be opened")
+    @Test("Chain build limits count failed builds before another attempt can be opened")
     func chainBuildLimits() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: nil,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: nil,
             totalProbeCap: 0,
             chainLimits: ChainLimits(maxBuildsPerStart: 2, poolCapacity: 2)
         )
@@ -146,7 +148,7 @@ struct DiagonalSchedulingTests {
         let report = fixture.run(reduction)
 
         #expect(recorder.builds == [0, 1])
-        #expect(report.constructedSearches == 0)
+        #expect(report.constructedAttempts == 0)
         #expect(report.buildOutcomes[CompositionBuildRecord(depth: 1, outcome: .failed(.bindNotFound))] == 2)
     }
 
@@ -155,8 +157,8 @@ struct DiagonalSchedulingTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: nil,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: nil,
             totalProbeCap: 0,
             deliversUniformFeedback: uniform
         )
@@ -171,17 +173,14 @@ struct DiagonalSchedulingTests {
         #expect(recorder.feedback["B"] == feedback)
     }
 
-    @Test("An acceptance that stops the pass leaves later branches unbuilt")
+    @Test("An acceptance that stops the pass leaves later attempts unbuilt")
     func acceptanceStopsPool() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let reduction = fixture.pool(count: 2, recorder: recorder) { index in
-            fixture.search(
-                ["A", "B"][index],
-                values: [0],
-                recorder: recorder,
-                configuration: SearchConfiguration(acceptance: .stop, requiresExactDecoder: false, reportedMutation: nil)
-            )
+            .lift(LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
+                fixture.search(["A", "B"][index], values: [0], recorder: recorder)
+            }
         }
 
         let report = fixture.run(reduction, property: { _ in false })
@@ -193,7 +192,7 @@ struct DiagonalSchedulingTests {
         #expect(report.anyRequiresRebuild)
     }
 
-    @Test("A deadline between candidates finishes suspended searches without opening another branch")
+    @Test("A deadline between candidates finishes suspended searches without opening another attempt")
     func deadlineStopsPool() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
@@ -240,11 +239,11 @@ struct DiagonalSchedulingTests {
         #expect(result.stats.liftAttemptsByEncoder[.boundValueSearch, default: 0] > 0)
     }
 
-    @Test("The turn-based policy builds every branch before resuming any, with fixed turns")
+    @Test("The turn-based policy builds every attempt before resuming any, with fixed turns")
     func turnBasedComparison() throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let configuration = ChoiceConfiguration(probesPerSearchTurn: 2, searchBudget: nil, totalProbeCap: 0, scheduling: .turnBased)
+        let configuration = ChoiceConfiguration(probesPerAttemptTurn: 2, constructedAttemptLimit: nil, totalProbeCap: 0, scheduling: .turnBased)
         let reduction = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { index in
             fixture.search(["A", "B", "C"][index], recorder: recorder)
         }
@@ -257,11 +256,11 @@ struct DiagonalSchedulingTests {
 
 @Suite("Lazy proposals")
 struct LazyProposalTests {
-    @Test("The proposal factory runs once, when the first branch is selected, under either policy", arguments: [ChoiceScheduling.diagonal, .turnBased])
+    @Test("The proposal factory runs once, when the first attempt is selected, under either policy", arguments: [ChoiceScheduling.diagonal, .turnBased])
     func factoryRunsOnceAtFirstSelection(scheduling: ChoiceScheduling) throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let configuration = ChoiceConfiguration(probesPerSearchTurn: 2, searchBudget: nil, totalProbeCap: 0, scheduling: scheduling)
+        let configuration = ChoiceConfiguration(probesPerAttemptTurn: 2, constructedAttemptLimit: nil, totalProbeCap: 0, scheduling: scheduling)
         let reduction = fixture.pool(count: 3, configuration: configuration, recorder: recorder) { index in
             fixture.search(["A", "B", "C"][index], recorder: recorder)
         }
@@ -287,7 +286,7 @@ struct LazyProposalTests {
     func probeCapDoesNotConstructLaterProposals(scheduling: ChoiceScheduling) throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let configuration = ChoiceConfiguration(probesPerSearchTurn: 2, searchBudget: nil, totalProbeCap: 2, scheduling: scheduling)
+        let configuration = ChoiceConfiguration(probesPerAttemptTurn: 2, constructedAttemptLimit: nil, totalProbeCap: 2, scheduling: scheduling)
         let reduction = fixture.pool(count: 1_000_000, configuration: configuration, recorder: recorder) { _ in
             fixture.search("A", recorder: recorder)
         }
@@ -299,13 +298,13 @@ struct LazyProposalTests {
         #expect(recorder.finished == ["A": ["passed"]])
     }
 
-    @Test("Zero search or build allowances do not initialize the cursor", arguments: [0, 1, 2])
+    @Test("Zero attempt or build allowances do not initialize the cursor", arguments: [0, 1, 2])
     func zeroBudgetsAvoidSetup(limit: Int) throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: limit == 0 ? 0 : nil,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: limit == 0 ? 0 : nil,
             totalProbeCap: 0,
             chainLimits: limit == 0 ? nil : ChainLimits(maxBuildsPerStart: limit == 1 ? 0 : 1, poolCapacity: limit == 2 ? 0 : 1)
         )
@@ -317,14 +316,14 @@ struct LazyProposalTests {
 
         #expect(recorder.factoryCalls == 0)
         #expect(recorder.proposalRequests == 0)
-        #expect(report.constructedSearches == 0)
+        #expect(report.constructedAttempts == 0)
     }
 
     @Test("A failed build and an empty search consume only their own proposals", arguments: [ChoiceScheduling.diagonal, .turnBased])
-    func searchBudgetStopsProposalConstruction(scheduling: ChoiceScheduling) throws {
+    func attemptLimitStopsProposalConstruction(scheduling: ChoiceScheduling) throws {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
-        let configuration = ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: 1, totalProbeCap: 0, scheduling: scheduling)
+        let configuration = ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: 1, totalProbeCap: 0, scheduling: scheduling)
         let reduction = fixture.pool(count: 1_000_000, configuration: configuration, recorder: recorder) { index in
             guard index > 0 else {
                 return .fail(.bindNotFound)
@@ -336,7 +335,7 @@ struct LazyProposalTests {
 
         #expect(recorder.proposals == [0, 1])
         #expect(recorder.proposalRequests == 2)
-        #expect(report.constructedSearches == 1)
+        #expect(report.constructedAttempts == 1)
         #expect(recorder.finished == ["empty": ["initial"]])
     }
 
@@ -345,8 +344,8 @@ struct LazyProposalTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: nil,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: nil,
             totalProbeCap: 0,
             chainLimits: ChainLimits(maxBuildsPerStart: 2, poolCapacity: 2),
             scheduling: scheduling
@@ -367,8 +366,8 @@ struct LazyProposalTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: nil,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: nil,
             totalProbeCap: 0,
             chainLimits: ChainLimits(maxBuildsPerStart: 2, poolCapacity: 3),
             scheduling: scheduling
@@ -386,7 +385,7 @@ struct LazyProposalTests {
 
         #expect(recorder.builds == [0, 0, 1])
         #expect(recorder.emissions == ["B0"])
-        #expect(report.constructedSearches == 2)
+        #expect(report.constructedAttempts == 2)
         #expect(report.buildOutcomes[CompositionBuildRecord(depth: 2, outcome: .failed(.bindNotFound))] == 1)
     }
 
@@ -395,12 +394,9 @@ struct LazyProposalTests {
         let fixture = try SchedulingFixture()
         let recorder = SchedulingRecorder()
         let reduction = fixture.pool(count: 1_000_000, recorder: recorder) { _ in
-            fixture.search(
-                "A",
-                values: [0],
-                recorder: recorder,
-                configuration: SearchConfiguration(acceptance: .stop, requiresExactDecoder: false, reportedMutation: nil)
-            )
+            .lift(LiftProposal(prefix: fixture.sequence, mutation: .leafValues([])), fallbackTree: fixture.tree) { _ in
+                fixture.search("A", values: [0], recorder: recorder)
+            }
         }
 
         let report = fixture.run(reduction, property: { _ in false })
@@ -450,7 +446,7 @@ struct LazyProposalTests {
 
 // MARK: - Fixtures
 
-/// Records actual branch construction, candidate emission, feedback, and finalization across interleaved searches.
+/// Records actual attempt construction, candidate emission, feedback, and finalization across interleaved searches.
 private final class SchedulingRecorder {
     var factoryCalls = 0
     var proposalRequests = 0
@@ -480,7 +476,7 @@ private final class SchedulingRecorder {
     }
 }
 
-/// Exposes cursor setup and prefix construction separately from branch builds, including requests that discover exhaustion.
+/// Exposes cursor setup and prefix construction separately from attempt builds, including requests that discover exhaustion.
 private struct RecordingProposalCursor: ProposalCursor {
     let count: Int
     let base: ChoiceSequence
@@ -520,7 +516,7 @@ private struct RecordingScheduleSearch: ReductionSearch {
         buffer = base
         buffer[0] = buffer[0].withBitPattern(values[nextIndex])
         nextIndex += 1
-        return .written(mutation: .leafValues([]), admission: .standard)
+        return .eager(mutation: .leafValues([]), admission: .standard)
     }
 
     consuming func finish(pending: SearchFeedback) -> SearchReport {
@@ -542,7 +538,7 @@ private struct SchedulingFixture {
 
     func pool(
         count: Int,
-        configuration: ChoiceConfiguration = ChoiceConfiguration(probesPerSearchTurn: nil, searchBudget: nil, totalProbeCap: 0),
+        configuration: ChoiceConfiguration = ChoiceConfiguration(probesPerAttemptTurn: nil, constructedAttemptLimit: nil, totalProbeCap: 0),
         recorder: SchedulingRecorder,
         build: @escaping (Int) -> Reduction
     ) -> Reduction {

@@ -61,20 +61,15 @@ extension IntegerSearch {
         )
     }
 
-    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning the next candidate ``ChoiceSequence`` to probe or nil when all phases are exhausted. The caller has already made an accepted candidate the baseline, so subsequent probes build on it.
+    /// Advances through the integer phase state machine (batch-zero, per-leaf-zero, batch bisection, per-leaf), returning a lazy candidate, or nil when all phases are exhausted. The caller has already made the recovered sequence the baseline, so subsequent probes build on it.
     static func nextProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         switch state.phase {
             case .batchZero:
                 // Try every leaf at its target at once.
-                var candidate = state.sequence
-                for leaf in state.leafPositions {
-                    candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                        .withBitPattern(leaf.targetBitPattern)
-                }
-                if candidate.shortLexPrecedes(state.sequence) {
+                if let candidate = batchProbe(leaves: state.leafPositions[...], in: state.sequence, bitPattern: { _, leaf in leaf.targetBitPattern }) {
                     // If the batch-zero probe is accepted, per-leaf zero sees the acceptance and converges every leaf. If it is rejected, per-leaf zero tries each leaf at its target alone.
                     state.phase = .perLeafZero
                     state.perLeafZero = PerLeafZeroState()
@@ -105,7 +100,7 @@ extension IntegerSearch {
     static func nextPerLeafZeroProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         guard var perLeafZero = state.perLeafZero else {
             state.phase = .perLeaf
             return nextProbe(state: &state, lastAccepted: lastAccepted)
@@ -135,16 +130,14 @@ extension IntegerSearch {
                 continue
             }
 
-            var candidate = state.sequence
-            candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                .withBitPattern(leaf.targetBitPattern)
-
-            guard candidate.shortLexPrecedes(state.sequence) else {
+            let currentEntry = state.sequence[leaf.sequenceIndex]
+            let targetEntry = currentEntry.withBitPattern(leaf.targetBitPattern)
+            guard targetEntry.shortLexCompare(currentEntry) == .lt else {
                 continue
             }
 
             state.perLeafZero = perLeafZero
-            return candidate
+            return leaf.lazyProbe(replacing: targetEntry, in: state.sequence)
         }
 
         // All leaves tried. Batch bisection runs on the survivors only when at least four remain.
@@ -177,7 +170,7 @@ extension IntegerSearch {
     static func nextBatchBisectProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         guard var bisection = state.bisection else {
             state.phase = .perLeaf
             return nextPerLeafProbe(state: &state, lastAccepted: false)
@@ -245,25 +238,12 @@ extension IntegerSearch {
                 break
             }
 
-            let hasWork = (group.start ..< group.end).contains { index in
-                bisection.convergedIndices.contains(index) == false
-                    && state.leafPositions[index].currentBitPattern != state.leafPositions[index].targetBitPattern
-            }
-            if hasWork == false {
-                bisection.activeGroup = nil
-                continue
-            }
-
             // Move each unconverged leaf to `1 / divisor` of its distance from its target.
-            var candidate = state.sequence
-            var anyChanged = false
-            for index in group.start ..< group.end {
-                guard bisection.convergedIndices.contains(index) == false else {
-                    continue
-                }
-                let leaf = state.leafPositions[index]
-                guard leaf.currentBitPattern != leaf.targetBitPattern else {
-                    continue
+            let candidate = batchProbe(leaves: state.leafPositions[group.start ..< group.end], in: state.sequence) { index, leaf in
+                guard bisection.convergedIndices.contains(index) == false,
+                      leaf.currentBitPattern != leaf.targetBitPattern
+                else {
+                    return nil
                 }
 
                 let probeBitPattern: UInt64
@@ -276,15 +256,10 @@ extension IntegerSearch {
                     let step = range / bisection.divisor
                     probeBitPattern = step > 0 ? leaf.targetBitPattern - step : leaf.targetBitPattern
                 }
-
-                if probeBitPattern != leaf.currentBitPattern {
-                    candidate[leaf.sequenceIndex] = candidate[leaf.sequenceIndex]
-                        .withBitPattern(probeBitPattern)
-                    anyChanged = true
-                }
+                return probeBitPattern != leaf.currentBitPattern ? probeBitPattern : nil
             }
 
-            guard anyChanged, candidate.shortLexPrecedes(state.sequence) else {
+            guard let candidate else {
                 // The group cannot move, which counts as a stall.
                 bisection.activeGroup = nil
                 continue
@@ -307,13 +282,48 @@ extension IntegerSearch {
         return nextPerLeafProbe(state: &state, lastAccepted: false)
     }
 
+    /// Value-only edits preserve length and structure, so the earliest differing position decides shortlex order even when leaves arrive out of order.
+    private static func batchProbe(
+        leaves: ArraySlice<LeafPosition>,
+        in baseline: ChoiceSequence,
+        bitPattern: (Int, LeafPosition) -> UInt64?
+    ) -> ReductionCandidate? {
+        var patch = SequencePatch(minimumCapacity: leaves.count)
+        var changes: [LeafChange] = []
+        changes.reserveCapacity(leaves.count)
+        var firstDifferencePosition = Int.max
+        var precedes = false
+        for index in leaves.indices {
+            let leaf = leaves[index]
+            guard let pattern = bitPattern(index, leaf) else {
+                continue
+            }
+            let original = baseline[leaf.sequenceIndex]
+            let replacement = original.withBitPattern(pattern)
+            guard let choice = replacement.value?.choice, choice != original.value?.choice else {
+                continue
+            }
+            patch.append(.init(position: leaf.sequenceIndex, replacement: replacement))
+            changes.append(LeafChange(leafNodeID: leaf.nodeID, newValue: choice, mayReshape: leaf.mayReshape))
+            let order = replacement.shortLexCompare(original)
+            if order != .eq, leaf.sequenceIndex < firstDifferencePosition {
+                firstDifferencePosition = leaf.sequenceIndex
+                precedes = order == .lt
+            }
+        }
+        guard precedes else {
+            return nil
+        }
+        return .lazy(patch, mutation: .leafValues(changes), admission: .standard)
+    }
+
     // MARK: - Per-Leaf Orchestrator
 
     /// Searches each leaf in sequence order: a direct shot at the reduction target, then bit-pattern search, then a candidate list when one was set up (a linear scan over a non-monotone gap, or simpler forms of a character), and finally the cross-zero phase for signed types. Returns nil when every leaf is done.
     static func nextPerLeafProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         while state.leafIndex < state.leafPositions.count {
             // Skip leaves already converged by the batch bisection phase.
             if let bisection = state.bisection,
@@ -370,15 +380,13 @@ extension IntegerSearch {
                             currentChoice.tag.makeConvertible(bitPattern64: targetBitPattern),
                             tag: currentChoice.tag
                         )
-                        var candidate = state.sequence
                         let targetEntry = ChoiceSequenceValue.value(.init(
                             choice: targetChoice,
                             validRange: currentEntry.value!.validRange,
                             isRangeExplicit: currentEntry.value!.isRangeExplicit
                         ))
-                        candidate[leaf.sequenceIndex] = targetEntry
-                        if candidate.shortLexPrecedes(state.sequence) {
-                            return candidate
+                        if targetEntry.shortLexCompare(currentEntry) == .lt {
+                            return leaf.lazyProbe(replacing: targetEntry, in: state.sequence)
                         }
                     }
                 }
@@ -417,7 +425,7 @@ extension IntegerSearch {
     static func nextBitPatternSearchProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         let leaf = state.leafPositions[state.leafIndex]
         let currentEntry = state.sequence[leaf.sequenceIndex]
 
@@ -489,9 +497,7 @@ extension IntegerSearch {
 
             let newEntry = currentEntry.withBitPattern(firstBitPattern)
             if newEntry.shortLexCompare(currentEntry) == .lt {
-                var candidate = state.sequence
-                candidate[leaf.sequenceIndex] = newEntry
-                return candidate
+                return leaf.lazyProbe(replacing: newEntry, in: state.sequence)
             }
         }
 
@@ -499,9 +505,7 @@ extension IntegerSearch {
         while let nextBitPattern = state.stepper?.advance(lastAccepted: accepted) {
             let newEntry = currentEntry.withBitPattern(nextBitPattern)
             if newEntry.shortLexCompare(currentEntry) == .lt {
-                var candidate = state.sequence
-                candidate[leaf.sequenceIndex] = newEntry
-                return candidate
+                return leaf.lazyProbe(replacing: newEntry, in: state.sequence)
             }
             accepted = false
         }
@@ -566,7 +570,7 @@ extension IntegerSearch {
     static func nextCandidateListProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         guard var list = state.candidateList else {
             return nil
         }
@@ -587,10 +591,8 @@ extension IntegerSearch {
             guard newEntry.shortLexCompare(currentEntry) == .lt else {
                 continue
             }
-            var candidate = state.sequence
-            candidate[leaf.sequenceIndex] = newEntry
             state.candidateList = list
-            return candidate
+            return leaf.lazyProbe(replacing: newEntry, in: state.sequence)
         }
         state.candidateList = list
         return nil
@@ -702,7 +704,7 @@ extension IntegerSearch {
     static func nextCrossZeroProbe(
         state: inout State,
         lastAccepted: Bool
-    ) -> ChoiceSequence? {
+    ) -> ReductionCandidate? {
         guard var crossZero = state.crossZero else {
             return nil
         }
@@ -743,22 +745,21 @@ extension IntegerSearch {
         return nil
     }
 
-    /// Records `key` as the outstanding probe and returns the sequence with the leaf set to its decoded value.
+    /// Records `key` as the outstanding probe and describes the leaf edit.
     private static func emitCrossZeroProbe(
         key: UInt64,
         crossZero: inout CrossZeroState,
         state: inout State
-    ) -> ChoiceSequence {
+    ) -> ReductionCandidate {
         crossZero.lastEmittedKey = key
         state.crossZero = crossZero
 
-        var candidate = state.sequence
-        candidate[crossZero.sequenceIndex] = .value(.init(
+        let entry = ChoiceSequenceValue.value(.init(
             choice: simplestSignedValue(rank: key, tag: crossZero.tag),
             validRange: crossZero.validRange,
             isRangeExplicit: crossZero.isRangeExplicit
         ))
-        return candidate
+        return state.leafPositions[state.leafIndex].lazyProbe(replacing: entry, in: state.sequence)
     }
 
     /// The signed value at `rank` in the order 0, 1, −1, 2, −2, and so on, which is the rank ``ChoiceValue/shortlexKey`` assigns it.

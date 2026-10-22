@@ -10,7 +10,7 @@ struct BoundExchangeEncoderTests {
         let report = fixture.run(property: { _ in true })
 
         #expect(report.buildOutcomes.contains { record, count in record.outcome == .failed(.sinkValueMismatch) && count > 0 })
-        #expect(report.liftAttempts > report.constructedSearches)
+        #expect(report.liftAttempts > report.constructedAttempts)
     }
 }
 

@@ -9,23 +9,23 @@
 struct ReductionPassReport {
     var counts = ReductionProbeCounts()
     var anyAccepted = false
-    /// Whether an acceptance left the graph needing a full rebuild, because its acceptance policy or its mutation ruled out an in-place update.
+    /// Whether an acceptance left the graph needing a full rebuild, because a lift, its graph update policy, or its mutation ruled out an in-place update.
     var anyRequiresRebuild = false
     /// Whether the latest accepted decoding skipped materializing unselected branches, so the incumbent's tree lacks them and pick nodes cannot offer pivots.
     var latestTreeIsStripped = false
     /// Leaves an accepted `.leafValues` mutation changed. Their old-graph values are stale, so their convergence records transfer across the rebuild without the value guard.
     var acceptedLeafNodeIDs: Set<Int> = []
-    /// From searches the root branch reaches. Searches inside a `propose` are finished and their reports discarded, since their node IDs belong to a lifted graph.
+    /// From searches that address the incumbent graph. Searches in lifted context are finished and their reports discarded, since their node IDs belong to another graph.
     var searchReport = SearchReport()
-    /// Each root search's share of ``counts``, in the order the searches ran, for every one that was asked for a candidate. Searches inside a `propose` are counted only in ``counts``.
+    /// Each unlifted search's share of ``counts``, in completion order, for every one that was asked for a candidate. Lifted searches are counted only in ``counts``.
     var searchCounts: [SearchCounts] = []
     /// Lift requests, including those whose materialization failed.
     var liftAttempts = 0
-    /// Searches constructed by the outermost `propose`, including empty ones.
-    var constructedSearches = 0
-    /// Searches constructed by nested `propose` levels.
-    var nestedConstructedSearches = 0
-    /// What each `propose` branch built after its lifts, and every failure, by how many `propose` levels enclose it.
+    /// Attempts constructed by outermost `propose` levels, each counted once on reaching a search or nested level, even if it emits no probes. The root attempt and failed builds are excluded.
+    var constructedAttempts = 0
+    /// Attempts constructed by nested `propose` levels, counted on the same basis as ``constructedAttempts``.
+    var nestedConstructedAttempts = 0
+    /// What each `propose` attempt built after its lifts, and every failure, by how many `propose` levels enclose it.
     var buildOutcomes: [CompositionBuildRecord: Int] = [:]
 }
 
@@ -35,7 +35,7 @@ struct ReductionPassReport {
 ///
 /// Holds no decoding logic: it asks searches for candidates, checks each against the rejection cache, has the decoder decode it, checks the result's ordering against the incumbent, and feeds the outcome back.
 ///
-/// Inside a `propose` it selects the branch with the smallest cost plus emitted candidate count, breaking ties by original branch order. Branches are built only when selected. The optional turn-based policy builds new branches before resuming suspended searches in FIFO order. An acceptance that ends its search, under ``AcceptancePolicy/stop`` or through a rebuild, ends every search in the pass. A branch whose pipeline reaches another `propose` becomes a nested level, scheduled like any other search: each candidate it emits advances its parent's grade, while its own priorities stay local to the child pool.
+/// Inside a `propose` it selects the attempt with the smallest cost plus emitted candidate count, breaking ties by original attempt order. Attempts are built only when selected. The optional turn-based policy builds new attempts before resuming suspended attempts in FIFO order. An acceptance that ends its search, in lifted context or through a rebuild, ends every search in the pass. An attempt whose pipeline reaches another `propose` becomes a nested level, scheduled as part of that attempt: each candidate it emits advances its parent's grade, while its own priorities stay local to the child pool.
 enum Reducer {
     /// What an execution hands back to the runner.
     struct Result {
@@ -49,12 +49,12 @@ enum Reducer {
         let probeTiming: ProbeTiming?
     }
 
-    /// Builds the encoder's reduction as the root branch and evaluates its candidates until the reduction finishes, the deadline passes, or an acceptance ends the pass, and returns the restorable state with everything the execution observed.
+    /// Builds the encoder's reduction as the root attempt and evaluates its candidates until the reduction finishes, the deadline passes, or an acceptance ends the pass, and returns the restorable state with everything the execution observed.
     ///
-    /// The root is built without recording a build outcome. A search it reaches keeps its report and records its own counts; a `propose` it reaches becomes the outermost level.
+    /// The root is built without recording a build outcome; a `propose` it reaches becomes the outermost level. Search reports are kept only while searches address the incumbent graph.
     static func reduce(_ reduction: Reduction, context: consuming Context) -> Result {
-        if case let .built(root) = buildBranch(reduction, depth: nil, context: &context) {
-            let pool = SearchPool(root: root)
+        if case let .built(root) = buildAttempt(reduction, depth: nil, context: &context) {
+            let pool = AttemptPool(root: root)
             evaluating: while true {
                 switch next(pool, checksDeadline: true, context: &context) {
                     case .exhausted:
@@ -99,7 +99,7 @@ extension Reducer {
         var report = ReductionPassReport()
         var baseHash: UInt64
         var candidateBuffer: ChoiceSequence
-        var previousSparseProbe: SparseEncoderProbe?
+        var previousPatch: SequencePatch?
         var nextProbeID = 0
         /// Builds left to a nested chain, shared by every level that has chain limits. Created by the outermost such level.
         var buildPoolRemaining: Int?

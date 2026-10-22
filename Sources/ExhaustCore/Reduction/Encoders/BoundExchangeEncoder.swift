@@ -15,15 +15,15 @@ enum BoundExchangeEncoder: ReductionEncoder {
 
     static func reduce(_ exchange: BoundExchangeScope, input scope: EncoderInput) -> Reduction {
         let configuration = ChoiceConfiguration(
-            probesPerSearchTurn: nil,
-            searchBudget: scope.tuning.keptExchangeLiftBudget,
+            probesPerAttemptTurn: nil,
+            constructedAttemptLimit: scope.tuning.keptExchangeLiftBudget,
             totalProbeCap: 0
         )
         return .propose(
             { BoundExchangeProposalCursor(graph: scope.graph, baseSequence: scope.baseSequence, exchange: exchange) },
             configuration: configuration,
             then: { proposal in
-                .lift(proposal.prefix, fallbackTree: scope.tree) { lifted in
+                .lift(proposal, fallbackTree: scope.tree) { lifted in
                     guard let lifted else {
                         return .fail(.materializationFailed)
                     }
@@ -60,11 +60,7 @@ enum BoundExchangeEncoder: ReductionEncoder {
         }
         return .search(
             SingleCandidateSearch(candidate: lifted.sequence, mutation: proposal.mutation),
-            configuration: SearchConfiguration(
-                acceptance: .stop,
-                requiresExactDecoder: true,
-                reportedMutation: ReductionComposition.reshaping(proposal.mutation)
-            )
+            configuration: SearchConfiguration(requiresExactDecoder: true)
         )
     }
 }
