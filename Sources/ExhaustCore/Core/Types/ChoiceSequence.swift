@@ -13,6 +13,12 @@
 @usableFromInline
 package typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 
+/// A value-only edit over a shared sequence. Structural positions remain valid because the replacement cannot change an entry's kind.
+struct ChoiceSequenceValueReplacement {
+    let index: Int
+    let value: ChoiceSequenceValue.Value
+}
+
 package extension Collection<ChoiceSequenceValue> {
     var shortString: String {
         map { $0.shortString }.joined()

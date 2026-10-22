@@ -14,6 +14,7 @@
 extension Materializer {
     struct Cursor: ~Copyable {
         private let entries: ChoiceSequence
+        private let valueReplacement: ChoiceSequenceValueReplacement?
         private(set) var position: Int = 0
         var exhausted: Bool = false
 
@@ -83,8 +84,12 @@ extension Materializer {
             position = min(range.upperBound &+ 1, entries.count)
         }
 
-        init(from sequence: consuming ChoiceSequence) {
+        init(from sequence: consuming ChoiceSequence, valueReplacement: ChoiceSequenceValueReplacement? = nil) {
+            if let valueReplacement {
+                precondition(sequence.indices.contains(valueReplacement.index) && sequence[valueReplacement.index].value != nil)
+            }
             entries = sequence
+            self.valueReplacement = valueReplacement
             effectiveEnd = entries.count
         }
 
@@ -283,12 +288,16 @@ extension Materializer {
             }
             switch entries[position] {
                 case let .value(v):
-                    if let expected, Cursor.tagIsCompatible(v.choice.tag, with: expected) == false {
+                    var value = v
+                    if let valueReplacement, valueReplacement.index == position {
+                        value = valueReplacement.value
+                    }
+                    if let expected, Cursor.tagIsCompatible(value.choice.tag, with: expected) == false {
                         exhausted = true
                         return nil
                     }
                     position &+= 1
-                    return v
+                    return value
                 default:
                     exhausted = true
                     return nil
@@ -300,9 +309,15 @@ extension Materializer {
             guard suspended == false,
                   exhausted == false,
                   position < effectiveEnd,
-                  case let .value(value) = entries[position],
-                  Self.tagIsCompatible(value.choice.tag, with: expected)
+                  case let .value(original) = entries[position]
             else {
+                return nil
+            }
+            var value = original
+            if let valueReplacement, valueReplacement.index == position {
+                value = valueReplacement.value
+            }
+            guard Self.tagIsCompatible(value.choice.tag, with: expected) else {
                 return nil
             }
             return value.choice.bitPattern64
@@ -327,13 +342,20 @@ extension Materializer {
                 }
             }
             let start = position
+            let replacement = valueReplacement
             let values = entries.withUnsafeBufferPointer { source in
                 [UInt64](unsafeUninitializedCapacity: count) { destination, initializedCount in
                     initializedCount = 0
                     for index in 0 ..< count {
-                        guard case let .value(value) = source[start + index],
-                              Self.tagIsCompatible(value.choice.tag, with: expected)
+                        guard case let .value(original) = source[start + index]
                         else {
+                            return
+                        }
+                        var value = original
+                        if let replacement, replacement.index == start + index {
+                            value = replacement.value
+                        }
+                        guard Self.tagIsCompatible(value.choice.tag, with: expected) else {
                             return
                         }
                         destination[index] = value.choice.bitPattern64

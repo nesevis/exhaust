@@ -38,21 +38,30 @@ struct LeafProposalCursor {
 
     /// Replaces only the controller's value entry so surrounding bind and group markers survive each proposal.
     mutating func next(into candidate: inout ChoiceSequence) -> LiftProposal? {
+        guard let proposal = next() else {
+            return nil
+        }
+        candidate = proposal.prefix
+        return LiftProposal(prefix: candidate, mutation: proposal.mutation)
+    }
+
+    /// Retains the scope's sequence and records the single edit, avoiding a full copy for every unopened attempt.
+    mutating func next() -> LiftProposal? {
         guard candidateIndex < candidates.count else {
             return nil
         }
         let bitPattern = candidates[candidateIndex]
         candidateIndex += 1
         let choice = ChoiceValue(typeTag.makeConvertible(bitPattern64: bitPattern), tag: typeTag)
-        candidate = baseSequence
-        candidate[sequenceIndex] = .value(.init(
+        let value = ChoiceSequenceValue.Value(
             choice: choice,
             validRange: validRange,
             isRangeExplicit: isRangeExplicit
-        ))
+        )
         return LiftProposal(
-            prefix: candidate,
-            mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)])
+            prefix: baseSequence,
+            mutation: .leafValues([LeafChange(leafNodeID: leafNodeID, newValue: choice, mayReshape: mayReshape)]),
+            valueReplacement: .init(index: sequenceIndex, value: value)
         )
     }
 }

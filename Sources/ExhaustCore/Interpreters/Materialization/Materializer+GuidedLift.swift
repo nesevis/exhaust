@@ -6,17 +6,22 @@ extension Materializer {
         generator: AnyGenerator,
         prefix: ChoiceSequence,
         fallbackTree: ChoiceTree,
-        maximumSequenceCount: Int? = nil
+        maximumSequenceCount: Int? = nil,
+        valueReplacement: ChoiceSequenceValueReplacement? = nil
     ) -> ChoiceTree? {
+        var context = Context(
+            prefix: prefix,
+            mode: .guided(seed: 0, fallbackTree: fallbackTree),
+            fallbackTree: fallbackTree,
+            materializePicks: true,
+            maximumSequenceCount: maximumSequenceCount
+        )
+        if let valueReplacement {
+            context.cursor = Cursor(from: prefix, valueReplacement: valueReplacement)
+        }
         guard case let .success(_, tree, _) = materializeAny(
             generator,
-            context: .init(
-                prefix: prefix,
-                mode: .guided(seed: 0, fallbackTree: fallbackTree),
-                fallbackTree: fallbackTree,
-                materializePicks: true,
-                maximumSequenceCount: maximumSequenceCount
-            )
+            context: consume context
         ) else {
             return nil
         }

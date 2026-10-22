@@ -108,12 +108,13 @@ struct ReductionDecoder {
     }
 
     /// Materializes `prefix` in guided mode without running the property, so a composition can inspect the lifted structure before emitting any candidate.
-    func lift(_ prefix: ChoiceSequence, fallbackTree: ChoiceTree, maximumSequenceCount: Int?) -> LiftResult? {
+    func lift(_ prefix: ChoiceSequence, fallbackTree: ChoiceTree, maximumSequenceCount: Int?, valueReplacement: ChoiceSequenceValueReplacement? = nil) -> LiftResult? {
         Materializer.guidedLift(
             generator: generator,
             prefix: prefix,
             fallbackTree: fallbackTree,
-            maximumSequenceCount: maximumSequenceCount
+            maximumSequenceCount: maximumSequenceCount,
+            valueReplacement: valueReplacement
         )
         .map { tree in LiftResult(tree: tree, sequence: ChoiceSequence(tree)) }
     }

@@ -131,7 +131,7 @@ enum BoundValueEncoder: ReductionEncoder {
         chain: Chain
     ) -> Reduction {
         let upstreamSequenceIndex = scope.graph.nodes[controllerLeafNodeID].positionRange?.lowerBound
-        let upstreamProposedBitPattern = controllerBitPattern(in: proposal.prefix, at: upstreamSequenceIndex)
+        let upstreamProposedBitPattern = controllerBitPattern(in: proposal, at: upstreamSequenceIndex)
 
         let liftedBind: LiftedBind
         switch locateLiftedBind(
@@ -278,9 +278,9 @@ enum BoundValueEncoder: ReductionEncoder {
     }
 
     /// The controller's proposed bit pattern, for logging. Nil when the controller position falls outside the proposed prefix.
-    private static func controllerBitPattern(in sequence: ChoiceSequence, at index: Int?) -> UInt64? {
+    private static func controllerBitPattern(in proposal: LiftProposal, at index: Int?) -> UInt64? {
         index.flatMap { sequenceIndex in
-            sequenceIndex < sequence.count ? sequence[sequenceIndex].value?.choice.bitPattern64 : nil
+            sequenceIndex < proposal.basePrefix.count ? proposal.value(at: sequenceIndex)?.choice.bitPattern64 : nil
         }
     }
 

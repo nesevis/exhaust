@@ -53,6 +53,7 @@ struct LeafProposalCursorTests {
                 graph: graph,
                 baseSequence: sequence
             )
+            var sharedCursor = cursor
             var candidate = sequence
             var expected = sequence
             while let proposal = cursor.next(into: &candidate) {
@@ -64,9 +65,15 @@ struct LeafProposalCursorTests {
                 }
                 #expect(Array(candidate) == Array(expected))
                 #expect(Array(proposal.prefix) == Array(expected))
+                let nextSharedProposal = sharedCursor.next()
+                let sharedProposal = try #require(nextSharedProposal)
+                #expect(sharedProposal.prefix == expected)
+                #expect(sharedProposal.basePrefix == sequence)
+                #expect(ProbeTraceRecorder.Mutation(sharedProposal.mutation) == ProbeTraceRecorder.Mutation(proposal.mutation))
                 #expect(ProbeTraceRecorder.Mutation(proposal.mutation) == ProbeTraceRecorder.Mutation(emittedCandidate.mutation))
             }
             #expect(adaptive.next(.rejected(.propertyPassed), into: &expected) == nil)
+            #expect(sharedCursor.next() == nil)
         }
     }
 }

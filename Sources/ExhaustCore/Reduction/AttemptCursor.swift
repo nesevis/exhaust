@@ -3,6 +3,14 @@
 /// Constructs one prefix at a time from a fixed snapshot of a scope. Copies must advance independently so a reduction can be interpreted more than once.
 protocol ProposalCursor {
     mutating func next(into buffer: inout ChoiceSequence) -> LiftProposal?
+    mutating func next() -> LiftProposal?
+}
+
+extension ProposalCursor {
+    mutating func next() -> LiftProposal? {
+        var buffer = ChoiceSequence()
+        return next(into: &buffer)
+    }
 }
 
 extension LeafProposalCursor: ProposalCursor {}
@@ -49,8 +57,7 @@ struct AttemptCursor {
                 storage = .started(proposals)
                 return next()
             case var .started(proposals):
-                var buffer = ChoiceSequence()
-                guard let proposal = proposals.next(into: &buffer) else {
+                guard let proposal = proposals.next() else {
                     storage = .exhausted
                     return nil
                 }
