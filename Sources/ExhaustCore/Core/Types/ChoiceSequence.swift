@@ -133,7 +133,16 @@ package extension ChoiceSequence {
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var eIdx = 0
                 while eIdx < elements.count {
-                    flatten(elements[eIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
+                    // Scalar arrays dominate lifted histories. Emit their leaves here rather than recursively dispatching each element.
+                    if case let .choice(value, metadata) = elements[eIdx] {
+                        output.append(.value(.init(
+                            choice: value,
+                            validRange: metadata.validRange,
+                            isRangeExplicit: metadata.isRangeExplicit
+                        )))
+                    } else {
+                        flatten(elements[eIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
+                    }
                     eIdx += 1
                 }
                 output.append(.sequence(false))

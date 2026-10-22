@@ -116,7 +116,7 @@ struct ReductionDecoder {
             maximumSequenceCount: maximumSequenceCount,
             valueReplacement: valueReplacement
         )
-        .map { tree in LiftResult(tree: tree, sequence: ChoiceSequence(tree)) }
+        .map { tree in LiftResult(tree: tree, sequence: ChoiceSequence(tree, reservingCapacity: prefix.count)) }
     }
 
     /// The property with the host's wrapper around it, carrying the candidate the probe is testing.
