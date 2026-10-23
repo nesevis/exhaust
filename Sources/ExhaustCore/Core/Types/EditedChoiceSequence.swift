@@ -20,13 +20,16 @@ package struct EditedChoiceSequence {
 
     @inline(__always)
     package func value(at index: Int) -> ChoiceSequenceValue.Value? {
-        guard base.indices.contains(index) else {
+        guard index >= 0, index < base.count else {
             return nil
         }
         if let replacement, replacement.index == index {
             return replacement.value
         }
-        return base[index].value
+        guard case let .value(value) = base[index] else {
+            return nil
+        }
+        return value
     }
 
     /// Copies only when a consumer requires an owned sequence containing the edit.

@@ -21,7 +21,7 @@ struct ChoiceGraphBindBuildPropertyTests {
                     in: tree,
                     omittingScalarSequenceElements: false
                 )
-                guard metadata.bindPath.contains(.bindInner) == false else {
+                guard metadata.bindPath.materialized().contains(.bindInner) == false else {
                     #expect(bindRooted == nil, "A bind inside another bind's inner subtree must fall back, for recipe: \(recipe)")
                     continue
                 }

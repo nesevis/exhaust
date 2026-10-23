@@ -15,15 +15,16 @@ extension ChoiceGraph {
         from tree: ChoiceTree,
         matchingPath path: ChoicePath
     ) -> ChoiceTree? {
-        walkForPathMatch(tree: tree, remainingPath: path[...])
+        walkForPathMatch(tree: tree, path: path, pathIndex: 0)
     }
 
-    /// Recursive walk used by ``extractBoundSubtree(from:matchingPath:)``. Returns the bound child subtree when `remainingPath` is fully consumed at a non-getSize bind, or nil on mismatch.
+    /// Recursive walk used by ``extractBoundSubtree(from:matchingPath:)``. Returns the bound child subtree when `path` is fully consumed at a non-getSize bind, or nil on mismatch.
     ///
-    /// Transparent variants (``ChoiceTree/branch``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step in `remainingPath`.
+    /// Transparent variants (``ChoiceTree/branch``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step at `pathIndex`.
     private static func walkForPathMatch(
         tree: ChoiceTree,
-        remainingPath: ChoicePath.SubSequence
+        path: ChoicePath,
+        pathIndex: Int
     ) -> ChoiceTree? {
         switch tree {
             case .choice, .just, .getSize:
@@ -31,7 +32,7 @@ extension ChoiceGraph {
                 return nil
 
             case let .sequence(elements, _):
-                guard let step = remainingPath.first,
+                guard let step = path.step(at: pathIndex),
                       case let .sequenceChild(index) = step,
                       elements.indices.contains(index)
                 else {
@@ -39,16 +40,17 @@ extension ChoiceGraph {
                 }
                 return walkForPathMatch(
                     tree: elements[index],
-                    remainingPath: remainingPath.dropFirst()
+                    path: path,
+                    pathIndex: pathIndex + 1
                 )
 
             case let .branch(b):
                 // Transparent wrapper — pass through without consuming a step.
-                return walkForPathMatch(tree: b.choice, remainingPath: remainingPath)
+                return walkForPathMatch(tree: b.choice, path: path, pathIndex: pathIndex)
 
             case let .group(array, _, _):
                 if isPickSite(array) {
-                    guard let step = remainingPath.first,
+                    guard let step = path.step(at: pathIndex),
                           case let .pickBranch(targetID) = step
                     else {
                         return nil
@@ -60,14 +62,15 @@ extension ChoiceGraph {
                         {
                             return walkForPathMatch(
                                 tree: element,
-                                remainingPath: remainingPath.dropFirst()
+                                path: path,
+                                pathIndex: pathIndex + 1
                             )
                         }
                     }
                     return nil
                 }
                 // Regular zip group.
-                guard let step = remainingPath.first,
+                guard let step = path.step(at: pathIndex),
                       case let .groupChild(index) = step,
                       array.indices.contains(index)
                 else {
@@ -75,38 +78,41 @@ extension ChoiceGraph {
                 }
                 return walkForPathMatch(
                     tree: array[index],
-                    remainingPath: remainingPath.dropFirst()
+                    path: path,
+                    pathIndex: pathIndex + 1
                 )
 
             case let .bind(_, inner, bound):
                 if inner.isGetSize {
                     // getSize-bind is transparent in the graph — pass through.
-                    return walkForPathMatch(tree: bound, remainingPath: remainingPath)
+                    return walkForPathMatch(tree: bound, path: path, pathIndex: pathIndex)
                 }
-                if remainingPath.isEmpty {
+                if pathIndex == path.count {
                     // This is the target bind — return its bound child.
                     return bound
                 }
-                guard let step = remainingPath.first else {
+                guard let step = path.step(at: pathIndex) else {
                     return nil
                 }
                 switch step {
                     case .bindBound:
                         return walkForPathMatch(
                             tree: bound,
-                            remainingPath: remainingPath.dropFirst()
+                            path: path,
+                            pathIndex: pathIndex + 1
                         )
                     case .bindInner:
                         return walkForPathMatch(
                             tree: inner,
-                            remainingPath: remainingPath.dropFirst()
+                            path: path,
+                            pathIndex: pathIndex + 1
                         )
                     default:
                         return nil
                 }
 
             case let .resize(_, choices):
-                guard let step = remainingPath.first,
+                guard let step = path.step(at: pathIndex),
                       case let .groupChild(index) = step,
                       choices.indices.contains(index)
                 else {
@@ -114,7 +120,8 @@ extension ChoiceGraph {
                 }
                 return walkForPathMatch(
                     tree: choices[index],
-                    remainingPath: remainingPath.dropFirst()
+                    path: path,
+                    pathIndex: pathIndex + 1
                 )
         }
     }

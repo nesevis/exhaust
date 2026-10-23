@@ -27,6 +27,14 @@ struct SequencePatch: RandomAccessCollection, Equatable {
         firstEdit == nil ? 0 : additional.count + 1
     }
 
+    func index(after index: Int) -> Int {
+        index + 1
+    }
+
+    func index(before index: Int) -> Int {
+        index - 1
+    }
+
     subscript(index: Int) -> Edit {
         guard index == 0 else {
             return additional[index - 1]
@@ -39,7 +47,7 @@ struct SequencePatch: RandomAccessCollection, Equatable {
 
     /// Duplicate positions would cancel hash contributions incorrectly, even though the last write would win during materialization.
     mutating func append(_ edit: Edit) {
-        assert(contains(where: { $0.position == edit.position }) == false)
+        assert(firstEdit?.position != edit.position && additional.contains(where: { $0.position == edit.position }) == false)
         guard firstEdit != nil else {
             firstEdit = edit
             return
@@ -47,13 +55,21 @@ struct SequencePatch: RandomAccessCollection, Equatable {
         additional.append(edit)
     }
 
+    // MARK: - Hot patch operations
+
+    // Indexed loops avoid generic collection traversal on every probe in debug builds.
+
     /// Updates only edited contributions; the hash and sequence must describe the same baseline.
     func hash(baseHash: UInt64, baseSequence: ChoiceSequence) -> UInt64 {
         baseSequence.withUnsafeBufferPointer { buffer in
             var hash = baseHash
-            for edit in self {
+            var index = 0
+            let editCount = endIndex
+            while index < editCount {
+                let edit = self[index]
                 hash ^= ZobristHash.contribution(at: edit.position, buffer[edit.position])
                 hash ^= ZobristHash.contribution(at: edit.position, edit.replacement)
+                index += 1
             }
             return hash
         }
@@ -62,8 +78,12 @@ struct SequencePatch: RandomAccessCollection, Equatable {
     /// Requires a buffer restored to this patch's baseline; untouched entries are not rewritten.
     func write(into candidate: inout ChoiceSequence) {
         candidate.withUnsafeMutableBufferPointer { buffer in
-            for edit in self {
+            var index = 0
+            let editCount = endIndex
+            while index < editCount {
+                let edit = self[index]
                 buffer[edit.position] = edit.replacement
+                index += 1
             }
         }
     }
@@ -71,8 +91,12 @@ struct SequencePatch: RandomAccessCollection, Equatable {
     /// Undoes this patch before reusing the buffer for another candidate against the same baseline.
     func restore(into candidate: inout ChoiceSequence, baseSequence: ChoiceSequence) {
         candidate.withUnsafeMutableBufferPointer { buffer in
-            for edit in self {
+            var index = 0
+            let editCount = endIndex
+            while index < editCount {
+                let edit = self[index]
                 buffer[edit.position] = baseSequence[edit.position]
+                index += 1
             }
         }
     }

@@ -12,7 +12,7 @@ extension ChoiceGraphBuilder {
         in tree: ChoiceTree,
         omittingScalarSequenceElements: Bool
     ) -> (graph: ChoiceGraph, bindNodeID: Int)? {
-        guard let location = locateBind(in: tree, remainingPath: bindPath[...], offset: 0, bindDepth: 0, fingerprint: fingerprint) else {
+        guard let location = locateBind(in: tree, path: bindPath, pathIndex: 0, offset: 0, bindDepth: 0, fingerprint: fingerprint) else {
             return nil
         }
         var builder = ChoiceGraphBuilder(omittingScalarSequenceElements: omittingScalarSequenceElements)
@@ -26,7 +26,8 @@ extension ChoiceGraphBuilder {
     /// Locates an active bind with the full walk's offset and depth, counting skipped siblings through ``ChoiceTree/flattenedEntryCount``.
     private static func locateBind(
         in tree: ChoiceTree,
-        remainingPath: ChoicePath.SubSequence,
+        path: ChoicePath,
+        pathIndex: Int,
         offset: Int,
         bindDepth: Int,
         fingerprint: UInt64
@@ -36,37 +37,39 @@ extension ChoiceGraphBuilder {
                 return nil
 
             case let .sequence(elements, _):
-                guard case let .sequenceChild(index)? = remainingPath.first, elements.indices.contains(index) else {
+                guard case let .sequenceChild(index)? = path.step(at: pathIndex), elements.indices.contains(index) else {
                     return nil
                 }
                 return locateBind(
                     in: elements[index],
-                    remainingPath: remainingPath.dropFirst(),
+                    path: path,
+                    pathIndex: pathIndex + 1,
                     offset: offset + 1 + Self.flattenedEntryCount(of: elements[..<index]),
                     bindDepth: bindDepth,
                     fingerprint: fingerprint
                 )
 
             case let .branch(branch):
-                return locateBind(in: branch.choice, remainingPath: remainingPath, offset: offset, bindDepth: bindDepth, fingerprint: fingerprint)
+                return locateBind(in: branch.choice, path: path, pathIndex: pathIndex, offset: offset, bindDepth: bindDepth, fingerprint: fingerprint)
 
             case let .group(array, _, _):
                 if let pickSite = detectPickSite(array) {
-                    guard case let .pickBranch(branchID)? = remainingPath.first,
+                    guard case let .pickBranch(branchID)? = path.step(at: pathIndex),
                           branchID == pickSite.selectedID,
                           let selected = array.first(where: { $0.isSelected })
                     else {
                         return nil
                     }
                     // Group open and branch marker precede the selected branch's content.
-                    return locateBind(in: selected, remainingPath: remainingPath.dropFirst(), offset: offset + 2, bindDepth: bindDepth, fingerprint: fingerprint)
+                    return locateBind(in: selected, path: path, pathIndex: pathIndex + 1, offset: offset + 2, bindDepth: bindDepth, fingerprint: fingerprint)
                 }
-                guard case let .groupChild(index)? = remainingPath.first, array.indices.contains(index) else {
+                guard case let .groupChild(index)? = path.step(at: pathIndex), array.indices.contains(index) else {
                     return nil
                 }
                 return locateBind(
                     in: array[index],
-                    remainingPath: remainingPath.dropFirst(),
+                    path: path,
+                    pathIndex: pathIndex + 1,
                     offset: offset + 1 + Self.flattenedEntryCount(of: array[..<index]),
                     bindDepth: bindDepth,
                     fingerprint: fingerprint
@@ -74,9 +77,9 @@ extension ChoiceGraphBuilder {
 
             case let .bind(bindFingerprint, inner, bound):
                 if inner.isGetSize {
-                    return locateBind(in: bound, remainingPath: remainingPath, offset: offset + 1, bindDepth: bindDepth, fingerprint: fingerprint)
+                    return locateBind(in: bound, path: path, pathIndex: pathIndex, offset: offset + 1, bindDepth: bindDepth, fingerprint: fingerprint)
                 }
-                guard let step = remainingPath.first else {
+                guard let step = path.step(at: pathIndex) else {
                     guard bindFingerprint == fingerprint else {
                         return nil
                     }
@@ -87,19 +90,21 @@ extension ChoiceGraphBuilder {
                 }
                 return locateBind(
                     in: bound,
-                    remainingPath: remainingPath.dropFirst(),
+                    path: path,
+                    pathIndex: pathIndex + 1,
                     offset: offset + 1 + inner.flattenedEntryCount,
                     bindDepth: bindDepth + 1,
                     fingerprint: fingerprint
                 )
 
             case let .resize(_, choices):
-                guard case let .groupChild(index)? = remainingPath.first, choices.indices.contains(index) else {
+                guard case let .groupChild(index)? = path.step(at: pathIndex), choices.indices.contains(index) else {
                     return nil
                 }
                 return locateBind(
                     in: choices[index],
-                    remainingPath: remainingPath.dropFirst(),
+                    path: path,
+                    pathIndex: pathIndex + 1,
                     offset: offset + 1 + Self.flattenedEntryCount(of: choices[..<index]),
                     bindDepth: bindDepth,
                     fingerprint: fingerprint

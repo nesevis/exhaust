@@ -11,22 +11,33 @@ struct ChoicePathTests {
         for rotation in alphabet.indices {
             let steps = (0 ..< length).map { alphabet[($0 + rotation) % alphabet.count] }
             let path = ChoicePath(steps)
-            #expect(Array(path) == steps)
+            #expect(path.materialized() == steps)
             #expect(path.count == steps.count)
-            #expect(Array(path.reversed()) == Array(steps.reversed()))
+            #expect(path.isEmpty == steps.isEmpty)
+            #expect(path.step(at: -1) == nil)
+            #expect(path.step(at: length) == nil)
+            #expect(path.step(at: .max) == nil)
+            for index in steps.indices {
+                #expect(path.step(at: index) == steps[index])
+            }
+            #expect(path.prefix(.max) == path)
+            #expect(path.droppingFirst(.max).isEmpty)
+            #expect(Array(path.materialized().reversed()) == Array(steps.reversed()))
             var appended: ChoicePath = []
             for step in steps {
                 let parent = appended
                 appended = parent.appending(step)
-                #expect(Array(appended.dropLast()) == Array(parent))
+                #expect(appended.prefix(parent.count).materialized() == parent.materialized())
             }
             #expect(appended == path)
             #expect(Set([path, appended]).count == 1)
             for split in 0 ... length {
-                let prefix = ChoicePath(path.prefix(split))
-                let suffix = ChoicePath(path.dropFirst(split))
+                let prefix = path.prefix(split)
+                let suffix = path.droppingFirst(split)
                 #expect(prefix == ChoicePath(steps.prefix(split)))
                 #expect(suffix == ChoicePath(steps.dropFirst(split)))
+                #expect(Set([prefix, ChoicePath(steps.prefix(split))]).count == 1)
+                #expect(Set([suffix, ChoicePath(steps.dropFirst(split))]).count == 1)
             }
         }
     }

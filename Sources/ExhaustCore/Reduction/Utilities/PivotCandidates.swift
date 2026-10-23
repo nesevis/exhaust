@@ -127,7 +127,7 @@ enum PivotCandidates {
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
                 continue
             }
-            let path = ChoicePath(graph.nodes[nodeID].choicePath.dropFirst(pathPrefixCount))
+            let path = graph.nodes[nodeID].choicePath.droppingFirst(pathPrefixCount)
             sourcesByPath[path] = metadata
         }
         var hasChangedFill = false

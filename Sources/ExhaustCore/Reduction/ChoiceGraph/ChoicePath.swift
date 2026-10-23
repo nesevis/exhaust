@@ -55,7 +55,7 @@ package struct ChoicePath: Sendable, Hashable {
                 if expanded.isEmpty {
                     let prefix = ChoicePath(storage: .compact(bits))
                     expanded.reserveCapacity(Swift.max(prefix.count + 1, steps.underestimatedCount))
-                    expanded.append(contentsOf: prefix)
+                    prefix.appendSteps(to: &expanded)
                 }
                 expanded.append(step)
             }
@@ -72,7 +72,7 @@ package struct ChoicePath: Sendable, Hashable {
                 }
                 var steps: [ChoicePathStep] = []
                 steps.reserveCapacity(count + 1)
-                steps.append(contentsOf: self)
+                appendSteps(to: &steps)
                 steps.append(step)
                 return ChoicePath(storage: .expanded(steps))
             case var .expanded(steps):
@@ -111,12 +111,8 @@ package struct ChoicePath: Sendable, Hashable {
     }
 }
 
-extension ChoicePath: RandomAccessCollection {
-    package var startIndex: Int {
-        0
-    }
-
-    package var endIndex: Int {
+package extension ChoicePath {
+    var count: Int {
         switch storage {
             case let .compact(bits):
                 (64 - bits.leadingZeroBitCount + 7) / 8
@@ -125,39 +121,106 @@ extension ChoicePath: RandomAccessCollection {
         }
     }
 
-    package func index(after index: Int) -> Int {
-        index + 1
-    }
-
-    package func index(before index: Int) -> Int {
-        index - 1
-    }
-
-    package subscript(index: Int) -> ChoicePathStep {
-        precondition(index >= 0 && index < endIndex)
+    var isEmpty: Bool {
         switch storage {
             case let .compact(bits):
-                let code = (bits >> ((endIndex - index - 1) * 8)) & 0xFF
-                switch code {
-                    case 1:
-                        return .bindInner
-                    case 2:
-                        return .bindBound
-                    default:
-                        let payload = code & 0x3F
-                        switch code & 0xC0 {
-                            case 0x40:
-                                return .sequenceChild(Int(payload))
-                            case 0x80:
-                                return .groupChild(Int(payload))
-                            case 0xC0:
-                                return .pickBranch(payload)
-                            default:
-                                preconditionFailure("Invalid compact path step")
-                        }
-                }
+                bits == 0
+            case let .expanded(steps):
+                steps.isEmpty
+        }
+    }
+
+    /// Returns nil when traversal has consumed the path or the index is negative.
+    func step(at index: Int) -> ChoicePathStep? {
+        guard index >= 0, index < count else {
+            return nil
+        }
+        switch storage {
+            case let .compact(bits):
+                return Self.step(for: (bits >> ((count - index - 1) * 8)) & 0xFF)
             case let .expanded(steps):
                 return steps[index]
+        }
+    }
+
+    /// Retains at most the requested number of leading steps, preserving canonical storage for equality and hashing.
+    func prefix(_ maximumLength: Int) -> ChoicePath {
+        precondition(maximumLength >= 0)
+        guard maximumLength < count else {
+            return self
+        }
+        guard maximumLength > 0 else {
+            return []
+        }
+        switch storage {
+            case let .compact(bits):
+                return ChoicePath(storage: .compact(bits >> ((count - maximumLength) * 8)))
+            case let .expanded(steps):
+                return ChoicePath(steps.prefix(maximumLength))
+        }
+    }
+
+    /// Removes leading steps without generic slicing; an expanded suffix is repacked when it fits the compact representation.
+    func droppingFirst(_ count: Int) -> ChoicePath {
+        precondition(count >= 0)
+        guard count > 0 else {
+            return self
+        }
+        let remaining = self.count - Swift.min(count, self.count)
+        guard remaining > 0 else {
+            return []
+        }
+        switch storage {
+            case let .compact(bits):
+                return ChoicePath(storage: .compact(bits & ((1 << (remaining * 8)) - 1)))
+            case let .expanded(steps):
+                return ChoicePath(steps.dropFirst(count))
+        }
+    }
+
+    /// Expands compact storage into an array only for consumers that need an owned sequence of steps.
+    func materialized() -> [ChoicePathStep] {
+        if case let .expanded(steps) = storage {
+            return steps
+        }
+        var steps: [ChoicePathStep] = []
+        steps.reserveCapacity(count)
+        appendSteps(to: &steps)
+        return steps
+    }
+
+    /// Appends decoded steps into the caller's reserved buffer so expansion does not require an intermediate array.
+    private func appendSteps(to result: inout [ChoicePathStep]) {
+        switch storage {
+            case let .compact(bits):
+                let stepCount = count
+                for index in 0 ..< stepCount {
+                    result.append(Self.step(for: (bits >> ((stepCount - index - 1) * 8)) & 0xFF))
+                }
+            case let .expanded(steps):
+                result.append(contentsOf: steps)
+        }
+    }
+
+    /// Decodes one nonzero byte produced by the compact step encoding.
+    private static func step(for code: UInt64) -> ChoicePathStep {
+        switch code {
+            case 1:
+                return .bindInner
+            case 2:
+                return .bindBound
+            default:
+                let payload = code & 0x3F
+                switch code & 0xC0 {
+                    case 0x40:
+                        return .sequenceChild(Int(payload))
+                    case 0x80:
+                        return .groupChild(Int(payload))
+                    case 0xC0:
+                        return .pickBranch(payload)
+                    default:
+                        preconditionFailure("Invalid compact path step")
+                }
         }
     }
 }
@@ -170,6 +233,6 @@ extension ChoicePath: ExpressibleByArrayLiteral {
 
 extension ChoicePath: CustomStringConvertible {
     package var description: String {
-        String(describing: Array(self))
+        String(describing: materialized())
     }
 }

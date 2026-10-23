@@ -14,9 +14,8 @@
 extension Materializer {
     struct Cursor: ~Copyable {
         private let sequence: EditedChoiceSequence
-        private var entries: ChoiceSequence {
-            sequence.base
-        }
+        /// Caches the immutable base for structural reads; forwarding through the edit descriptor adds copying overhead in debug builds.
+        private let entries: ChoiceSequence
 
         private(set) var position: Int = 0
         var exhausted: Bool = false
@@ -89,6 +88,7 @@ extension Materializer {
 
         init(from sequence: consuming EditedChoiceSequence) {
             effectiveEnd = sequence.count
+            entries = sequence.base
             self.sequence = sequence
         }
 
