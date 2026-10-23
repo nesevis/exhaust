@@ -84,6 +84,7 @@ package extension __ExhaustRuntime {
         commandLimit: Int,
         concurrencyLevel: Int?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
+        replayProperty: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
         smokeSource: AnyStateMachineCandidateSource<Spec>? = nil,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
         onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil
@@ -107,7 +108,7 @@ package extension __ExhaustRuntime {
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
                 deadlineNanoseconds: config.deadlineNanoseconds,
-                property: property
+                property: replayProperty
             ))
         }
 
@@ -117,7 +118,7 @@ package extension __ExhaustRuntime {
                 replayIteration: replayIteration,
                 sequenceGen: sequenceGen,
                 deadlineNanoseconds: config.deadlineNanoseconds,
-                property: property
+                property: replayProperty
             ))
         }
 

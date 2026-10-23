@@ -37,8 +37,7 @@ package extension __ExhaustRuntime {
         )
 
         let invocationCounter = UnsafeSendableBox(0)
-        let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
-            invocationCounter.value += 1
+        let passesOnce: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
             timeoutProbeCounts.value.attempts += 1
             let partition = LanePartition(markers: candidate.taggedCommands.map(\.0))
             let outcome = innerBackend.execute(candidate.taggedCommands, setupStep: candidate.setupStep, partition: partition)
@@ -53,6 +52,24 @@ package extension __ExhaustRuntime {
                 outcome: outcome,
                 backend: innerBackend
             ) == nil
+        }
+        let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
+            invocationCounter.value += 1
+            return passesOnce(candidate)
+        }
+        // A targeted replay probes one candidate, and a race need not fire on any single execution. Repeat it as reduction does before accepting the pass, so a seed that reproduces the failure is not reported as fixed. One increment covers all repetitions, matching reduction's accounting.
+        let deadlineNanoseconds = config.deadlineNanoseconds
+        let replayProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
+            invocationCounter.value += 1
+            for _ in 0 ..< PreemptiveConfirmation.confirmationRepetitionsCeiling {
+                guard deadlineNanoseconds.map({ MonotonicClock.nanoseconds() < $0 }) ?? true else {
+                    return true
+                }
+                if passesOnce(candidate) == false {
+                    return false
+                }
+            }
+            return true
         }
 
         let smokeProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
@@ -86,6 +103,7 @@ package extension __ExhaustRuntime {
             concurrencyLevel: config.concurrencyLevel,
             identifySkips: identifySkips,
             property: property,
+            replayProperty: replayProperty,
             invocationCounter: invocationCounter,
             sequenceGenForLength: { range in
                 Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)

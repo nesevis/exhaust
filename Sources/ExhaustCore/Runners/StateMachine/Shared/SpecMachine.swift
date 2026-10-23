@@ -457,6 +457,8 @@ package struct SpecPipeline<Backend: StateMachineBackend> {
     let concurrencyLevel: Int?
     let identifySkips: @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>
     let property: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool
+    /// Probes the single candidate a targeted replay addresses. A nondeterministic backend repeats the candidate here, because one miss would report a reproducible seed as passing; deterministic backends use ``property``.
+    let replayProperty: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool
     let invocationCounter: UnsafeSendableBox<Int>
     let sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?
     let fileID: StaticString
@@ -472,6 +474,7 @@ package struct SpecPipeline<Backend: StateMachineBackend> {
         concurrencyLevel: Int?,
         identifySkips: @escaping @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>,
         property: @escaping @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool,
+        replayProperty: (@Sendable (SpecCandidateValue<Backend.Spec>) -> Bool)? = nil,
         invocationCounter: UnsafeSendableBox<Int>,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?,
         fileID: StaticString,
@@ -486,6 +489,7 @@ package struct SpecPipeline<Backend: StateMachineBackend> {
         self.concurrencyLevel = concurrencyLevel
         self.identifySkips = identifySkips
         self.property = property
+        self.replayProperty = replayProperty ?? property
         self.invocationCounter = invocationCounter
         self.sequenceGenForLength = sequenceGenForLength
         self.fileID = fileID
@@ -518,6 +522,7 @@ package struct SpecPipeline<Backend: StateMachineBackend> {
             commandLimit: commandLimit,
             concurrencyLevel: concurrencyLevel,
             property: property,
+            replayProperty: replayProperty,
             smokeSource: smokeSource,
             sequenceGenForLength: sequenceGenForLength,
             onFilterLosses: onFilterLosses
