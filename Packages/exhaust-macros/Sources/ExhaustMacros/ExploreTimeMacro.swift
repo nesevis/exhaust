@@ -4,14 +4,16 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#explore(gen, time: .minutes(15), .settings...) { ... }` into a call to `__ExhaustRuntime.__exploreTime(...)` or `__ExhaustRuntime.__exploreTimeExpect(...)`.
+/// Expression macro that expands `#explore(gen, time: .minutes(15), .settings...) { ... }` into a call to `__ExhaustRuntime.__exploreTimeAsync(...)` or `__ExhaustRuntime.__exploreTimeExpectAsync(...)`.
+///
+/// Both runtime targets are async, so every call is awaited and the search never holds the caller's thread. Each target overloads on the closure's effects, so overload resolution, not the macro, chooses between calling a synchronous property directly and bridging an asynchronous one.
 ///
 /// The macro inspects the trailing closure to determine the runtime function:
-/// - **Multi-statement closures** expand to `__exploreTimeExpect` (Void-returning, uses `withExpectedIssue`).
-/// - **Single-expression closures containing `#expect` or `#require`** expand to `__exploreTimeExpect`.
-/// - **All other single-expression closures** expand to `__exploreTime` (Bool-returning predicate).
+/// - **Multi-statement closures** expand to `__exploreTimeExpectAsync` (Void-returning, absorbs per-attempt issues).
+/// - **Single-expression closures containing `#expect` or `#require`** expand to `__exploreTimeExpectAsync`.
+/// - **All other single-expression closures** expand to `__exploreTimeAsync` (Bool-returning predicate).
 ///
-/// When a function reference is passed via `property:`, the expansion always uses `__exploreTime`.
+/// When a function reference is passed via `property:`, the expansion always uses `__exploreTimeAsync`.
 ///
 /// The `time:` and `directions:` modes are mutually exclusive at the type level; a call carrying both arguments is diagnosed here for a clearer message than overload-resolution failure.
 public struct ExploreTimeMacro: ExpressionMacro {
@@ -19,44 +21,22 @@ public struct ExploreTimeMacro: ExpressionMacro {
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        try expandExploreTimeCall(
-            of: node,
-            in: context,
-            plainFunction: "__exploreTime",
-            expectFunction: "__exploreTimeExpect"
-        )
+        try expandExploreTimeCall(of: node, in: context)
     }
 }
 
-/// Expression macro for async `#explore(time:)` closures.
-public struct ExploreTimeAsyncMacro: ExpressionMacro {
-    public static func expansion(
-        of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext
-    ) throws -> ExprSyntax {
-        try expandExploreTimeCall(
-            of: node,
-            in: context,
-            plainFunction: "__exploreTimeAsync",
-            expectFunction: "__exploreTimeExpectAsync"
-        )
-    }
-}
+// MARK: - Expansion Logic
 
-// MARK: - Shared Expansion Logic
-
-/// The shared body of the sync and async `time:` macros: diagnoses the closure, picks the plain or expect runtime function, and expands. The two macros differ only in the runtime function names.
+/// Diagnoses the closure, picks the plain or expect runtime function, and expands.
 private func expandExploreTimeCall(
     of node: some FreestandingMacroExpansionSyntax,
-    in context: some MacroExpansionContext,
-    plainFunction: String,
-    expectFunction: String
+    in context: some MacroExpansionContext
 ) throws -> ExprSyntax {
     let args = node.arguments.map(\.self)
 
     guard let trailingClosure = node.trailingClosure else {
         return try expandExploreTimeFunctionReference(
-            of: node, args: args, in: context, runtimeFunction: plainFunction
+            of: node, args: args, in: context
         )
     }
 
@@ -82,7 +62,7 @@ private func expandExploreTimeCall(
         args: args,
         trailingClosure: trailingClosure,
         in: context,
-        runtimeFunction: isVoid ? expectFunction : plainFunction,
+        runtimeFunction: isVoid ? "__exploreTimeExpectAsync" : "__exploreTimeAsync",
         isExpectExpansion: isVoid
     )
 }
@@ -164,7 +144,7 @@ private func expandExploreTimeFunctionReference(
     of node: some FreestandingMacroExpansionSyntax,
     args: [LabeledExprListSyntax.Element],
     in context: some MacroExpansionContext,
-    runtimeFunction: String = "__exploreTime"
+    runtimeFunction: String = "__exploreTimeAsync"
 ) throws -> ExprSyntax {
     guard args.count >= 3 else {
         context.diagnose(Diagnostic(

@@ -8,8 +8,8 @@ import Testing
 @Suite("#explore(time:) runtime entry", .serialized)
 struct ExploreTimeRuntimeTests {
     @Test("Missing instrumentation warns without invoking the property or consuming budget")
-    func missingInstrumentation() {
-        let report = __ExhaustRuntime.__exploreTime(
+    func missingInstrumentation() async {
+        let report = await __ExhaustRuntime.__exploreTimeAsync(
             #gen(.int(in: 0 ... 100)),
             time: .seconds(60),
             settings: [],
@@ -30,7 +30,7 @@ struct ExploreTimeRuntimeTests {
         let report = await withIssueReporters([reporter]) {
             switch entry {
                 case .syncBool:
-                    return __ExhaustRuntime.__exploreTime(
+                    return await __ExhaustRuntime.__exploreTimeAsync(
                         #gen(.int(in: 0 ... 100)),
                         time: .seconds(60),
                         settings: [],
@@ -40,7 +40,7 @@ struct ExploreTimeRuntimeTests {
                         return false
                     }
                 case .syncExpect:
-                    return __ExhaustRuntime.__exploreTimeExpect(
+                    return await __ExhaustRuntime.__exploreTimeExpectAsync(
                         #gen(.int(in: 0 ... 100)),
                         time: .seconds(60),
                         settings: [],
@@ -54,7 +54,7 @@ struct ExploreTimeRuntimeTests {
                         time: .seconds(60),
                         settings: [],
                         coverage: .none
-                    ) { _ in
+                    ) { _ async in
                         Issue.record("An uninstrumented property must not run")
                         return false
                     }
@@ -64,8 +64,8 @@ struct ExploreTimeRuntimeTests {
                         time: .seconds(60),
                         settings: [],
                         coverage: .none,
-                        property: { _ in Issue.record("An uninstrumented property must not run") },
-                        detection: { _ in Issue.record("An uninstrumented detector must not run") }
+                        property: { _ async in Issue.record("An uninstrumented property must not run") },
+                        detection: { _ async in Issue.record("An uninstrumented detector must not run") }
                     )
             }
         }
@@ -80,40 +80,8 @@ struct ExploreTimeRuntimeTests {
 
     // One test per value entry point of the shape "the run's recorded issue reaches the current test". The recorded issue here is the invalid-budget error, which travels the same reportFuzzIssues tail as the fault inventory. withKnownIssue is task-scoped, so a variant that reports off the test task — as the async Bool variant once did from inside its GCD closure — fails its test here instead of silently losing the report.
 
-    @Test("The sync Bool entry point records its issue on the test task")
-    func reportingChannelSyncBool() {
-        nonisolated(unsafe) var report: FuzzReport?
-        withKnownIssue {
-            report = __ExhaustRuntime.__exploreTime(
-                #gen(.int(in: 0 ... 100)),
-                time: .zero,
-                settings: [],
-                coverage: .none
-            ) { value in
-                value >= 0
-            }
-        }
-        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
-    }
-
-    @Test("The sync expect entry point records its issue on the test task")
-    func reportingChannelSyncExpect() {
-        nonisolated(unsafe) var report: FuzzReport?
-        withKnownIssue {
-            report = __ExhaustRuntime.__exploreTimeExpect(
-                #gen(.int(in: 0 ... 100)),
-                time: .zero,
-                settings: [],
-                coverage: .none,
-                property: { _ in },
-                detection: { _ in }
-            )
-        }
-        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
-    }
-
-    @Test("The async Bool entry point records its issue on the test task, after the GCD hop")
-    func reportingChannelAsyncBool() async {
+    @Test("The synchronous-closure Bool entry point records its issue on the test task, after the GCD hop")
+    func reportingChannelSyncBool() async {
         nonisolated(unsafe) var report: FuzzReport?
         await withKnownIssue {
             report = await __ExhaustRuntime.__exploreTimeAsync(
@@ -128,8 +96,8 @@ struct ExploreTimeRuntimeTests {
         #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
     }
 
-    @Test("The async expect entry point records its issue on the test task, after the GCD hop")
-    func reportingChannelAsyncExpect() async {
+    @Test("The synchronous-closure expect entry point records its issue on the test task, after the GCD hop")
+    func reportingChannelSyncExpect() async {
         nonisolated(unsafe) var report: FuzzReport?
         await withKnownIssue {
             report = await __ExhaustRuntime.__exploreTimeExpectAsync(
@@ -142,6 +110,84 @@ struct ExploreTimeRuntimeTests {
             )
         }
         #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
+    }
+
+    @Test("The async-closure Bool entry point records its issue on the test task, after the GCD hop")
+    func reportingChannelAsyncBool() async {
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__exploreTimeAsync(
+                #gen(.int(in: 0 ... 100)),
+                time: .zero,
+                settings: [],
+                coverage: .none
+            ) { value async in
+                value >= 0
+            }
+        }
+        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
+    }
+
+    @Test("The async-closure expect entry point records its issue on the test task, after the GCD hop")
+    func reportingChannelAsyncExpect() async {
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__exploreTimeExpectAsync(
+                #gen(.int(in: 0 ... 100)),
+                time: .zero,
+                settings: [],
+                coverage: .none,
+                property: { _ async in },
+                detection: { _ async in }
+            )
+        }
+        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
+    }
+
+    // MARK: - Closure Effects
+
+    // Overload resolution, not the macro, picks the path: a closure without `async` must reach the direct call, and only an `async` closure may pay for a task per attempt.
+
+    @Test("A synchronous property closure is called directly on the fuzz lane, outside any task", arguments: ClosureEffect.allCases)
+    func closureEffectSelectsThePath(effect: ClosureEffect) async {
+        let invocations = SendableBox((total: 0, insideTask: 0))
+        let record: @Sendable () -> Void = {
+            let isInsideTask = withUnsafeCurrentTask { $0 != nil }
+            invocations.withValue { counts in
+                counts.total += 1
+                counts.insideTask += isInsideTask ? 1 : 0
+            }
+        }
+        switch effect {
+            case .synchronous:
+                await __ExhaustRuntime.__exploreTimeAsync(
+                    #gen(.int(in: 0 ... 100)),
+                    time: .milliseconds(50),
+                    settings: [.replay(1), .suppress(.all)],
+                    coverage: .injected(passthroughSource())
+                ) { _ in
+                    record()
+                    return true
+                }
+            case .asynchronous:
+                await __ExhaustRuntime.__exploreTimeAsync(
+                    #gen(.int(in: 0 ... 100)),
+                    time: .milliseconds(50),
+                    settings: [.replay(1), .suppress(.all)],
+                    coverage: .injected(passthroughSource())
+                ) { _ async in
+                    record()
+                    return true
+                }
+        }
+        let counts = invocations.value
+        #expect(counts.total > 0)
+        switch effect {
+            case .synchronous:
+                #expect(counts.insideTask == 0)
+            case .asynchronous:
+                #expect(counts.insideTask == counts.total)
+        }
     }
 
     @Test("The skipScreening setting starts the search at random sampling with no screening attempts")
@@ -726,4 +772,9 @@ enum MissingInstrumentationEntry: CaseIterable, Sendable {
     case syncExpect
     case asyncBool
     case asyncExpect
+}
+
+enum ClosureEffect: CaseIterable, Sendable {
+    case synchronous
+    case asynchronous
 }

@@ -8,7 +8,7 @@
         .macros(["explore": ExploreTimeMacro.self], record: .failed)
     )
     struct ExploreTimeMacroTests {
-        @Test("Bool trailing closure expands to __exploreTime")
+        @Test("Bool trailing closure expands to __exploreTimeAsync")
         func boolTrailingClosure() {
             assertMacro {
                 """
@@ -18,7 +18,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__exploreTime(
+                __ExhaustRuntime.__exploreTimeAsync(
                     messageGen,
                     time: .minutes(15),
                     settings: [],
@@ -44,7 +44,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__exploreTime(
+                __ExhaustRuntime.__exploreTimeAsync(
                     messageGen,
                     time: .seconds(30),
                     settings: [.replay(42), .suppress(.all)],
@@ -60,7 +60,7 @@
             }
         }
 
-        @Test("Void closure with #expect expands to __exploreTimeExpect with a detection rewrite")
+        @Test("Void closure with #expect expands to __exploreTimeExpectAsync with a detection rewrite")
         func expectClosure() {
             assertMacro {
                 """
@@ -71,7 +71,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__exploreTimeExpect(
+                __ExhaustRuntime.__exploreTimeExpectAsync(
                     messageGen,
                     time: .minutes(2),
                     settings: [],
@@ -92,7 +92,7 @@
             }
         }
 
-        @Test("Function reference expands to __exploreTime")
+        @Test("Function reference expands to __exploreTimeAsync")
         func functionReference() {
             assertMacro {
                 """
@@ -100,7 +100,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__exploreTime(
+                __ExhaustRuntime.__exploreTimeAsync(
                     messageGen,
                     time: .minutes(5),
                     settings: [],
@@ -182,14 +182,8 @@
                 """
             }
         }
-    }
 
-    @Suite(
-        "#explore(time:) async macro expansion tests",
-        .macros(["explore": ExploreTimeAsyncMacro.self], record: .failed)
-    )
-    struct ExploreTimeAsyncMacroTests {
-        @Test("Async Bool trailing closure expands to __exploreTimeAsync")
+        @Test("Async Bool trailing closure expands to the same __exploreTimeAsync target")
         func asyncBoolClosure() {
             assertMacro {
                 """
@@ -215,7 +209,7 @@
             }
         }
 
-        @Test("Async Void closure with #expect expands to __exploreTimeExpectAsync with a detection rewrite")
+        @Test("Async Void closure with #expect expands to the same __exploreTimeExpectAsync target")
         func asyncExpectClosure() {
             assertMacro {
                 """

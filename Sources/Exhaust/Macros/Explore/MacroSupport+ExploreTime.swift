@@ -22,35 +22,9 @@ import IssueReporting
 public extension __ExhaustRuntime {
     // MARK: - Entry-Point Driver
 
-    /// Runs one value entry point's full pipeline in the one order the reporting channel tolerates: persistence preparation and resume findings, the run core, diagnostic replay, issue reporting, and attachment recording.
+    /// Runs one value entry point's full pipeline in the one order the reporting channel tolerates: persistence preparation and resume findings, the run core on the fuzz lane, diagnostic replay, issue reporting, and attachment recording.
     ///
-    /// Everything except the core must run on the test task: issue recording and attachment association resolve the current test from task-locals, and a report recorded anywhere else can silently misroute. The four public entry points are closure literals over this driver, so the ordering constraint is stated once instead of hand-copied per variant — a copy once put `reportFuzzIssues` inside the async GCD closure, and a failing run stopped failing its test.
-    private static func runFuzzValueEntryPoint(
-        settings: [PropertyFuzzSettings],
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt,
-        runCore: (FuzzPersistenceContext) -> FuzzReport,
-        replay: ((inout FuzzReport, _ suppressIssueReporting: Bool) -> Void)? = nil
-    ) -> FuzzReport {
-        let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
-        var report = runCore(persistence)
-        let parsedSettings = ParsedPropertyFuzzSettings(settings)
-        replay?(&report, parsedSettings.suppress.issueReporting)
-        reportFuzzIssues(
-            report: report,
-            suppressIssueReporting: parsedSettings.suppress.issueReporting,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
-        return report
-    }
-
-    /// The async twin of ``runFuzzValueEntryPoint(settings:fileID:filePath:line:column:runCore:replay:)``: identical order, with only the core hopping to the fuzz lane.
+    /// Everything except the core must run on the test task: issue recording and attachment association resolve the current test from task-locals, and a report recorded anywhere else can silently misroute. The entry points are closure literals over this driver, so the ordering constraint is stated once instead of hand-copied per variant — a copy once put `reportFuzzIssues` inside the GCD closure, and a failing run stopped failing its test. Only the core hops, so the search never holds the caller's thread, which in an async test is one of the cooperative pool's.
     ///
     /// Persistence prepares before the hop because ``reportFuzzResumeFindings(context:fileID:filePath:line:column:)`` records the predecessor's trap — the one finding designed to be impossible to lose — and context construction performs no writes, so nothing about it needs the fuzz lane.
     private static func runFuzzValueEntryPointAsync(
@@ -92,10 +66,12 @@ public extension __ExhaustRuntime {
     // MARK: - Public Entry Points
 
     // The macro expansions call these. Each forwards to its package twin with the production coverage source; the twins exist so a test can choose the source per call instead of altering process-wide state.
+    //
+    // Each variant has a synchronous-closure and an asynchronous-closure overload. Overload resolution picks the synchronous one for a closure without `async` or `await`, and that overload calls the property directly on the fuzz lane. The asynchronous one bridges every attempt through `blockingAwait`.
 
-    /// Runs a coverage-guided `time:` fuzz run with a Bool-returning property. Runtime target of `#explore(time:)`.
+    /// Runs a coverage-guided `time:` fuzz run with a synchronous Bool-returning property. Runtime target of `#explore(time:)`.
     @discardableResult
-    static func __exploreTime<Output>(
+    static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
@@ -104,8 +80,8 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column,
         property: @escaping @Sendable (Output) throws -> Bool
-    ) -> FuzzReport {
-        __exploreTime(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property)
+    ) async -> FuzzReport {
+        await __exploreTimeAsync(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property)
     }
 
     /// Refuses a `Void`-returning function reference, so the call site gets a sentence rather than a type mismatch.
@@ -113,7 +89,7 @@ public extension __ExhaustRuntime {
     /// A trailing closure that returns `Void` is supported: the macro reads its body, checks that it has some way to fail, and routes it to the `#expect`-aware runtime. A bare function reference is a name, and the macro cannot see through it to do either. Overload resolution picks this declaration for such a call, and its unavailability is the diagnostic.
     @available(*, unavailable, message: "Pass a closure rather than a function reference when the property returns Void. #explore needs to see the body to route Void properties to the #expect-aware runtime, and a bare name does not expose one. Wrap it: { try myProperty($0) }.")
     @discardableResult
-    static func __exploreTime<Output>(
+    static func __exploreTimeAsync<Output>(
         _: ReflectiveGenerator<Output>,
         time _: TimeSpan,
         settings _: [PropertyFuzzSettings],
@@ -121,14 +97,14 @@ public extension __ExhaustRuntime {
         filePath _: StaticString = #filePath,
         line _: UInt = #line,
         column _: UInt = #column,
-        property _: @escaping @Sendable (Output) throws -> Void
-    ) -> FuzzReport {
+        property _: @escaping @Sendable (Output) async throws -> Void
+    ) async -> FuzzReport {
         fatalError("unavailable")
     }
 
-    /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure. Runtime target of `#explore(time:)`.
+    /// Runs a coverage-guided `time:` fuzz run with a synchronous Void/#expect/#require closure. Runtime target of `#explore(time:)`.
     @discardableResult
-    static func __exploreTimeExpect<Output>(
+    static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
@@ -138,8 +114,8 @@ public extension __ExhaustRuntime {
         column: UInt = #column,
         property: @escaping @Sendable (Output) throws -> Void,
         detection: @escaping @Sendable (Output) throws -> Void
-    ) -> FuzzReport {
-        __exploreTimeExpect(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property, detection: detection)
+    ) async -> FuzzReport {
+        await __exploreTimeExpectAsync(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property, detection: detection)
     }
 
     /// Runs a coverage-guided `time:` fuzz run with an async Bool-returning property. Runtime target of `#explore(time:)`.
@@ -175,9 +151,9 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore Time (Bool)
 
-    /// Runs a coverage-guided `time:` fuzz run with a Bool-returning property. Runtime target of `#explore(time:)`.
+    /// Runs a coverage-guided `time:` fuzz run with a synchronous Bool-returning property, calling it directly on the fuzz lane.
     @discardableResult
-    package static func __exploreTime<Output>(
+    package static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
@@ -187,8 +163,8 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column,
         property: @escaping @Sendable (Output) throws -> Bool
-    ) -> FuzzReport {
-        runFuzzValueEntryPoint(
+    ) async -> FuzzReport {
+        await runFuzzValueEntryPointAsync(
             settings: settings,
             fileID: fileID,
             filePath: filePath,
@@ -215,7 +191,7 @@ public extension __ExhaustRuntime {
     ///
     /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside ``withAbsorbedIssues(into:isIntermittent:framework:_:)``. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
     @discardableResult
-    package static func __exploreTimeExpect<Output>(
+    package static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
@@ -226,9 +202,11 @@ public extension __ExhaustRuntime {
         column: UInt = #column,
         property: @escaping @Sendable (Output) throws -> Void,
         detection: @escaping @Sendable (Output) throws -> Void
-    ) -> FuzzReport {
+    ) async -> FuzzReport {
         let verdictProperty = wrapVerdictDetection(detection)
-        return runFuzzValueEntryPoint(
+        // Resolved on the test task: on the fuzz lane `Test.current` is nil and resolution reports XCTest for a Swift Testing run.
+        let framework = ActiveTestFramework.current
+        return await runFuzzValueEntryPointAsync(
             settings: settings,
             fileID: fileID,
             filePath: filePath,
@@ -237,7 +215,7 @@ public extension __ExhaustRuntime {
             runCore: { persistence in
                 nonisolated(unsafe) var pipelineReport: FuzzReport?
                 // No ledger: a fuzz run reports its failures from the fault inventory afterwards, so it acts on nothing the scope absorbs.
-                withAbsorbedIssues {
+                withAbsorbedIssues(framework: framework) {
                     pipelineReport = runExploreTimeCore(
                         gen: refGen.gen,
                         generatorIsReflective: refGen.isReflective,
@@ -316,6 +294,8 @@ public extension __ExhaustRuntime {
         detection: @escaping @Sendable (Output) async throws -> Void
     ) async -> FuzzReport {
         let verdictProperty = bridgeAsyncVerdictDetection(detection)
+        // Resolved on the test task: on the fuzz lane `Test.current` is nil and resolution reports XCTest for a Swift Testing run.
+        let framework = ActiveTestFramework.current
         return await runFuzzValueEntryPointAsync(
             settings: settings,
             fileID: fileID,
@@ -324,21 +304,7 @@ public extension __ExhaustRuntime {
             column: column,
             runCore: { persistence in
                 nonisolated(unsafe) var pipelineReport: FuzzReport?
-                // The framework is named rather than resolved: this runs on a GCD thread, where Test.current is nil and resolution reports XCTest for a Swift Testing run. The async path is always in a Swift Testing context.
-                #if canImport(Testing)
-                    withAbsorbedIssues(framework: .swiftTesting) {
-                        pipelineReport = runExploreTimeCore(
-                            gen: refGen.gen,
-                            generatorIsReflective: refGen.isReflective,
-                            time: time,
-                            settings: settings,
-                            source: coverage,
-                            configure: nil,
-                            persistence: persistence,
-                            property: verdictProperty
-                        )
-                    }
-                #else
+                withAbsorbedIssues(framework: framework) {
                     pipelineReport = runExploreTimeCore(
                         gen: refGen.gen,
                         generatorIsReflective: refGen.isReflective,
@@ -349,7 +315,7 @@ public extension __ExhaustRuntime {
                         persistence: persistence,
                         property: verdictProperty
                     )
-                #endif
+                }
                 return pipelineReport ?? missingPipelineReport()
             },
             replay: { report, suppressIssueReporting in

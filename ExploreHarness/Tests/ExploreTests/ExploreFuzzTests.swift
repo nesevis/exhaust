@@ -11,8 +11,8 @@ import Testing
 @Suite("Explore fuzz validation", .serialized)
 struct ExploreFuzzTests {
     @Test("A fuzz run finds every catchable fault, separates the slippage pair, and never over-splits one value", .timeLimit(.minutes(2)))
-    func fuzzInventory() throws {
-        let report = Self.report
+    func fuzzInventory() async throws {
+        let report = await Self.report.value
 
         // Every planted fault's canonical minimal form appears among the clusters.
         let faultA = try #require(clusterMatching(report, .faultA), "expected fault A (data / region 5 / [0, 0])")
@@ -38,8 +38,8 @@ struct ExploreFuzzTests {
     }
 
     @Test("The reported summary names the function that threw for every cluster", .timeLimit(.minutes(2)))
-    func summaryAttribution() {
-        let summary = Self.summary
+    func summaryAttribution() async {
+        let summary = await Self.summary.value
 
         // The suspect form is the debugger's simplified name, what a developer reads in the failure message, and each fault names the branch it threw from.
         #expect(summary.contains("static Parser.validateWindow(_:) (Parser.swift)"))
@@ -55,10 +55,11 @@ struct ExploreFuzzTests {
     }
 
     @Test("The reported summary separates the slippage pair by decoder frame", .timeLimit(.minutes(2)))
-    func summarySlippagePairSeparation() {
-        let summary = Self.summary
-        guard let faultA = clusterMatching(Self.report, .faultA),
-              let faultB = clusterMatching(Self.report, .faultB),
+    func summarySlippagePairSeparation() async {
+        let report = await Self.report.value
+        let summary = await Self.summary.value
+        guard let faultA = clusterMatching(report, .faultA),
+              let faultB = clusterMatching(report, .faultB),
               let data = block(for: faultA, in: summary),
               let control = block(for: faultB, in: summary)
         else {
@@ -80,14 +81,14 @@ struct ExploreFuzzTests {
     // MARK: - Shared Fuzz Run
 
     /// One instrumented run for the whole suite. Swift Testing builds a fresh suite value per test, so a per-test call would spend the full wall-clock budget repeatedly and leave each test describing a different campaign.
-    private static let report = fuzz()
+    private static let report = Task { await fuzz() }
 
     /// The shared run's rendered inventory, in the attachment form that carries every suspect. The terminal form names one suspect per cluster, which cannot separate the slippage pair; ``FuzzReport/renderedAttachmentSummary()`` re-renders on every call, and every assertion against it wants the same text.
-    private static let summary = ExploreFuzzTests.report.renderedAttachmentSummary()
+    private static let summary = Task { await ExploreFuzzTests.report.value.renderedAttachmentSummary() }
 
-    private static func fuzz() -> FuzzReport {
+    private static func fuzz() async -> FuzzReport {
         // A throwing single-expression property, so each distinct fault type flows through as its own symptom rather than collapsing to a bare returnedFalse.
-        #explore(
+        await #explore(
             Fixture.messageGenerator,
             time: .seconds(8),
             .replay(20_260_710),

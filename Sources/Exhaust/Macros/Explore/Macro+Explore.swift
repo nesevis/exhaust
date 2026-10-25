@@ -59,36 +59,12 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// The run inherits `#exhaust`'s covering array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are cataloged and clustered rather than terminating the run: opting into a time budget is opting into "find everything you can within it".
 ///
 /// ```swift
-/// #explore(messageGen, time: .minutes(15)) { message in
+/// await #explore(messageGen, time: .minutes(15)) { message in
 ///     try Decoder.decode(message)
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; when no instrumented module is loaded, it emits a runtime warning and returns without invoking the property or consuming any budget. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
-///
-/// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
-///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
-///
-/// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
-@freestanding(expression)
-@discardableResult
-public macro explore<GeneratedValue, PropertyResult>(
-    _ gen: ReflectiveGenerator<GeneratedValue>,
-    time: TimeSpan,
-    _ settings: PropertyFuzzSettings...,
-    property: @Sendable (GeneratedValue) throws -> PropertyResult
-) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeMacro")
-
-/// Runs a coverage-guided property test with an async property closure, continuing past where `#exhaust` would stop until the time budget is consumed.
-///
-/// The run inherits `#exhaust`'s covering array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are cataloged and clustered rather than terminating the run. The property closure may `await`, and the expanded call is `async`, so call it with `await`.
-///
-/// ```swift
-/// await #explore(messageGen, time: .minutes(15)) { message in
-///     try await server.roundTrip(message)
-/// }
-/// ```
+/// The call is always `async`: the search runs on its own thread for the whole budget, and awaiting it keeps that thread out of the cooperative pool. The property closure may be synchronous or `async`. A synchronous closure is called directly on the search's thread. An `async` closure is awaited once per attempt, which costs throughput, so add `async` only when the property needs to `await`.
 ///
 /// Requires coverage instrumentation on the target under test; when no instrumented module is loaded, it emits a runtime warning and returns without invoking the property or consuming any budget. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
 ///
@@ -104,7 +80,7 @@ public macro explore<GeneratedValue, PropertyResult>(
     time: TimeSpan,
     _ settings: PropertyFuzzSettings...,
     property: @Sendable (GeneratedValue) async throws -> PropertyResult
-) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeAsyncMacro")
+) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeMacro")
 
 /// Runs a coverage-guided spec test under the given ``SearchableExecutionModel`` until the time budget is consumed.
 ///

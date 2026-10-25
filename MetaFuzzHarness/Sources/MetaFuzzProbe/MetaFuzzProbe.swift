@@ -2,7 +2,7 @@
 //  MetaFuzzProbe.swift
 //  MetaFuzzProbe
 //
-//  Standalone self-fuzzing loop for the nightly CI wrapper. Runs as an executable so a trap in ExhaustCore kills only this process: the wrapper relaunches it, the run resumes from the progress log (EXHAUST_STATE_DIR), quarantines the crash region, and spends the remaining budget elsewhere. The main thread's 8 MB stack also tolerates deeper recipes than the 512 KiB test threads, which is why the depth and node-budget flags default higher here.
+//  Standalone self-fuzzing loop for the nightly CI wrapper. Runs as an executable so a trap in ExhaustCore kills only this process: the wrapper relaunches it, the run resumes from the progress log (EXHAUST_STATE_DIR), quarantines the crash region, and spends the remaining budget elsewhere. The search runs on a 512 KiB fuzz-lane thread whatever the caller's stack, so the node-budget default matches the library's debug-calibrated ceiling; release runs can raise it (calibrate with ExhaustStackProbe).
 //
 
 import ArgumentParser
@@ -12,7 +12,7 @@ import ExhaustMetaFuzz
 import Foundation
 
 @main
-struct MetaFuzzProbe: ParsableCommand {
+struct MetaFuzzProbe: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Fuzzes the ExhaustCore pipeline against the oracle roster.",
         discussion: "Framework seams stay environment-driven: EXHAUST_STATE_DIR relocates the progress log and breadcrumb so the wrapper can resume a trapped run, and EXHAUST_RESUME=0 opts out of resuming. Exit codes: 0 = no findings, 2 = oracle violations found (records written), signal death = a trap in ExhaustCore."
@@ -28,7 +28,7 @@ struct MetaFuzzProbe: ParsableCommand {
     var depth: Int = 2
 
     @Option(help: "Recipe node-count ceiling. Calibrate raises with ExhaustStackProbe.")
-    var nodeBudget: Int = 80
+    var nodeBudget: Int = 40
 
     @Option(help: "Oracle roster to fuzz against: pipeline (interpreter agreement) or screening (enumerability verdicts).")
     var campaign: Campaign = .pipeline
@@ -42,14 +42,14 @@ struct MetaFuzzProbe: ParsableCommand {
         }
     }
 
-    func run() throws {
+    func run() async throws {
         let findings = URL(fileURLWithPath: findingsDirectory)
 
         // The property must be a closure literal in each invocation: the macro's Void-closure handling is syntactic, and a function reference expands as if the property returned Bool.
         let report: FuzzReport
         switch (campaign, seed) {
             case let (.pipeline, seed?):
-                report = #explore(
+                report = await #explore(
                     MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
                     time: .seconds(budgetSeconds),
                     .replay(.numeric(seed))
@@ -62,7 +62,7 @@ struct MetaFuzzProbe: ParsableCommand {
                     }
                 }
             case (.pipeline, nil):
-                report = #explore(
+                report = await #explore(
                     MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
                     time: .seconds(budgetSeconds)
                 ) { fuzzCase in
@@ -74,7 +74,7 @@ struct MetaFuzzProbe: ParsableCommand {
                     }
                 }
             case let (.screening, seed?):
-                report = #explore(
+                report = await #explore(
                     MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
                     time: .seconds(budgetSeconds),
                     .replay(.numeric(seed))
@@ -87,7 +87,7 @@ struct MetaFuzzProbe: ParsableCommand {
                     }
                 }
             case (.screening, nil):
-                report = #explore(
+                report = await #explore(
                     MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),
                     time: .seconds(budgetSeconds)
                 ) { fuzzCase in

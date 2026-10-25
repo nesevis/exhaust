@@ -14,16 +14,16 @@ Give Exhaust a time budget and let it search for bugs by observing which branche
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {
-    await #explore(myInputGenerator, time: .seconds(20)) { input async in
+    await #explore(myInputGenerator, time: .seconds(20)) { input in
         let result = try MyParser.parse(input)
         #expect(result.isWellFormed)
     }
 }
 ```
 
-The test reads like any other `#exhaust` test: a generator, a property, and `#expect` assertions. The differences are the `time:` parameter and the `async`/`await`.
+The test reads like any other `#exhaust` test: a generator, a property, and `#expect` assertions. The differences are the `time:` parameter and the `await`.
 
-The search holds one thread for the entire budget. Write the `async` form so that thread is not one of the cooperative pool's.
+Exhaust runs the search on its own thread for the whole budget, so every call is `async`. The test waits on that thread without holding one of its own.
 
 The recommended workflow is to run the test through the `explore` package command. It builds the selected root targets with instrumentation in a separate directory, then runs the selected tests. Manual instrumentation is also supported for tests that should run as part of the ordinary suite.
 
@@ -61,7 +61,7 @@ import Testing
         #gen(.int(in: -1_000_000...1_000_000)),
         time: .seconds(60),
         .replay(.numeric(1337))
-    ) { value async in
+    ) { value in
         let encoded = IntegerCodec.encode(value)
         let decoded = try IntegerCodec.decode(encoded)
         #expect(decoded == value)
@@ -71,7 +71,7 @@ import Testing
 
 The generator defines the inputs the search can explore; the property describes what must hold for every input. Here, encoding and decoding must recover the original integer. A thrown error or a failed `#expect` records a counterexample. The run reduces counterexamples and continues searching until its budget expires or it stops making progress. Add `.failFast` to stop after the first reduced failure.
 
-Use the `async` test and `await #explore` form with an explicitly `async` property closure so the search can use its own thread. A synchronous closure selects the synchronous overload even if you write `await` before the macro. Keep the property's work on that execution lane; <doc:#When-the-run-cannot-see-the-code> explains the restrictions on actor and detached-task work.
+Call `#explore` with `await` from an `async` test. The property closure can be synchronous or `async`. Exhaust calls a synchronous closure directly on the search's thread. It awaits an `async` closure once per input, which costs throughput, so add `async` only when the property needs to `await` something. Keep the property's work on the search's thread. <doc:#When-the-run-cannot-see-the-code> explains the restrictions on actor and detached-task work.
 
 The optional `.replay(.numeric(1337))` fixes the seed. Change it in the test to try another seed; the command has no `--seed` option. A seed helps reproduce a search under the same build and budget, but debug and release builds can follow different paths through the search.
 
@@ -110,7 +110,7 @@ These options belong to `explore` and go after its name:
 | `--configuration debug\|release` | Choose the campaign's build configuration. Defaults to `release`. |
 | `--help` | Show command usage. |
 
-SwiftPM options such as `--package-path` and `--scratch-path` go before `explore`. No `--allow-writing-to-package-directory` flag is needed. SwiftPM builds the package's test bundle, including other test targets, but `explore` runs only the tests selected above.
+SwiftPM options such as `--package-path` and `--scratch-path` go before `explore`. After `explore`, the command rejects them as unknown options. No `--allow-writing-to-package-directory` flag is needed. SwiftPM builds the package's test bundle, including other test targets, but `explore` runs only the tests selected above.
 
 ### 4. Inspect findings and rerun
 
@@ -370,7 +370,7 @@ Backward solving needs a reflective generator, one Exhaust can run backward from
 
 Two runtime messages cover this, so a run that is blind does not pass quietly.
 
-- **No coverage at all.** The run fails with a diagnostic. In a release build the usual cause is the compiler inlining the code under test into a module that has no coverage flags; the fix is to instrument the calling module too, as the dedicated-target recipe does. Otherwise the property's work ran on an executor the run did not bind.
+- **No coverage at all.** The run fails with a diagnostic. In a release build the usual cause is the compiler inlining the code under test into a module that has no coverage flags. The `explore` command instruments the calling test target for this reason. With manual instrumentation, add the flags to that target too. Otherwise the property's work ran on an executor the run did not bind.
 - **Some coverage missed.** The summary reports "N edge hits fired off the run's lane and were not searched". Either the property handed work to another executor, or another test exercised the same instrumented code at the same time; the count cannot tell which, so read it against what the suite was doing.
 
 Behind both: `trace-pc-guard` records through a context bound to the running lane. That is what lets separate runs share a process, and it is also the limitation: a `@MainActor` function, an actor with a custom executor, or work inside a detached task runs somewhere else, and its branches are not recorded. Measured on the same five-branch function reached four ways:
@@ -408,7 +408,7 @@ Pollution only adds branches, never removes them. The result is inputs admitted 
 
 ### Instrument only the code under test
 
-Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#Running-in-a-dedicated-target>.
+Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#When-the-fuzz-target-and-the-code-under-test-share-a-build>.
 
 ### Replay under the conditions of the original run
 
