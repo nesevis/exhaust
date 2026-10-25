@@ -17,12 +17,13 @@ struct Explore: CommandPlugin {
         }
         let process = Process()
         process.executableURL = try context.tool(named: "ExhaustExploreCommand").url
+        // The helper reads these before `explore`, so the user's arguments cannot override them.
         process.arguments = try [
-            "explore", "--package-path", context.package.directoryURL.path,
+            "--package-path", context.package.directoryURL.path,
             "--output-path", context.pluginWorkDirectoryURL.appendingPathComponent("exhaust").path,
             "--swift", context.tool(named: "swift").url.path,
             "--workspace-path", workspace.path,
-        ] + runtimeArguments + arguments
+        ] + runtimeArguments + ["explore"] + arguments
         try process.run()
         process.waitUntilExit()
         if process.terminationReason != .exit || process.terminationStatus != 0 {

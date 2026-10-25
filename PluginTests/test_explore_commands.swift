@@ -113,7 +113,7 @@ struct ExploreCommandsTests {
             try require(help.contains(option), "Missing \(option) in help:\n\(help)")
         }
         for option in ["--runtime-package", "--workspace-path", "--output-path"] {
-            try require(!help.contains(option), "Plugin context leaked into public help:\n\(help)")
+            try require(help.contains(option) == false, "Plugin context leaked into public help:\n\(help)")
         }
         let normalized = help.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         try require(normalized.contains("default: release"), help)
@@ -136,7 +136,7 @@ struct ExploreCommandsTests {
         let pluginRoot = consumer.appendingPathComponent(".build/plugins").resolvingSymlinksInPath()
         try require(scratch.path.hasPrefix(pluginRoot.path + "/"), "Build escaped plugin workspace: \(scratch.path)")
         try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
-        let helperArguments = arguments + ["--output-path", scratch.deletingLastPathComponent().nativePath]
+        let outputPath = scratch.deletingLastPathComponent().nativePath
         let objects = try files(in: scratch).filter { ["o", "obj"].contains($0.pathExtension) }
         for (module, instrumented) in [("MyLibrary", true), ("ParserTests", true), ("OtherLibrary", false), ("Callbacks", false)] {
             let names = [".o", ".swift.o", ".c.o", ".obj", ".swift.obj", ".c.obj"].map { module + $0 }
@@ -150,18 +150,18 @@ struct ExploreCommandsTests {
         try require(!manager.contentsOfDirectory(atPath: scratch.appendingPathComponent("attachments").nativePath).isEmpty,
                     "Missing attachments directory")
         try withBuildLock(scratch.appendingPathComponent("explore.lock")) {
-            let locked = try helperRun(helperArguments, success: false)
+            let locked = try helperRun(arguments, outputPath: outputPath, success: false)
             try require(locked.contains("Another explore command"), locked)
         }
-        let nested = try helperRun(helperArguments + ["--filter", "Nested"])
+        let nested = try helperRun(arguments + ["--filter", "Nested"], outputPath: outputPath)
         try require(nested.contains("parameterized") && !nested.contains("No matching test cases"), nested)
-        let legacy = try helperRun(helperArguments + ["--filter", "testLegacy"])
+        let legacy = try helperRun(arguments + ["--filter", "testLegacy"], outputPath: outputPath)
         try require(legacy.contains("testLegacy") && !legacy.contains("No matching test cases"), legacy)
         let failed = try plugin(arguments + ["--filter", "deliberateFailure"], success: false)
         try require(failed.contains("EXPECTED_FAILURE_FORWARDING"), failed)
         try require(Data(contentsOf: manifest) == original, "Failed campaign modified Package.swift")
         try require(Data(contentsOf: dependencyManifest) == dependencyOriginal, "Campaign modified dependency manifest")
-        let missing = try helperRun(helperArguments + ["--filter", "doesNotExist"], success: false)
+        let missing = try helperRun(arguments + ["--filter", "doesNotExist"], outputPath: outputPath, success: false)
         try require(missing.contains("No tests matched"), missing)
         let plain = try run(swift, ["package", "--package-path", consumer.nativePath, "--disable-sandbox",
                                    "--manifest-cache", "local", "--scratch-path",
@@ -228,6 +228,8 @@ struct ExploreCommandsTests {
         }
         _ = try helperRun(["--instrument", "MyLibrary", "--filter", "["], success: false)
         _ = try helperRun(["--instrument", "MyLibrary", "--unknown", "value"], success: false)
+        let overridden = try helperRun(["--instrument", "MyLibrary", "--package-path", "/elsewhere"], success: false)
+        try require(overridden.contains("Unknown option: --package-path"), overridden)
         _ = try helperRun(["--instrument", "MyLibrary", "--configuration", "profile"], success: false)
         _ = try helperRun(["--instrument"], success: false)
         _ = try helperRun(["--instrument", ""], success: false)
@@ -348,10 +350,11 @@ struct ExploreCommandsTests {
         try content.write(to: path, atomically: true, encoding: .utf8)
     }
 
-    func helperRun(_ arguments: [String], root: URL? = nil, success: Bool = true) throws -> String {
-        try run(helper, ["explore", "--package-path", (root ?? consumer).nativePath,
-                         "--swift", swift.nativePath, "--runtime-package", "provider"] + arguments,
-                environment: environment, success: success).output
+    func helperRun(_ arguments: [String], outputPath: String? = nil, root: URL? = nil, success: Bool = true) throws -> String {
+        let output = outputPath.map { ["--output-path", $0] } ?? []
+        return try run(helper, ["--package-path", (root ?? consumer).nativePath,
+                                "--swift", swift.nativePath, "--runtime-package", "provider"] + output + ["explore"] + arguments,
+                       environment: environment, success: success).output
     }
 
     func plugin(_ arguments: [String], success: Bool = true) throws -> String {

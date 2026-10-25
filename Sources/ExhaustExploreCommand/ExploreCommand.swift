@@ -10,10 +10,11 @@ import Foundation
 @main
 struct ExploreCommand {
     static func main() {
-        let arguments = Array(CommandLine.arguments.dropFirst())
+        var arguments = CommandLine.arguments.dropFirst()
         do {
-            let options = try Options.parse(arguments)
-            try CommandRunner(options: options).run()
+            let invocation = try Invocation.parse(&arguments)
+            let options = try Options.parse(Array(arguments))
+            try CommandRunner(options: options, invocation: invocation).run()
         } catch is HelpRequested {
             print(Options.help)
         } catch let failure as ChildFailure {

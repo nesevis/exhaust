@@ -15,13 +15,26 @@ struct ExploreCommandTests {
         #expect(options.filter == "valid")
         #expect(options.seconds == 60)
         #expect(options.configuration == .debug)
-        #expect(options.runtimePackage == .root)
+    }
+
+    @Test("Plugin context precedes explore, and user arguments cannot override it", arguments: [
+        "--package-path", "--swift", "--runtime-package", "--workspace-path", "--output-path",
+    ])
+    func pluginContextIsNotUserOption(name: String) throws {
+        var arguments = ["--runtime-package", "exhaust", "explore", "--instrument", "Library"][...]
+        let invocation = try Invocation.parse(&arguments)
+        #expect(invocation.runtimePackage == .dependency(identity: "exhaust"))
+        #expect(Array(arguments) == ["explore", "--instrument", "Library"])
+        let error = #expect(throws: CommandError.self) {
+            try Options.parse(Array(arguments) + [name, "/elsewhere"])
+        }
+        #expect(error?.description.contains("Unknown option: \(name)") == true)
     }
 
     @Test("Invalid options fail before any process starts", arguments: [
         ["--time", "0"], ["--time", "-1"], ["--time", "1.5"], ["--time", "18446744074"],
         ["--filter", "["], ["--configuration", "profile"], ["--unknown", "value"],
-        ["--test-target"], ["--instrument", ""], ["--output-path="],
+        ["--test-target"], ["--instrument", ""], ["--test-target="],
     ])
     func invalidOptions(arguments: [String]) {
         #expect(throws: CommandError.self) {
@@ -54,23 +67,33 @@ struct ExploreCommandTests {
 
     @Test("Unknown options report their name even without a value")
     func unknownOption() {
-        do {
-            _ = try Options.parse(["explore", "--unknown"])
-            Issue.record("An unknown option must be rejected")
-        } catch {
-            #expect(String(describing: error).contains("Unknown option: --unknown"))
+        let error = #expect(throws: CommandError.self) {
+            try Options.parse(["explore", "--unknown"])
         }
+        #expect(error?.description.contains("Unknown option: --unknown") == true)
     }
 
     @Test("Planning instruments the selected library and test while preserving state overrides")
     func campaignPlan() throws {
         let options = try Options.parse(["explore", "--instrument", "Library", "--time", "2"])
-        let plan = try CampaignPlan(options: options, package: package, outputDirectory: URL(fileURLWithPath: "/tmp/explore"), environment: ["EXHAUST_STATE_DIR": "/tmp/custom-state"])
+        let plan = try CampaignPlan(
+            options: options,
+            invocation: Invocation(),
+            package: package,
+            outputDirectory: URL(fileURLWithPath: "/tmp/explore"),
+            environment: ["EXHAUST_STATE_DIR": "/tmp/custom-state"]
+        )
         #expect(plan.test.name == "Tests")
         #expect(plan.targets == ["Library", "Tests"])
         #expect(plan.statePath == "/tmp/custom-state")
         #expect(plan.environment["EXHAUST_EXPLORE_TIME_NS"] == "2000000000")
-        let repeated = try CampaignPlan(options: options, package: package, outputDirectory: URL(fileURLWithPath: "/tmp/explore"), environment: [:])
+        let repeated = try CampaignPlan(
+            options: options,
+            invocation: Invocation(),
+            package: package,
+            outputDirectory: URL(fileURLWithPath: "/tmp/explore"),
+            environment: [:]
+        )
         #expect(plan.scratch == repeated.scratch)
         #expect(repeated.statePath == repeated.scratch.appendingPathComponent("state").nativePath)
     }
@@ -79,7 +102,13 @@ struct ExploreCommandTests {
     func invalidTargets(name: String) throws {
         let options = try Options.parse(["explore", "--instrument", name])
         #expect(throws: CommandError.self) {
-            try CampaignPlan(options: options, package: package, outputDirectory: URL(fileURLWithPath: "/tmp"), environment: [:])
+            try CampaignPlan(
+                options: options,
+                invocation: Invocation(),
+                package: package,
+                outputDirectory: URL(fileURLWithPath: "/tmp"),
+                environment: [:]
+            )
         }
     }
 
@@ -87,14 +116,27 @@ struct ExploreCommandTests {
     func ambiguousTests() throws {
         let options = try Options.parse(["explore", "--instrument", "Library"])
         #expect(throws: CommandError.self) {
-            try CampaignPlan(options: options, package: ambiguousPackage, outputDirectory: URL(fileURLWithPath: "/tmp"), environment: [:])
+            try CampaignPlan(
+                options: options,
+                invocation: Invocation(),
+                package: ambiguousPackage,
+                outputDirectory: URL(fileURLWithPath: "/tmp"),
+                environment: [:]
+            )
         }
     }
 
     @Test("Explicit selection resolves an ambiguous test target")
     func explicitTestTarget() throws {
         let options = try Options.parse(["explore", "--instrument", "Library", "--test-target", "OtherTests"])
-        #expect(try CampaignPlan(options: options, package: ambiguousPackage, outputDirectory: URL(fileURLWithPath: "/tmp"), environment: [:]).test.name == "OtherTests")
+        let plan = try CampaignPlan(
+            options: options,
+            invocation: Invocation(),
+            package: ambiguousPackage,
+            outputDirectory: URL(fileURLWithPath: "/tmp"),
+            environment: [:]
+        )
+        #expect(plan.test.name == "OtherTests")
     }
 
     @Test("Discovery preserves module boundaries and escapes execution identifiers")
@@ -132,13 +174,13 @@ struct ExploreCommandTests {
     @Test("Verification requires exact unconditional Swift instrumentation flags")
     func instrumentationVerification() throws {
         let flags = ManifestHook.compilerFlags
-        let setting = ManifestSetting(tool: "swift", kind: ManifestSettingKind(unsafeFlags: ManifestUnsafeFlags(_0: flags)), condition: nil)
+        let setting = ManifestSetting(tool: "swift", kind: ManifestSettingKind(unsafeFlags: ManifestUnsafeFlags(flags: flags)), condition: nil)
         let valid = PackageManifest(dependencies: [], targets: [ManifestTarget(name: "Library", settings: [setting])])
         try valid.verifyInstrumentation(targets: ["Library"])
         for invalid in [
             ManifestSetting(tool: "c", kind: setting.kind, condition: nil),
             ManifestSetting(tool: "swift", kind: setting.kind, condition: ManifestCondition()),
-            ManifestSetting(tool: "swift", kind: ManifestSettingKind(unsafeFlags: ManifestUnsafeFlags(_0: flags.map { $0 + "suffix" })), condition: nil),
+            ManifestSetting(tool: "swift", kind: ManifestSettingKind(unsafeFlags: ManifestUnsafeFlags(flags: flags.map { $0 + "suffix" })), condition: nil),
         ] {
             let manifest = PackageManifest(dependencies: [], targets: [ManifestTarget(name: "Library", settings: [invalid])])
             #expect(throws: CommandError.self) { try manifest.verifyInstrumentation(targets: ["Library"]) }
@@ -156,10 +198,12 @@ struct ExploreCommandTests {
         #expect(ManifestHook.augment(source, targets: ["Library"], runtimePackage: nil).contains(".target(name: \"ExhaustCore\")"))
     }
 
-    @Test("Generated options round-trip through both argument syntaxes", arguments: ArgumentSyntax.allCases)
+    @Test("Generated plugin context and options round-trip through both user argument syntaxes", arguments: ArgumentSyntax.allCases)
     func optionsRoundTrip(syntax: ArgumentSyntax) {
-        #exhaust(CommandGenerators.options) { options in
-            try Options.parse(syntax.arguments(for: options)) == options
+        #exhaust(#gen(CommandGenerators.invocation, CommandGenerators.options)) { invocation, options in
+            var arguments = (ArgumentSyntax.arguments(for: invocation) + syntax.arguments(for: options))[...]
+            let parsedInvocation = try Invocation.parse(&arguments)
+            return try parsedInvocation == invocation && Options.parse(Array(arguments)) == options
         }
     }
 
@@ -196,17 +240,25 @@ struct ExploreCommandTests {
     // MARK: - Fixtures
 
     private var ambiguousPackage: PackageDescription {
-        PackageDescription(targets: package.targets + [PackageTargetDescription(name: "OtherTests", c99name: "OtherTests", type: .test, moduleType: .swift)], products: package.products)
+        PackageDescription(
+            targets: package.targets + [
+                PackageTargetDescription(name: "OtherTests", c99name: "OtherTests", type: .test, moduleType: .swift, targetDependencies: nil),
+            ],
+            products: package.products
+        )
     }
 
     private var package: PackageDescription {
-        PackageDescription(targets: [
-            PackageTargetDescription(name: "Library", c99name: "Library", type: .library, moduleType: .swift),
-            PackageTargetDescription(name: "Tests", c99name: "Tests", type: .test, moduleType: .swift),
-            PackageTargetDescription(name: "Macro", c99name: "Macro", type: .macro, moduleType: .swift),
-            PackageTargetDescription(name: "ExhaustCore", c99name: "ExhaustCore", type: .library, moduleType: .swift, targetDependencies: ["RuntimeHelper"]),
-            PackageTargetDescription(name: "RuntimeHelper", c99name: "RuntimeHelper", type: .library, moduleType: .swift),
-        ], products: [PackageProductDescription(name: "ExhaustFuzzRuntime", targets: ["ExhaustCore"])])
+        PackageDescription(
+            targets: [
+                PackageTargetDescription(name: "Library", c99name: "Library", type: .library, moduleType: .swift, targetDependencies: nil),
+                PackageTargetDescription(name: "Tests", c99name: "Tests", type: .test, moduleType: .swift, targetDependencies: nil),
+                PackageTargetDescription(name: "Macro", c99name: "Macro", type: .macro, moduleType: .swift, targetDependencies: nil),
+                PackageTargetDescription(name: "ExhaustCore", c99name: "ExhaustCore", type: .library, moduleType: .swift, targetDependencies: ["RuntimeHelper"]),
+                PackageTargetDescription(name: "RuntimeHelper", c99name: "RuntimeHelper", type: .library, moduleType: .swift, targetDependencies: nil),
+            ],
+            products: [PackageProductDescription(name: "ExhaustFuzzRuntime", targets: ["ExhaustCore"])]
+        )
     }
 }
 
@@ -227,33 +279,38 @@ private enum CommandGenerators {
 
     static var options: ReflectiveGenerator<Options> {
         let value = text()
-        // Parsing normalizes the package path, so the round trip starts from an already normalized one.
-        let packagePath = FileManager.default.temporaryDirectory.standardizedFileURL.resolvingSymlinksInPath().path
         return #gen(
             value.array(length: 1 ... 4),
             value.optional(),
             value.optional(),
             .uint64(in: 1 ... UInt64.max / 1_000_000_000).optional(),
-            .element(from: [BuildConfiguration.debug, .release]),
-            value,
-            value.optional(),
-            value.optional(),
-            value.optional()
+            .element(from: [BuildConfiguration.debug, .release])
         )
-        .map { instruments, testTarget, filter, seconds, configuration, swift, runtimeIdentity, workspacePath, outputPath in
+        .map { instruments, testTarget, filter, seconds, configuration in
             Options(
                 instruments: instruments,
                 testTarget: testTarget,
                 filter: filter.map(NSRegularExpression.escapedPattern(for:)),
                 seconds: seconds,
-                configuration: configuration,
-                packagePath: packagePath,
-                swift: swift,
-                runtimePackage: runtimeIdentity.map { .dependency(identity: $0) } ?? .root,
-                workspacePath: workspacePath,
-                outputPath: outputPath
+                configuration: configuration
             )
         }
+    }
+
+    static var invocation: ReflectiveGenerator<Invocation> {
+        let value = text()
+        // Parsing normalizes the package path, so the round trip starts from an already normalized one.
+        let packagePath = FileManager.default.temporaryDirectory.standardizedFileURL.resolvingSymlinksInPath().path
+        return #gen(value, value.optional(), value.optional(), value.optional())
+            .map { swift, runtimeIdentity, workspacePath, outputPath in
+                Invocation(
+                    packagePath: packagePath,
+                    swift: swift,
+                    runtimePackage: runtimeIdentity.map { .dependency(identity: $0) } ?? .root,
+                    workspacePath: workspacePath,
+                    outputPath: outputPath
+                )
+            }
     }
 
     /// Swift Testing identifiers. Components exclude `/`, `(`, and `)`, as real suite and function names do, so no identifier is another's `/`-separated prefix.
@@ -330,17 +387,11 @@ enum ArgumentSyntax: CaseIterable {
     case equals
 
     func arguments(for options: Options) -> [String] {
-        let runtime: String? = switch options.runtimePackage {
-            case .root:
-                nil
-            case let .dependency(identity):
-                identity
-        }
         let values: [(String, String?)] = options.instruments.map { ("--instrument", $0) } + [
-            ("--test-target", options.testTarget), ("--filter", options.filter),
-            ("--time", options.seconds.map(String.init)), ("--configuration", options.configuration.rawValue),
-            ("--package-path", options.packagePath), ("--swift", options.swift),
-            ("--runtime-package", runtime), ("--workspace-path", options.workspacePath), ("--output-path", options.outputPath),
+            ("--test-target", options.testTarget),
+            ("--filter", options.filter),
+            ("--time", options.seconds.map(String.init)),
+            ("--configuration", options.configuration.rawValue),
         ]
         return ["explore"] + values.flatMap { name, value -> [String] in
             guard let value else {
@@ -352,6 +403,26 @@ enum ArgumentSyntax: CaseIterable {
                 case .equals:
                     return [name + "=" + value]
             }
+        }
+    }
+
+    /// The plugin always passes its context as separated pairs, so it has one syntax.
+    static func arguments(for invocation: Invocation) -> [String] {
+        let runtime: String? = switch invocation.runtimePackage {
+            case .root:
+                nil
+            case let .dependency(identity):
+                identity
+        }
+        let values: [(String, String?)] = [
+            ("--package-path", invocation.packagePath),
+            ("--swift", invocation.swift),
+            ("--runtime-package", runtime),
+            ("--workspace-path", invocation.workspacePath),
+            ("--output-path", invocation.outputPath),
+        ]
+        return values.flatMap { name, value in
+            value.map { [name, $0] } ?? []
         }
     }
 }

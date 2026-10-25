@@ -8,18 +8,26 @@ struct CampaignPlan {
     let statePath: String
     let environment: [String: String]
 
-    init(options: Options, package: PackageDescription, outputDirectory: URL, environment: [String: String]) throws {
+    init(
+        options: Options,
+        invocation: Invocation,
+        package: PackageDescription,
+        outputDirectory: URL,
+        environment: [String: String]
+    ) throws {
         test = try Self.selectTest(in: package, named: options.testTarget)
         for name in options.instruments {
-            if options.runtimePackage == .root, package.runtimeTargetNames.contains(name) {
+            if invocation.runtimePackage == .root, package.runtimeTargetNames.contains(name) {
                 throw CommandError("The Exhaust fuzz runtime must remain uninstrumented: \(name).")
             }
             guard package.targets.contains(where: { $0.name == name && $0.moduleType == .swift && $0.type.supportsInstrumentation }) else {
-                throw CommandError("\(name) is not a root Swift library, executable, or test target. Dependency targets, macros, C targets and binary targets are not supported.")
+                throw CommandError(
+                    "\(name) is not a root Swift library, executable, or test target. Dependency targets, macros, C targets and binary targets are not supported."
+                )
             }
         }
         targets = Set(options.instruments + [test.name]).sorted()
-        let identity = (["overlay-v1", options.configuration.rawValue, options.swift] + targets).joined(separator: "\n")
+        let identity = (["overlay-v1", options.configuration.rawValue, invocation.swift] + targets).joined(separator: "\n")
         scratch = outputDirectory.appendingPathComponent(StableFingerprint.hex(identity))
         statePath = environment["EXHAUST_STATE_DIR"] ?? scratch.appendingPathComponent("state").nativePath
         var campaignEnvironment = environment
@@ -34,7 +42,9 @@ struct CampaignPlan {
         let tests = package.targets.filter { $0.type == .test && $0.moduleType == .swift }
         guard let name else {
             guard tests.count == 1, let selected = tests.first else {
-                throw CommandError("Select one root Swift test target with --test-target. Available: \(tests.map(\.name).sorted().joined(separator: ", ")).")
+                throw CommandError(
+                    "Select one root Swift test target with --test-target. Available: \(tests.map(\.name).sorted().joined(separator: ", "))."
+                )
             }
             return selected
         }

@@ -6,11 +6,6 @@ struct Options: Equatable {
     var filter: String?
     var seconds: UInt64?
     var configuration: BuildConfiguration = .release
-    var packagePath = FileManager.default.currentDirectoryPath
-    var swift = "swift"
-    var runtimePackage: RuntimePackage = .root
-    var workspacePath: String?
-    var outputPath: String?
 
     // MARK: - Parsing
 
@@ -59,21 +54,10 @@ struct Options: Equatable {
                         throw CommandError("--configuration must be debug or release.")
                     }
                     options.configuration = configuration
-                case "--package-path":
-                    options.packagePath = try value()
-                case "--swift":
-                    options.swift = try value()
-                case "--runtime-package":
-                    options.runtimePackage = try .dependency(identity: value())
-                case "--workspace-path":
-                    options.workspacePath = try value()
-                case "--output-path":
-                    options.outputPath = try value()
                 default:
                     throw CommandError("Unknown option: \(name). Use --help for usage.")
             }
         }
-        options.packagePath = URL(fileURLWithPath: options.packagePath).standardizedFileURL.resolvingSymlinksInPath().path
         try options.validate()
         return options
     }
@@ -126,11 +110,6 @@ struct Options: Equatable {
 enum BuildConfiguration: String {
     case debug
     case release
-}
-
-enum RuntimePackage: Equatable {
-    case root
-    case dependency(identity: String)
 }
 
 struct HelpRequested: Error {}

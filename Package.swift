@@ -54,8 +54,7 @@ let package = Package(
     ],
     products: [
         .plugin(name: "Explore", targets: ["Explore"]),
-        // Linked by the manifest overlay only during fuzz builds. Reuses the same core
-        // (source or binary) as Exhaust so coverage callbacks have a single owner.
+        // Linked by the manifest overlay only during fuzz builds. Reuses the same core (source or binary) as Exhaust so coverage callbacks have a single owner.
         .library(name: "ExhaustFuzzRuntime", targets: ["ExhaustCore"]),
         .library(name: "ExhaustFuzzTestSupport", targets: ["ExhaustFuzzTestSupport"]),
         .library(name: "Exhaust", targets: ["Exhaust"]),

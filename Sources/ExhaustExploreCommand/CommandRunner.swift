@@ -3,14 +3,15 @@ import Foundation
 /// Executes a campaign without modifying the root package or its dependency checkouts.
 struct CommandRunner {
     let options: Options
+    let invocation: Invocation
     let fileManager = FileManager.default
 
     var root: URL {
-        URL(fileURLWithPath: options.packagePath)
+        URL(fileURLWithPath: invocation.packagePath)
     }
 
     var outputDirectory: URL {
-        options.outputPath.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent(".build/exhaust")
+        invocation.outputPath.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent(".build/exhaust")
     }
 
     var metadataDirectory: URL {
@@ -34,8 +35,14 @@ struct CommandRunner {
         }
         let description = try swift("package", ["describe", "--type", "json"], scratch: metadataDirectory, environment: cleanEnvironment, output: .capture)
         let package = try JSONDecoder().decode(PackageDescription.self, from: description)
-        let plan = try CampaignPlan(options: options, package: package, outputDirectory: outputDirectory, environment: cleanEnvironment)
-        let runtimePackage = try readManifest().runtimePackageName(for: options.runtimePackage)
+        let plan = try CampaignPlan(
+            options: options,
+            invocation: invocation,
+            package: package,
+            outputDirectory: outputDirectory,
+            environment: cleanEnvironment
+        )
+        let runtimePackage = try readManifest().runtimePackageName(for: invocation.runtimePackage)
         try fileManager.createDirectory(at: plan.scratch, withIntermediateDirectories: true)
         let buildLock = try BuildLock(directory: plan.scratch)
         defer { withExtendedLifetime(buildLock) {} }
@@ -81,7 +88,7 @@ struct CommandRunner {
 
     /// The plugin sandbox cannot fetch dependencies; seed the isolated workspace from the parent's resolved sources. Private copies also prevent fuzz builds from changing ordinary build checkouts.
     func seedDependencies(in scratch: URL) throws {
-        let workspace = options.workspacePath.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent(".build")
+        let workspace = invocation.workspacePath.map { URL(fileURLWithPath: $0) } ?? root.appendingPathComponent(".build")
         let stateURL = workspace.appendingPathComponent("workspace-state.json")
         guard fileManager.fileExists(atPath: stateURL.path) else {
             return
@@ -112,9 +119,16 @@ struct CommandRunner {
     }
 
     @discardableResult
-    func swift(_ command: String, _ arguments: [String], scratch: URL, environment: [String: String], output: ProcessOutput = .inherit, manifestOverlay: URL? = nil) throws -> Data {
+    func swift(
+        _ command: String,
+        _ arguments: [String],
+        scratch: URL,
+        environment: [String: String],
+        output: ProcessOutput = .inherit,
+        manifestOverlay: URL? = nil
+    ) throws -> Data {
         let process = Process()
-        process.executableURL = try PlatformPaths.swiftExecutable(named: options.swift, environment: environment)
+        process.executableURL = try PlatformPaths.swiftExecutable(named: invocation.swift, environment: environment)
         var commandArguments = [command, "--scratch-path", scratch.nativePath]
         // Prebuilt SwiftSyntax downloads require network/keychain access that a command plugin's parent sandbox does not grant. Its source checkout is already resolved.
         commandArguments += ["--package-path", root.nativePath, "--disable-sandbox", "--disable-experimental-prebuilts", "--manifest-cache", "local"]

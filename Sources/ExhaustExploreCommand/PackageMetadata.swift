@@ -4,11 +4,6 @@ struct PackageDescription: Decodable {
     let targets: [PackageTargetDescription]
     let products: [PackageProductDescription]
 
-    init(targets: [PackageTargetDescription], products: [PackageProductDescription] = []) {
-        self.targets = targets
-        self.products = products
-    }
-
     var runtimeTargetNames: Set<String> {
         var pending = products.first { $0.name == "ExhaustFuzzRuntime" }?.targets ?? []
         var visited = Set<String>()
@@ -32,7 +27,7 @@ struct PackageTargetDescription: Decodable {
     let c99name: String
     let type: TargetKind
     let moduleType: ModuleKind?
-    var targetDependencies: [String]?
+    let targetDependencies: [String]?
 
     enum CodingKeys: String, CodingKey {
         case name, c99name, type
@@ -64,7 +59,7 @@ struct PackageManifest: Decodable {
                 throw CommandError("The ephemeral manifest did not enable coverage for \(name).")
             }
             let flags = target.settings.filter { $0.tool == "swift" && $0.condition == nil }
-                .flatMap { $0.kind.unsafeFlags?._0 ?? [] }
+                .flatMap { $0.kind.unsafeFlags?.flags ?? [] }
             guard ManifestHook.compilerFlags.allSatisfy(flags.contains) else {
                 throw CommandError("The ephemeral manifest did not enable coverage for \(name).")
             }
@@ -101,7 +96,11 @@ struct ManifestSettingKind: Decodable {
 }
 
 struct ManifestUnsafeFlags: Decodable {
-    let _0: [String]
+    let flags: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case flags = "_0"
+    }
 }
 
 /// Any condition makes a setting unsuitable as proof of unconditional campaign instrumentation.
