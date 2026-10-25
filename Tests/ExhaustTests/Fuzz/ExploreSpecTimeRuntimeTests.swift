@@ -7,7 +7,7 @@ import Testing
 @Suite("#explore(Spec.self, time:) runtime dispatch and adapter")
 struct ExploreSpecTimeRuntimeTests {
     @Test(".tasks spec with no async members routes to the sequential runner")
-    func syncTasksSpecRoutesSequentially() async throws {
+    func syncTasksSpecRoutesSequentially() async {
         // TasksCounterSpec has only synchronous members, so it conforms to plain StateMachineSpec and has no suspension points to interleave at. The dispatch routes it through the sequential adapter, mirroring plain #execute — the run reaches the instrumentation check instead of terminating on a configuration diagnostic.
         let report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
             TasksCounterSpec.self,
@@ -23,7 +23,7 @@ struct ExploreSpecTimeRuntimeTests {
     }
 
     @Test("Async .sequential spec routes to the sequential runner")
-    func asyncSequentialSpecRoutesToRunner() async throws {
+    func asyncSequentialSpecRoutesToRunner() async {
         let report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
             AsyncSequentialCounterSpec.self,
             mode: .sequential,
@@ -39,7 +39,7 @@ struct ExploreSpecTimeRuntimeTests {
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async .tasks spec routes to the cooperative runner")
-    func tasksSpecRoutesToCooperativeRunner() async throws {
+    func tasksSpecRoutesToCooperativeRunner() async {
         let report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
             NonAtomicCounterSpec.self,
             mode: .tasks,

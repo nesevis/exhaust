@@ -441,7 +441,15 @@ public extension __ExhaustRuntime {
         let suppressLogs = parsed.suppress.logs
         let logLevel = parsed.logLevel
 
-        let budgetNanoseconds = time.nanoseconds
+        guard let budgetNanoseconds = exploreCommandBudget(
+            declared: time.nanoseconds,
+            environment: ProcessInfo.processInfo.environment
+        ) else {
+            return .empty(
+                termination: .invalidConfiguration("EXHAUST_EXPLORE_TIME_NS must be a positive integer number of nanoseconds."),
+                seed: seed
+            )
+        }
         guard budgetNanoseconds > 0 else {
             return .empty(
                 termination: .invalidConfiguration("#explore(time:) requires a positive time budget; got \(time.seconds)s."),

@@ -53,36 +53,47 @@ let package = Package(
         .visionOS(.v1),
     ],
     products: [
-        .library(
-            name: "Exhaust",
-            targets: ["Exhaust"]
-        ),
+        .plugin(name: "Explore", targets: ["Explore"]),
+        // Linked by the manifest overlay only during fuzz builds. Reuses the same core
+        // (source or binary) as Exhaust so coverage callbacks have a single owner.
+        .library(name: "ExhaustFuzzRuntime", targets: ["ExhaustCore"]),
+        .library(name: "ExhaustFuzzTestSupport", targets: ["ExhaustFuzzTestSupport"]),
+        .library(name: "Exhaust", targets: ["Exhaust"]),
         // The app-safe generator surface: ReflectiveGenerator factories, #gen, and generator synthesis, with no Testing or XCTest anywhere in its dependency closure. App and CLI targets import this product without ENABLE_TESTING_SEARCH_PATHS; Exhaust re-exports it for test targets.
-        .library(
-            name: "ExhaustGenerators",
-            targets: ["ExhaustGenerators"]
-        ),
+        .library(name: "ExhaustGenerators", targets: ["ExhaustGenerators"]),
         // The app-safe `@Exhaustable` annotation and its expansion metadata, with no dependency on ExhaustCore.
-        .library(
-            name: "Exhaustable",
-            targets: ["Exhaustable"]
-        ),
+        .library(name: "Exhaustable", targets: ["Exhaustable"]),
         // Consumed by the MetaFuzzHarness package (the self-fuzzing harness); not part of the supported public API.
-        .library(
-            name: "ExhaustMetaFuzz",
-            targets: ["ExhaustMetaFuzz"]
-        ),
+        .library(name: "ExhaustMetaFuzz", targets: ["ExhaustMetaFuzz"]),
     ],
     dependencies: [
         .package(path: "Packages/exhaust-macros"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.1"),
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
         .package(url: "https://github.com/pointfreeco/swift-issue-reporting", from: "2.1.1"),
-        // Its Swift 6.4 manifest depends directly on swift-issue-reporting.
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
     ] + swiftLintDependency,
     targets: [
+        .executableTarget(
+            name: "ExhaustExploreCommand",
+            dependencies: [.product(name: "ArgumentParser", package: "swift-argument-parser")]
+        ),
+        // IssueReporting needs its dynamic test support to report failures in release builds.
+        // The manifest overlay attaches this only to test targets, never the instrumented library.
+        .target(
+            name: "ExhaustFuzzTestSupport",
+            dependencies: [.product(name: "IssueReportingTestSupport", package: "swift-issue-reporting")]
+        ),
+        .plugin(
+            name: "Explore",
+            capability: .command(
+                intent: .custom(verb: "explore", description: "Build selected root targets with coverage instrumentation and run tests"),
+                permissions: []
+            ),
+            dependencies: ["ExhaustExploreCommand"]
+        ),
         coreTarget,
         // Uninstrumented C home for the SanitizerCoverage callbacks: the trace-cmp operand harvest and the trace-pc-guard edge recorder. Must not itself be built with -sanitize-coverage: an instrumented hook recurses into its own guard comparison. ExhaustCore links it so both are available wherever the fuzz loop runs.
         .target(

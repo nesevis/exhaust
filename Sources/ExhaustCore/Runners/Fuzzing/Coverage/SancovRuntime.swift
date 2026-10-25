@@ -169,16 +169,20 @@ package enum SancovRuntime {
 // constructors call them during image loading. Bodies must stay minimal and allocation-light:
 // they run before main, potentially before any other Swift code.
 
+/// Public linkage is required under whole-module optimization: these callbacks are
+/// referenced by other modules' generated C constructors, never by Swift call sites.
+@_spi(ExhaustRuntime)
 @_cdecl("__sanitizer_cov_8bit_counters_init")
-func exhaustSancovCountersInit(_ start: UnsafeMutablePointer<UInt8>?, _ end: UnsafeMutablePointer<UInt8>?) {
+public func exhaustSancovCountersInit(_ start: UnsafeMutablePointer<UInt8>?, _ end: UnsafeMutablePointer<UInt8>?) {
     guard let start, let end else {
         return
     }
     SancovRuntime.registerCounters(start: start, end: end)
 }
 
+@_spi(ExhaustRuntime)
 @_cdecl("__sanitizer_cov_pcs_init")
-func exhaustSancovPCsInit(_ start: UnsafeRawPointer?, _ end: UnsafeRawPointer?) {
+public func exhaustSancovPCsInit(_ start: UnsafeRawPointer?, _ end: UnsafeRawPointer?) {
     guard let start, let end else {
         return
     }

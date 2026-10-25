@@ -25,6 +25,12 @@ jobs:
       - name: Select Xcode 27
         run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
+      - name: Validate explore command consumer workflow
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
+
+      - name: Verify real campaigns and failure reporting
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift
+
       - name: Build harness
         run: swift build --build-system native --package-path ExploreHarness --build-tests
 
@@ -75,3 +81,29 @@ jobs:
               echo '```' >> "$GITHUB_STEP_SUMMARY"
             done
           fi
+
+  explore-command-linux:
+    runs-on: ubuntu-latest
+    container: swift:6.4
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate explore command consumer workflow
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
+      - name: Verify real campaigns and failure reporting
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift
+
+  explore-command-windows:
+    name: Explore command (Windows, experimental)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.4.0-release
+          tag: 6.4.0-RELEASE
+      - name: Validate explore command consumer workflow
+        shell: pwsh
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
+      - name: Verify real campaigns and failure reporting
+        shell: pwsh
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift

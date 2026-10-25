@@ -18,7 +18,7 @@ package extension __ExhaustRuntime {
 
         2. The property's work runs on an executor the run did not bind: a `@MainActor` function, an actor with a custom executor, or a detached task. `trace-pc-guard` records only on the run's own thread. Switch to counter-based instrumentation, which records regardless of executor:
 
-        .unsafeFlags(["-sanitize=undefined",
+        .unsafeFlags(["-sanitize=fuzzer-no-link",
                       "-sanitize-coverage=inline-8bit-counters,pc-table"])
 
         Replace the `trace-pc-guard` flags rather than adding to them: a build carrying both recorders is refused, because the two number their edges independently and nothing says which one a run should read. Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
@@ -34,12 +34,12 @@ package extension __ExhaustRuntime {
 
         A run reads one recorder. The two number their edges independently, so coverage measured against one says nothing about the other, and nothing in the build says which one you meant. Compile with one set of coverage flags:
 
-        .unsafeFlags(["-sanitize=undefined",
+        .unsafeFlags(["-sanitize=fuzzer-no-link",
                       "-sanitize-coverage=edge,trace-pc-guard,pc-table"])
 
         or, when the property's work runs on an executor the run does not bind (a `@MainActor` function, an actor with a custom executor, a detached task):
 
-        .unsafeFlags(["-sanitize=undefined",
+        .unsafeFlags(["-sanitize=fuzzer-no-link",
                       "-sanitize-coverage=inline-8bit-counters,pc-table"])
 
         Counter-based coverage is process-global, so a run using it needs the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test. Check every target in the dependency graph, not only the one under test: flags on a library and different flags on the test target put both recorders in the same process.
@@ -57,7 +57,7 @@ package extension __ExhaustRuntime {
 
         Instrument with counters instead, which record wherever the work runs:
 
-        .unsafeFlags(["-sanitize=undefined",
+        .unsafeFlags(["-sanitize=fuzzer-no-link",
                       "-sanitize-coverage=inline-8bit-counters,pc-table"])
 
         Replace the `trace-pc-guard` flags rather than adding to them; a build carrying both recorders is refused. Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
@@ -69,13 +69,17 @@ package extension __ExhaustRuntime {
     /// The runtime warning for a build without coverage instrumentation, with the flags ready to copy-paste.
     static var missingInstrumentationMessage: String {
         """
-        #explore(time:) did not run because no instrumented module is loaded. The property was not invoked and no time budget was consumed. Add the following to the swiftSettings of the target whose coverage you want tracked (typically the library under test):
+        #explore(time:) did not run because no instrumented module is loaded. The property was not invoked and no time budget was consumed. For a dedicated run, use the package command; it applies instrumentation without editing Package.swift:
 
-        .unsafeFlags(["-sanitize=undefined",
+        swift package explore --instrument <LibraryTarget> --test-target <TestTarget>
+
+        To instrument ordinary suite builds manually instead, add the following to the swiftSettings of the target whose coverage you want tracked (typically the library under test):
+
+        .unsafeFlags(["-sanitize=fuzzer-no-link",
                       "-sanitize-coverage=edge,trace-pc-guard,pc-table"],
                      .when(configuration: .debug))
 
-        For a dedicated fuzz target built with `-c release`, drop the `.when(configuration:)` gate, add "-assert-config", "Debug" to the list, and apply the same flags to the test target that calls the code under test. The CoverageGuidedFuzzing article has both recipes.
+        The explore command defaults to release and instruments the selected library and test target with assertions enabled. For a manual release build, gate the flags on an explicit fuzzing opt-in, add "-assert-config", "Debug", and instrument the calling test target too. See CoverageGuidedFuzzing for both workflows.
         """
     }
 }

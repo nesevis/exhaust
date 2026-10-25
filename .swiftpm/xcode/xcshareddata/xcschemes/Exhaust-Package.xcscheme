@@ -178,9 +178,8 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ExhaustStackProbe"
-            BuildableName = "ExhaustStackProbe"
-            BlueprintName = "ExhaustStackProbe"
+            BlueprintIdentifier = "ExhaustExploreCommand"
+            BuildableName = "ExhaustExploreCommand"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -204,9 +203,8 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ExhaustStackProbe"
-            BuildableName = "ExhaustStackProbe"
-            BlueprintName = "ExhaustStackProbe"
+            BlueprintIdentifier = "ExhaustExploreCommand"
+            BuildableName = "ExhaustExploreCommand"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>
