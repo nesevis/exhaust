@@ -569,7 +569,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Issue Reporting
 
-    /// Records the run's issues from the report alone: configuration and instrumentation errors (never suppressed — they signal a malfunction, not the failures a caller may be asserting on), the pointless-run error, and the fault inventory (suppressible for tests asserting on the returned report).
+    /// Records the run's issues from the report alone: the missing-instrumentation warning and configuration or instrumentation errors (never suppressed), the pointless-run error, and the fault inventory (suppressible for tests asserting on the returned report).
     package static func reportFuzzIssues(
         report: FuzzReport,
         suppressIssueReporting: Bool,
@@ -580,7 +580,7 @@ public extension __ExhaustRuntime {
     ) {
         switch report.termination {
             case .instrumentationMissing:
-                reportError(
+                reportWarning(
                     missingInstrumentationMessage,
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )

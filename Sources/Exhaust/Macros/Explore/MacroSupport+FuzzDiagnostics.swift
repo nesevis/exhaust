@@ -1,4 +1,4 @@
-// The configuration diagnostics `#explore(time:)` fails a run with: missing, unobservable, and conflicting coverage instrumentation.
+// The coverage configuration diagnostics for `#explore(time:)`: missing, unobservable, and conflicting coverage instrumentation.
 
 import ExhaustCore
 
@@ -66,10 +66,10 @@ package extension __ExhaustRuntime {
         """
     }
 
-    /// The hard-failure diagnostic for a build without coverage instrumentation, with the flags ready to copy-paste.
+    /// The runtime warning for a build without coverage instrumentation, with the flags ready to copy-paste.
     static var missingInstrumentationMessage: String {
         """
-        #explore(time:) requires coverage instrumentation, and no instrumented module is loaded. Add the following to the swiftSettings of the target whose coverage you want tracked (typically the library under test):
+        #explore(time:) did not run because no instrumented module is loaded. The property was not invoked and no time budget was consumed. Add the following to the swiftSettings of the target whose coverage you want tracked (typically the library under test):
 
         .unsafeFlags(["-sanitize=undefined",
                       "-sanitize-coverage=edge,trace-pc-guard,pc-table"],

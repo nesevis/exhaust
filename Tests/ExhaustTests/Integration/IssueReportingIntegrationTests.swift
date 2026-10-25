@@ -6,6 +6,31 @@ import Testing
 
 @Suite("Issue reporting integration")
 struct IssueReportingIntegrationTests {
+    @Test("Missing fuzz instrumentation reports one warning at the call site")
+    func missingFuzzInstrumentationWarning() {
+        let reporter = RecordingIssueReporter()
+        withIssueReporters([reporter]) {
+            __ExhaustRuntime.reportFuzzIssues(
+                report: .empty(termination: .instrumentationMissing, seed: 1337),
+                suppressIssueReporting: true,
+                fileID: "FuzzTests/Fixture.swift",
+                filePath: "/tmp/Fixture.swift",
+                line: 41,
+                column: 7
+            )
+        }
+        #expect(reporter.issues == [
+            RecordedIssue(
+                message: __ExhaustRuntime.missingInstrumentationMessage,
+                severity: .warning,
+                fileID: "FuzzTests/Fixture.swift",
+                filePath: "/tmp/Fixture.swift",
+                line: 41,
+                column: 7
+            ),
+        ])
+    }
+
     @Test("Issue routing preserves severity and source location")
     func issueRoutingPreservesSeverityAndSourceLocation() {
         let reporter = RecordingIssueReporter()

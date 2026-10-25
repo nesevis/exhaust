@@ -6,27 +6,25 @@ import Testing
 
 @Suite("#explore(time:) runtime entry", .serialized)
 struct ExploreTimeRuntimeTests {
-    @Test("Missing instrumentation fails immediately, before any budget is consumed")
+    @Test("Missing instrumentation warns without invoking the property or consuming budget")
     func missingInstrumentation() {
-        var report: FuzzReport?
-        withKnownIssue {
-            report = __ExhaustRuntime.__exploreTime(
-                #gen(.int(in: 0 ... 100)),
-                time: .seconds(60),
-                settings: [],
-                coverage: .none
-            ) { value in
-                value >= 0
-            }
+        let report = __ExhaustRuntime.__exploreTime(
+            #gen(.int(in: 0 ... 100)),
+            time: .seconds(60),
+            settings: [],
+            coverage: .none
+        ) { _ in
+            Issue.record("An uninstrumented property must not run")
+            return false
         }
-        #expect(report?.termination == .instrumentationMissing)
-        #expect(report?.attempts.total == 0)
-        #expect(report?.timing.elapsed == .zero)
+        #expect(report.termination == .instrumentationMissing)
+        #expect(report.attempts.total == 0)
+        #expect(report.timing.elapsed == .zero)
     }
 
     // MARK: - Per-Variant Reporting Channel
 
-    // One test per value entry point of the shape "the run's recorded issue reaches the current test". The recorded issue here is the missing-instrumentation error (the suite runs uninstrumented, and the override pins that), which travels the same reportFuzzIssues tail as the fault inventory. withKnownIssue is task-scoped, so a variant that reports off the test task — as the async Bool variant once did from inside its GCD closure — fails its test here instead of silently losing the report.
+    // One test per value entry point of the shape "the run's recorded issue reaches the current test". The recorded issue here is the invalid-budget error, which travels the same reportFuzzIssues tail as the fault inventory. withKnownIssue is task-scoped, so a variant that reports off the test task — as the async Bool variant once did from inside its GCD closure — fails its test here instead of silently losing the report.
 
     @Test("The sync Bool entry point records its issue on the test task")
     func reportingChannelSyncBool() {
@@ -34,14 +32,17 @@ struct ExploreTimeRuntimeTests {
         withKnownIssue {
             report = __ExhaustRuntime.__exploreTime(
                 #gen(.int(in: 0 ... 100)),
-                time: .seconds(60),
+                time: .zero,
                 settings: [],
                 coverage: .none
             ) { value in
                 value >= 0
             }
         }
-        #expect(report?.termination == .instrumentationMissing)
+        guard case .invalidConfiguration = report?.termination else {
+            Issue.record("Expected invalidConfiguration for a zero budget")
+            return
+        }
     }
 
     @Test("The sync expect entry point records its issue on the test task")
@@ -50,14 +51,17 @@ struct ExploreTimeRuntimeTests {
         withKnownIssue {
             report = __ExhaustRuntime.__exploreTimeExpect(
                 #gen(.int(in: 0 ... 100)),
-                time: .seconds(60),
+                time: .zero,
                 settings: [],
                 coverage: .none,
                 property: { _ in },
                 detection: { _ in }
             )
         }
-        #expect(report?.termination == .instrumentationMissing)
+        guard case .invalidConfiguration = report?.termination else {
+            Issue.record("Expected invalidConfiguration for a zero budget")
+            return
+        }
     }
 
     @Test("The async Bool entry point records its issue on the test task, after the GCD hop")
@@ -66,14 +70,17 @@ struct ExploreTimeRuntimeTests {
         await withKnownIssue {
             report = await __ExhaustRuntime.__exploreTimeAsync(
                 #gen(.int(in: 0 ... 100)),
-                time: .seconds(60),
+                time: .zero,
                 settings: [],
                 coverage: .none
             ) { value in
                 value >= 0
             }
         }
-        #expect(report?.termination == .instrumentationMissing)
+        guard case .invalidConfiguration = report?.termination else {
+            Issue.record("Expected invalidConfiguration for a zero budget")
+            return
+        }
     }
 
     @Test("The async expect entry point records its issue on the test task, after the GCD hop")
@@ -82,14 +89,17 @@ struct ExploreTimeRuntimeTests {
         await withKnownIssue {
             report = await __ExhaustRuntime.__exploreTimeExpectAsync(
                 #gen(.int(in: 0 ... 100)),
-                time: .seconds(60),
+                time: .zero,
                 settings: [],
                 coverage: .none,
                 property: { _ in },
                 detection: { _ in }
             )
         }
-        #expect(report?.termination == .instrumentationMissing)
+        guard case .invalidConfiguration = report?.termination else {
+            Issue.record("Expected invalidConfiguration for a zero budget")
+            return
+        }
     }
 
     @Test("The skipScreening setting starts the search at random sampling with no screening attempts")

@@ -120,9 +120,9 @@ package extension CoverageSource {
 ///
 /// Every entry point takes one of these explicitly, so a test never has to alter process-wide state to say "run without instrumentation" or "run against this synthetic source". The production check reads the coverage registries, which the loader populates before `main` and nothing mutates afterwards.
 package enum CoverageSourceSelection: Sendable {
-    /// The source for this build: trace-pc-guards when compiled in, otherwise counters, otherwise none (the run fails with the missing-instrumentation diagnostic).
+    /// The source for this build: trace-pc-guards when compiled in, otherwise counters, otherwise none (the run returns with the missing-instrumentation warning).
     case production
-    /// No source at all; the run fails as an uninstrumented build would.
+    /// No source at all; the run returns without evaluating the property, as an uninstrumented build would.
     case none
     /// The given source. Report-time symbolization is skipped, because a synthetic source's edge indices do not address real program counters.
     case injected(any CoverageSource)

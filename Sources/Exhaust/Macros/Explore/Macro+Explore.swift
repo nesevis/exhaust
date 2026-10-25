@@ -64,7 +64,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
+/// Requires coverage instrumentation on the target under test; when no instrumented module is loaded, it emits a runtime warning and returns without invoking the property or consuming any budget. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
@@ -90,7 +90,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
+/// Requires coverage instrumentation on the target under test; when no instrumented module is loaded, it emits a runtime warning and returns without invoking the property or consuming any budget. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
@@ -108,7 +108,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 
 /// Runs a coverage-guided spec test under the given ``SearchableExecutionModel`` until the time budget is consumed.
 ///
-/// Where the generator form searches values, this form searches command sequences: the spec's `@Command` methods are drawn, mutated, and reduced as a sequence. Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
+/// Where the generator form searches values, this form searches command sequences: the spec's `@Command` methods are drawn, mutated, and reduced as a sequence. Requires coverage instrumentation on the target under test; when no instrumented module is loaded, it emits a runtime warning and returns without invoking the property or consuming any budget. The run skips the covering array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
 ///
 /// `mode: .tasks` on a synchronous spec runs one command at a time, because interleaving needs `await` boundaries. The mode is a ``SearchableExecutionModel``, which has no `.threads`: coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay. Run those specs under `#execute`, whose race detection relies on repetition rather than coverage.
 ///
@@ -136,7 +136,7 @@ public macro explore<Spec: StateMachineSpec>(
 
 /// Runs a coverage-guided spec test for an async spec under the given ``SearchableExecutionModel`` until the time budget is consumed.
 ///
-/// Where the generator form searches values, this form searches command sequences: the spec's `@Command` methods are drawn, mutated, and reduced as a sequence. Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
+/// Where the generator form searches values, this form searches command sequences: the spec's `@Command` methods are drawn, mutated, and reduced as a sequence. Requires coverage instrumentation on the target under test; when no instrumented module is loaded, it emits a runtime warning and returns without invoking the property or consuming any budget. The run skips the covering array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
 ///
 /// `mode: .sequential` runs the commands one at a time, each awaited in turn. `mode: .tasks` drains each sequence through the cooperative scheduler: every command carries a lane-assigning schedule marker drawn as part of the generated input, so the interleaving itself is searched, mutated, and reduced alongside the commands (``StateMachineFuzzSettings/parallelize(lanes:)`` sets the lane count, defaulting to two). It requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2. The mode is a ``SearchableExecutionModel``, which has no `.threads`: coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay. Run those specs under `#execute`, whose race detection relies on repetition rather than coverage.
 ///

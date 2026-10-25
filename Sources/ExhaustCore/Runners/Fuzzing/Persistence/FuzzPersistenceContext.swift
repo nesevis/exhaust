@@ -4,7 +4,7 @@ import Foundation
 
 /// The persistence configuration for one `time:` run, constructed read-only before the run starts.
 ///
-/// Construction performs no writes: it locates the store, reads any fresh progress document a crashed predecessor left, and reads the surviving breadcrumb. The runner creates the writer and the live breadcrumb mapping itself when the run actually starts, so a run that fails validation (missing instrumentation, bad settings) leaves no files behind.
+/// Construction performs no writes: it locates the store, reads any fresh progress document a crashed predecessor left, and reads the surviving breadcrumb. The runner creates the writer and the live breadcrumb mapping itself when the run actually starts, so a run that never starts (missing instrumentation, bad settings) leaves no files behind.
 package struct FuzzPersistenceContext {
     /// The per-test store; the runner writes checkpoints here and removes it on normal termination.
     package let store: FuzzProgressStore

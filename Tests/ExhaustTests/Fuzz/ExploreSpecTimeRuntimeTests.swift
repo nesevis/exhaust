@@ -9,38 +9,30 @@ struct ExploreSpecTimeRuntimeTests {
     @Test(".tasks spec with no async members routes to the sequential runner")
     func syncTasksSpecRoutesSequentially() async throws {
         // TasksCounterSpec has only synchronous members, so it conforms to plain StateMachineSpec and has no suspension points to interleave at. The dispatch routes it through the sequential adapter, mirroring plain #execute — the run reaches the instrumentation check instead of terminating on a configuration diagnostic.
-        nonisolated(unsafe) var report: FuzzReport?
-        await withKnownIssue {
-            report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
-                TasksCounterSpec.self,
-                mode: .tasks,
-                time: .seconds(60),
-                settings: [],
-                coverage: .none
-            )
-        }
-        let resolved = try #require(report)
-        guard case .instrumentationMissing = resolved.termination else {
-            Issue.record("Expected instrumentationMissing (the sequential runner path), got \(resolved.termination)")
+        let report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
+            TasksCounterSpec.self,
+            mode: .tasks,
+            time: .seconds(60),
+            settings: [],
+            coverage: .none
+        )
+        guard case .instrumentationMissing = report.termination else {
+            Issue.record("Expected instrumentationMissing (the sequential runner path), got \(report.termination)")
             return
         }
     }
 
     @Test("Async .sequential spec routes to the sequential runner")
     func asyncSequentialSpecRoutesToRunner() async throws {
-        nonisolated(unsafe) var report: FuzzReport?
-        await withKnownIssue {
-            report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
-                AsyncSequentialCounterSpec.self,
-                mode: .sequential,
-                time: .seconds(60),
-                settings: [],
-                coverage: .none
-            )
-        }
-        let resolved = try #require(report)
-        guard case .instrumentationMissing = resolved.termination else {
-            Issue.record("Expected instrumentationMissing (the async-sequential runner path), got \(resolved.termination)")
+        let report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
+            AsyncSequentialCounterSpec.self,
+            mode: .sequential,
+            time: .seconds(60),
+            settings: [],
+            coverage: .none
+        )
+        guard case .instrumentationMissing = report.termination else {
+            Issue.record("Expected instrumentationMissing (the async-sequential runner path), got \(report.termination)")
             return
         }
     }
@@ -48,19 +40,15 @@ struct ExploreSpecTimeRuntimeTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async .tasks spec routes to the cooperative runner")
     func tasksSpecRoutesToCooperativeRunner() async throws {
-        nonisolated(unsafe) var report: FuzzReport?
-        await withKnownIssue {
-            report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
-                NonAtomicCounterSpec.self,
-                mode: .tasks,
-                time: .seconds(60),
-                settings: [.parallelize(lanes: .two)],
-                coverage: .none
-            )
-        }
-        let resolved = try #require(report)
-        guard case .instrumentationMissing = resolved.termination else {
-            Issue.record("Expected instrumentationMissing (the cooperative runner path), got \(resolved.termination)")
+        let report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
+            NonAtomicCounterSpec.self,
+            mode: .tasks,
+            time: .seconds(60),
+            settings: [.parallelize(lanes: .two)],
+            coverage: .none
+        )
+        guard case .instrumentationMissing = report.termination else {
+            Issue.record("Expected instrumentationMissing (the cooperative runner path), got \(report.termination)")
             return
         }
     }
