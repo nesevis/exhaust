@@ -25,7 +25,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(iterationCount > 0)
@@ -51,7 +51,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output.count == 5)
@@ -78,7 +78,7 @@ struct ReducerSimplifyValuesTests {
         let property: (UInt64) -> Bool = { _ in false }
 
         let (sequence, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(sequence.shortLexPrecedes(originalSequence))
@@ -97,7 +97,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // The reduced output must still fail the property
@@ -116,7 +116,7 @@ struct ReducerSimplifyValuesTests {
         let property: (Int64) -> Bool = { _ in false }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // The output should be 0 (semantic simplest for signed)
@@ -133,7 +133,7 @@ struct ReducerSimplifyValuesTests {
         let property: (Int64) -> Bool = { _ in false }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output == 0)
@@ -152,7 +152,7 @@ struct ReducerSimplifyValuesTests {
         let property: ([Character]) -> Bool = { _ in false }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // All characters should be " "
@@ -172,7 +172,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let (sequence, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Should be simpler than original
@@ -190,7 +190,7 @@ struct ReducerSimplifyValuesTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let (sequence, _) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(ChoiceSequence.validate(sequence))
@@ -205,7 +205,7 @@ struct ReducerSimplifyValuesTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let (sequence, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         guard case let .success(rematerialized, _, _) = Materializer.materialize(gen, context: .init(

@@ -129,6 +129,10 @@ private final class ExecuteDeadlineSyncSpec {
         nil
     }
 
+    @Invariant func remainsUnchanged() -> Bool {
+        value == 0
+    }
+
     @Command func first() {
         waitForExecuteDeadline()
     }

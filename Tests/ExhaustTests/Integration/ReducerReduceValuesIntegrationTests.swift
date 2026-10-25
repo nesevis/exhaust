@@ -18,7 +18,7 @@ struct ReducerReduceValuesIntegrationTests {
             // Reversible, but only accidentally ([Character] is more or less equal to String)
             .map { String($0) }
 
-        let gen = #gen(stringGen, stringGen, stringGen) {
+        let gen = #gen(stringGen, stringGen, stringGen).map {
             // Concatenating; irreversible
             $0 + $1 + $2
         }

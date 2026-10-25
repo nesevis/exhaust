@@ -15,7 +15,7 @@ public enum Fixture {
                 .uint16(),
                 .int(in: 0 ... 7),
                 .uint8().array(length: length ... length)
-            ) { mode, flags, checksum, region, payload in
+            ).map { mode, flags, checksum, region, payload in
                 Message(
                     mode: mode,
                     flags: flags,

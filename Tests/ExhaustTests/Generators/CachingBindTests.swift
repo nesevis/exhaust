@@ -81,7 +81,7 @@ struct CachingBindTests {
     @Test("Key path variant builds the dependent generator once per distinct key")
     func keyPathVariantBuildsTheDependentGeneratorOncePerDistinctKey() {
         let counter = ConstructionCounter()
-        let rows = #gen(.int(in: 0 ... 3), .int(in: 0 ... 100)) { (order: $0, noise: $1) }
+        let rows = #gen(.int(in: 0 ... 3), .int(in: 0 ... 100)).map { (order: $0, noise: $1) }
         let generator = rows.bind(cachingBy: \.order) { row in
             counter.increment(row.order)
             return .int(in: 0 ... row.order)
@@ -99,7 +99,7 @@ struct CachingBindTests {
     func keyPathVariantDrawsTheSameValuesAsAPlainBindUnderTheSameSeed() {
         func collect(caching: Bool) -> [Int] {
             let recorder = DrawnValueRecorder()
-            let rows = #gen(.int(in: 1 ... 5), .int(in: 0 ... 100)) { (width: $0, noise: $1) }
+            let rows = #gen(.int(in: 1 ... 5), .int(in: 0 ... 100)).map { (width: $0, noise: $1) }
             let generator: ReflectiveGenerator<Int> = switch caching {
                 case true: rows.bind(cachingBy: \.width) { row in .int(in: 0 ... row.width * 1000) }
                 case false: rows.bind { row in .int(in: 0 ... row.width * 1000) }

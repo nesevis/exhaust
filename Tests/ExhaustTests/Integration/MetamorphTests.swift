@@ -191,7 +191,7 @@ struct MetamorphTests {
 
         // Reduce: property is "original <= 100"
         let (_, shrunk) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .init(maxStalls: 2)) { results in
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: .init(maxStalls: 2)) { results in
                 (results[0] as! Int) <= 100
             }.counterexample
         )

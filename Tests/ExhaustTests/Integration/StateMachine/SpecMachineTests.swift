@@ -182,7 +182,7 @@ struct ScreeningSourceSelectionTests {
             .int(in: 0 ... 100).optional(),
             .int(in: 1 ... 100).optional(),
             .int(in: 0 ... 400)
-        ) { seedSource, screeningReplayRow, replayIteration, screeningBudget in
+        ).map { seedSource, screeningReplayRow, replayIteration, screeningBudget in
             var config = ResolvedConcurrentConfig()
             config.seed = seedSource.map { UInt64($0) }
             config.screeningReplay = screeningReplayRow.map { (tierLength: 5, row: $0) }

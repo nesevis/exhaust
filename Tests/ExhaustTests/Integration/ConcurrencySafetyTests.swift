@@ -97,7 +97,7 @@ struct GeneratorSharingTests {
             ),
             depthRange: 0 ... 3,
             extend: { recurse, _ in
-                #gen(recurse(), recurse()) { left, right in
+                #gen(recurse(), recurse()).map { left, right in
                     [left as Any, right as Any]
                 }
             }

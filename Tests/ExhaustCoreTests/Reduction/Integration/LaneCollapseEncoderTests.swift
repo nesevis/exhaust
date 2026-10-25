@@ -29,7 +29,7 @@ struct LaneCollapseEncoderTests {
         )
 
         let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
         let laneMarkers = reduced.map(\.0)
@@ -105,7 +105,7 @@ struct LaneCollapseEncoderTests {
         }
 
         let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property).counterexample
         )
 
         let laneMarkers = reduced.map(\.0)

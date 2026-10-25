@@ -20,7 +20,7 @@ struct DerivedScreeningParityTests {
 
     @Test("Default drawn-depth nested products match handwritten rows", arguments: [100, 200])
     func drawnNestedProducts(maximumNodes: Int) throws {
-        let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool(), .int(in: 0 ... 31)) { first, second, enabled, outer in
+        let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool(), .int(in: 0 ... 31)).map { first, second, enabled, outer in
             ScreeningNested(inner: ScreeningRecord(first: first, second: second, enabled: enabled), outer: outer)
         }
         let derived = ScreeningNested.gen(.budget(.custom(recursion: 10, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))
@@ -197,7 +197,7 @@ struct DerivedScreeningParityTests {
 
     @Test("Nested products expose fields through nonrecursive derived edges", arguments: [100, 200])
     func nestedProducts(maximumNodes: Int) throws {
-        let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool(), .int(in: 0 ... 31)) { first, second, enabled, outer in
+        let handwritten = #gen(.int(in: 0 ... 31), .int(in: 0 ... 31), .bool(), .int(in: 0 ... 31)).map { first, second, enabled, outer in
             ScreeningNested(inner: ScreeningRecord(first: first, second: second, enabled: enabled), outer: outer)
         }
         let derived = ScreeningNested.gen(recursion: 2, .budget(.custom(recursion: 2, nodes: maximumNodes)), overriding: .int(in: 0 ... 31))

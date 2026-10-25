@@ -125,12 +125,10 @@ private func materialize<Output: Equatable>(
             mode: .exact,
             fallbackTree: tree
         )
-    ),
-        let typed = value as? Output
-    else {
+    ) else {
         throw MaterializeFailure.failed
     }
-    return typed
+    return value
 }
 
 private enum MaterializeFailure: Error {

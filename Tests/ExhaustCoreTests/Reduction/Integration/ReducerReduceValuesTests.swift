@@ -59,7 +59,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 5 }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output == 5)
@@ -76,7 +76,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 50 }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output == 50)
@@ -93,7 +93,7 @@ struct ReducerReduceValuesTests {
         let property: (Int64) -> Bool = { $0 > -5 }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output == -5)
@@ -125,7 +125,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 10 }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(property(output) == false)
@@ -151,7 +151,7 @@ struct ReducerReduceValuesTests {
         let property: (Character) -> Bool = { $0 <= "e" }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output == "f")
@@ -181,7 +181,7 @@ struct ReducerReduceValuesTests {
         let property: (Double) -> Bool = { _ in false }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Value should be reduced toward 0 (Pass 3 sets it to 0.0 directly since property always fails)
@@ -203,7 +203,7 @@ struct ReducerReduceValuesTests {
         }
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         #expect(output.sorted() == [0, 0, 100])
@@ -235,7 +235,7 @@ struct ReducerReduceValuesTests {
         let (_, tree) = try #require(found)
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: reducerConfig, property: property).counterexample
         )
 
         // Minimal failing tuple under constraints:

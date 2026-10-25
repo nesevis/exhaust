@@ -48,7 +48,7 @@ struct CharacterSimplificationTests {
         let expected = Character(Unicode.Scalar(target)!)
         let generator = Gen.character().gen
         let tree = try #require(try Interpreters.reflect(generator, with: initial))
-        let (_, reduced) = try #require(try Interpreters.choiceGraphReduce(
+        let (_, reduced) = try #require(Interpreters.choiceGraphReduce(
             gen: generator,
             tree: tree,
             output: initial,
@@ -122,7 +122,7 @@ struct CharacterSimplificationTests {
         let tree = try #require(try Interpreters.reflect(generator, with: "creepidiot"))
 
         let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: generator,
                 tree: tree,
                 output: "creepidiot",
@@ -142,7 +142,7 @@ struct CharacterSimplificationTests {
         let tree = try #require(try Interpreters.reflect(generator, with: "å"))
 
         let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: generator,
                 tree: tree,
                 output: "å",
@@ -163,7 +163,7 @@ struct CharacterSimplificationTests {
         let tree = try #require(try Interpreters.reflect(generator, with: zalgo))
 
         let (_, reduced) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: generator,
                 tree: tree,
                 output: zalgo,

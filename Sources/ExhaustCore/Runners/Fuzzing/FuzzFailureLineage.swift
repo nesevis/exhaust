@@ -182,7 +182,7 @@ package struct FuzzFailureLineage {
                 handle.write(data)
                 handle.closeFile()
             } else {
-                FileManager.default.createFile(atPath: path, contents: data)
+                _ = FileManager.default.createFile(atPath: path, contents: data)
             }
         }
     }
