@@ -160,7 +160,7 @@ public struct FuzzReport: Sendable {
         /// The mutation phase stopped learning, with no coverage-novel corpus admission for a sustained window, so the run ended early and returned the unused budget rather than burning it. A plateau is not evidence the fault space is exhausted; failures on already-covered paths remain possible.
         case coveragePlateau(unused: TimeSpan)
 
-        /// The build lacks coverage instrumentation, so the run failed loudly before consuming any budget. The recorded issue carries the compiler flags to add.
+        /// The build lacks coverage instrumentation, so the run returned without invoking the property or consuming any budget. A runtime warning explains how to enable instrumentation.
         case instrumentationMissing
 
         /// The build carries instrumentation, but the run recorded no coverage at all, so the search had nothing to follow and stopped rather than spending the budget. Reached when the property's work executes somewhere the coverage source does not observe; see <doc:CoverageGuidedFuzzing> on executor isolation.

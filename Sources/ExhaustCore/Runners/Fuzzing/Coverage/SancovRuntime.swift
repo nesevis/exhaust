@@ -165,20 +165,20 @@ package enum SancovRuntime {
 
 // MARK: - SanitizerCoverage Hooks
 
-// These must be free functions with exact C symbol names; the instrumented images' module
-// constructors call them during image loading. Bodies must stay minimal and allocation-light:
-// they run before main, potentially before any other Swift code.
+// These must be free functions with exact C symbol names; instrumented images call them from module constructors before main. Package visibility retains the C entry points under whole-module optimization without exposing a public Swift API.
 
+/// Registers counter storage supplied by instrumented images during loading.
 @_cdecl("__sanitizer_cov_8bit_counters_init")
-func exhaustSancovCountersInit(_ start: UnsafeMutablePointer<UInt8>?, _ end: UnsafeMutablePointer<UInt8>?) {
+package func exhaustSancovCountersInit(_ start: UnsafeMutablePointer<UInt8>?, _ end: UnsafeMutablePointer<UInt8>?) {
     guard let start, let end else {
         return
     }
     SancovRuntime.registerCounters(start: start, end: end)
 }
 
+/// Registers the program-counter table supplied by instrumented images during loading.
 @_cdecl("__sanitizer_cov_pcs_init")
-func exhaustSancovPCsInit(_ start: UnsafeRawPointer?, _ end: UnsafeRawPointer?) {
+package func exhaustSancovPCsInit(_ start: UnsafeRawPointer?, _ end: UnsafeRawPointer?) {
     guard let start, let end else {
         return
     }

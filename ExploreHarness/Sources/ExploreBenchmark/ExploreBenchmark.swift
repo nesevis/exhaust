@@ -69,7 +69,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
         let report: FuzzReport
         switch fixture {
             case .parser:
-                report = #explore(
+                report = await #explore(
                     Fixture.messageGenerator,
                     time: budget,
                     .replay(.numeric(seed)),
@@ -78,7 +78,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
                     try Parser.decode(message).byteCount >= 0
                 }
             case .deep:
-                report = #explore(
+                report = await #explore(
                     DeepFixture.packetGenerator,
                     time: budget,
                     .replay(.numeric(seed)),
@@ -89,7 +89,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
             case .queue:
                 report = await specReport(BoundedQueueSpec.self, seed: seed, budget: budget)
             case .lengthGate:
-                report = #explore(
+                report = await #explore(
                     LengthGateFixture.valuesGenerator,
                     time: budget,
                     .replay(.numeric(seed)),
@@ -98,7 +98,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
                     try LengthGate.process(values) >= 0
                 }
             case .dedup:
-                report = #explore(
+                report = await #explore(
                     DedupGateFixture.valuesGenerator,
                     time: budget,
                     .replay(.numeric(seed)),
@@ -107,7 +107,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
                     try DedupGate.ingest(values) >= 0
                 }
             case .recursiveDepth:
-                report = #explore(
+                report = await #explore(
                     RecursiveDepthFixture.treeGenerator,
                     time: budget,
                     .replay(.numeric(seed)),
@@ -116,7 +116,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
                     try RecursiveDepth.measure(tree) >= 0
                 }
             case .wideAlign:
-                report = #explore(
+                report = await #explore(
                     WideAlignFixture.pairGenerator,
                     time: budget,
                     .replay(.numeric(seed)),

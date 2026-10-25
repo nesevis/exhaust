@@ -34,3 +34,15 @@ let package = Package(
         ),
     ]
 )
+
+// Treat compiler warnings as errors for libraries, executables, tests, and macros in all configurations.
+// Manifest settings apply to local builds and CI without changing third-party dependency settings.
+for target in package.targets {
+    switch target.type {
+        case .regular, .executable, .test, .macro:
+            target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+            target.cSettings = (target.cSettings ?? []) + [.treatAllWarnings(as: .error)]
+        default:
+            break
+    }
+}

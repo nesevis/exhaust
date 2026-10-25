@@ -11,7 +11,7 @@ struct ExhaustableDomainTests {
     func nestedLimit() {
         let scaling = #gen(.element(from: [ExhaustableSizeScaling.constant, .linear, .exponential]))
         // Magnitudes stay small so custom domains tie with `.tiny` and `.small`.
-        let domain = #gen(.bool(), .element(from: presets), .int(in: 0 ... 200), scaling) { isPreset, preset, magnitude, scaling in
+        let domain = #gen(.bool(), .element(from: presets), .int(in: 0 ... 200), scaling).map { isPreset, preset, magnitude, scaling in
             switch isPreset {
                 case true:
                     preset

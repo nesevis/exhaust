@@ -63,8 +63,8 @@ struct ExploreTrapTests {
 
     #if canImport(ObjectiveC)
         @Test("An NSException raised by the property is caught in-process, clustered, and the run continues", .timeLimit(.minutes(2)))
-        func nsExceptionIsCaughtAndClustered() {
-            let report = #explore(
+        func nsExceptionIsCaughtAndClustered() async {
+            let report = await #explore(
                 Fixture.messageGenerator,
                 time: .seconds(4),
                 .replay(7),
@@ -90,8 +90,8 @@ struct ExploreTrapTests {
     #endif
 
     @Test("A fuzz run records throughput and testing overhead", .timeLimit(.minutes(2)))
-    func throughputRecorded() {
-        let report = #explore(
+    func throughputRecorded() async {
+        let report = await #explore(
             Fixture.messageGenerator,
             time: .milliseconds(500),
             .replay(1),

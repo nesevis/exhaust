@@ -17,7 +17,7 @@ struct ReductionPropertyTests {
         try #require(property(value) == false, "Seed 99 must produce a counterexample (sum >= 50)")
 
         let (reduced, _) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -43,7 +43,7 @@ struct ReductionPropertyTests {
         try #require(property(value) == false, "Seed 77 must produce a counterexample (value >= 30)")
 
         let (reduced, _) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,
@@ -78,7 +78,7 @@ struct ReductionPropertyTests {
             exercised += 1
 
             let (reduced, _) = try #require(
-                try Interpreters.choiceGraphReduce(
+                Interpreters.choiceGraphReduce(
                     gen: gen,
                     tree: tree,
                     output: value,
@@ -107,7 +107,7 @@ struct ReductionPropertyTests {
         try #require(property(value) == false, "Seed 99 must produce a counterexample (sum >= 50)")
 
         let (firstSequence, firstOutput) = try #require(
-            try Interpreters.choiceGraphReduce(
+            Interpreters.choiceGraphReduce(
                 gen: gen,
                 tree: tree,
                 output: value,

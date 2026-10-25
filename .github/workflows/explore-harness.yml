@@ -25,6 +25,12 @@ jobs:
       - name: Select Xcode 27
         run: sudo xcode-select -s /Applications/Xcode_27.app/Contents/Developer
 
+      - name: Validate explore command consumer workflow
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
+
+      - name: Verify real campaigns and failure reporting
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift
+
       - name: Build harness
         run: swift build --build-system native --package-path ExploreHarness --build-tests
 
@@ -75,3 +81,79 @@ jobs:
               echo '```' >> "$GITHUB_STEP_SUMMARY"
             done
           fi
+
+  explore-command-linux:
+    runs-on: ubuntu-latest
+    container: swift:6.4
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate explore command consumer workflow
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
+      - name: Verify real campaigns and failure reporting
+        run: swift -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift
+
+  explore-command-windows:
+    name: Explore command (Windows, experimental)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.4.0-release
+          tag: 6.4.0-RELEASE
+      # The interpreter's JIT cannot resolve Foundation or WinSDK symbols on Windows, so compile each script and run the executable.
+      - name: Validate explore command consumer workflow
+        shell: pwsh
+        run: |
+          swiftc -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift -o "$env:RUNNER_TEMP\test_explore_commands.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:RUNNER_TEMP\test_explore_commands.exe"
+          exit $LASTEXITCODE
+      - name: Verify real campaigns and failure reporting
+        shell: pwsh
+        run: |
+          swiftc -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift -o "$env:RUNNER_TEMP\run_real_consumer.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:RUNNER_TEMP\run_real_consumer.exe"
+          exit $LASTEXITCODE
+      # Diagnostic: an instrumented test runner that cannot load lists no tests. Lists each Products binary's imported DLLs that are neither beside it nor on PATH (with the toolchain's Testing and XCTest directories added, as `swift test` does), then runs each runner and prints its exit code: 0xC0000135 is a missing DLL, 0xC0000005 a crash, and a timeout a deadlock during DLL initialisation.
+      - name: Diagnose instrumented test runners
+        if: failure()
+        shell: pwsh
+        run: |
+          $developer = Resolve-Path (Join-Path $env:SDKROOT "..\..")
+          $env:Path = "$developer\Library\Testing-6.4.0\usr\bin;$developer\Library\XCTest-6.4.0\usr\bin;$env:Path"
+          $env:EXHAUST_EXPLORE_TIME_NS = "1000000000"
+          $readobj = Get-Command llvm-readobj -ErrorAction SilentlyContinue
+          $dumpbin = Get-Command dumpbin -ErrorAction SilentlyContinue
+          $runners = Get-ChildItem -Path PluginTests/RealConsumer/.build/plugins/Explore/outputs -Recurse -Filter "*-test-runner.exe" -ErrorAction SilentlyContinue
+          if (-not $runners) { "No test runner executables found"; exit 0 }
+          $products = $runners[0].DirectoryName
+          "Products: $products"
+          Get-ChildItem -Path $products -Filter "*.dll" | ForEach-Object { "  dll: $($_.Name)" }
+          foreach ($binary in Get-ChildItem -Path $products -Include "*.exe", "*.dll" -Recurse -Depth 0) {
+            $imports = @()
+            if ($readobj) {
+              $imports = & $readobj.Source --coff-imports $binary.FullName | Select-String "Name: (\S+\.dll)" | ForEach-Object { $_.Matches[0].Groups[1].Value }
+            } elseif ($dumpbin) {
+              $imports = & $dumpbin.Source /nologo /dependents $binary.FullName | Select-String "^\s+(\S+\.dll)\s*$" | ForEach-Object { $_.Matches[0].Groups[1].Value }
+            } else {
+              "No llvm-readobj or dumpbin to list imports"
+              break
+            }
+            foreach ($import in $imports | Sort-Object -Unique) {
+              if ($import -like "api-ms-win-*" -or $import -like "ext-ms-*") { continue }
+              $found = (Test-Path (Join-Path $products $import)) -or ($env:Path.Split(";") | Where-Object { $_ -and (Test-Path (Join-Path $_ $import)) })
+              if (-not $found) { "MISSING for $($binary.Name): $import" }
+            }
+          }
+          foreach ($runner in $runners) {
+            "== $($runner.Name)"
+            $process = Start-Process -FilePath $runner.FullName -ArgumentList "--list-tests" -WorkingDirectory $runner.DirectoryName -NoNewWindow -PassThru
+            if ($process.WaitForExit(120000)) {
+              "exit code: 0x{0:X8}" -f $process.ExitCode
+            } else {
+              $process.Kill()
+              "timed out after 120 s"
+            }
+          }

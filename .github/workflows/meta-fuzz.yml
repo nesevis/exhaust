@@ -82,7 +82,7 @@ jobs:
               "$(swift build --build-system native --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
               --budget-seconds "${{ github.event.inputs.budget || '2700' }}" \
               --depth 3 \
-              --node-budget 160 \
+              --node-budget 80 \
               --findings-directory "${{ runner.temp }}/metafuzz-findings"
 
       # The second campaign: the same case generator against the screening roster, which checks that
@@ -101,7 +101,7 @@ jobs:
               --campaign screening \
               --budget-seconds 900 \
               --depth 3 \
-              --node-budget 160 \
+              --node-budget 80 \
               --findings-directory "${{ runner.temp }}/metafuzz-findings"
 
       - name: Probe metrics summary

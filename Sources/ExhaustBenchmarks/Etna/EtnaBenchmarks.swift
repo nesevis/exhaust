@@ -103,48 +103,8 @@ private func runEtnaSeeds<Input>(
 
 // MARK: - Reporting
 
-private func printEtnaTaskReport(name: String, seedCount: Int, results: [EtnaResult]) {
-    return
-    let solved = results.filter(\.solved)
-    let solvedCount = solved.count
-
-    guard solvedCount > 0 else {
-        print("[\(name)] solved=0/\(seedCount)")
-        return
-    }
-
-    let bugFindingInvocations = solved.map { $0.screeningInvocations + $0.randomInvocations }
-    let meanInvoc = Double(bugFindingInvocations.reduce(0, +)) / Double(solvedCount)
-    let meanScr = Double(solved.map(\.screeningInvocations).reduce(0, +)) / Double(solvedCount)
-    let meanRand = Double(solved.map(\.randomInvocations).reduce(0, +)) / Double(solvedCount)
-
-    let bucketUnder100 = bugFindingInvocations.count(where: { $0 < 100 })
-    let bucketUnder1K = bugFindingInvocations.count(where: { $0 >= 100 && $0 < 1000 })
-    let bucketUnder10K = bugFindingInvocations.count(where: { $0 >= 1000 && $0 < 10000 })
-    let unsolved = seedCount - solvedCount
-
-    let f1 = { (value: Double) in String(format: "%.1f", value) }
-    let f2 = { (value: Double) in String(format: "%.2f", value) }
-
-    let meanMs = solved.map { $0.generationMs + $0.screeningMs }.reduce(0, +) / Double(solvedCount)
-    let reductionInvocs = solved.map(\.reductionInvocations)
-    let hasReduction = reductionInvocs.contains { $0 > 0 }
-
-    let unsolvableAttempts = results.filter { $0.solved == false }.map(\.totalInvocations)
-    let meanUnsolvedAttempts = unsolvableAttempts.isEmpty ? 0 : Double(unsolvableAttempts.reduce(0, +)) / Double(unsolvableAttempts.count)
-
-    var line = "[\(name)] solved=\(solvedCount)/\(seedCount) invoc=\(f1(meanInvoc)) (cov=\(f1(meanScr)) rand=\(f1(meanRand))) \(f2(meanMs))ms (< 100: \(bucketUnder100) | < 1K: \(bucketUnder1K) | < 10K: \(bucketUnder10K) | unsolved: \(unsolved))"
-    if unsolved > 0 {
-        line += " unsolved_attempts=\(f1(meanUnsolvedAttempts))"
-    }
-
-    if hasReduction {
-        let meanRedInvoc = Double(reductionInvocs.reduce(0, +)) / Double(solvedCount)
-        let meanRedMs = solved.map(\.reductionMs).reduce(0, +) / Double(solvedCount)
-        line += " reduce=\(f1(meanRedInvoc))invoc/\(f2(meanRedMs))ms"
-    }
-
-    print(line)
+private func printEtnaTaskReport(name _: String, seedCount _: Int, results _: [EtnaResult]) {
+    // Per-task output is intentionally disabled; printEtnaSummary reports aggregate results.
 }
 
 private func printEtnaSummary(workload: String, taskResults: [(name: String, results: [EtnaResult])], seedCount: Int) {

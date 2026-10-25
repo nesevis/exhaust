@@ -15,7 +15,7 @@ public enum DeepFixture {
                 .int(in: 0 ... 7),
                 commandGenerator.array(length: 0 ... 16),
                 .uint8().array(length: length ... length)
-            ) { channel, flags, window, commands, body in
+            ).map { channel, flags, window, commands, body in
                 Packet(
                     channel: UInt8(channel),
                     flags: flags,

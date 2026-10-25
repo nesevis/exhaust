@@ -7,7 +7,7 @@
 /// - Important: The `#explore(time:)` mode is experimental. Its settings, report format, and search behavior may change in any release.
 ///
 /// ```swift
-/// #explore(messageGen, time: .minutes(15)) { message in
+/// await #explore(messageGen, time: .minutes(15)) { message in
 ///     try Decoder.decode(message)
 /// }
 /// ```

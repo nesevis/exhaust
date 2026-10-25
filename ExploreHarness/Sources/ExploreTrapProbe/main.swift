@@ -35,7 +35,7 @@ let property: @Sendable (Message) -> Bool = { message in
 }
 
 // A generous budget the probe never spends: fault E is roughly 1-in-75 by blind sampling, so the trap fires within milliseconds and kills the process well before this elapses.
-_ = #explore(Fixture.messageGenerator, time: .seconds(120), property: property)
+_ = await #explore(Fixture.messageGenerator, time: .seconds(120), property: property)
 
 // Only reachable if the trap never fired — a failure of the fixture, not the runtime.
 FileHandle.standardError.write(Data("ExploreTrapProbe completed without trapping\n".utf8))

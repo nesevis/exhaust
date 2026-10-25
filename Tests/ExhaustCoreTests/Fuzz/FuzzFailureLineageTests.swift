@@ -58,7 +58,7 @@ struct FuzzFailureLineageTests {
         let runner = makeRunner(property: { values in
             values.contains { $0 > 90000 } ? .fail(.returnedFalse) : .pass
         })
-        runner.failureLineage = try #require(FuzzFailureLineage(directory: directory, seed: 1337))
+        runner.failureLineage = FuzzFailureLineage(directory: directory, seed: 1337)
         let result = runner.run()
         #expect(result.clusters.isEmpty == false)
 

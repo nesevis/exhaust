@@ -194,7 +194,8 @@ extension Interpreters {
         }
         func firstMatchingArmPath() throws -> [ArmReflection] {
             for choice in candidates {
-                if let first = try reflectArm(choice).first {
+                let paths = try reflectArm(choice)
+                if let first = paths.first {
                     return [first]
                 }
             }

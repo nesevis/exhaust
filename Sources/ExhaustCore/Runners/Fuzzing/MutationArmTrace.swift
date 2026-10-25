@@ -88,7 +88,7 @@ package struct MutationArmTrace {
         let manager = FileManager.default
         if manager.fileExists(atPath: path) == false {
             let header = "seed,window,attempts,arm,draws,misses,credited,admissions,creditedEven,admissionsEven,probability,admissible,spacingMedian,spacingP90\n"
-            manager.createFile(atPath: path, contents: Data(header.utf8))
+            _ = manager.createFile(atPath: path, contents: Data(header.utf8))
         }
         guard let handle = FileHandle(forWritingAtPath: path) else {
             return

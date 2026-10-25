@@ -13,7 +13,7 @@ struct ReducerIntegrationTests {
         try #require(value > 5)
 
         let (_, output) = try #require(
-            try Interpreters.choiceGraphReduce(gen: gen, tree: tree, output: value, config: .init(maxStalls: 2)) {
+            Interpreters.choiceGraphReduce(gen: gen, tree: tree, output: value, config: .init(maxStalls: 2)) {
                 $0 < 5
             }.counterexample
         )

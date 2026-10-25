@@ -60,6 +60,15 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ExhaustExploreCommandTests"
+               BuildableName = "ExhaustExploreCommandTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

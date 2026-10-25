@@ -117,6 +117,19 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ExhaustFuzzTestSupport"
+               BuildableName = "ExhaustFuzzTestSupport"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -162,6 +175,15 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "ExhaustExploreCommandTests"
+               BuildableName = "ExhaustExploreCommandTests"
+               ReferencedContainer = "container:">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
@@ -178,9 +200,8 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ExhaustStackProbe"
-            BuildableName = "ExhaustStackProbe"
-            BlueprintName = "ExhaustStackProbe"
+            BlueprintIdentifier = "ExhaustExploreCommand"
+            BuildableName = "ExhaustExploreCommand"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -204,9 +225,8 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ExhaustStackProbe"
-            BuildableName = "ExhaustStackProbe"
-            BlueprintName = "ExhaustStackProbe"
+            BlueprintIdentifier = "ExhaustExploreCommand"
+            BuildableName = "ExhaustExploreCommand"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>

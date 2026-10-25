@@ -6,7 +6,7 @@ import Testing
 struct FaultInventoryRestoreTests {
     @Test("Folding restored clusters preserves counts and yields unique keys with contiguous identifiers")
     func foldIsConservative() throws {
-        try #exhaust(#gen(.int(in: 0 ... 5).array(length: 1 ... 8))) { keyIndices in
+        #exhaust(#gen(.int(in: 0 ... 5).array(length: 1 ... 8))) { keyIndices in
             let restored = keyIndices.enumerated().map { position, keyIndex in
                 cluster(id: position, key: "k\(keyIndex)", instances: position + 1, symptom: "s\(keyIndex)")
             }
@@ -32,8 +32,8 @@ struct FaultInventoryRestoreTests {
     }
 
     @Test("Symptom attribution picks the same cluster the linear scan did")
-    func attributionMatchesTheScan() throws {
-        try #exhaust(#gen(.int(in: 0 ... 3).array(length: 1 ... 6))) { symptomIndices in
+    func attributionMatchesTheScan() {
+        #exhaust(#gen(.int(in: 0 ... 3).array(length: 1 ... 6))) { symptomIndices in
             let restored = symptomIndices.enumerated().map { position, symptomIndex in
                 cluster(
                     id: position,

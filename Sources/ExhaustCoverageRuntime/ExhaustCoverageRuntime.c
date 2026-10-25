@@ -383,3 +383,27 @@ void exhaust_tpg_reset_registry_for_testing(void) {
     atomic_store_explicit(&exhaust_tpg_dropped_hits, 0, memory_order_relaxed);
 }
 #endif
+
+// MARK: - COFF Section Bounds
+//
+// SanitizerCoverage module constructors find each image's guard, counter, and PC-table arrays through `__start_` and `__stop_` symbols. ELF and Mach-O linkers synthesize those; COFF linkers do not, so on Windows an instrumented image fails to link unless something defines them. libFuzzer's runtime does (compiler-rt's sanitizer_coverage_win_sections), and `-sanitize=fuzzer-no-link` leaves that runtime out, so this file defines the same markers.
+//
+// The linker orders grouped sections by the text after `$`: the instrumented arrays live in `$M`-suffixed sections, so an `A` marker lands before them and a `Z` marker after. LLVM's COFF lowering skips the eight bytes of each start marker. Each stop marker is one byte with one-byte alignment, so the linker has no reason to pad before it; any padding it does add reads as zeroed guards or a partial PC-table entry, which `exhaust_tpg` ignores and the Swift PC-table registration rounds away.
+//
+// Section bounds are per image, and every Windows test target links into its own DLL. Each image that contains instrumented code links this runtime, because the explore overlay makes every instrumented target depend on it, so each image gets its own markers.
+#if defined(_WIN32)
+#pragma section(".SCOV$GA", read, write)
+__declspec(allocate(".SCOV$GA")) uint64_t __start___sancov_guards = 0;
+#pragma section(".SCOV$GZ", read, write)
+__declspec(allocate(".SCOV$GZ")) __declspec(align(1)) uint8_t __stop___sancov_guards = 0;
+
+#pragma section(".SCOV$CA", read, write)
+__declspec(allocate(".SCOV$CA")) uint64_t __start___sancov_cntrs = 0;
+#pragma section(".SCOV$CZ", read, write)
+__declspec(allocate(".SCOV$CZ")) __declspec(align(1)) uint8_t __stop___sancov_cntrs = 0;
+
+#pragma section(".SCOVP$A", read)
+__declspec(allocate(".SCOVP$A")) const uint64_t __start___sancov_pcs = 0;
+#pragma section(".SCOVP$Z", read)
+__declspec(allocate(".SCOVP$Z")) __declspec(align(1)) const uint8_t __stop___sancov_pcs = 0;
+#endif

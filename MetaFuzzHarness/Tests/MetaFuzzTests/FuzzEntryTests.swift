@@ -3,19 +3,19 @@ import ExhaustMetaFuzz
 import Foundation
 import Testing
 
-/// The instrumented fuzz entry for the CI PR lane. Gated on `METAFUZZ_FUZZ=1` because `#explore(time:)` hard-fails without coverage instrumentation, and this package's default `swift test` run is uninstrumented. The CI lane builds with `-Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table` and sets the variable.
+/// The instrumented fuzz entry for the CI PR lane. Gated on `METAFUZZ_FUZZ=1` because `#explore(time:)` does not run without coverage instrumentation, and this package's default `swift test` run is uninstrumented. The CI lane builds with `-Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table` and sets the variable.
 @Suite("Fuzz entry", .serialized, .enabled(if: ProcessInfo.processInfo.environment["METAFUZZ_FUZZ"] == "1"))
 struct FuzzEntryTests {
     /// Cases run serially because coverage counters are process-global.
     @Test("The pipeline and screening oracles hold under pinned fuzzing", arguments: Campaign.allCases)
-    private func oracleCampaign(campaign: Campaign) {
+    private func oracleCampaign(campaign: Campaign) async {
         let budgetSeconds = ProcessInfo.processInfo.environment[campaign.budgetEnvironmentVariable].flatMap(Int.init)
             ?? ProcessInfo.processInfo.environment["METAFUZZ_BUDGET"].flatMap(Int.init)
             ?? 60
         let seed = ProcessInfo.processInfo.environment["METAFUZZ_SEED"].flatMap(UInt64.init) ?? 1
         let findings = findingsDirectory()
 
-        let report = #explore(
+        let report = await #explore(
             MetaFuzz.caseGenerator(),
             time: .seconds(budgetSeconds),
             .replay(.numeric(seed))

@@ -1,4 +1,5 @@
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import IssueReporting
 import Testing
@@ -6,6 +7,31 @@ import Testing
 
 @Suite("Issue reporting integration")
 struct IssueReportingIntegrationTests {
+    @Test("Missing fuzz instrumentation reports one warning at the call site")
+    func missingFuzzInstrumentationWarning() {
+        let reporter = RecordingIssueReporter()
+        withIssueReporters([reporter]) {
+            __ExhaustRuntime.reportFuzzIssues(
+                report: .empty(termination: .instrumentationMissing, seed: 1337),
+                suppressIssueReporting: true,
+                fileID: "FuzzTests/Fixture.swift",
+                filePath: "/tmp/Fixture.swift",
+                line: 41,
+                column: 7
+            )
+        }
+        #expect(reporter.issues == [
+            RecordedIssue(
+                message: __ExhaustRuntime.missingInstrumentationMessage,
+                severity: .warning,
+                fileID: "FuzzTests/Fixture.swift",
+                filePath: "/tmp/Fixture.swift",
+                line: 41,
+                column: 7
+            ),
+        ])
+    }
+
     @Test("Issue routing preserves severity and source location")
     func issueRoutingPreservesSeverityAndSourceLocation() {
         let reporter = RecordingIssueReporter()
@@ -278,43 +304,4 @@ private func absorbingDirectTestingIssues<Value>(
     #endif
 }
 
-private struct RecordedIssue: Equatable {
-    let message: String
-    let severity: IssueSeverity
-    let fileID: String
-    let filePath: String
-    let line: UInt
-    let column: UInt
-}
-
 private struct DiagnosticFailure: Error {}
-
-private final class RecordingIssueReporter: IssueReporter, @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [RecordedIssue] = []
-
-    var issues: [RecordedIssue] {
-        lock.withLock { storage }
-    }
-
-    func reportIssue(
-        _ message: @autoclosure () -> String?,
-        severity: IssueSeverity,
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt
-    ) {
-        let issue = RecordedIssue(
-            message: message() ?? "",
-            severity: severity,
-            fileID: "\(fileID)",
-            filePath: "\(filePath)",
-            line: line,
-            column: column
-        )
-        lock.withLock {
-            storage.append(issue)
-        }
-    }
-}

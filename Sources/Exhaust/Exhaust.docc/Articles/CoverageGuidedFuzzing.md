@@ -21,15 +21,128 @@ Give Exhaust a time budget and let it search for bugs by observing which branche
 }
 ```
 
-The test reads like any other `#exhaust` test: a generator, a property, and `#expect` assertions. The differences are the `time:` parameter and the `async`/`await`.
+The test reads like any other `#exhaust` test: a generator, a property, and `#expect` assertions. The differences are the `time:` parameter and the `await`.
 
-The search holds one thread for the entire budget. Write the `async` form so that thread is not one of the cooperative pool's.
+Exhaust runs the search on its own thread for the whole budget, so every call is `async`. The test waits on that thread without holding one of its own.
 
-Two ways to run it are covered here. The setup below puts a fuzz test in your ordinary suite with a budget of seconds; <doc:#Running-in-a-dedicated-target> covers a fuzz-only target with a release build and a long budget.
+The recommended workflow is to run the test through the `explore` package command. It builds the selected root targets with instrumentation in a separate directory, then runs the selected tests. Manual instrumentation is also supported for tests that should run as part of the ordinary suite.
 
-## Setting up coverage instrumentation
+## Running a fuzzing campaign
 
-`#explore(time:)` requires the code under test to be compiled with coverage instrumentation. Without it, the test fails immediately with a diagnostic showing the flags to add. No budget is consumed.
+Use Swift 6.4 or later and a version of Exhaust that provides the `explore` command. Add Exhaust as a direct dependency of the package you want to test; <doc:GettingStarted> covers adding the dependency. The command runs on macOS and Linux. Windows support is experimental pending native CI verification, and on Windows the command leaves the test target uninstrumented (see <doc:#Instrumentation-scope-and-current-limits>). The single-line commands below work in a Unix shell or PowerShell.
+
+### 1. Add a fuzz test target
+
+Keep campaign tests in a dedicated Swift test target so you can select them separately from your ordinary unit tests. For a library target named `MyLibrary`, add this entry to the `targets` array in `Package.swift`:
+
+```swift
+.testTarget(
+    name: "MyLibraryFuzz",
+    dependencies: [
+        "MyLibrary",
+        .product(name: "Exhaust", package: "exhaust"),
+    ]
+),
+```
+
+Leave the existing library and unit-test targets in place. You do not need to add a plugin declaration or coverage flags to any target. `explore` supplies instrumentation for the campaign through an ephemeral manifest overlay; it never edits your `Package.swift`. There is no setup command or hook to commit.
+
+### 2. Write the property
+
+Create `Tests/MyLibraryFuzz/IntegerCodecFuzzTests.swift`. This example assumes `MyLibrary` exposes `IntegerCodec.encode(_:)` and a throwing `IntegerCodec.decode(_:)`. Replace those calls with the API you want to exercise:
+
+```swift
+import Exhaust
+import MyLibrary
+import Testing
+
+@Test func integerRoundTrip() async {
+    await #explore(
+        #gen(.int(in: -1_000_000...1_000_000)),
+        time: .seconds(60),
+        .replay(.numeric(1337))
+    ) { value in
+        let encoded = IntegerCodec.encode(value)
+        let decoded = try IntegerCodec.decode(encoded)
+        #expect(decoded == value)
+    }
+}
+```
+
+The generator defines the inputs the search can explore; the property describes what must hold for every input. Here, encoding and decoding must recover the original integer. A thrown error or a failed `#expect` records a counterexample. The run reduces counterexamples and continues searching until its budget expires or it stops making progress. Add `.failFast` to stop after the first reduced failure.
+
+Call `#explore` with `await` from an `async` test. The property closure can be synchronous or `async`. Exhaust calls a synchronous closure directly on the search's thread. It awaits an `async` closure once per input, which costs throughput, so add `async` only when the property needs to `await` something. Keep the property's work on the search's thread. <doc:#When-the-run-cannot-see-the-code> explains the restrictions on actor and detached-task work.
+
+The optional `.replay(.numeric(1337))` fixes the seed. Change it in the test to try another seed; the command has no `--seed` option. A seed helps reproduce a search under the same build and budget, but debug and release builds can follow different paths through the search.
+
+### 3. Run a campaign
+
+From the package directory, run:
+
+```sh
+swift package explore --instrument MyLibrary --test-target MyLibraryFuzz --filter integerRoundTrip --time 60
+```
+
+This builds the package's tests in a separate build directory, instruments `MyLibrary` and `MyLibraryFuzz`, and runs the selected property. Exhaust and other dependency targets keep their own build settings. The command automatically links the coverage runtime and test-reporting support; the test target needs only the dependencies shown above.
+
+The default build configuration is **release**. To run the same property in debug:
+
+```sh
+swift package explore --instrument MyLibrary --test-target MyLibraryFuzz --filter integerRoundTrip --configuration debug --time 60
+```
+
+Once the property works, give mutation more time with a fifteen-minute campaign:
+
+```sh
+swift package explore --instrument MyLibrary --test-target MyLibraryFuzz --filter integerRoundTrip --time 900
+```
+
+`--time` overrides the budget of **each** `#explore(time:)` invocation, including state machine specs. It is not a limit on compilation or the whole test suite. Omit it to use the budget written in each test. Swift Testing time limits still apply, so increase an explicit `@Test` time limit when running a longer campaign.
+
+These options belong to `explore` and go after its name:
+
+| Option | Meaning |
+|--------|---------|
+| `--instrument <target>` | Instrument a Swift target in the root package. Required; repeat it for additional targets the property exercises. |
+| `--test-target <target>` | Select one Swift test target. It is also instrumented automatically, except on Windows. May be omitted when the package has exactly one Swift test target. |
+| `--filter <regex>` | Select matching tests within that target. Omit it to run all tests in the target. No matches is an error. |
+| `--time <seconds>` | Override each invocation's budget with a positive whole number of seconds. |
+| `--configuration debug\|release` | Choose the campaign's build configuration. Defaults to `release`. |
+| `--help` | Show command usage. |
+
+SwiftPM options such as `--package-path` and `--scratch-path` go before `explore`. After `explore`, the command rejects them as unknown options. No `--allow-writing-to-package-directory` flag is needed. SwiftPM builds the package's test bundle, including other test targets, but `explore` runs only the tests selected above.
+
+### 4. Inspect findings and rerun
+
+The command prints its build, attachment, and crash-recovery directories under `.build/plugins`, which remains inside the usual ignored `.build` directory. A custom SwiftPM `--scratch-path` relocates that workspace. Each invocation gets a new attachment directory; reports remain available even when a test fails.
+
+Read the reduced counterexamples in the test output and open `explore-time-summary.txt` in the printed attachment directory for coverage and throughput. Per-cluster attachments contain further diagnostic detail. <doc:#Reading-the-report> explains the report and reproduction settings. A property failure, build error, or test-process crash makes the command exit unsuccessfully, so the same invocation can be used in CI.
+
+Rerun the command after fixing a bug. If the previous process crashed, the command uses its stable checkpoint directory to recover and continue the campaign. Set `EXHAUST_RESUME=0` in your shell's environment for a fresh run. To relocate checkpoints, set `EXHAUST_STATE_DIR`; a location outside the plugin work directory also needs SwiftPM's `--allow-writing-to-directory <path>` permission. A lock prevents overlapping commands from using the same instrumentation selection and configuration.
+
+### Keep campaigns separate from ordinary tests
+
+A dedicated test target is still discovered by an ordinary `swift test`. When no instrumented module is loaded, `#explore(time:)` emits a runtime warning and returns without invoking the property or consuming its time budget. The returned report has `.instrumentationMissing` termination and zero attempts. The test can stay in the ordinary suite; the warning makes clear that no fuzzing took place. Code outside the macro still runs, including assertions on its report.
+
+Compiler `-warnings-as-errors` does not promote this runtime warning to a test failure. To omit campaign tests and their warnings from the ordinary suite entirely, filter out the target:
+
+```sh
+swift test --skip MyLibraryFuzz
+```
+
+Use `swift package explore` for the campaign target. To include short fuzz properties in ordinary test runs instead, configure the manual instrumentation described below.
+
+### Instrumentation scope and current limits
+
+The command enables edge coverage, comparison tracing, and assertions for the selected targets in both debug and release. It instruments the calling test target too, so you do not need to add `@inline(never)` merely to keep calls from disappearing into an uninstrumented test module. Dependency code inlined or specialized into a selected module can still contribute coverage: selection is by compiled module, not by the original source of every function.
+
+On Windows the command does not instrument the test target. Running release-mode fuzzing campaigns on Windows therefore risks code being inlined into the test target and escaping coverage.
+
+The overlay preserves relative dependency paths and the manifest's `#filePath`. This first version requires a top-level variable named `package` and a single `Package.swift`; version-specific manifests such as `Package@swift-6.4.swift` are rejected. You can select root Swift library, executable, and test targets. Dependency targets, C-family targets, macro targets, and binary targets cannot be selected. The command leaves Exhaust's coverage runtime uninstrumented.
+
+## Setting up coverage instrumentation manually
+
+`#explore(time:)` requires the code under test to be compiled with coverage instrumentation. When no instrumented module is loaded, it emits a runtime warning showing how to enable instrumentation and returns without invoking the property. No budget is consumed. An instrumented build whose property records no coverage still fails, because its campaign cannot observe the code under test.
 
 The fuzz test lives in an ordinary test target and runs whenever the suite runs. Add the flags to the library under test, gated on the debug configuration the suite builds in. The flags are `unsafeFlags`, which SwiftPM accepts only in a root package, so they belong in the manifest of the package you are testing:
 
@@ -39,13 +152,15 @@ The fuzz test lives in an ordinary test target and runs whenever the suite runs.
     name: "MyLibrary",
     swiftSettings: [
         .unsafeFlags(
-            ["-sanitize=undefined",
+            ["-sanitize=fuzzer-no-link",
              "-sanitize-coverage=edge,trace-pc-guard,pc-table"],
             .when(configuration: .debug)
         ),
     ]
 )
 ```
+
+`-sanitize=fuzzer-no-link` enables fuzzing instrumentation without linking libFuzzer's runtime or entry point. Exhaust supplies the coverage callbacks and search loop. This flag works on both macOS and Linux; it does not enable AddressSanitizer or UndefinedBehaviorSanitizer.
 
 `trace-pc-guard` records each run's coverage through a context bound to the run's own thread, so other tests running in the same process, and other `#explore(time:)` runs, do not disturb it. The suite needs no `.serialized` trait, no `--no-parallel`, and no filtering. Keep the budget short (a few seconds) so the suite stays fast; the search returns unused budget when it stops finding new branches.
 
@@ -201,37 +316,15 @@ Under `.threads` the same command sequence takes different branches depending on
 
 ## Running in a dedicated target
 
-A fuzz-only test target, built in release configuration and run by itself with a long budget. Release runs several times more attempts per second than debug on the same property, which is the point of a dedicated run. Three things change relative to the suite recipe:
+The campaign workflow above uses a dedicated test target and instruments both the library and its calling test module. It keeps assertions active in release builds and leaves ordinary builds unchanged.
 
-1. **The flags apply in release and on both the library and the test target.** In an optimised build the compiler inlines small functions from the library into the module that calls them. An inlined copy is compiled as part of the calling module, so if only the library carries the flags, those copies have no instrumentation and the branches they contain are never recorded. Instrumenting the test target as well closes that gap.
-2. **`-assert-config Debug` keeps `assert` and `assertionFailure` active.** Release compiles them out; without this flag any oracle your code expresses through `assert` disappears from the fuzz run. `precondition` and `fatalError` are unaffected.
-3. **Build and run with `-c release`.**
-
-```swift
-// Package.swift
-let fuzzFlags: [SwiftSetting] = [
-    .unsafeFlags([
-        "-sanitize=undefined",
-        "-sanitize-coverage=edge,trace-pc-guard,pc-table",
-        "-assert-config", "Debug",
-    ]),
-]
-
-.target(name: "MyLibrary", swiftSettings: fuzzFlags),
-.testTarget(name: "MyLibraryFuzz", dependencies: ["MyLibrary"], swiftSettings: fuzzFlags),
-```
-
-```bash
-swift test -c release --filter MyLibraryFuzz
-```
-
-The flags are not gated on a configuration here because the dedicated target is only ever built for fuzzing. If the same library also serves the suite recipe, keep the debug-gated flags there too; the two do not conflict.
+For a **manual** release build, apply the coverage flags and `-assert-config Debug` to both modules, and gate them on an explicit fuzzing opt-in. A separate test target alone does not prevent flags on a shared library from affecting ordinary builds.
 
 ### When the fuzz target and the code under test share a build
 
-If the fuzzing code and the code under test live in the same package — or the code under test is any dependency built from source in the same build — instrumenting only the library has a silent failure mode under release optimisation. The compiler inlines small public functions from the instrumented library into the uninstrumented caller, and each inlined copy is compiled under the caller's flags: no guards, no comparison callbacks. The functions still compute correctly; they just vanish from the coverage signal. If everything the property touches is inlined away, the run fails with the no-coverage diagnostic. If only some helpers are, nothing fails: the search runs on a partial signal and comparison tracing sees none of the swallowed comparisons, with no indication anything is missing. Only a prebuilt binary dependency is out of the optimiser's reach.
+When configuring instrumentation manually, instrumenting only the library can lose coverage under release optimization if its code is inlined into an uninstrumented caller. The `explore` command instruments the test target too to cover this case, except on Windows. The compiler inlines small public functions from the instrumented library into the uninstrumented caller, and each inlined copy is compiled under the caller's flags: no guards, no comparison callbacks. The functions still compute correctly; they just vanish from the coverage signal. If everything the property touches is inlined away, the run fails with the no-coverage diagnostic. If only some helpers are, nothing fails: the search runs on a partial signal and comparison tracing sees none of the swallowed comparisons, with no indication anything is missing. Only a prebuilt binary dependency is out of the optimiser's reach.
 
-What makes the scoped configuration sound is marking the instrumented library's public entry points `@inline(never)`, so the boundary stays a real call into instrumented code. A cheap way to verify is a canary property: an equality check against a wide constant inside the instrumented module, run under `trace-cmp` for a few seconds. Solved almost immediately means edges and comparison operands are flowing end to end; unsolved means the boundary is being inlined away.
+If you deliberately leave the caller uninstrumented, marking the library's public entry points `@inline(never)` keeps those calls in the instrumented module. This is an option for a manual configuration, not a requirement for the command workflow.
 
 ### When the code under test is a dependency you cannot edit
 
@@ -239,7 +332,7 @@ Pass the flags on the command line instead. This instruments every module in the
 
 ```bash
 swift test -c release \
-    -Xswiftc -sanitize=undefined \
+    -Xswiftc -sanitize=fuzzer-no-link \
     -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table \
     -Xswiftc -assert-config -Xswiftc Debug \
     --filter MyLibraryFuzz
@@ -255,11 +348,11 @@ Some branches depend on a value the generator will almost never produce by chanc
 
 It helps where the wanted value is rare — a byte or a printable character sees no benefit on its own, because ordinary generation already produces every value there — and where several generated values must agree at once, which random draws rarely deliver even over a small domain.
 
-Append `trace-cmp` to the coverage list, in the per-target flags:
+`explore` enables comparison tracing automatically. For manual instrumentation, append `trace-cmp` to the coverage list in the per-target flags:
 
 ```swift
 .unsafeFlags(
-    ["-sanitize=undefined",
+    ["-sanitize=fuzzer-no-link",
      "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp"],
     .when(configuration: .debug)
 )
@@ -269,7 +362,7 @@ or on the command line:
 
 ```bash
 swift test \
-    -Xswiftc -sanitize=undefined \
+    -Xswiftc -sanitize=fuzzer-no-link \
     -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp
 ```
 
@@ -279,7 +372,7 @@ Backward solving needs a reflective generator, one Exhaust can run backward from
 
 Two runtime messages cover this, so a run that is blind does not pass quietly.
 
-- **No coverage at all.** The run fails with a diagnostic. In a release build the usual cause is the compiler inlining the code under test into a module that has no coverage flags; the fix is to instrument the calling module too, as the dedicated-target recipe does. Otherwise the property's work ran on an executor the run did not bind.
+- **No coverage at all.** The run fails with a diagnostic. In a release build the usual cause is the compiler inlining the code under test into a module that has no coverage flags. The `explore` command instruments the calling test target for this reason. With manual instrumentation, add the flags to that target too. Otherwise the property's work ran on an executor the run did not bind.
 - **Some coverage missed.** The summary reports "N edge hits fired off the run's lane and were not searched". Either the property handed work to another executor, or another test exercised the same instrumented code at the same time; the count cannot tell which, so read it against what the suite was doing.
 
 Behind both: `trace-pc-guard` records through a context bound to the running lane. That is what lets separate runs share a process, and it is also the limitation: a `@MainActor` function, an actor with a custom executor, or work inside a detached task runs somewhere else, and its branches are not recorded. Measured on the same five-branch function reached four ways:
@@ -317,7 +410,7 @@ Pollution only adds branches, never removes them. The result is inputs admitted 
 
 ### Instrument only the code under test
 
-Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#Running-in-a-dedicated-target>.
+Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#When-the-fuzz-target-and-the-code-under-test-share-a-build>.
 
 ### Replay under the conditions of the original run
 
@@ -333,7 +426,7 @@ Rerun the test and Exhaust reports the trapping input (or the input it was mutat
 
 Whether the checkpoint stores the trapping candidate itself, or only identifies it by hash and names the input it was mutated from, follows the budget. Runs of ten minutes or longer store it; shorter runs do not, because a short run is cheap to reproduce by running it again and a long campaign is not. Storing the candidate writes it on every property invocation, which cost about 8% of candidate throughput on a search evaluating tens of thousands of inputs a second, so throughput steps down at that boundary.
 
-Checkpoints live in the system temporary directory and are removed when a run completes normally, so there is nothing to add to `.gitignore`. Set `EXHAUST_STATE_DIR` to relocate them, for example on CI where each step gets a fresh temporary directory. Set `EXHAUST_RESUME=0` to ignore a crashed predecessor's state and start fresh.
+With `explore`, checkpoints live in the printed crash-recovery directory under its build workspace. With manual instrumentation, they default to the system temporary directory. They are removed when a run completes normally. Set `EXHAUST_STATE_DIR` to relocate them, for example on CI where each step gets a fresh temporary directory. Set `EXHAUST_RESUME=0` to ignore a crashed predecessor's state and start fresh.
 
 If the instrumented code changed between crash and rerun, Exhaust re-measures the restored inputs against the rebuilt code before resuming.
 

@@ -10,7 +10,7 @@ func registerSynthesizedGeneratorBenchmarks() {
         .asciiString(length: 0 ... 50),
         .asciiString(length: 1 ... 30),
         .asciiString(length: 2 ... 5)
-    ) { name, age, active, email, street, zip in
+    ).map { name, age, active, email, street, zip in
         BenchmarkPerson(
             name: name,
             age: age,
