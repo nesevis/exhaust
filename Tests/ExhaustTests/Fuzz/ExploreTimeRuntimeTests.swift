@@ -1,6 +1,7 @@
 import ExhaustCore
 import ExhaustTestSupport
 import Foundation
+import IssueReporting
 import Testing
 @testable import Exhaust
 
@@ -22,6 +23,59 @@ struct ExploreTimeRuntimeTests {
         #expect(report.timing.elapsed == .zero)
     }
 
+    @Test("Every entry point reports the specific missing-instrumentation warning on the test task", arguments: MissingInstrumentationEntry.allCases)
+    func missingInstrumentationWarning(entry: MissingInstrumentationEntry) async {
+        let reporter = RecordingIssueReporter()
+        let testID = Test.current.map { String(describing: $0.id) }
+        let report = await withIssueReporters([reporter]) {
+            switch entry {
+                case .syncBool:
+                    return __ExhaustRuntime.__exploreTime(
+                        #gen(.int(in: 0 ... 100)),
+                        time: .seconds(60),
+                        settings: [],
+                        coverage: .none
+                    ) { _ in
+                        Issue.record("An uninstrumented property must not run")
+                        return false
+                    }
+                case .syncExpect:
+                    return __ExhaustRuntime.__exploreTimeExpect(
+                        #gen(.int(in: 0 ... 100)),
+                        time: .seconds(60),
+                        settings: [],
+                        coverage: .none,
+                        property: { _ in Issue.record("An uninstrumented property must not run") },
+                        detection: { _ in Issue.record("An uninstrumented detector must not run") }
+                    )
+                case .asyncBool:
+                    return await __ExhaustRuntime.__exploreTimeAsync(
+                        #gen(.int(in: 0 ... 100)),
+                        time: .seconds(60),
+                        settings: [],
+                        coverage: .none
+                    ) { _ in
+                        Issue.record("An uninstrumented property must not run")
+                        return false
+                    }
+                case .asyncExpect:
+                    return await __ExhaustRuntime.__exploreTimeExpectAsync(
+                        #gen(.int(in: 0 ... 100)),
+                        time: .seconds(60),
+                        settings: [],
+                        coverage: .none,
+                        property: { _ in Issue.record("An uninstrumented property must not run") },
+                        detection: { _ in Issue.record("An uninstrumented detector must not run") }
+                    )
+            }
+        }
+        #expect(report.termination == .instrumentationMissing)
+        #expect(report.attempts.total == 0)
+        #expect(report.timing.elapsed == .zero)
+        #expect(reporter.issues.map(\.message) == [__ExhaustRuntime.missingInstrumentationMessage])
+        #expect(reporter.issues.allSatisfy { $0.severity == .warning && $0.testID == testID })
+    }
+
     // MARK: - Per-Variant Reporting Channel
 
     // One test per value entry point of the shape "the run's recorded issue reaches the current test". The recorded issue here is the invalid-budget error, which travels the same reportFuzzIssues tail as the fault inventory. withKnownIssue is task-scoped, so a variant that reports off the test task — as the async Bool variant once did from inside its GCD closure — fails its test here instead of silently losing the report.
@@ -39,10 +93,7 @@ struct ExploreTimeRuntimeTests {
                 value >= 0
             }
         }
-        guard case .invalidConfiguration = report?.termination else {
-            Issue.record("Expected invalidConfiguration for a zero budget")
-            return
-        }
+        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
     }
 
     @Test("The sync expect entry point records its issue on the test task")
@@ -58,10 +109,7 @@ struct ExploreTimeRuntimeTests {
                 detection: { _ in }
             )
         }
-        guard case .invalidConfiguration = report?.termination else {
-            Issue.record("Expected invalidConfiguration for a zero budget")
-            return
-        }
+        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
     }
 
     @Test("The async Bool entry point records its issue on the test task, after the GCD hop")
@@ -77,10 +125,7 @@ struct ExploreTimeRuntimeTests {
                 value >= 0
             }
         }
-        guard case .invalidConfiguration = report?.termination else {
-            Issue.record("Expected invalidConfiguration for a zero budget")
-            return
-        }
+        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
     }
 
     @Test("The async expect entry point records its issue on the test task, after the GCD hop")
@@ -96,10 +141,7 @@ struct ExploreTimeRuntimeTests {
                 detection: { _ in }
             )
         }
-        guard case .invalidConfiguration = report?.termination else {
-            Issue.record("Expected invalidConfiguration for a zero budget")
-            return
-        }
+        #expect(report?.termination == .invalidConfiguration("#explore(time:) requires a positive time budget; got 0.0s."))
     }
 
     @Test("The skipScreening setting starts the search at random sampling with no screening attempts")
@@ -675,4 +717,13 @@ struct DiscriminatingEdgeFoldingTests {
         }
         #expect(__ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: 3).map(\.edgeIndex) == [0, 1, 2])
     }
+}
+
+// MARK: - Missing Instrumentation Diagnostics
+
+enum MissingInstrumentationEntry: CaseIterable, Sendable {
+    case syncBool
+    case syncExpect
+    case asyncBool
+    case asyncExpect
 }

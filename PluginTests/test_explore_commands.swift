@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Consumer-level command checks using a minimal provider and ArgumentParser.
+// Consumer-level command checks using a dependency-free minimal provider.
 // Run: swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
 import Foundation
 #if os(Windows)
@@ -35,7 +35,7 @@ func validate() throws {
         ("command help", suite.commandHelp),
         ("consumer workflow", suite.consumerWorkflow),
         ("nonstandard manifest", suite.nonstandardManifest),
-        ("edited and versioned manifests", suite.rejectedManifests),
+        ("versioned manifests", suite.rejectedManifests),
         ("invalid arguments", suite.invalidArguments),
     ]
     var failures = 0
@@ -73,10 +73,7 @@ struct ExploreCommandsTests {
         self.base = base
         self.repository = repository
         var environment = ProcessInfo.processInfo.environment
-        for key in ["EXHAUST_INSTRUMENT_PACKAGE", "EXHAUST_INSTRUMENT_TARGETS",
-                    "EXHAUST_EXPLORE_TIME_NS", "EXHAUST_RUNTIME_PACKAGE"] {
-            environment.removeValue(forKey: key)
-        }
+        environment.removeValue(forKey: "EXHAUST_EXPLORE_TIME_NS")
         environment["CLANG_MODULE_CACHE_PATH"] = base.appendingPathComponent("module-cache").nativePath
         self.environment = environment
         #if os(macOS)
@@ -216,16 +213,9 @@ struct ExploreCommandsTests {
         // swift-tools-version: 6.4
         import PackageDescription
         let package = Package(name: "Modified")
-        // BEGIN EXHAUST EXPLORE INSTRUMENTATION v1
-        // edited
-        // END EXHAUST EXPLORE INSTRUMENTATION
 
         """
         try write(root, "Package.swift", source)
-        let original = try Data(contentsOf: root.appendingPathComponent("Package.swift"))
-        let edited = try helperRun(["--instrument", "MyLibrary"], root: root, success: false)
-        try require(edited.contains("edited"), edited)
-        try require(Data(contentsOf: root.appendingPathComponent("Package.swift")) == original, "Edited hook was modified")
         try write(root, "Package@swift-6.4.swift", source)
         let versioned = try helperRun(["--instrument", "MyLibrary"], root: root, success: false)
         try require(versioned.contains("Version-specific"), versioned)
@@ -263,13 +253,10 @@ struct ExploreCommandsTests {
             .library(name: "ExhaustFuzzRuntime", targets: ["Callbacks"]),
             .library(name: "ExhaustFuzzTestSupport", targets: ["Callbacks"]),
             .plugin(name: "Explore", targets: ["Explore"]),
-        ], dependencies: [
-            .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.1"),
         ], targets: [
             .target(name: "Callbacks"),
             .executableTarget(
                 name: "ExhaustExploreCommand",
-                dependencies: [.product(name: "ArgumentParser", package: "swift-argument-parser")],
                 swiftSettings: [.treatAllWarnings(as: .error)]
             ),
             .plugin(name: "Explore", capability: .command(intent: .custom(verb: "explore", description: "Explore"), permissions: []), dependencies: ["ExhaustExploreCommand"]),

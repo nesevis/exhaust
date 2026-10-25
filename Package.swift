@@ -68,7 +68,6 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "Packages/exhaust-macros"),
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.1"),
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
@@ -76,10 +75,8 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
     ] + swiftLintDependency,
     targets: [
-        .executableTarget(
-            name: "ExhaustExploreCommand",
-            dependencies: [.product(name: "ArgumentParser", package: "swift-argument-parser")]
-        ),
+        .executableTarget(name: "ExhaustExploreCommand"),
+        .testTarget(name: "ExhaustExploreCommandTests", dependencies: ["ExhaustExploreCommand", "Exhaust"]),
         // IssueReporting needs its dynamic test support to report failures in release builds.
         // The manifest overlay attaches this only to test targets, never the instrumented library.
         .target(
@@ -150,7 +147,7 @@ let package = Package(
         ),
         .target(
             name: "ExhaustTestSupport",
-            dependencies: ["ExhaustCore", "ExhaustMetaFuzz"],
+            dependencies: ["ExhaustCore", "ExhaustMetaFuzz", .product(name: "IssueReporting", package: "swift-issue-reporting")],
             swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
         ),

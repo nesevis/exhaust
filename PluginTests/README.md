@@ -1,12 +1,14 @@
 # Explore command validation
 
+Run the argument parsing, campaign planning, test selection, and manifest validation unit tests with `swift test --filter ExploreCommandTests`. These rules are checked without launching child SwiftPM processes.
+
 Run the isolated consumer tests (Swift 6.4+ and `llvm-nm` or `nm`):
 
 ```sh
 swift -warnings-as-errors -swift-version 6 PluginTests/test_explore_commands.swift
 ```
 
-These copy the production command/plugin sources into a temporary provider package that depends only on ArgumentParser. SwiftPM fetches that dependency on the first run; the fixture does not build Exhaust. They exercise generated command help and argument validation, real SwiftPM plugin discovery, ephemeral manifest overlays, unchanged manifests after success and failure, target validation, release instrumentation, filtered Swift Testing execution, failure exit status, and an ordinary uninstrumented build. Object files verify that the selected library and test module contain coverage callbacks while the dependency and callback runtime do not.
+These copy the production command/plugin sources into a temporary provider package with no external dependencies. The fixture does not build Exhaust. They exercise command help and argument validation, real SwiftPM plugin discovery, ephemeral manifest overlays, unchanged manifests after success and failure, target validation, release instrumentation, filtered Swift Testing execution, failure exit status, and an ordinary uninstrumented build. Object files verify that the selected library and test module contain coverage callbacks while the dependency and callback runtime do not.
 
 The `RealConsumer` fixture also exercises the actual Exhaust macro, coverage runtime, report attachments, and command budget override. From the repository root:
 

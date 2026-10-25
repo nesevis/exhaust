@@ -1,84 +1,136 @@
-import ArgumentParser
 import Foundation
 
-struct Options: ParsableArguments {
-    // MARK: - Campaign Options
-
-    @Option(name: .customLong("instrument"), help: "Root Swift target to instrument; repeat for additional targets.")
+struct Options: Equatable {
     var instruments: [String] = []
-
-    @Option(help: "Root Swift test target; inferred when the package has only one.")
     var testTarget: String?
-
-    @Option(help: "Run matching tests within the selected test target; no matches fails.")
     var filter: String?
-
-    @Option(
-        name: .customLong("time"),
-        parsing: .unconditional,
-        help: ArgumentHelp("Override each #explore(time:) invocation's budget.", valueName: "seconds"),
-        transform: parseSeconds
-    )
     var seconds: UInt64?
-
-    @Option(help: "Build configuration for the campaign.")
     var configuration: BuildConfiguration = .release
-
-    // MARK: - Plugin Context
-
-    /// Supplied by the command plugin, not part of the public campaign interface.
-    @Option(help: .hidden)
     var packagePath = FileManager.default.currentDirectoryPath
-
-    @Option(help: .hidden)
     var swift = "swift"
-
-    @Option(help: .hidden)
-    var runtimePackage = "exhaust"
-
-    @Option(help: .hidden)
+    var runtimePackage: RuntimePackage = .root
     var workspacePath: String?
-
-    @Option(help: .hidden)
     var outputPath: String?
 
-    // MARK: - Validation
+    // MARK: - Parsing
 
-    mutating func validate() throws {
-        guard !instruments.isEmpty else {
-            throw ValidationError("Select at least one root Swift target with --instrument <target>.")
+    static func parse(_ arguments: [String]) throws -> Options {
+        var options = Options()
+        var remaining = arguments[...]
+        guard remaining.popFirst() == "explore" else {
+            throw CommandError("Expected explore. Use --help for usage.")
         }
-        let stringOptions: [(String, String?)] = [
-            ("--package-path", packagePath), ("--swift", swift), ("--runtime-package", runtimePackage),
-            ("--workspace-path", workspacePath), ("--output-path", outputPath),
-            ("--test-target", testTarget), ("--filter", filter),
-        ] + instruments.map { ("--instrument", $0) }
-        for (name, value) in stringOptions where value?.isEmpty == true {
-            throw ValidationError("\(name) requires a nonempty value.")
+        while let argument = remaining.popFirst() {
+            // Split scalars, not characters: a value starting with a combining mark joins `=` into one character.
+            let parts = argument.unicodeScalars.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            let name = String(parts[0])
+            func value() throws -> String {
+                let value: String
+                switch parts.count {
+                    case 2:
+                        value = String(parts[1])
+                    default:
+                        guard let next = remaining.popFirst() else {
+                            throw CommandError("\(name) requires a value.")
+                        }
+                        value = next
+                }
+                guard value.isEmpty == false else {
+                    throw CommandError("\(name) requires a nonempty value.")
+                }
+                return value
+            }
+            switch name {
+                case "-h", "--help":
+                    guard parts.count == 1 else {
+                        throw CommandError("\(name) does not accept a value.")
+                    }
+                    throw HelpRequested()
+                case "--instrument":
+                    try options.instruments.append(value())
+                case "--test-target":
+                    options.testTarget = try value()
+                case "--filter":
+                    options.filter = try value()
+                case "--time":
+                    options.seconds = try parseSeconds(value())
+                case "--configuration":
+                    guard let configuration = try BuildConfiguration(rawValue: value()) else {
+                        throw CommandError("--configuration must be debug or release.")
+                    }
+                    options.configuration = configuration
+                case "--package-path":
+                    options.packagePath = try value()
+                case "--swift":
+                    options.swift = try value()
+                case "--runtime-package":
+                    options.runtimePackage = try .dependency(identity: value())
+                case "--workspace-path":
+                    options.workspacePath = try value()
+                case "--output-path":
+                    options.outputPath = try value()
+                default:
+                    throw CommandError("Unknown option: \(name). Use --help for usage.")
+            }
+        }
+        options.packagePath = URL(fileURLWithPath: options.packagePath).standardizedFileURL.resolvingSymlinksInPath().path
+        try options.validate()
+        return options
+    }
+
+    static func parseSeconds(_ value: String) throws -> UInt64 {
+        guard let seconds = UInt64(value), seconds > 0, seconds <= UInt64.max / 1_000_000_000 else {
+            throw CommandError("--time must be a positive whole number of seconds representable in nanoseconds.")
+        }
+        return seconds
+    }
+
+    func validate() throws {
+        guard instruments.isEmpty == false else {
+            throw CommandError("Select at least one root Swift target with --instrument <target>.")
         }
         if let filter {
             do {
                 _ = try NSRegularExpression(pattern: filter)
             } catch {
-                throw ValidationError("--filter must be a valid regular expression: \(error.localizedDescription)")
+                throw CommandError("--filter must be a valid regular expression: \(error.localizedDescription)")
             }
         }
-        packagePath = URL(fileURLWithPath: packagePath).standardizedFileURL.resolvingSymlinksInPath().path
     }
-}
 
-// MARK: - Value Parsing
+    // MARK: - Help
 
-private func parseSeconds(_ value: String) throws -> UInt64 {
-    guard let seconds = UInt64(value), seconds > 0, seconds <= UInt64.max / 1_000_000_000 else {
-        throw ValidationError("--time must be a positive whole number of seconds representable in nanoseconds.")
-    }
-    return seconds
+    static let help = """
+    USAGE: swift package explore --instrument <target> [options]
+
+    Build selected root targets with coverage instrumentation and run tests.
+    Instrumentation uses an ephemeral manifest overlay; Package.swift is never edited.
+    The selected test target is instrumented too. Dependencies retain their own settings.
+    Builds and attachments stay in the plugin work directory. Tests' own time limits still apply.
+
+    OPTIONS:
+      --instrument <target>       Root Swift target to instrument; repeat for additional targets.
+      --test-target <target>      Root Swift test target; inferred when there is only one.
+      --filter <regex>            Run matching tests in the selected target; no matches fails.
+      --time <seconds>            Positive whole seconds per #explore(time:) invocation.
+      --configuration <mode>      debug or release (default: release).
+      -h, --help                  Show this help.
+
+    Options accept --name=value or --name value. Repeated scalar options use the last value.
+    SwiftPM options such as --package-path and --scratch-path go before explore.
+    """
 }
 
 // MARK: - Supporting Types
 
-enum BuildConfiguration: String, CaseIterable, ExpressibleByArgument {
+enum BuildConfiguration: String {
     case debug
     case release
 }
+
+enum RuntimePackage: Equatable {
+    case root
+    case dependency(identity: String)
+}
+
+struct HelpRequested: Error {}

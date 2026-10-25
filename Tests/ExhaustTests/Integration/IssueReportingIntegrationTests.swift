@@ -1,4 +1,5 @@
 import ExhaustCore
+import ExhaustTestSupport
 import Foundation
 import IssueReporting
 import Testing
@@ -303,43 +304,4 @@ private func absorbingDirectTestingIssues<Value>(
     #endif
 }
 
-private struct RecordedIssue: Equatable {
-    let message: String
-    let severity: IssueSeverity
-    let fileID: String
-    let filePath: String
-    let line: UInt
-    let column: UInt
-}
-
 private struct DiagnosticFailure: Error {}
-
-private final class RecordingIssueReporter: IssueReporter, @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [RecordedIssue] = []
-
-    var issues: [RecordedIssue] {
-        lock.withLock { storage }
-    }
-
-    func reportIssue(
-        _ message: @autoclosure () -> String?,
-        severity: IssueSeverity,
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt
-    ) {
-        let issue = RecordedIssue(
-            message: message() ?? "",
-            severity: severity,
-            fileID: "\(fileID)",
-            filePath: "\(filePath)",
-            line: line,
-            column: column
-        )
-        lock.withLock {
-            storage.append(issue)
-        }
-    }
-}

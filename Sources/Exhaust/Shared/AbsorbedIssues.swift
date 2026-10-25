@@ -69,7 +69,7 @@ package final class AbsorbedIssues: Sendable {
 
 /// Runs `body` with the issues it records absorbed, recording each one into `ledger`.
 ///
-/// This is the single suppression scope for every pipeline: it replaces a direct `_withKnownIssue`, which cannot resolve the framework on a GCD worker (`Test.current` is nil there and `TestContext` then reports `.xcTest` for a Swift Testing run), and a direct `withKnownIssue`, which assumes Swift Testing is the framework running. Routing on ``ActiveTestFramework`` picks the matching absorb-and-observe API for each: Swift Testing's known-issue matcher, XCTest's expected-failure issue matcher, or IssueReporting's `_withKnownIssue` outside a test, where nothing can be observed and the ledger stays empty.
+/// This is the single suppression scope for every pipeline: it replaces unconditional calls to `_withKnownIssue`, which cannot resolve the framework on a GCD worker (`Test.current` is nil there and `TestContext` then reports `.xcTest` for a Swift Testing run), and `withKnownIssue`, which assumes Swift Testing is the framework running. Routing on ``ActiveTestFramework`` picks the matching absorb-and-observe API for each: Swift Testing's known-issue matcher, XCTest's expected-failure issue matcher, or IssueReporting's `_withKnownIssue` outside a test, where nothing can be observed and the ledger stays empty.
 ///
 /// The scope binds on the calling thread and covers what that thread runs. An unstructured `Task` inherits the binding, so the sync-async bridge needs no second scope, but a body that hands work to another thread and waits does: that thread inherits nothing, and its issues escape absorption entirely. Bind again inside such work through ``AbsorbedIssues/absorbing(isIntermittent:_:)``.
 ///
