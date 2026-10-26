@@ -185,41 +185,29 @@ private final class PostconditionOnlyCounter: @unchecked Sendable {
     }
 }
 
-/// Sequential calls time out successfully; overlapping calls signal each other and throw.
-/// The condition establishes overlap, while the bounded wait lets smoke and reference runs finish.
-/// All mutable state is protected by the condition lock.
+/// Throws once calls arrive from more than one thread, which happens only in the concurrent phase.
+///
+/// Smoke, reference, and witness replays each run on a single thread. The concurrent run calls the same instance from its lanes and, when the sequence has a prefix, from the coordinating thread, so a second calling thread marks it. Unlike an overlap window, this does not depend on how quickly a starved lane gets scheduled.
 private final class OverlappingCommandCounter: @unchecked Sendable {
-    private struct OverlapError: Error {}
+    private struct ConcurrentCallError: Error {}
 
-    private let condition = NSCondition()
-    private var activeCalls = 0
-    private var hasOverlapped = false
-    private var hasThrown = false
+    private let callingThreads = SendableBox(Set<ObjectIdentifier>())
+    private let hasThrown = SendableBox(false)
 
     var didThrowFromOverlap: Bool {
-        condition.lock()
-        defer { condition.unlock() }
-        return hasThrown
+        hasThrown.value
     }
 
     func enter() throws {
-        condition.lock()
-        defer {
-            activeCalls -= 1
-            condition.unlock()
+        let thread = ObjectIdentifier(Thread.current)
+        let threadCount = callingThreads.withValue { threads in
+            threads.insert(thread)
+            return threads.count
         }
-        activeCalls += 1
-        if activeCalls == 2 {
-            hasOverlapped = true
-            condition.broadcast()
+        guard threadCount > 1 else {
+            return
         }
-        let deadline = Date(timeIntervalSinceNow: 0.002)
-        while hasOverlapped == false {
-            if condition.wait(until: deadline) == false {
-                return
-            }
-        }
-        hasThrown = true
-        throw OverlapError()
+        hasThrown.value = true
+        throw ConcurrentCallError()
     }
 }

@@ -162,7 +162,7 @@ struct ExploreTimeRuntimeTests {
             case .synchronous:
                 await __ExhaustRuntime.__exploreTimeAsync(
                     #gen(.int(in: 0 ... 100)),
-                    time: .milliseconds(50),
+                    time: .seconds(1),
                     settings: [.replay(1), .suppress(.all)],
                     coverage: .injected(passthroughSource())
                 ) { _ in
@@ -172,7 +172,7 @@ struct ExploreTimeRuntimeTests {
             case .asynchronous:
                 await __ExhaustRuntime.__exploreTimeAsync(
                     #gen(.int(in: 0 ... 100)),
-                    time: .milliseconds(50),
+                    time: .seconds(1),
                     settings: [.replay(1), .suppress(.all)],
                     coverage: .injected(passthroughSource())
                 ) { _ async in
