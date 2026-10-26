@@ -29,7 +29,7 @@ The recommended workflow is to run the test through the `explore` package comman
 
 ## Running a fuzzing campaign
 
-Use Swift 6.4 or later and a version of Exhaust that provides the `explore` command. Add Exhaust as a direct dependency of the package you want to test; <doc:GettingStarted> covers adding the dependency. The command runs on macOS and Linux. Windows support is experimental pending native CI verification, and on Windows the command leaves the test target uninstrumented (see <doc:#Instrumentation-scope-and-current-limits>). The single-line commands below work in a Unix shell or PowerShell.
+Use Swift 6.4 or later and a version of Exhaust that provides the `explore` command. Add Exhaust as a direct dependency of the package you want to test; <doc:GettingStarted> covers adding the dependency. The command runs on macOS and Linux. Windows support is experimental pending native CI verification. On Windows the command runs campaigns in debug only and leaves the test target uninstrumented (see <doc:#Instrumentation-scope-and-current-limits>). The single-line commands below work in a Unix shell or PowerShell.
 
 ### 1. Add a fuzz test target
 
@@ -85,7 +85,7 @@ swift package explore --instrument MyLibrary --test-target MyLibraryFuzz --filte
 
 This builds the package's tests in a separate build directory, instruments `MyLibrary` and `MyLibraryFuzz`, and runs the selected property. Exhaust and other dependency targets keep their own build settings. The command automatically links the coverage runtime and test-reporting support; the test target needs only the dependencies shown above.
 
-The default build configuration is **release**. To run the same property in debug:
+The default build configuration is **release**, except on Windows, where campaigns run in debug only. To run the same property in debug:
 
 ```sh
 swift package explore --instrument MyLibrary --test-target MyLibraryFuzz --filter integerRoundTrip --configuration debug --time 60
@@ -107,7 +107,7 @@ These options belong to `explore` and go after its name:
 | `--test-target <target>` | Select one Swift test target. It is also instrumented automatically, except on Windows. May be omitted when the package has exactly one Swift test target. |
 | `--filter <regex>` | Select matching tests within that target. Omit it to run all tests in the target. No matches is an error. |
 | `--time <seconds>` | Override each invocation's budget with a positive whole number of seconds. |
-| `--configuration debug\|release` | Choose the campaign's build configuration. Defaults to `release`. |
+| `--configuration debug\|release` | Choose the campaign's build configuration. Defaults to `release`. Windows supports `debug` only, and defaults to it. |
 | `--help` | Show command usage. |
 
 SwiftPM options such as `--package-path` and `--scratch-path` go before `explore`. After `explore`, the command rejects them as unknown options. No `--allow-writing-to-package-directory` flag is needed. SwiftPM builds the package's test bundle, including other test targets, but `explore` runs only the tests selected above.
@@ -136,7 +136,7 @@ Use `swift package explore` for the campaign target. To include short fuzz prope
 
 The command enables edge coverage, comparison tracing, and assertions for the selected targets in both debug and release. It instruments the calling test target too, so you do not need to add `@inline(never)` merely to keep calls from disappearing into an uninstrumented test module. Dependency code inlined or specialized into a selected module can still contribute coverage: selection is by compiled module, not by the original source of every function.
 
-On Windows the command does not instrument the test target. Running release-mode fuzzing campaigns on Windows therefore risks code being inlined into the test target and escaping coverage.
+On Windows the command does not instrument the test target, and it runs campaigns in debug only. SwiftPM's release test runners on Windows do not load test targets that contain only Swift Testing tests, so a release campaign would find no tests.
 
 The overlay preserves relative dependency paths and the manifest's `#filePath`. This first version requires a top-level variable named `package` and a single `Package.swift`; version-specific manifests such as `Package@swift-6.4.swift` are rejected. You can select root Swift library, executable, and test targets. Dependency targets, C-family targets, macro targets, and binary targets cannot be selected. The command leaves Exhaust's coverage runtime uninstrumented.
 

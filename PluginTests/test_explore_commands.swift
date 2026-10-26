@@ -144,7 +144,10 @@ struct ExploreCommandsTests {
         try require(scratch.path.hasPrefix(pluginRoot.path + "/"), "Build escaped plugin workspace: \(scratch.path)")
         try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
         let outputPath = scratch.deletingLastPathComponent().nativePath
-        let objects = try files(in: scratch).filter { ["o", "obj"].contains($0.pathExtension) }
+        // Debug builds also emit a module-wrap object under `Modules/` that embeds the Swift module for the debugger. It contains no code, so it carries no instrumentation either way.
+        let objects = try files(in: scratch).filter {
+            ["o", "obj"].contains($0.pathExtension) && $0.deletingLastPathComponent().lastPathComponent != "Modules"
+        }
         for (module, instrumented) in [("MyLibrary", true), ("ParserTests", instrumentsTestTarget), ("OtherLibrary", false), ("Callbacks", false)] {
             let names = [".o", ".swift.o", ".c.o", ".obj", ".swift.obj", ".c.obj"].map { module + $0 }
             let matching = objects.filter { names.contains($0.lastPathComponent) }
@@ -198,6 +201,8 @@ struct ExploreCommandsTests {
         #if os(Windows)
             let instrumentedTest = try helperRun(["--instrument", "MyLibrary", "--instrument", "ParserTests", "--test-target", "ParserTests"], success: false)
             try require(instrumentedTest.contains("cannot be instrumented on Windows"), instrumentedTest)
+            let releaseCampaign = try helperRun(["--instrument", "MyLibrary", "--test-target", "ParserTests", "--configuration", "release"], success: false)
+            try require(releaseCampaign.contains("Release campaigns are not supported on Windows"), releaseCampaign)
         #endif
     }
 

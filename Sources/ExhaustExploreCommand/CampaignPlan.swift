@@ -32,6 +32,11 @@ struct CampaignPlan {
                 )
             }
         }
+        if linkage == .perTargetRunner, options.configuration == .release {
+            throw CommandError(
+                "Release campaigns are not supported on Windows: SwiftPM's release test runners do not load Swift-Testing-only test targets, so discovery finds no tests. Use --configuration debug, the default on Windows."
+            )
+        }
         targets = switch linkage {
             case .sharedProduct:
                 Set(options.instruments + [test.name]).sorted()
@@ -75,8 +80,18 @@ struct CampaignPlan {
 enum TestLinkage {
     /// Every test target links into one product with its dependencies, so the coverage runtime reaches all instrumented code (macOS and Linux).
     case sharedProduct
-    /// Each test target links into its own DLL, and SwiftPM generates a runner executable per test target that inherits the test target's compiler flags but none of its dependencies (Windows). An instrumented test target would instrument a runner that cannot link the coverage runtime, so only non-test targets are instrumented.
+    /// Each test target links into its own DLL, and SwiftPM generates a runner executable per test target that inherits the test target's compiler flags but none of its dependencies (Windows). An instrumented test target would instrument a runner that cannot link the coverage runtime, so only non-test targets are instrumented. A release runner for a Swift-Testing-only target references nothing in its test DLL, so the linker drops the import, the DLL never loads, and discovery finds no tests; campaigns therefore run in debug.
     case perTargetRunner
+
+    /// The configuration a campaign uses when `--configuration` is not given.
+    var defaultConfiguration: BuildConfiguration {
+        switch self {
+            case .sharedProduct:
+                .release
+            case .perTargetRunner:
+                .debug
+        }
+    }
 
     static var host: TestLinkage {
         #if os(Windows)

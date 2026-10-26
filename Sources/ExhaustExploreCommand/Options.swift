@@ -5,7 +5,7 @@ struct Options: Equatable {
     var testTarget: String?
     var filter: String?
     var seconds: UInt64?
-    var configuration: BuildConfiguration = .release
+    var configuration: BuildConfiguration = TestLinkage.host.defaultConfiguration
 
     // MARK: - Parsing
 
@@ -97,7 +97,7 @@ struct Options: Equatable {
       --test-target <target>      Root Swift test target; inferred when there is only one.
       --filter <regex>            Run matching tests in the selected target; no matches fails.
       --time <seconds>            Positive whole seconds per #explore(time:) invocation.
-      --configuration <mode>      debug or release (default: release).
+      --configuration <mode>      debug or release (default: release; debug only on Windows).
       -h, --help                  Show this help.
 
     Options accept --name=value or --name value. Repeated scalar options use the last value.

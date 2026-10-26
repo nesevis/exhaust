@@ -52,9 +52,9 @@ struct ExploreCommandTests {
         #expect(try Options.parseSeconds("18446744073") == 18_446_744_073)
     }
 
-    @Test("Campaigns default to release")
+    @Test("Campaigns default to the host platform's configuration")
     func defaultConfiguration() throws {
-        #expect(try Options.parse(["explore", "--instrument", "Library"]).configuration == .release)
+        #expect(try Options.parse(["explore", "--instrument", "Library"]).configuration == TestLinkage.host.defaultConfiguration)
     }
 
     @Test("Help is recognized only in option position", arguments: ["-h", "--help"])
@@ -123,7 +123,7 @@ struct ExploreCommandTests {
 
     @Test("Per-target test runners leave the selected test target uninstrumented")
     func perTargetRunnerPlan() throws {
-        let options = try Options.parse(["explore", "--instrument", "Library"])
+        let options = try Options.parse(["explore", "--instrument", "Library", "--configuration", "debug"])
         let plan = try CampaignPlan(
             options: options,
             invocation: Invocation(),
@@ -138,7 +138,7 @@ struct ExploreCommandTests {
 
     @Test("Per-target test runners reject instrumenting a test target")
     func perTargetRunnerRejectsTestTarget() throws {
-        let options = try Options.parse(["explore", "--instrument", "Library", "--instrument", "Tests"])
+        let options = try Options.parse(["explore", "--instrument", "Library", "--instrument", "Tests", "--configuration", "debug"])
         let error = #expect(throws: CommandError.self) {
             try CampaignPlan(
                 options: options,
@@ -296,6 +296,28 @@ struct ExploreCommandTests {
                     matches(name + "/" + discovery.executionSuffix)
                 }
         }
+    }
+
+    @Test("Per-target test runners reject release campaigns")
+    func perTargetRunnerRejectsRelease() throws {
+        let options = try Options.parse(["explore", "--instrument", "Library", "--configuration", "release"])
+        let error = #expect(throws: CommandError.self) {
+            try CampaignPlan(
+                options: options,
+                invocation: Invocation(),
+                package: package,
+                outputDirectory: URL(fileURLWithPath: "/tmp/explore"),
+                environment: [:],
+                linkage: .perTargetRunner
+            )
+        }
+        #expect(error?.description.contains("Release campaigns are not supported on Windows") == true)
+    }
+
+    @Test("Campaigns default to debug where test runners are per target, and to release elsewhere")
+    func linkageDefaultConfiguration() {
+        #expect(TestLinkage.perTargetRunner.defaultConfiguration == .debug)
+        #expect(TestLinkage.sharedProduct.defaultConfiguration == .release)
     }
 
     @Test("Copying dependencies replaces directory links with the files they point to")
