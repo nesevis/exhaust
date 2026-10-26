@@ -69,13 +69,13 @@ let package = Package(
     ]
 )
 
-// Treat compiler warnings as errors for libraries, executables, tests, and macros in all configurations.
+// Treat Swift compiler warnings as errors for libraries, executables, tests, and macros in all configurations.
 // Manifest settings apply to local builds and CI without changing third-party dependency settings.
+// No C settings: this package has no C targets, and a C warnings setting on the macro target breaks consumers that build it against SwiftPM's prebuilt swift-syntax (the clang importer receives the prebuilt module directory as a second input).
 for target in package.targets {
     switch target.type {
         case .regular, .executable, .test, .macro:
             target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
-            target.cSettings = (target.cSettings ?? []) + [.treatAllWarnings(as: .error)]
         default:
             break
     }

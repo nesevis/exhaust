@@ -6,6 +6,25 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-26
+
+### Added
+
+- The `explore` package command runs coverage-guided fuzzing campaigns: `swift package explore --instrument <target> [--test-target <target>] [--filter <regex>] [--time <seconds>] [--configuration debug|release]`. It builds the selected root targets, and the selected test target, with coverage instrumentation in a separate build directory through an ephemeral manifest overlay, so `Package.swift` is never edited and ordinary builds stay uninstrumented. Campaigns default to release. `--time` overrides the budget of every `#explore(time:)` invocation. The command links the coverage runtime and test-reporting support itself, keeps a crash-recovery directory for each campaign, and prevents overlapping campaigns on the same build. See [Coverage-guided fuzzing](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing).
+- Windows support for the `explore` command is experimental. On Windows, campaigns run in debug only, because SwiftPM's release test runners do not load test targets that contain only Swift Testing tests, and the selected test target is not instrumented.
+
+### Changed
+
+- `#explore(time:)` is now async only. Every call must be awaited from an async context. The property closure can still be synchronous or `async`: a synchronous closure is called directly on the search's thread, and an `async` closure is awaited once per input. Calls that were not awaited no longer compile. `#explore(time:)` is experimental, so this change is made in a minor release.
+- When no instrumented module is loaded, `#explore(time:)` now emits a runtime warning and returns without invoking the property or consuming its budget, instead of failing the test. The returned report has `.instrumentationMissing` termination. Fuzz tests can stay in the ordinary suite.
+- The documented coverage flags now use `-sanitize=fuzzer-no-link`, which adds coverage instrumentation without linking a sanitizer runtime, instead of `-sanitize=undefined`.
+
+### Fixed
+
+- Coverage-instrumented builds now link on Windows. The coverage runtime defines the section bounds that the Windows linker does not provide.
+- Replaying a `.threads` state-machine failure from its seed now repeats the targeted run, so the failure reproduces more reliably.
+- In async XCTest tests, `#explore(time:)` now absorbs the property's per-attempt failures through XCTest instead of Swift Testing.
+
 ## [1.7.4] - 2026-10-23
 
 ### Changed
@@ -328,7 +347,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.7.4...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/nesevis/exhaust/compare/v1.7.4...v1.8.0
 [1.7.4]: https://github.com/nesevis/exhaust/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/nesevis/exhaust/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/nesevis/exhaust/compare/v1.7.1...v1.7.2
