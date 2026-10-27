@@ -22,7 +22,7 @@ extension ReductionSession {
             return
         }
         let savedRejectCache = rejectCache
-        rejectCache = rejectCache.emptied
+        rejectCache = ProbeCache()
         defer {
             rejectCache = savedRejectCache
         }

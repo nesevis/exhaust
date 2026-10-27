@@ -22,7 +22,7 @@ struct CandidateRepresentationTests {
                 incumbent: Counterexample(sequence: sequence, tree: tree, output: values),
                 incumbentHash: ZobristHash.hash(of: sequence),
                 graph: graph,
-                rejectCache: [],
+                rejectCache: ProbeCache(),
                 decoder: ReductionDecoder(
                     generator: generator.erase(),
                     property: { _ in shouldPass },

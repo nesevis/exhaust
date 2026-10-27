@@ -581,7 +581,7 @@ private struct SchedulingFixture {
                 incumbent: Counterexample(sequence: sequence, tree: tree, output: UInt64(5)),
                 incumbentHash: ZobristHash.hash(of: sequence),
                 graph: ChoiceGraph.build(from: tree),
-                rejectCache: [],
+                rejectCache: ProbeCache(),
                 decoder: ReductionDecoder(generator: generator.erase(), property: property, probeWrapper: nil, hasBind: false),
                 encoder: ValueSearchEncoder.self,
                 deadline: deadline

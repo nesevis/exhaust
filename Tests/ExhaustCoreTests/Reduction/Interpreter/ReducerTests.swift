@@ -89,7 +89,7 @@ private struct InterpreterFixture {
                 ),
                 incumbentHash: ZobristHash.hash(of: sequence),
                 graph: ChoiceGraph.build(from: tree),
-                rejectCache: [],
+                rejectCache: ProbeCache(),
                 decoder: ReductionDecoder(
                     generator: generator.erase(),
                     property: { _ in false },

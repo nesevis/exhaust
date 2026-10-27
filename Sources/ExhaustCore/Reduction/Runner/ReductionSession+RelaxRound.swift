@@ -79,8 +79,7 @@ extension ReductionSession {
                 using: .exact(materializePicks: true, admission: .standard),
                 decoder: decoder,
                 admits: { _ in true },
-                cacheHit: false,
-                cacheKey: nil,
+                lookup: nil,
                 cache: &rejectCache,
                 counts: &tally.probeCounts
             )
@@ -118,7 +117,7 @@ extension ReductionSession {
             "seq_len": "\(incumbent.sequence.count)", "sources": "\(sources.count)",
         ])
         let savedRejectCache = rejectCache
-        rejectCache = rejectCache.emptied
+        rejectCache = ProbeCache()
         _ = dispatchCycle(policy: .exploitation)
         sources = outerSources
 

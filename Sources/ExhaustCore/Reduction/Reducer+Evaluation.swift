@@ -39,16 +39,16 @@ extension Reducer {
             mutation: mutation,
             admission: admission
         ))
-        let cacheKey = context.rejectCache.key(
+        let lookup = context.rejectCache.lookup(
             probeHash: probeHash,
-            decision: ProbeDecision(selection),
+            decision: ProbeDecision(selection, order: context.encoder.admissionOrder),
             incumbentHash: context.baseHash
         )
 
-        let cacheHit = context.rejectCache.contains(cacheKey)
+        let isCached = lookup.isCached
         if case let .lazy(patch) = candidate.contents {
             // Observers still see every emitted sequence. Unobserved cache hits leave the buffer and its previous edits untouched.
-            if cacheHit == false || context.observer != nil {
+            if isCached == false || context.observer != nil {
                 if let previousPatch = context.previousPatch {
                     previousPatch.restore(into: &context.candidateBuffer, baseSequence: context.incumbent.sequence)
                 } else {
@@ -70,7 +70,7 @@ extension Reducer {
         context.probeTiming?.chargeEncode()
 
         // Selection is reported after decoding, so a probe interrupted here has no selection event.
-        if cacheHit == false, context.isExpired {
+        if isCached == false, context.isExpired {
             terminate(observationID, .interrupted, context: &context)
             return Evaluation(feedback: .initial, isAccepted: false, stop: .deadline)
         }
@@ -83,9 +83,7 @@ extension Reducer {
             admits: { [incumbent = context.incumbent, order = context.encoder.admissionOrder] in
                 incumbent.admits($0, under: order)
             },
-            probeHash: probeHash,
-            cacheHit: cacheHit,
-            cacheKey: cacheKey,
+            lookup: lookup,
             cache: &context.rejectCache,
             counts: &context.report.counts
         )

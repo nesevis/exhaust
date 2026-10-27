@@ -230,7 +230,7 @@ private struct StagedJointFixture {
                 ),
                 incumbentHash: ZobristHash.hash(of: sequence),
                 graph: graph,
-                rejectCache: [],
+                rejectCache: ProbeCache(),
                 decoder: ReductionDecoder(
                     generator: generator,
                     property: property,

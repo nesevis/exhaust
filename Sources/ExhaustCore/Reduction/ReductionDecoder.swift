@@ -29,6 +29,8 @@ struct Counterexample {
     /// Whether `decoded` may replace this incumbent under `order`.
     func admits(_ decoded: Counterexample, under order: ReductionOrder) -> Bool {
         switch order {
+            case .strictlySmaller:
+                decoded.sequence.shortLexPrecedes(sequence)
             case .notLarger:
                 sequence.shortLexPrecedes(decoded.sequence) == false
             case .unordered:
@@ -39,6 +41,8 @@ struct Counterexample {
 
 /// The ordering an admitted candidate must satisfy against the incumbent.
 enum ReductionOrder {
+    /// Recovery must make progress before it renews the stall budget.
+    case strictlySmaller
     /// Ordinary probes. Equal sequences are lateral moves and stay admissible.
     case notLarger
     /// The numeric reorder pass, whose reorderings need not precede the incumbent.

@@ -215,7 +215,7 @@ private struct LiftFixture {
             incumbent: Counterexample(sequence: base, tree: tree, output: UInt64(5)),
             incumbentHash: ZobristHash.hash(of: base),
             graph: graph,
-            rejectCache: [],
+            rejectCache: ProbeCache(),
             decoder: ReductionDecoder(generator: generator.erase(), property: { _ in false }, probeWrapper: nil, hasBind: false),
             encoder: ValueSearchEncoder.self,
             observer: observer

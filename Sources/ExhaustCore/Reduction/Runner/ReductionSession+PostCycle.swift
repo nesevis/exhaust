@@ -178,7 +178,7 @@ extension ReductionSession {
             baseSequence: incumbent.sequence,
             probe: candidate
         )
-        let cacheKey = rejectCache.key(
+        let lookup = rejectCache.lookup(
             probeHash: probeHash,
             decision: ProbeDecision(selection),
             incumbentHash: incumbentHash
@@ -189,9 +189,7 @@ extension ReductionSession {
             using: selection,
             decoder: decoder,
             admits: { _ in true },
-            probeHash: probeHash,
-            cacheHit: rejectCache.contains(cacheKey),
-            cacheKey: cacheKey,
+            lookup: lookup,
             cache: &rejectCache,
             counts: &counts
         )
@@ -303,10 +301,8 @@ extension ReductionSession {
                 against: incumbent,
                 using: .exact(materializePicks: true, admission: .standard),
                 decoder: decoder,
-                admits: { [baseline = incumbent.sequence] in $0.sequence.shortLexPrecedes(baseline) },
-                probeHash: probe.probeHash,
-                cacheHit: false,
-                cacheKey: probe.cacheKey,
+                admits: { [incumbent] in incumbent.admits($0, under: .strictlySmaller) },
+                lookup: probe.lookup,
                 cache: &rejectCache,
                 counts: &probeCounts
             ) else {

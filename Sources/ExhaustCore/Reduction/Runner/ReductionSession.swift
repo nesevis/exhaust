@@ -164,7 +164,7 @@ package struct ReductionSession {
         storedIncumbent = Counterexample(sequence: sequence, tree: tree, output: initialOutput)
         incumbentHash = ZobristHash.hash(of: sequence)
         hasBind = Self.containsBind(sequence)
-        rejectCache = ProbeCache(keying: configuration.tuning.probeCacheKeying)
+        rejectCache = ProbeCache()
         self.graph = graph
         self.generator = erasedGenerator
         self.property = wrappedProperty

@@ -79,11 +79,8 @@ struct ReducerRegressionTests {
 
     // MARK: - Probe Cache
 
-    @Test("A numeric admission's rejection does not turn away the same candidate under standard admission when the key records the decision", arguments: [
-        ProbeCacheKeying.decision,
-        .decisionAndIncumbent,
-    ])
-    func admissionRejectionDoesNotAnswerForStandardAdmission(_ keying: ProbeCacheKeying) throws {
+    @Test("The default cache isolates numeric admission from standard admission")
+    func admissionRejectionDoesNotAnswerForStandardAdmission() throws {
         let generator = Gen.choose(in: UInt64(0) ... 10)._bound(
             forward: { controller in Gen.zip(Gen.just(controller), Gen.choose(in: UInt64(0) ... controller)) },
             backward: { $0.0 }
@@ -98,7 +95,7 @@ struct ReducerRegressionTests {
             incumbent: Counterexample(sequence: base, tree: tree, output: (UInt64(10), UInt64(10))),
             incumbentHash: ZobristHash.hash(of: base),
             graph: ChoiceGraph.build(from: tree),
-            rejectCache: ProbeCache(keying: keying),
+            rejectCache: ProbeCache(),
             decoder: ReductionDecoder(generator: generator.erase(), property: { _ in false }, probeWrapper: nil, hasBind: true),
             encoder: ValueSearchEncoder.self
         )
@@ -112,6 +109,8 @@ struct ReducerRegressionTests {
         let standard = Reducer.evaluateAndCommit(.eager(mutation: .leafValues([]), admission: .standard), configuration: configuration, context: &context)
         #expect(context.report.counts.rejectedByCache == 0)
         #expect(standard.isAccepted)
+        let output = try #require(context.incumbent.output as? (UInt64, UInt64))
+        #expect(output == (5, 5))
     }
 
     // MARK: - Covering Rows
@@ -181,8 +180,15 @@ struct ReducerRegressionTests {
             var candidates = RelaxCandidateCursor(sequence: runner.incumbent.sequence, graph: runner.graph, limit: 1, isEncoderEnabled: runner.isEncoderEnabled)
             let next = candidates.next()
             let candidate = try #require(next)
-            let key = runner.rejectCache.key(probeHash: ZobristHash.hash(of: candidate), decision: ProbeDecision(isGuided: false), incumbentHash: runner.incumbentHash)
-            runner.rejectCache.insert(key)
+            let lookup = runner.rejectCache.lookup(
+                probeHash: ZobristHash.hash(of: candidate),
+                decision: ProbeDecision(isGuided: false),
+                incumbentHash: runner.incumbentHash
+            )
+            runner.rejectCache.record(
+                lookup,
+                outcome: .propertyPassed(materializationAttempts: 1, sources: .unknown)
+            )
         }
 
         // The substitution perturbation decodes with picks materialized, even if ordinary reduction cached its rejection; exploitation then removes an element, whose decoding leaves picks unmaterialized and rebuilds the graph from that tree.

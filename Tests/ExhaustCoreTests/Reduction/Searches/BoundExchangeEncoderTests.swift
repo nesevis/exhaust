@@ -66,7 +66,7 @@ private struct BoundExchangeFixture {
                 ),
                 incumbentHash: ZobristHash.hash(of: sequence),
                 graph: graph,
-                rejectCache: [],
+                rejectCache: ProbeCache(),
                 decoder: ReductionDecoder(
                     generator: generator,
                     property: property,

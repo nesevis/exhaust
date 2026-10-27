@@ -14,13 +14,11 @@ struct ImprovingPivotCursor {
     /// A candidate with the hash already checked against the cache snapshot and every earlier probe.
     struct Probe {
         let sequence: ChoiceSequence
-        let probeHash: UInt64
-        /// The key its rejection is recorded under: the probe hash with ``decision`` folded in.
-        let cacheKey: UInt64
+        let lookup: ProbeCache.Lookup
     }
 
-    /// Every improving pivot is decoded exactly with picks materialized and standard admission.
-    static let decision = ProbeDecision(isGuided: false)
+    /// Every improving pivot uses exact decoding with picks materialized, standard decoder admission, and a strictly smaller recovered sequence.
+    static let decision = ProbeDecision(isGuided: false, order: .strictlySmaller)
 
     private struct Pivot {
         let pickNodeID: Int
@@ -112,11 +110,11 @@ struct ImprovingPivotCursor {
                 continue
             }
             let probeHash = ZobristHash.hash(of: candidate)
-            let cacheKey = rejectCache.key(probeHash: probeHash, decision: Self.decision, incumbentHash: incumbentHash)
-            guard rejectCache.contains(cacheKey) == false, emittedHashes.insert(probeHash).inserted else {
+            let lookup = rejectCache.lookup(probeHash: probeHash, decision: Self.decision, incumbentHash: incumbentHash)
+            guard lookup.isCached == false, emittedHashes.insert(probeHash).inserted else {
                 continue
             }
-            return Probe(sequence: candidate, probeHash: probeHash, cacheKey: cacheKey)
+            return Probe(sequence: candidate, lookup: lookup)
         }
         return nil
     }
