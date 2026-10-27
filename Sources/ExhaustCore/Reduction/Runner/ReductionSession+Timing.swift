@@ -140,3 +140,21 @@ private extension ReductionStats.StepTimings {
         }
     }
 }
+
+// MARK: - Post-Cycle Timing
+
+extension ReductionSession.PostCycleAction {
+    /// The owner for the whole action, including adoption and rebuilding after a recovered witness.
+    var timingBucket: ReductionSession.TimingBucket {
+        switch self {
+            case .confirmConvergence:
+                .convergenceConfirmation
+            case .relationPass:
+                .relationPass
+            case .improvingPivots, .relaxRound:
+                .relaxRound
+            case .stagedJointPass:
+                .stagedJointPass
+        }
+    }
+}

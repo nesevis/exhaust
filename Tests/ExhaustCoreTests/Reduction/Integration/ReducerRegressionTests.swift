@@ -5,11 +5,11 @@ import Testing
 struct ReducerRegressionTests {
     // MARK: - Convergence Confirmation
 
-    @Test("Confirmation clears a stale floor on a leaf below its target", arguments: [
+    @Test("Confirmation adopts a failure closer to the target and restarts reduction", arguments: [
         ConfirmationCase(start: -5, failsAtOrBelow: -4),
         ConfirmationCase(start: 5, failsAtOrAbove: 4),
     ])
-    func confirmationClearsStaleFloorTowardsTarget(_ confirmation: ConfirmationCase) throws {
+    func confirmationAdoptsFailureTowardsTarget(_ confirmation: ConfirmationCase) throws {
         let generator = Gen.choose(in: Int64(-100) ... 100)
         let tree = try #require(try Interpreters.reflect(generator, with: confirmation.start))
         var runner = ReductionSession(
@@ -28,13 +28,17 @@ struct ReducerRegressionTests {
             cycle: 0
         )
 
-        let clearedStaleFloor = runner.confirmConvergence()
+        runner.stallBudget = 0
+        _ = runner.runPostCycleActions([.confirmConvergence])
 
-        #expect(clearedStaleFloor)
+        #expect(runner.anyAccepted)
+        #expect(runner.stallBudget == 1)
         #expect(runner.graph.convergenceStore[leafNodeID] == nil)
-        #expect(runner.incumbent.output as? Int64 == confirmation.start)
-        #expect(runner.incumbent.sequence == ChoiceSequence(tree))
-        #expect(runner.incumbentHash == ZobristHash.hash(of: ChoiceSequence(tree)))
+        let expected = confirmation.start < 0 ? confirmation.start + 1 : confirmation.start - 1
+        #expect(runner.incumbent.output as? Int64 == expected)
+        #expect(runner.incumbent.sequence == ChoiceSequence(runner.incumbent.tree))
+        #expect(runner.incumbent.sequence.shortLexPrecedes(ChoiceSequence(tree)))
+        #expect(runner.incumbentHash == ZobristHash.hash(of: runner.incumbent.sequence))
         #expect(runner.stats.reductionProbes == 1)
         #expect(runner.stats.reductionProbesAccepted == 1)
     }

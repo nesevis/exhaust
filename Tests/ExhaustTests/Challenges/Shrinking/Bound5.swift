@@ -97,9 +97,9 @@ struct Bound5ShrinkingChallenge {
         )
 
         let rep = try #require(report)
-        // Value search also probes a negative leaf's positive counterpart, which this overflow failure rejects.
+        // Counts include confirmation's second-step probes and reuse of certified property passes across admission policies.
         #expect(rep.propertyInvocations == 136)
-        #expect(rep.totalMaterializations == 321)
+        #expect(rep.totalMaterializations == 322)
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -197,9 +197,9 @@ struct Bound5ShrinkingChallenge {
         }
 
         let rep = try #require(report)
-        // Value search also probes a negative leaf's positive counterpart, which this overflow failure rejects.
+        // Counts include confirmation's second-step probes and reuse of certified property passes across admission policies.
         #expect(rep.propertyInvocations == 170)
-        #expect(rep.totalMaterializations == 239)
+        #expect(rep.totalMaterializations == 240)
 
         let b25 = try #require(output)
         let arr = b25.0.arr + b25.1.arr + b25.2.arr + b25.3.arr + b25.4.arr

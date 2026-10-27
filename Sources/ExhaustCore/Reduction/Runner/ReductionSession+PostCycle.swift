@@ -6,62 +6,84 @@
 // MARK: - Post-Cycle Actions
 
 extension ReductionSession {
-    /// Runs the cycle's post-cycle actions in order, stopping at the deadline.
+    /// A candidate still needs adoption and a graph rebuild; a committed result already has both. Extra invalidation travels with the result so the common transition applies it.
+    enum PostCycleResult {
+        case unchanged
+        case recovered(Counterexample, isTreeStripped: Bool)
+        case committed(invalidating: Set<PostCycleInvalidation>)
+    }
+
+    /// Invalidates evidence beyond the fruitless verdicts cleared by every acceptance.
+    enum PostCycleInvalidation: Hashable {
+        /// Drops floors whose validity may depend on the jointly changed values.
+        case convergence
+        /// Restores bind budgets after escaping a coupled stall.
+        case searchHistory
+    }
+
+    /// Runs the scheduled actions in order against the current graph, stopping at the deadline. A prior acceptance skips relaxation because the improved counterexample has not yet stalled.
     mutating func runPostCycleActions(_ actions: [PostCycleAction]) -> PhaseOutcome {
         for action in actions {
             guard deadline.isExpired == false else {
                 return .deadline
             }
-            switch action {
-                case .confirmConvergence:
-                    confirmConvergence()
-                    stepTimer.charge(.convergenceConfirmation)
-                case .relationPass:
-                    let previousOwner = stepTimer.beginOwnership(.relationPass)
-                    runRelationPass()
-                    stepTimer.endOwnership(restoring: previousOwner)
-                case .improvingPivots:
-                    if runImprovingPivotPass() {
-                        recordPostCycleAcceptance()
-                    }
-                    stepTimer.charge(.relaxRound)
-                case .stagedJointPass:
-                    let previousOwner = stepTimer.beginOwnership(.stagedJointPass)
-                    runStagedJointPass()
-                    stepTimer.endOwnership(restoring: previousOwner)
-                case .relaxRound:
-                    // Perturbing away from a counterexample an earlier action just improved spends budget escaping a local minimum the run may not be in.
-                    guard anyAccepted == false else {
-                        continue
-                    }
-                    let previousOwner = stepTimer.beginOwnership(.relaxRound)
-                    if runRelaxRound() {
-                        recordPostCycleAcceptance()
-                    }
-                    stepTimer.endOwnership(restoring: previousOwner)
+            // Perturbing an improvement would spend escape budget before ordinary reduction has searched it.
+            if action == .relaxRound, anyAccepted {
+                continue
             }
+            runPostCycleAction(action)
         }
         return .completed
     }
 
-    /// Records an acceptance made by a post-cycle action: marks the cycle accepted and restores the stall budget.
-    ///
-    /// The stall that scheduled the action has already been spent, and the relax round runs only on the stall that would end the run. Without fresh budget the run could stop before ordinary reduction, bind search included, reaches the accepted counterexample.
-    mutating func recordPostCycleAcceptance() {
-        anyAccepted = true
-        anyAcceptanceEverOccurred = true
+    /// Keeps decoding, adoption, graph rebuilding, and invalidation in the recovering action's timing bucket, including nested pass charges.
+    private mutating func runPostCycleAction(_ action: PostCycleAction) {
+        let previousOwner = stepTimer.beginOwnership(action.timingBucket)
+        defer {
+            stepTimer.endOwnership(restoring: previousOwner)
+        }
+        let result: PostCycleResult = switch action {
+            case .confirmConvergence:
+                confirmConvergence()
+            case .relationPass:
+                runRelationPass()
+            case .improvingPivots:
+                runImprovingPivotPass()
+            case .stagedJointPass:
+                runStagedJointPass()
+            case .relaxRound:
+                runRelaxRound() ? .committed(invalidating: []) : .unchanged
+        }
+        applyPostCycleResult(result)
+    }
+
+    /// Adopts a recovered witness even when its property call expired the deadline, and renews the budget for ordinary reduction. Applies only the additional invalidation reported by the accepting action; cache entries retain their decision and incumbent keys.
+    private mutating func applyPostCycleResult(_ result: PostCycleResult) {
+        let invalidations: Set<PostCycleInvalidation>
+        switch result {
+            case .unchanged:
+                return
+            case let .recovered(counterexample, isTreeStripped):
+                incumbent = counterexample
+                rebuildAndUpdateGraph()
+                graphIsStripped = isTreeStripped
+                invalidations = []
+            case let .committed(invalidating):
+                invalidations = invalidating
+        }
+        recordAcceptance()
         stallBudget = maxStalls
+        for invalidation in invalidations {
+            switch invalidation {
+                case .convergence:
+                    graph.convergenceStore.removeAll()
+                case .searchHistory:
+                    gate.invalidateSearchHistory()
+            }
+        }
     }
 
-    /// Records an acceptance whose effect can reach beyond the edited leaves, because the property couples values the generator treats as independent. Every convergence floor, cached rejection, and bind search history is invalidated as well.
-    mutating func invalidateAfterCoupledAcceptance() {
-        recordPostCycleAcceptance()
-        graph.convergenceStore.removeAll()
-        rejectCache.removeAll()
-        gate.invalidateSearchHistory()
-    }
-
-    /// Applies a post-cycle pass's policy and, for an acceptance that needs one, a graph-only rebuild. Post-cycle actions never rebuild sources.
+    /// Applies a post-cycle pass's accounting and graph changes. Further invalidation is carried by the action result and applied by the common transition.
     mutating func applyPostCycleReport(_ pass: PassRecord, appliedPasses: Int = 1) {
         applyPassPolicy(pass, appliedPasses: appliedPasses)
         if pass.requiresRebuild {
@@ -69,157 +91,24 @@ extension ReductionSession {
         }
     }
 
-    // MARK: - Convergence Confirmation
-
-    /// Probes each converged leaf one step past its floor towards its reduction target to find stale floors, then two steps when that rejects and the target is that far away, for non-monotone gaps. A passing probe clears the record so minimization can work on the leaf again.
-    ///
-    /// A leaf below its target in bit-pattern space, such as a negative signed integer, steps upward. Stepping down from it would move away from the target, which shortlex ordering skips without a probe.
-    ///
-    /// - Returns: Whether any stale floor was cleared.
-    @discardableResult
-    mutating func confirmConvergence() -> Bool {
-        var anyStale = false
-        var counts = ReductionProbeCounts()
-        defer {
-            stats.record(counts, for: .convergenceConfirmation)
-        }
-
-        let selection: ReductionDecoder.Selection = hasBind
-            ? .guided(materializePicks: false)
-            : .exact(materializePicks: false, admission: .standard)
-
-        for nodeID in graph.leafNodes {
-            if deadline.isExpired {
-                break
-            }
-            guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else {
-                continue
-            }
-            guard let origin = graph.convergenceStore[nodeID] else {
-                continue
-            }
-            guard let range = graph.nodes[nodeID].positionRange else {
-                continue
-            }
-
-            let target = metadata.value.reductionTarget(in: metadata.validRange)
-            guard origin.bound != target else {
-                continue
-            }
-
-            let nearerBitPattern = Self.bitPattern(origin.bound, steppedTowards: target, by: 1)
-            let result = probeCloser(
-                value: nearerBitPattern,
-                at: range.lowerBound,
-                selection: selection,
-                counts: &counts
-            )
-
-            if result == .accepted {
-                anyStale = true
-                graph.clearConvergence(nodeID)
-                ReductionLog.reducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
-                    "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(nearerBitPattern)",
-                ])
-            } else if result == .rejected, origin.bound.absoluteDifference(target) >= 2, deadline.isExpired == false {
-                let gapBitPattern = Self.bitPattern(origin.bound, steppedTowards: target, by: 2)
-                let gapResult = probeCloser(
-                    value: gapBitPattern,
-                    at: range.lowerBound,
-                    selection: selection,
-                    counts: &counts
-                )
-                if gapResult == .accepted {
-                    anyStale = true
-                    graph.clearConvergence(nodeID)
-                    ReductionLog.reducer("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
-                        "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(gapBitPattern)",
-                    ])
-                }
-            }
-        }
-
-        return anyStale
-    }
-
-    private enum ConfirmationProbeResult {
-        case accepted
-        case rejected
-        case skipped
-    }
-
-    /// The bit pattern `step` past `bound` in the direction of `target`.
-    private static func bitPattern(_ bound: UInt64, steppedTowards target: UInt64, by step: UInt64) -> UInt64 {
-        switch bound > target {
-            case true:
-                bound - step
-            case false:
-                bound + step
-        }
-    }
-
-    /// Decodes the sequence with one value moved closer to its target, without committing it: a failing decode only proves the floor stale.
-    private mutating func probeCloser(
-        value: UInt64,
-        at sequenceIndex: Int,
-        selection: ReductionDecoder.Selection,
-        counts: inout ReductionProbeCounts
-    ) -> ConfirmationProbeResult {
-        var candidate = incumbent.sequence
-        candidate[sequenceIndex] = candidate[sequenceIndex].withBitPattern(value)
-        guard candidate.shortLexPrecedes(incumbent.sequence) else {
-            return .skipped
-        }
-
-        counts.recordEmission()
-
-        let probeHash = ZobristHash.incrementalHash(
-            baseHash: incumbentHash,
-            baseSequence: incumbent.sequence,
-            probe: candidate
-        )
-        let lookup = rejectCache.lookup(
-            probeHash: probeHash,
-            decision: ProbeDecision(selection),
-            incumbentHash: incumbentHash
-        )
-        let evaluation = CandidateEvaluator.evaluate(
-            candidate,
-            against: incumbent,
-            using: selection,
-            decoder: decoder,
-            admits: { _ in true },
-            lookup: lookup,
-            cache: &rejectCache,
-            counts: &counts
-        )
-        switch evaluation {
-            case .cached:
-                return .skipped
-            case .rejected:
-                return .rejected
-            case .admitted:
-                counts.recordAcceptance()
-                return .accepted
-        }
-    }
-
     // MARK: - Relation Pass
 
     /// Runs relation search once value search has written its stall evidence.
-    private mutating func runRelationPass() {
+    private mutating func runRelationPass() -> PostCycleResult {
         guard let scope = RelationQuery.build(graph: graph) else {
-            return
+            return .unchanged
         }
         guard deadline.isExpired == false else {
             stats.reductionWasCapped = true
-            return
+            return .unchanged
         }
         let pass = runPass(.relation(scope), boundValueFingerprint: nil, usesWarmStarts: false)
         applyPostCycleReport(pass)
         if isInstrumented, pass.report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
         }
+        // Moving a related pair can lower a third leaf's floor even when that leaf's value has not changed.
+        return pass.report.anyAccepted ? .committed(invalidating: [.convergence]) : .unchanged
     }
 
     // MARK: - Staged Joint Pass
@@ -233,21 +122,19 @@ extension ReductionSession {
         return source.dispatchPriority != nil
     }
 
-    /// Searches the pending checkpoint, marking it searched before the encoder's reduction starts so a deadline interruption does not repeat it. An acceptance invalidates every floor, cached rejection, and bind search history, because the property couples the moved values.
-    private mutating func runStagedJointPass() {
+    /// Searches the pending checkpoint, marking it searched before the encoder's reduction starts so a deadline interruption does not repeat it. An acceptance invalidates every floor and restores bind search budgets because the joint search escaped a coupled stall. Cached decisions remain reusable under their existing keys.
+    private mutating func runStagedJointPass() -> PostCycleResult {
         guard deadline.isExpired == false else {
-            return
+            return .unchanged
         }
         let source = stagedJointSource()
         guard let priced = source.nextScope(), case let .stagedJoint(scope) = priced.encoderScope else {
-            return
+            return .unchanged
         }
         exhaustedStagedJoint = StagedJointSource.Checkpoint(base: incumbent.sequence, scope: scope)
         let pass = runPass(.stagedJoint(scope), boundValueFingerprint: nil, usesWarmStarts: false)
         applyPostCycleReport(pass, appliedPasses: max(1, pass.report.searchCounts.count))
-        if pass.report.anyAccepted {
-            invalidateAfterCoupledAcceptance()
-        }
+        return pass.report.anyAccepted ? .committed(invalidating: [.convergence, .searchHistory]) : .unchanged
     }
 
     private func stagedJointSource() -> StagedJointSource {
@@ -273,11 +160,11 @@ extension ReductionSession {
 
     /// Probes improving pivots at non-minimal content and accepts the first that still fails the property, without a checkpoint, because every accepted probe already precedes the sequence. The next cycle minimizes the accepted arm under ordinary scheduling.
     ///
-    /// - Returns: Whether a pivot was accepted.
-    mutating func runImprovingPivotPass() -> Bool {
+    /// - Returns: The recovered failure, for the common post-cycle transition to adopt.
+    mutating func runImprovingPivotPass() -> PostCycleResult {
         let budget = tuning.relaxImprovingProbeBudget
         guard budget > 0 else {
-            return false
+            return .unchanged
         }
         var probesUsed = 0
         var probeCounts = ReductionProbeCounts()
@@ -309,16 +196,15 @@ extension ReductionSession {
                 continue
             }
             probeCounts.recordAcceptance()
-            incumbent = recovered
             if collectStats {
                 stats.relaxImprovingAcceptances += 1
             }
-            rebuildAndUpdateGraph()
             ReductionLog.reducer("relax_round_improving_pivot_accepted", isInstrumented: isInstrumented, metadata: [
-                "seq_len": "\(incumbent.sequence.count)", "probes": "\(probesUsed)",
+                "seq_len": "\(recovered.sequence.count)",
+                "probes": "\(probesUsed)",
             ])
-            return true
+            return .recovered(recovered, isTreeStripped: false)
         }
-        return false
+        return .unchanged
     }
 }

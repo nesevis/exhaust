@@ -32,8 +32,14 @@ struct ReductionDeadlineTests {
             return accepted == false
         }
 
+        runner.gate = BoundValueGate(baseBudget: 64)
+        runner.gate.recordOutcome(fingerprint: 42, accepted: false)
+
         runner.run()
 
+        #expect(runner.anyAccepted == accepted)
+        #expect(runner.gate.isFruitless(42) == (accepted == false))
+        #expect(runner.gate.decayedBudget(fingerprint: 42) == 32)
         #expect(calls == 1)
         #expect(runner.passCounter == 1)
         #expect(runner.stats.reductionProbes == 1)
@@ -44,6 +50,41 @@ struct ReductionDeadlineTests {
         #expect(runner.stats.reductionWasCapped)
         #expect(runner.sources.isEmpty)
         #expect(runner.stats.materializationsBySite[.decoder, default: 0] == (accepted ? 2 : 1))
+    }
+
+    @Test("Relaxation records a directly improving perturbation at expiry without a pass", arguments: [false, true])
+    func relaxAcceptanceWithoutPass(improves: Bool) throws {
+        let clock = ReductionTestClock()
+        let generator = Gen.pick(choices: [
+            (1, Gen.choose(in: UInt64(0) ... 100)),
+            (1, Gen.choose(in: UInt64(200) ... 300)),
+        ])
+        let start: UInt64 = improves ? 250 : 50
+        var calls = 0
+        var runner = try makeRunner(generator, start: start, clock: clock, encoders: [.branchPivot]) { _ in
+            calls += 1
+            clock.expire()
+            return false
+        }
+        runner.gate = BoundValueGate(baseBudget: 64)
+        runner.gate.recordOutcome(fingerprint: 42, accepted: false)
+        runner.gate.markDispatched(42)
+        let initialRebuilds = runner.stats.graphStats.fullGraphRebuilds
+
+        // Call directly so the post-cycle wrapper cannot hide missing bookkeeping on this exit.
+        #expect(runner.runRelaxRound() == improves)
+
+        #expect(calls == 1)
+        #expect(runner.passCounter == 0)
+        #expect(runner.anyAccepted == improves)
+        #expect(runner.anyAcceptanceEverOccurred == improves)
+        #expect(runner.gate.isFruitless(42) == (improves == false))
+        #expect(runner.gate.decayedBudget(fingerprint: 42) == 32)
+        #expect(runner.gate.shouldDispatch(fingerprint: 42) == .skip)
+        #expect(runner.stats.graphStats.fullGraphRebuilds == initialRebuilds + (improves ? 1 : 0))
+        #expect(runner.incumbent.output as? UInt64 == (improves ? 0 : start))
+        #expect(runner.incumbent.sequence == ChoiceSequence(runner.incumbent.tree))
+        #expect(runner.deadline.isExpired)
     }
 
     @Test("A structural acceptance at the deadline rebuilds the committed graph exactly once")

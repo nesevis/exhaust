@@ -406,10 +406,7 @@ extension ReductionSession {
             : .continueDispatching
 
         if report.anyAccepted {
-            anyAccepted = true
-            anyAcceptanceEverOccurred = true
-            // Value changes can make an earlier joint search productive without erasing its budget decay.
-            gate.clearFruitless()
+            recordAcceptance()
         }
         return action
     }

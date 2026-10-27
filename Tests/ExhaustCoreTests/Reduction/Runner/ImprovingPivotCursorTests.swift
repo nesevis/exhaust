@@ -85,9 +85,9 @@ struct ImprovingPivotCursorTests {
         runner.rejectCache.record(rejected, outcome: .materializationRejected(materializationAttempts: 1))
         #expect(runner.hasUnprobedImprovingPivot)
 
-        let accepted = runner.runImprovingPivotPass()
+        _ = runner.runPostCycleActions([.improvingPivots])
 
-        #expect(accepted == false)
+        #expect(runner.anyAccepted == false)
         #expect(propertyCalls == 1)
         #expect(runner.stats.relaxImprovingProbes == 1)
         #expect(runner.stats.reductionProbes == 1)
