@@ -176,8 +176,10 @@ extension Materializer {
 extension Materializer.Mode {
     var internalMode: Materializer.InternalMode {
         switch self {
-            case .exact: .exact
-            case .guided: .guided
+            case .exact:
+                .exact
+            case .guided:
+                .guided
         }
     }
 }
@@ -267,9 +269,13 @@ extension Materializer {
             case let .impure(.sequence(lengthGen, elementGen, elementBatch), continuation):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handleSequence(
-                    lengthGen: lengthGen, elementGen: elementGen, elementBatch: elementBatch,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
+                    lengthGenerator: lengthGen,
+                    elementGenerator: elementGen,
+                    elementBatch: elementBatch,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                    calleeFallback: calleeFallback,
                     continuationFallback: continuationFallback
                 )
 
@@ -446,9 +452,7 @@ package extension Materializer {
         var flatOutput: ChoiceSequence?
         /// Suppresses flat emission for sub-walks whose trees the tree path discards: a sequence's generate-mode length walk and the metamorphic inner walk (which bulk-appends its flattened real tree instead).
         var flatEmissionSuspended: Bool = false
-        /// Accumulates per-coordinate resolution tier data for guided mode.
-        /// Accumulates per-coordinate resolution tier data for guided mode.
-        /// `nil` for exact mode and pure-generate mode.
+        /// Resolution diagnostics and source provenance, when collection is enabled.
         var decodingReport: DecodingReport?
         /// Per-fingerprint filter predicate observations accumulated during this materialization.
         var filterObservations: [UInt64: FilterObservation] = [:]
@@ -464,6 +468,11 @@ package extension Materializer {
         /// Called for each committed pick whose branch an exact replay reads from the prefix. Backtrack picks and unselected branches are not reported.
         var observePrefixPick: ((PrefixPickObservation) -> Void)?
 
+        /// Records scalar or structural provenance through the report; unobserved walks cannot certify cache reuse.
+        mutating func recordResolution(_ resolution: DecodingReport.Resolution) {
+            decodingReport?.recordResolution(resolution)
+        }
+
         /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
         @inline(__always)
         mutating func enterReseedIfTargeted() -> Bool {
@@ -474,6 +483,7 @@ package extension Materializer {
                 return false
             }
             cursor.jump(past: reseedRanges[nextReseedIndex])
+            recordResolution(.reseed)
             nextReseedIndex += 1
             hasPendingReseed = nextReseedIndex < reseedRanges.count
             cursor.suspended = true
@@ -511,13 +521,21 @@ package extension Materializer {
             )
         }
 
+        /// Restores fidelity counts without losing sources used by the discarded attempt. Callers also record the reason dependencies remain uncertain.
+        mutating func restoreDecodingReport(_ report: DecodingReport?) {
+            let discardedSources = decodingReport?.sources ?? .unknown
+            decodingReport = report
+            decodingReport?.record(sources: discardedSources)
+        }
+
         mutating func restore(_ snapshot: AuditionSnapshot) {
             cursor.rewind(to: snapshot.cursor)
             if let emitted = flatOutput?.count, emitted > snapshot.flatCount {
                 flatOutput!.removeLast(emitted - snapshot.flatCount)
             }
             filterObservations = snapshot.filterObservations
-            decodingReport = snapshot.decodingReport
+            restoreDecodingReport(snapshot.decodingReport)
+            recordResolution(.audition)
         }
     }
 }
@@ -525,7 +543,7 @@ package extension Materializer {
 // MARK: - Audition Snapshot
 
 extension Materializer {
-    /// The context state a failed backtrack arm must not leave behind: what it read from the prefix, what it emitted to the flat buffer, and what it observed. The PRNG is excluded so the next draw is independent of the failed attempt.
+    /// Captures cursor position, emissions, observations, and fidelity counts for rollback after a failed arm. Source provenance survives restoration because discarded attempts can affect the selected arm. The PRNG is excluded so a retry advances instead of repeating the failed attempt's draws.
     struct AuditionSnapshot {
         let cursor: CursorCheckpoint
         let flatCount: Int

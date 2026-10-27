@@ -15,23 +15,71 @@ package enum ResolutionTier: UInt8, Sendable {
 
 /// Diagnostics collected during a single materialization pass.
 ///
-/// Tracks per-coordinate resolution tier counts (how closely guided materialization preserved the original value assignment) and per-fingerprint filter predicate observations. Resolution tier data is meaningful for guided mode; filter observations are populated in both exact and guided modes.
+/// Source provenance and filter observations are collected in both exact and guided modes. Per-coordinate resolution tier counts describe guided fidelity only: they track the surviving attempt, while sources retain dependencies from discarded attempts as well.
 package struct DecodingReport: Sendable {
+    /// Accumulates dependencies across the whole walk, even when fidelity counts are rolled back after a discarded attempt.
+    package private(set) var sources: MaterializationSources
+
+    /// Unobserved reports start with unknown dependencies; a materializer that records resolutions starts with an empty set.
+    init(sources: MaterializationSources = .unknown) {
+        self.sources = sources
+    }
+
+    /// Separates scalar fidelity accounting from structural dependencies and conservative uncertainty.
+    enum Resolution {
+        case scalar(ResolutionTier)
+        /// Structural choices contribute provenance without increasing the scalar count.
+        case branch(MaterializationSources)
+        case length(MaterializationSources)
+        case zipBoundary(MaterializationSources)
+        /// Screening pins depth to policy's maximum rather than reading the prefix.
+        case maximumScreeningDepth
+        /// Discarded arms can influence the surviving branch and PRNG stream.
+        case audition
+        /// A rejected attempt consumes randomness before the surviving attempt.
+        case filterRetry
+        /// Explicit reseeding deliberately ignores part of the prefix.
+        case reseed
+    }
+
+    /// Records structural inputs and uncertainty alongside scalar provenance, so fidelity alone never certifies cache reuse.
+    mutating func recordResolution(_ resolution: Resolution) {
+        switch resolution {
+            case let .scalar(tier):
+                record(tier: tier)
+            case let .branch(sources), let .length(sources), let .zipBoundary(sources):
+                record(sources: sources)
+            case .maximumScreeningDepth:
+                record(sources: .screeningPolicy)
+            case .audition, .filterRetry, .reseed:
+                record(sources: .unknown)
+        }
+    }
+
+    /// Keeps dependencies monotonic even when a discarded attempt's scalar counts are restored.
+    mutating func record(sources: MaterializationSources) {
+        self.sources.formUnion(sources)
+    }
+
     private var exactCarryForwardCount = 0
     private var fallbackTreeCount = 0
     private var prngCount = 0
     private var reseededCount = 0
 
-    /// Records that one coordinate was resolved at the given tier.
+    /// Records each scalar's source as well as its fidelity tier; reseeded draws remain distinguishable in fidelity diagnostics.
     mutating func record(tier: ResolutionTier) {
         switch tier {
             case .exactCarryForward:
+                sources.insert(.prefix)
                 exactCarryForwardCount += 1
             case .fallbackTree:
+                sources.insert(.fallbackTree)
                 fallbackTreeCount += 1
             case .prng:
+                sources.insert(.prng)
                 prngCount += 1
             case .reseeded:
+                sources.insert(.prng)
                 reseededCount += 1
         }
     }

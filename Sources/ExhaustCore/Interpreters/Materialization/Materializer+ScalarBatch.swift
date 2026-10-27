@@ -73,6 +73,9 @@ extension Materializer {
             return nil
         }
 
+        if count > 0 {
+            context.decodingReport?.record(sources: .prefix)
+        }
         guard min != 0 || max != UInt64.max else {
             return bits
         }
