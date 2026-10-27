@@ -1,6 +1,6 @@
 /// Tracks inputs that can influence a materialized value or its active structure, including discarded attempts. Generator definitions and fixed decoding settings are implicit; advancing the PRNG without using its output does not add a dependency.
 ///
-/// Only `.prefix` alone certifies a guided property pass for reuse across incumbents. An empty set records no observed inputs; `.unknown` means dependencies were not fully established.
+/// Only `.prefix` alone certifies a guided property pass for reuse across incumbents. An empty set records no observed inputs and deliberately does not certify cross-incumbent reuse; `.unknown` means dependencies were not fully established.
 package struct MaterializationSources: OptionSet, Sendable {
     package let rawValue: UInt8
 

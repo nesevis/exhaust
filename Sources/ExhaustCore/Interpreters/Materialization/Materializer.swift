@@ -468,9 +468,9 @@ package extension Materializer {
         /// Called for each committed pick whose branch an exact replay reads from the prefix. Backtrack picks and unselected branches are not reported.
         var observePrefixPick: ((PrefixPickObservation) -> Void)?
 
-        /// Records scalar or structural provenance through the report; unobserved walks cannot certify cache reuse.
-        mutating func recordResolution(_ resolution: DecodingReport.Resolution) {
-            decodingReport?.recordResolution(resolution)
+        /// Adds dependencies without changing scalar fidelity counts; absent reports remain uncertified.
+        mutating func record(_ sources: MaterializationSources) {
+            decodingReport?.record(sources: sources)
         }
 
         /// Enters the reseed scope when the cursor stands at the start of the next marked span: jumps the prefix past it, advances to the next span, and suspends the cursor. Returns whether it entered; the caller clears `cursor.suspended` once the site's walk is done. Called only where a site is about to be materialised, so a marker-skipping start match at an ancestor never takes the reseed.
@@ -483,7 +483,8 @@ package extension Materializer {
                 return false
             }
             cursor.jump(past: reseedRanges[nextReseedIndex])
-            recordResolution(.reseed)
+            // Reseeding deliberately bypasses prefix data, so retain uncertainty even if no scalar is drawn.
+            record(.unknown)
             nextReseedIndex += 1
             hasPendingReseed = nextReseedIndex < reseedRanges.count
             cursor.suspended = true
@@ -521,11 +522,11 @@ package extension Materializer {
             )
         }
 
-        /// Restores fidelity counts without losing sources used by the discarded attempt. Callers also record the reason dependencies remain uncertain.
+        /// Restores fidelity counts and retains discarded sources for diagnostics. Their union does not certify independence from discarded attempts, so rollback also records `.unknown`.
         mutating func restoreDecodingReport(_ report: DecodingReport?) {
             let discardedSources = decodingReport?.sources ?? .unknown
             decodingReport = report
-            decodingReport?.record(sources: discardedSources)
+            record(discardedSources.union(.unknown))
         }
 
         mutating func restore(_ snapshot: AuditionSnapshot) {
@@ -535,7 +536,6 @@ package extension Materializer {
             }
             filterObservations = snapshot.filterObservations
             restoreDecodingReport(snapshot.decodingReport)
-            recordResolution(.audition)
         }
     }
 }

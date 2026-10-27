@@ -236,7 +236,7 @@ package struct ReductionSession {
     // MARK: - Cycle
 
     /// Marks progress and reopens fruitless bind searches without erasing their budget decay. Post-cycle stall renewal and broader invalidation are separate policies.
-    mutating func recordAcceptance() {
+    mutating func markProgress() {
         anyAccepted = true
         anyAcceptanceEverOccurred = true
         gate.clearFruitless()

@@ -28,7 +28,7 @@ extension Materializer {
 
         switch (context.cursor.tryConsumeSequenceOpen(), context.mode, elementFallbacks) {
             case let (sequenceInfo?, .exact, _):
-                context.recordResolution(.length(.prefix))
+                context.record(.prefix)
                 let prefixCount = UInt64(sequenceInfo.elementCount)
                 lengthMetadata = try extractLengthMetadata(lengthGenerator)
                 if lengthMetadata.isRangeExplicit {
@@ -40,7 +40,7 @@ extension Materializer {
                 }
                 length = prefixCount
             case let (sequenceInfo?, _, _) where sequenceInfo.isLengthExplicit:
-                context.recordResolution(.length(.prefix))
+                context.record(.prefix)
                 // Fixed-length generators always use their declared length; variable-length generators preserve the prefix count within their range.
                 let prefixCount = UInt64(sequenceInfo.elementCount)
                 lengthMetadata = try extractLengthMetadata(lengthGenerator)
@@ -48,20 +48,21 @@ extension Materializer {
                     Swift.min(Swift.max(prefixCount, range.lowerBound), range.upperBound)
                 } ?? prefixCount
             case let (sequenceInfo?, _, _):
-                context.recordResolution(.length(.prefix))
+                context.record(.prefix)
                 length = UInt64(sequenceInfo.elementCount)
                 lengthMetadata = ChoiceMetadata(validRange: nil, isRangeExplicit: false)
             case (nil, .exact, _):
                 throw RejectionError()
             case let (nil, _, elementFallbacks?):
-                context.recordResolution(.length(.fallbackTree))
+                context.record(.fallbackTree)
                 let resolvedLength = UInt64(elementFallbacks.count)
                 lengthMetadata = try extractLengthMetadata(lengthGenerator)
                 length = lengthMetadata.validRange.map { range in
                     Swift.min(Swift.max(resolvedLength, range.lowerBound), range.upperBound)
                 } ?? resolvedLength
             case (nil, _, nil):
-                context.recordResolution(.length(.unknown))
+                // A fresh length walk has no replay boundary certifying the resulting structure.
+                context.record(.unknown)
                 let erasedLengthGenerator = lengthGenerator.erase()
                 // The length walk's tree is discarded and flatten never contains length entries, so flat emission is suspended around it.
                 let savedSuspension = context.flatEmissionSuspended
@@ -315,7 +316,7 @@ extension Materializer {
             default:
                 .unknown
         }
-        context.recordResolution(.zipBoundary(boundarySources))
+        context.record(boundarySources)
 
         let calleeStart = context.flatCount
         context.emitFlat(.zip(true))

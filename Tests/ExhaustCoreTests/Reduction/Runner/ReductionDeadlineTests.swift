@@ -71,8 +71,8 @@ struct ReductionDeadlineTests {
         runner.gate.markDispatched(42)
         let initialRebuilds = runner.stats.graphStats.fullGraphRebuilds
 
-        // Call directly so the post-cycle wrapper cannot hide missing bookkeeping on this exit.
-        #expect(runner.runRelaxRound() == improves)
+        // The common post-cycle transition owns progress even when relaxation exits before running a pass.
+        #expect(runner.runPostCycleActions([.relaxRound]) == .completed)
 
         #expect(calls == 1)
         #expect(runner.passCounter == 0)

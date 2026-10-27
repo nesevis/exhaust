@@ -101,7 +101,6 @@ extension ReductionSession {
             if improved {
                 rebuildAndUpdateGraph()
                 graphIsStripped = false
-                recordAcceptance()
             } else {
                 incumbent = checkpoint.incumbent
             }

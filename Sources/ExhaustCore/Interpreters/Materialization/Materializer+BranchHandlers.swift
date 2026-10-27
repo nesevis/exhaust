@@ -28,7 +28,7 @@ extension Materializer {
                 guard let prefixBranch = context.cursor.tryConsumeBranch() else {
                     throw RejectionError()
                 }
-                context.recordResolution(.branch(.prefix))
+                context.record(.prefix)
                 let exactIndex = Int(prefixBranch.id)
                 selectedChoice = exactIndex < choices.count ? choices[exactIndex] : nil
                 if let observePrefixPick = context.observePrefixPick, exactIndex < choices.count {
@@ -42,15 +42,15 @@ extension Materializer {
             case .guided:
                 switch (context.cursor.tryConsumeBranch(), fallbackBranch) {
                     case let (prefixBranch?, _):
-                        context.recordResolution(.branch(.prefix))
+                        context.record(.prefix)
                         let guidedIndex = Int(prefixBranch.id)
                         selectedChoice = guidedIndex < choices.count ? choices[guidedIndex] : nil
                     case let (nil, fallbackBranch?):
-                        context.recordResolution(.branch(.fallbackTree))
+                        context.record(.fallbackTree)
                         let fallbackIndex = Int(fallbackBranch.id)
                         selectedChoice = fallbackIndex < choices.count ? choices[fallbackIndex] : nil
                     case (nil, nil):
-                        context.recordResolution(.branch(.prng))
+                        context.record(.prng)
                         selectedChoice = WeightedPickSelection.draw(
                             from: choices,
                             totalWeight: totalWeight,
@@ -59,7 +59,7 @@ extension Materializer {
                 }
 
             case .generate:
-                context.recordResolution(.branch(.prng))
+                context.record(.prng)
                 selectedChoice = WeightedPickSelection.draw(
                     from: choices,
                     totalWeight: totalWeight,
@@ -67,7 +67,8 @@ extension Materializer {
                 )
 
             case .minimize:
-                context.recordResolution(.branch(.unknown))
+                // Minimization chooses an arm by policy rather than replaying a selector.
+                context.record(.unknown)
                 selectedChoice = choices.first
         }
 
@@ -285,7 +286,7 @@ extension Materializer {
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
         // Auditioning can discard prefix choices and select a different arm. Keep its results scoped to their fallback context.
-        context.recordResolution(.audition)
+        context.record(.unknown)
         let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
         // Exact resolution uses the jump seed only to materialize alternatives. Guided resolution still consumes it when alternatives are omitted because later PRNG fallbacks observe the stream position.
@@ -301,7 +302,7 @@ extension Materializer {
                 guard let prefixBranch = context.cursor.tryConsumeBranch() else {
                     throw RejectionError()
                 }
-                context.recordResolution(.branch(.prefix))
+                context.record(.prefix)
                 let exactIndex = Int(prefixBranch.id)
                 guard exactIndex < choices.count else {
                     return nil
@@ -311,14 +312,14 @@ extension Materializer {
             case .guided:
                 switch (context.cursor.tryConsumeBranch(), fallbackBranch) {
                     case let (prefixBranch?, _):
-                        context.recordResolution(.branch(.prefix))
+                        context.record(.prefix)
                         let guidedIndex = Int(prefixBranch.id)
                         guard guidedIndex < choices.count else {
                             return nil
                         }
                         pendingArm = choices[guidedIndex]
                     case let (nil, fallbackBranch?):
-                        context.recordResolution(.branch(.fallbackTree))
+                        context.record(.fallbackTree)
                         let fallbackIndex = Int(fallbackBranch.id)
                         guard fallbackIndex < choices.count else {
                             return nil
@@ -350,7 +351,7 @@ extension Materializer {
                             arm = try audition.nextInOrder()
                                 ?? BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: false)
                         case .guided, .generate:
-                            context.recordResolution(.branch(.prng))
+                            context.record(.prng)
                             arm = try audition.drawNext(using: &context.prng)?.arm
                                 ?? BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: false)
                     }

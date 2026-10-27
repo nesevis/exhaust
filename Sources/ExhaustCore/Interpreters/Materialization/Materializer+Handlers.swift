@@ -118,7 +118,7 @@ extension Materializer {
                 guard let prefixValue = context.cursor.tryConsumeValue(expecting: tag) else {
                     throw RejectionError()
                 }
-                context.decodingReport?.record(sources: .prefix)
+                context.record(.prefix)
                 let bp = prefixValue.choice.bitPattern64
                 if context.boundDepth > 0 || isRangeExplicit == false {
                     // Bound value or non-explicit range: clamp to fresh range.
@@ -141,7 +141,7 @@ extension Materializer {
 
             case (.guided, true):
                 // Screening forces the maximum feasible depth instead of consuming the prefix, so this walk cannot certify prefix-only replay.
-                context.recordResolution(.maximumScreeningDepth)
+                context.record(.screeningPolicy)
                 let effectiveRange = scaling.map { scaling in
                     Gen.applyScaling(
                         min: min,
@@ -161,15 +161,15 @@ extension Materializer {
                     if randomBits == bp {
                         reusedChoice = prefixValue.choice
                     }
-                    context.recordResolution(.scalar(.exactCarryForward))
+                    context.decodingReport?.record(tier: .exactCarryForward)
                 } else if reseeding == false, let calleeFallback, case let .choice(value, _) = calleeFallback {
                     // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(value.bitPattern64, min: min, max: max)
-                    context.recordResolution(.scalar(.fallbackTree))
+                    context.decodingReport?.record(tier: .fallbackTree)
                 } else {
                     randomBits = context.prng.next(in: min ... max)
                     let tier: ResolutionTier = context.cursor.suspended ? .reseeded : .prng
-                    context.recordResolution(.scalar(tier))
+                    context.decodingReport?.record(tier: tier)
                 }
 
             case (.generate, _):
@@ -189,7 +189,7 @@ extension Materializer {
                         randomBits = effective.lowerBound
                     default:
                         randomBits = context.prng.next(in: effective)
-                        context.decodingReport?.record(sources: .prng)
+                        context.record(.prng)
                 }
 
             case (.minimize, _):
@@ -516,7 +516,6 @@ extension Materializer {
             }
             // The failed attempt's tier counts would misstate the surviving value's provenance.
             context.restoreDecodingReport(reportBeforeAttempt)
-            context.recordResolution(.filterRetry)
             // Drop the failed attempt's emissions so the retry re-emits from the same index.
             context.flatOutput?.removeSubrange(calleeStart...)
         }

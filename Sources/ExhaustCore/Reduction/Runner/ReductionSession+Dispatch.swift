@@ -406,7 +406,7 @@ extension ReductionSession {
             : .continueDispatching
 
         if report.anyAccepted {
-            recordAcceptance()
+            markProgress()
         }
         return action
     }

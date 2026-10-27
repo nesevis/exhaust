@@ -10,15 +10,17 @@ extension ReductionSession {
     enum PostCycleResult {
         case unchanged
         case recovered(Counterexample, isTreeStripped: Bool)
-        case committed(invalidating: Set<PostCycleInvalidation>)
+        case committed(invalidating: PostCycleInvalidations)
     }
 
     /// Invalidates evidence beyond the fruitless verdicts cleared by every acceptance.
-    enum PostCycleInvalidation: Hashable {
+    struct PostCycleInvalidations: OptionSet {
+        let rawValue: UInt8
+
         /// Drops floors whose validity may depend on the jointly changed values.
-        case convergence
+        static let convergence = Self(rawValue: 1 << 0)
         /// Restores bind budgets after escaping a coupled stall.
-        case searchHistory
+        static let searchHistory = Self(rawValue: 1 << 1)
     }
 
     /// Runs the scheduled actions in order against the current graph, stopping at the deadline. A prior acceptance skips relaxation because the improved counterexample has not yet stalled.
@@ -59,7 +61,7 @@ extension ReductionSession {
 
     /// Adopts a recovered witness even when its property call expired the deadline, and renews the budget for ordinary reduction. Applies only the additional invalidation reported by the accepting action; cache entries retain their decision and incumbent keys.
     private mutating func applyPostCycleResult(_ result: PostCycleResult) {
-        let invalidations: Set<PostCycleInvalidation>
+        let invalidations: PostCycleInvalidations
         switch result {
             case .unchanged:
                 return
@@ -71,15 +73,13 @@ extension ReductionSession {
             case let .committed(invalidating):
                 invalidations = invalidating
         }
-        recordAcceptance()
+        markProgress()
         stallBudget = maxStalls
-        for invalidation in invalidations {
-            switch invalidation {
-                case .convergence:
-                    graph.convergenceStore.removeAll()
-                case .searchHistory:
-                    gate.invalidateSearchHistory()
-            }
+        if invalidations.contains(.convergence) {
+            graph.convergenceStore.removeAll()
+        }
+        if invalidations.contains(.searchHistory) {
+            gate.invalidateSearchHistory()
         }
     }
 

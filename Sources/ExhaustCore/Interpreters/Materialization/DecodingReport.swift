@@ -25,37 +25,6 @@ package struct DecodingReport: Sendable {
         self.sources = sources
     }
 
-    /// Separates scalar fidelity accounting from structural dependencies and conservative uncertainty.
-    enum Resolution {
-        case scalar(ResolutionTier)
-        /// Structural choices contribute provenance without increasing the scalar count.
-        case branch(MaterializationSources)
-        case length(MaterializationSources)
-        case zipBoundary(MaterializationSources)
-        /// Screening pins depth to policy's maximum rather than reading the prefix.
-        case maximumScreeningDepth
-        /// Discarded arms can influence the surviving branch and PRNG stream.
-        case audition
-        /// A rejected attempt consumes randomness before the surviving attempt.
-        case filterRetry
-        /// Explicit reseeding deliberately ignores part of the prefix.
-        case reseed
-    }
-
-    /// Records structural inputs and uncertainty alongside scalar provenance, so fidelity alone never certifies cache reuse.
-    mutating func recordResolution(_ resolution: Resolution) {
-        switch resolution {
-            case let .scalar(tier):
-                record(tier: tier)
-            case let .branch(sources), let .length(sources), let .zipBoundary(sources):
-                record(sources: sources)
-            case .maximumScreeningDepth:
-                record(sources: .screeningPolicy)
-            case .audition, .filterRetry, .reseed:
-                record(sources: .unknown)
-        }
-    }
-
     /// Keeps dependencies monotonic even when a discarded attempt's scalar counts are restored.
     mutating func record(sources: MaterializationSources) {
         self.sources.formUnion(sources)

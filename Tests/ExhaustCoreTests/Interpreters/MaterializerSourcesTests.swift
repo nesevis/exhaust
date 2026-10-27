@@ -129,10 +129,10 @@ struct MaterializerSourcesTests {
     @Test("Audition rollback restores scalar counts while retaining discarded sources")
     func rollbackKeepsDependency() throws {
         var context = Materializer.Context(prefix: .init(ChoiceSequence()), mode: .guided(seed: 42, fallbackTree: nil))
-        context.recordResolution(.scalar(.exactCarryForward))
+        context.decodingReport?.record(tier: .exactCarryForward)
         let snapshot = context.auditionSnapshot()
-        context.recordResolution(.scalar(.fallbackTree))
-        context.recordResolution(.scalar(.prng))
+        context.decodingReport?.record(tier: .fallbackTree)
+        context.decodingReport?.record(tier: .prng)
 
         context.restore(snapshot)
 
