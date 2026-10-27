@@ -161,7 +161,7 @@ extension FuzzRunner {
 
     /// Mixes an operand, its parent, and the tag group into one energy key.
     package static func comparandKey(word: UInt64, parentHash: UInt64, tag: TypeTag) -> UInt64 {
-        var mixed = word &* 0x9E37_79B9_7F4A_7C15
+        var mixed = word &* Xoshiro256.goldenRatioConstant
         mixed ^= parentHash &* 0xBF58_476D_1CE4_E5B9
         mixed ^= UInt64(tag.rawValue) &* 0x94D0_49BB_1331_11EB
         mixed ^= mixed >> 31

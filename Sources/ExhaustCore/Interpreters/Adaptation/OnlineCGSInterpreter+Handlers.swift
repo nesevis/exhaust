@@ -656,7 +656,7 @@ extension OnlineCGSInterpreter {
         let choiceCount = choices.count
         let minDeadObservations: UInt64 = 30
         // Recursive generators (BST, AVL) reuse the same source-level pick at every depth, producing identical fingerprints. Without depth scoping, vocabulary elimination at the root (where "leaf" is always dead) would kill "leaf" at inner depths too — but inner depths NEED leaves for validity.
-        let depthOffset = UInt64(derivativeContext.depth) &* 0x9E37_79B9_7F4A_7C15
+        let depthOffset = UInt64(derivativeContext.depth) &* Xoshiro256.goldenRatioConstant
 
         let liveChoiceIndices = liveIndices(
             for: choices,

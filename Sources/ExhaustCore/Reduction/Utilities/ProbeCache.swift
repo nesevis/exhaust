@@ -107,12 +107,12 @@ struct ProbeCache: ExpressibleByArrayLiteral {
                 break
             case let .numericPair(pair):
                 salt ^= finalize(0x10 &+ decisionSeed)
-                salt ^= finalize(UInt64(pair.source.position) &* 0x9E37_79B9_7F4A_7C15 &+ 1)
-                salt ^= finalize(UInt64(pair.sink.position) &* 0x9E37_79B9_7F4A_7C15 &+ 2)
+                salt ^= finalize(UInt64(pair.source.position) &* Xoshiro256.goldenRatioConstant &+ 1)
+                salt ^= finalize(UInt64(pair.sink.position) &* Xoshiro256.goldenRatioConstant &+ 2)
             case let .numericJoint(leaves):
                 salt ^= finalize(0x20 &+ decisionSeed)
                 for (index, leaf) in leaves.enumerated() {
-                    salt ^= finalize(UInt64(leaf.position) &* 0x9E37_79B9_7F4A_7C15 &+ UInt64(index) &+ 3)
+                    salt ^= finalize(UInt64(leaf.position) &* Xoshiro256.goldenRatioConstant &+ UInt64(index) &+ 3)
                 }
         }
         return salt
