@@ -5,11 +5,11 @@ import Testing
 struct ReducerRegressionTests {
     // MARK: - Convergence Confirmation
 
-    @Test("Confirmation clears a stale floor on a leaf below its target", arguments: [
+    @Test("Confirmation adopts a failure closer to the target and restarts reduction", arguments: [
         ConfirmationCase(start: -5, failsAtOrBelow: -4),
         ConfirmationCase(start: 5, failsAtOrAbove: 4),
     ])
-    func confirmationClearsStaleFloorTowardsTarget(_ confirmation: ConfirmationCase) throws {
+    func confirmationAdoptsFailureTowardsTarget(_ confirmation: ConfirmationCase) throws {
         let generator = Gen.choose(in: Int64(-100) ... 100)
         let tree = try #require(try Interpreters.reflect(generator, with: confirmation.start))
         var runner = ReductionSession(
@@ -28,13 +28,17 @@ struct ReducerRegressionTests {
             cycle: 0
         )
 
-        let clearedStaleFloor = runner.confirmConvergence()
+        runner.stallBudget = 0
+        _ = runner.runPostCycleActions([.confirmConvergence])
 
-        #expect(clearedStaleFloor)
+        #expect(runner.anyAccepted)
+        #expect(runner.stallBudget == 1)
         #expect(runner.graph.convergenceStore[leafNodeID] == nil)
-        #expect(runner.incumbent.output as? Int64 == confirmation.start)
-        #expect(runner.incumbent.sequence == ChoiceSequence(tree))
-        #expect(runner.incumbentHash == ZobristHash.hash(of: ChoiceSequence(tree)))
+        let expected = confirmation.start < 0 ? confirmation.start + 1 : confirmation.start - 1
+        #expect(runner.incumbent.output as? Int64 == expected)
+        #expect(runner.incumbent.sequence == ChoiceSequence(runner.incumbent.tree))
+        #expect(runner.incumbent.sequence.shortLexPrecedes(ChoiceSequence(tree)))
+        #expect(runner.incumbentHash == ZobristHash.hash(of: runner.incumbent.sequence))
         #expect(runner.stats.reductionProbes == 1)
         #expect(runner.stats.reductionProbesAccepted == 1)
     }
@@ -79,11 +83,8 @@ struct ReducerRegressionTests {
 
     // MARK: - Probe Cache
 
-    @Test("A numeric admission's rejection does not turn away the same candidate under standard admission when the key records the decision", arguments: [
-        ProbeCacheKeying.decision,
-        .decisionAndIncumbent,
-    ])
-    func admissionRejectionDoesNotAnswerForStandardAdmission(_ keying: ProbeCacheKeying) throws {
+    @Test("The default cache isolates numeric admission from standard admission")
+    func admissionRejectionDoesNotAnswerForStandardAdmission() throws {
         let generator = Gen.choose(in: UInt64(0) ... 10)._bound(
             forward: { controller in Gen.zip(Gen.just(controller), Gen.choose(in: UInt64(0) ... controller)) },
             backward: { $0.0 }
@@ -98,7 +99,7 @@ struct ReducerRegressionTests {
             incumbent: Counterexample(sequence: base, tree: tree, output: (UInt64(10), UInt64(10))),
             incumbentHash: ZobristHash.hash(of: base),
             graph: ChoiceGraph.build(from: tree),
-            rejectCache: ProbeCache(keying: keying),
+            rejectCache: ProbeCache(),
             decoder: ReductionDecoder(generator: generator.erase(), property: { _ in false }, probeWrapper: nil, hasBind: true),
             encoder: ValueSearchEncoder.self
         )
@@ -112,6 +113,8 @@ struct ReducerRegressionTests {
         let standard = Reducer.evaluateAndCommit(.eager(mutation: .leafValues([]), admission: .standard), configuration: configuration, context: &context)
         #expect(context.report.counts.rejectedByCache == 0)
         #expect(standard.isAccepted)
+        let output = try #require(context.incumbent.output as? (UInt64, UInt64))
+        #expect(output == (5, 5))
     }
 
     // MARK: - Covering Rows
@@ -181,8 +184,15 @@ struct ReducerRegressionTests {
             var candidates = RelaxCandidateCursor(sequence: runner.incumbent.sequence, graph: runner.graph, limit: 1, isEncoderEnabled: runner.isEncoderEnabled)
             let next = candidates.next()
             let candidate = try #require(next)
-            let key = runner.rejectCache.key(probeHash: ZobristHash.hash(of: candidate), decision: ProbeDecision(isGuided: false), incumbentHash: runner.incumbentHash)
-            runner.rejectCache.insert(key)
+            let lookup = runner.rejectCache.lookup(
+                probeHash: ZobristHash.hash(of: candidate),
+                decision: ProbeDecision(isGuided: false),
+                incumbentHash: runner.incumbentHash
+            )
+            runner.rejectCache.record(
+                lookup,
+                outcome: .propertyPassed(materializationAttempts: 1, sources: .unknown)
+            )
         }
 
         // The substitution perturbation decodes with picks materialized, even if ordinary reduction cached its rejection; exploitation then removes an element, whose decoding leaves picks unmaterialized and rebuilds the graph from that tree.

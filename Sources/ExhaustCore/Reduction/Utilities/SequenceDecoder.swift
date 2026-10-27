@@ -4,7 +4,7 @@ enum SequenceDecodingOutcome {
     case materializationRejected(materializationAttempts: Int)
 
     /// Materialization produced a value for which the property held.
-    case propertyPassed(materializationAttempts: Int)
+    case propertyPassed(materializationAttempts: Int, sources: MaterializationSources)
 
     /// Materialization produced a value for which the property failed. The reduction is `nil` when a later materialization or the decoder's admission check rejected the proposal. A nonnil reduction still needs the producer's admission checks.
     case propertyFailed(
@@ -16,7 +16,7 @@ enum SequenceDecodingOutcome {
     var materializationAttempts: Int {
         switch self {
             case let .materializationRejected(materializationAttempts),
-                 let .propertyPassed(materializationAttempts),
+                 let .propertyPassed(materializationAttempts, _),
                  let .propertyFailed(_, materializationAttempts):
                 materializationAttempts
         }
@@ -120,7 +120,7 @@ enum SequenceDecoder {
         func evaluated(_ output: Any, _ decodingReport: DecodingReport?) -> SequenceDecodingOutcome {
             mergeFilterObservations(from: decodingReport, into: &filterObservations)
             guard property(output) == false else {
-                return .propertyPassed(materializationAttempts: 1)
+                return .propertyPassed(materializationAttempts: 1, sources: decodingReport?.sources ?? .unknown)
             }
 
             switch Materializer.materializeAny(
@@ -208,9 +208,15 @@ enum SequenceDecoder {
                     logDecoderRejection(
                         reason: "property_passed",
                         probeHash: precomputedHash,
-                        extra: ["output": String(describing: output)]
+                        extra: [
+                            "output": String(describing: output),
+                            "sources": "\(decodingReport?.sources ?? .unknown)",
+                        ]
                     )
-                    return .propertyPassed(materializationAttempts: 1)
+                    return .propertyPassed(
+                        materializationAttempts: 1,
+                        sources: decodingReport?.sources ?? .unknown
+                    )
                 }
 
                 switch Materializer.materializeAny(

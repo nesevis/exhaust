@@ -21,7 +21,7 @@ struct QueryReuseParityTests {
 
         let scopes = PermutationQuery.build(graph: graph)
         #expect(scopes.count == 1)
-        #expect(scopes[0].swappableGroups[0].count == 3)
+        #expect(scopes[0].siblings.count == 3)
     }
 
     @Test("NodeShapeKey separates sequences by element count and isolates empty sequences")
@@ -44,8 +44,7 @@ struct QueryReuseParityTests {
 
         let scopes = PermutationQuery.build(graph: graph)
         #expect(scopes.count == 1)
-        #expect(scopes[0].swappableGroups.count == 1)
-        #expect(scopes[0].swappableGroups[0].count == 2)
+        #expect(scopes[0].siblings.count == 2)
     }
 
     @Test("Deletable set from RemovalQuery matches the length-constraint rule on a multi-sequence tree")

@@ -15,7 +15,7 @@ package struct SwarmMask: Sendable {
 
     /// The mask for one derivation index: the root seed and index mix through SplitMix64 so consecutive indices share no structure. The mutation loop passes a per-candidate index, so every candidate gets a fresh weighting.
     package static func forIndex(_ index: Int, rootSeed: UInt64) -> SwarmMask {
-        SwarmMask(epochSeed: splitMix64(rootSeed &+ 0x9E37_79B9_7F4A_7C15 &* UInt64(index &+ 1)))
+        SwarmMask(epochSeed: splitMix64(rootSeed &+ Xoshiro256.goldenRatioConstant &* UInt64(index &+ 1)))
     }
 
     /// Returns a per-branch activation weight in [0, 1) at a pick site, or nil when the site is unweighted. A continuous weight rather than a binary allow-or-exclude, so mutated children reach command mixes at specific ratios rather than include-or-exclude subsets.
@@ -170,7 +170,7 @@ package struct SwarmMask: Sendable {
 
     /// SplitMix64: the standard 64-bit finalizer, here the whole derivation chain from seed to per-site mask bits.
     private static func splitMix64(_ state: UInt64) -> UInt64 {
-        var z = state &+ 0x9E37_79B9_7F4A_7C15
+        var z = state &+ Xoshiro256.goldenRatioConstant
         z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return z ^ (z >> 31)

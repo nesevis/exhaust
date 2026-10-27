@@ -309,26 +309,12 @@ extension ScopeSources {
 
     /// One scope per same-shaped sibling group, earliest group first, since earlier positions affect shortlex order most. The cost is the swap's probe count: one for a pair, otherwise one plus the extension's logarithmic bound.
     private static func permutationEncoderScopes(graph: ChoiceGraph) -> [PricedEncoderScope] {
-        var entries: [(parentNodeID: Int, group: [Int], position: Int)] = []
-        for scope in PermutationQuery.build(graph: graph) {
-            let parentNodeID = scope.parentNodeID
-            for group in scope.swappableGroups {
-                guard group.count >= 2 else {
-                    continue
-                }
-                let position = graph.nodes[group[0]].positionRange?.lowerBound ?? 0
-                entries.append((parentNodeID: parentNodeID, group: group, position: position))
-            }
-        }
-        entries.sort { $0.position < $1.position }
-
-        return entries.map { entry in
-            let estimatedCost = entry.group.count <= 2 ? 1 : (1 + Int(log2(Double(entry.group.count))))
+        let scopes = PermutationQuery.build(graph: graph)
+        return scopes.map { scope in
+            let count = scope.siblings.count
+            let estimatedCost = count <= 2 ? 1 : (1 + Int(log2(Double(count))))
             return PricedEncoderScope(
-                encoderScope: .swap(PermutationScope(
-                    parentNodeID: entry.parentNodeID,
-                    swappableGroups: [entry.group]
-                )),
+                encoderScope: .swap(scope),
                 priority: DispatchPriority(
                     structuralBenefit: 0,
                     valueBenefit: 0,

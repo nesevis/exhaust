@@ -13,10 +13,16 @@ struct CursorDifferentialTests {
         let expected = EagerScopeReference.improvingPivotCandidates(sequence: sequence, graph: graph).filter {
             seen.insert(ZobristHash.hash(of: $0)).inserted
         }
-        var cursor = ImprovingPivotCursor(sequence: sequence, incumbentHash: ZobristHash.hash(of: sequence), graph: graph, rejectCache: [], deadline: .none)
+        var cursor = ImprovingPivotCursor(
+            sequence: sequence,
+            incumbentHash: ZobristHash.hash(of: sequence),
+            graph: graph,
+            rejectCache: ProbeCache(),
+            deadline: .none
+        )
         var actual: [ChoiceSequence] = []
         while let probe = cursor.next() {
-            #expect(probe.probeHash == ZobristHash.hash(of: probe.sequence))
+            #expect(probe.lookup.probeHash == ZobristHash.hash(of: probe.sequence))
             actual.append(probe.sequence)
         }
 

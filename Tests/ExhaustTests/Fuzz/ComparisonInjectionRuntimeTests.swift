@@ -213,6 +213,6 @@ private final class OperandScriptedSource: CoverageSource, @unchecked Sendable {
     func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
         body(0xC0FFEE, target, target)
         decoyCounter &+= 1
-        body(0xDECAF, decoyCounter, decoyCounter &* 0x9E37_79B9_7F4A_7C15)
+        body(0xDECAF, decoyCounter, decoyCounter &* Xoshiro256.goldenRatioConstant)
     }
 }

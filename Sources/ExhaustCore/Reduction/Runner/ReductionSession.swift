@@ -164,7 +164,7 @@ package struct ReductionSession {
         storedIncumbent = Counterexample(sequence: sequence, tree: tree, output: initialOutput)
         incumbentHash = ZobristHash.hash(of: sequence)
         hasBind = Self.containsBind(sequence)
-        rejectCache = ProbeCache(keying: configuration.tuning.probeCacheKeying)
+        rejectCache = ProbeCache()
         self.graph = graph
         self.generator = erasedGenerator
         self.property = wrappedProperty
@@ -214,7 +214,8 @@ package struct ReductionSession {
             }
             let actions = endCycle()
             stepTimer.charge(.untimed)
-            guard runPostCycleActions(actions) == .completed, deadline.isExpired == false else {
+            let recovery = runPostCycleActions(actions)
+            guard recovery != .deadline, deadline.isExpired == false else {
                 finishAtDeadline()
                 return
             }
@@ -233,6 +234,13 @@ package struct ReductionSession {
     }
 
     // MARK: - Cycle
+
+    /// Marks progress and reopens fruitless bind searches without erasing their budget decay. Post-cycle stall renewal and broader invalidation are separate policies.
+    mutating func markProgress() {
+        anyAccepted = true
+        anyAcceptanceEverOccurred = true
+        gate.clearFruitless()
+    }
 
     private mutating func beginCycle() {
         cycles += 1

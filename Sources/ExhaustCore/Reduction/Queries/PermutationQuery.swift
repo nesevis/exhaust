@@ -11,7 +11,7 @@ enum PermutationQuery {
     ///
     /// Groups children by structural shape derived from graph node metadata. Children with the same shape can be swapped for shortlex improvement. Only zip children are considered — sequence elements are excluded because their ordering is transient (value search minimizes them, and numeric reorder canonicalizes whatever remains). Including sequence elements caused a 6x materialization regression on NestedLists without improving the final counterexample.
     ///
-    /// - Returns: One scope per zip node with at least one group of two or more same-shaped children.
+    /// - Returns: One scope per group of two or more same-shaped children, ordered globally by first-child position. Every sibling has a live position range.
     static func build(graph: ChoiceGraph) -> [PermutationScope] {
         var scopes: [PermutationScope] = []
 
@@ -37,25 +37,16 @@ enum PermutationQuery {
                 shapeGroups[key, default: []].append(childID)
             }
 
-            let swappableGroups = shapeGroups.values
-                .filter { $0.count >= 2 }
-                .sorted { groupA, groupB in
-                    let positionA = graph.nodes[groupA[0]].positionRange?.lowerBound ?? 0
-                    let positionB = graph.nodes[groupB[0]].positionRange?.lowerBound ?? 0
-                    return positionA < positionB
-                }
-
-            guard swappableGroups.isEmpty == false else {
-                continue
+            for group in shapeGroups.values where group.count >= 2 {
+                scopes.append(PermutationScope(parentNodeID: nodeID, siblings: group))
             }
-
-            scopes.append(PermutationScope(
-                parentNodeID: nodeID,
-                swappableGroups: swappableGroups
-            ))
         }
 
-        return scopes
+        return scopes.sorted { first, second in
+            let firstPosition = graph.nodes[first.siblings[0]].positionRange!.lowerBound
+            let secondPosition = graph.nodes[second.siblings[0]].positionRange!.lowerBound
+            return firstPosition < secondPosition
+        }
     }
 
     // MARK: - Shape Key

@@ -154,7 +154,7 @@ struct SequenceDecoderInvariantTests {
 
         var relaxCounts = ReductionProbeCounts()
         relaxCounts.recordEmission()
-        relaxCounts.recordOutcome(.propertyPassed(materializationAttempts: 1))
+        relaxCounts.recordOutcome(.propertyPassed(materializationAttempts: 1, sources: .unknown))
 
         var stats = ReductionStats()
         stats.record(encoderCounts, for: .valueSearch)

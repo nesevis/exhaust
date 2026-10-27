@@ -153,7 +153,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     case let .pick(choices, _):
                         var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
                         baked.reserveCapacity(choices.count)
-                        let depthOffset = UInt64(depth) &* 0x9E37_79B9_7F4A_7C15
+                        let depthOffset = UInt64(depth) &* Xoshiro256.goldenRatioConstant
 
                         let precomputedWeights = computeFitnessSharingWeights(
                             choices: choices, records: accumulator.records, fingerprintOffset: depthOffset

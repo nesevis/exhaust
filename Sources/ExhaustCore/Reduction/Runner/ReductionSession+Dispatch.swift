@@ -285,7 +285,7 @@ extension ReductionSession {
         // Moved rather than copied, so neither the runner nor these locals hold a second reference while the execution edits them. Without `consume`, the locals keep their storage alive for the whole execution, and every rejection the cache records copies the entire set.
         var executionGraph = Self.vacatedGraph
         swap(&executionGraph, &graph)
-        var executionRejectCache = rejectCache.emptied
+        var executionRejectCache = ProbeCache()
         swap(&executionRejectCache, &rejectCache)
         let result = Reducer.reduce(
             reduction,
@@ -406,10 +406,7 @@ extension ReductionSession {
             : .continueDispatching
 
         if report.anyAccepted {
-            anyAccepted = true
-            anyAcceptanceEverOccurred = true
-            // Value changes can make an earlier joint search productive without erasing its budget decay.
-            gate.clearFruitless()
+            markProgress()
         }
         return action
     }

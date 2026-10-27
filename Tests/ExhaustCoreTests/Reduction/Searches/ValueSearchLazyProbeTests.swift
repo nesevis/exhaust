@@ -47,7 +47,7 @@ struct ValueSearchLazyProbeTests {
     func cachedObserverStream(isFloatingPoint: Bool) throws {
         let fixture = try Fixture(isFloatingPoint: isFloatingPoint)
         var firstStream: [ChoiceSequence] = []
-        let first = fixture.run(cache: []) { observation in
+        let first = fixture.run(cache: ProbeCache()) { observation in
             if case let .emitted(_, sequence, _) = observation {
                 firstStream.append(sequence)
             }

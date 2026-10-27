@@ -40,6 +40,7 @@ package extension Materializer.Context {
                 resolvedFallbackTree = guidedFallback ?? fallbackTree
                 maximizeBoundRegionIndices = indices
         }
+        let report = collectDecodingReport ? DecodingReport(sources: []) : nil
         self.init(
             rootFallbackTree: resolvedFallbackTree,
             cursor: Materializer.Cursor(from: consume prefix),
@@ -52,7 +53,7 @@ package extension Materializer.Context {
             materializePicks: materializePicks,
             shouldUseMaximumDepthForScreening: shouldUseMaximumDepthForScreening,
             skipTree: skipTree,
-            decodingReport: collectDecodingReport ? DecodingReport() : nil,
+            decodingReport: report,
             reseedRanges: reseedRanges,
             hasPendingReseed: reseedRanges.isEmpty == false
         )

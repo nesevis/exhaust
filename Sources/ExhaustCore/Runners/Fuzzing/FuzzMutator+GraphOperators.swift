@@ -90,16 +90,11 @@ package struct MutationTargets: Sendable {
         return nil
     }
 
-    /// Whether any swappable sibling group has at least `minimumSize` members, which is the first guard of every sibling-span operator.
+    /// Relies on ``PermutationQuery`` to exclude groups with fewer than two members.
     ///
     /// The second guard, that the group's cached position ranges still fit the candidate, is a staleness check rather than an applicability one and cannot be answered from the parent alone.
-    package func hasSwappableGroup(minimumSize: Int) -> Bool {
-        for scope in permutationScopes {
-            for group in scope.swappableGroups where group.count >= minimumSize {
-                return true
-            }
-        }
-        return false
+    package var hasSwappableGroup: Bool {
+        permutationScopes.isEmpty == false
     }
 
     /// Whether a tandem group has the two leaves the lockstep delta needs. A scope whose groups are all singletons passes the scope check and fails at the draw.
@@ -296,12 +291,11 @@ package struct MutationTargets: Sendable {
         transplantGroups: [[Int]]
     ) -> MutationArmSet {
         var structural = MutationArmSet.none
-        let hasSwappable2 = permutationScopes.contains { scope in scope.swappableGroups.contains { $0.count >= 2 } }
-        if hasSwappable2 {
+        if permutationScopes.isEmpty == false {
             structural.insert(.swap)
             structural.insert(.shuffle)
         }
-        if permutationScopes.contains(where: { scope in scope.swappableGroups.contains { $0.count >= 3 } }) {
+        if permutationScopes.contains(where: { $0.siblings.count >= 3 }) {
             structural.insert(.move)
         }
         if let tandem, tandem.groups.contains(where: { $0.leaves.count >= 2 }) {
@@ -346,7 +340,7 @@ package extension FuzzMutator {
         targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, minimumSize: 2, prng: &prng),
+        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, prng: &prng),
               let slots = positionSlots(of: group, graph: targets.graph, within: candidate.count)
         else {
             return nil
@@ -365,7 +359,7 @@ package extension FuzzMutator {
         targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, minimumSize: 2, prng: &prng),
+        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, prng: &prng),
               let slots = positionSlots(of: group, graph: targets.graph, within: candidate.count)
         else {
             return nil
@@ -391,7 +385,8 @@ package extension FuzzMutator {
         targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, minimumSize: 3, prng: &prng),
+        let movableScopes = targets.permutationScopes.lazy.filter { $0.siblings.count >= 3 }
+        guard let group = pickSwappableGroup(scopes: movableScopes, prng: &prng),
               let slots = positionSlots(of: group, graph: targets.graph, within: candidate.count)
         else {
             return nil
@@ -457,9 +452,12 @@ package extension FuzzMutator {
             return nil
         }
         let shiftUpward = switch (headroomUp, headroomDown) {
-            case (0, _): false
-            case (_, 0): true
-            default: prng.next(upperBound: 2) == 0
+            case (0, _):
+                false
+            case (_, 0):
+                true
+            default:
+                prng.next(upperBound: 2) == 0
         }
         let maxDelta = shiftUpward ? headroomUp : headroomDown
         let exponent = prng.next(upperBound: FuzzTunables.lockstepDeltaExponentLimit)
@@ -1087,14 +1085,13 @@ package extension FuzzMutator {
         return last
     }
 
-    /// Picks one swap-eligible sibling group with `minimumSize` or more members, weighted by member count.
+    /// Picks one query-validated sibling group, weighted by member count. Operators with stricter requirements supply their eligible scopes.
     private static func pickSwappableGroup(
-        scopes: [PermutationScope],
-        minimumSize: Int,
+        scopes: some Sequence<PermutationScope>,
         prng: inout Xoshiro256
     ) -> [Int]? {
         weightedPick(
-            from: scopes.lazy.flatMap(\.swappableGroups).filter { $0.count >= minimumSize },
+            from: scopes.lazy.map(\.siblings),
             weight: { UInt64($0.count) },
             prng: &prng
         )

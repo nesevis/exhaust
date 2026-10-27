@@ -66,7 +66,7 @@ struct BoundValueGate {
         fruitless.removeAll(keepingCapacity: true)
     }
 
-    /// Restores every bind's full search budget and clears fruitless verdicts, after coupled post-cycle acceptances invalidate convergence across the run. Recorded binds stay recorded, so they remain non-first dispatches, and per-cycle dispatch tracking is kept.
+    /// Restores every bind's full search budget and clears fruitless verdicts, after a staged-joint acceptance escapes a coupled stall. Other acceptances clear fruitless verdicts without resetting budget decay. Recorded binds stay recorded, so they remain non-first dispatches, and per-cycle dispatch tracking is kept.
     mutating func invalidateSearchHistory() {
         fruitless.removeAll(keepingCapacity: true)
         for fingerprint in stallCount.keys {

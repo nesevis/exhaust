@@ -73,6 +73,9 @@ extension Materializer {
             return nil
         }
 
+        if count > 0 {
+            context.record(.prefix)
+        }
         guard min != 0 || max != UInt64.max else {
             return bits
         }

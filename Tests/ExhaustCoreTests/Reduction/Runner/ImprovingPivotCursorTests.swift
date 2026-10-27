@@ -3,8 +3,6 @@ import Testing
 
 @Suite("Improving pivots")
 struct ImprovingPivotCursorTests {
-    private static let cacheKeyings: [ProbeCacheKeying] = [.sequence, .decision, .decisionAndIncumbent]
-
     @Test("A non-improving recorded fill still permits an improving transplant")
     func transplantAfterNonImprovingRecordedFill() throws {
         let target = ChoiceTree.group([leaf(2, range: 0 ... 3), leaf(2, range: 0 ... 3)], isZip: true)
@@ -29,27 +27,32 @@ struct ImprovingPivotCursorTests {
         #expect(cursor.next() == nil)
     }
 
-    @Test("Identical fills are emitted once and cached under the configured decision", arguments: cacheKeyings)
-    func duplicateFillsAndCache(keying: ProbeCacheKeying) throws {
+    @Test("Identical fills are emitted once and cached under their admission decision")
+    func duplicateFillsAndCache() throws {
         let tree = ChoiceTree.pickSite(fingerprint: 42, selected: 1, branches: [leaf(100, range: 0 ... 100), leaf(250, range: 200 ... 300)])
-        var cache = ProbeCache(keying: keying)
+        var cache = ProbeCache()
         var cursor = makeCursor(tree: tree, cache: cache)
         let next = cursor.next()
         let first = try #require(next)
         let incumbentHash = ZobristHash.hash(of: ChoiceSequence(tree))
 
         #expect(first.sequence.compactMap { $0.value?.choice.bitPattern64 } == [100])
-        #expect(first.cacheKey == cache.key(probeHash: first.probeHash, decision: ImprovingPivotCursor.decision, incumbentHash: incumbentHash))
+        #expect(first.lookup.probeHash == ZobristHash.hash(of: first.sequence))
+        #expect(first.lookup.incumbentHash == incumbentHash)
+        #expect(first.lookup.isCached == false)
         #expect(cursor.next() == nil)
         #expect(cursor.next() == nil)
 
-        cache.insert(first.cacheKey)
+        cache.record(first.lookup, outcome: .propertyPassed(materializationAttempts: 1, sources: .unknown))
         var cached = makeCursor(tree: tree, cache: cache)
         #expect(cached.next() == nil)
     }
 
-    @Test("Cached fills leave the improving probe budget for an uncached fill", arguments: cacheKeyings)
-    func cachedFillDoesNotSpendBudget(keying: ProbeCacheKeying) throws {
+    @Test(
+        "Cached fills leave the improving probe budget for an uncached fill",
+        arguments: [ReductionOrder.notLarger, .strictlySmaller]
+    )
+    func cachedFillDoesNotSpendBudget(order: ReductionOrder) throws {
         let generator = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64(0) ... 100)),
             (1, Gen.choose(in: UInt64(200) ... 300)),
@@ -57,7 +60,6 @@ struct ImprovingPivotCursorTests {
         let tree = try #require(try Interpreters.reflect(generator, with: UInt64(250)))
         var tuning = ReductionTuning()
         tuning.relaxImprovingProbeBudget = 1
-        tuning.probeCacheKeying = keying
         var propertyCalls = 0
         var runner = ReductionSession(
             generator: generator,
@@ -75,12 +77,17 @@ struct ImprovingPivotCursorTests {
         let first = try #require(next)
         let farthest = cursor.next()
         try #require(farthest != nil, "The uncached farthest fill must exercise the remaining budget")
-        runner.rejectCache.insert(first.cacheKey)
+        let rejected = runner.rejectCache.lookup(
+            probeHash: first.lookup.probeHash,
+            decision: ProbeDecision(isGuided: false, order: order),
+            incumbentHash: runner.incumbentHash
+        )
+        runner.rejectCache.record(rejected, outcome: .materializationRejected(materializationAttempts: 1))
         #expect(runner.hasUnprobedImprovingPivot)
 
-        let accepted = runner.runImprovingPivotPass()
+        _ = runner.runPostCycleActions([.improvingPivots])
 
-        #expect(accepted == false)
+        #expect(runner.anyAccepted == false)
         #expect(propertyCalls == 1)
         #expect(runner.stats.relaxImprovingProbes == 1)
         #expect(runner.stats.reductionProbes == 1)
@@ -104,7 +111,11 @@ private func leaf(_ value: UInt64, range: ClosedRange<UInt64>) -> ChoiceTree {
     .choice(ChoiceValue(value, tag: .uint64), .init(validRange: range, isRangeExplicit: true))
 }
 
-private func makeCursor(tree: ChoiceTree, cache: ProbeCache = [], deadline: ReductionDeadline = .none) -> ImprovingPivotCursor {
+private func makeCursor(
+    tree: ChoiceTree,
+    cache: ProbeCache = ProbeCache(),
+    deadline: ReductionDeadline = .none
+) -> ImprovingPivotCursor {
     let sequence = ChoiceSequence(tree)
     return ImprovingPivotCursor(sequence: sequence, incumbentHash: ZobristHash.hash(of: sequence), graph: ChoiceGraph.build(from: tree), rejectCache: cache, deadline: deadline)
 }

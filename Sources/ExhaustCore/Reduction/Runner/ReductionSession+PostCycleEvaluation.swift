@@ -17,9 +17,9 @@ extension ReductionSession {
         let shouldAttemptStagedJoint: Bool
     }
 
-    /// Work that may follow a cycle. Termination is not an action: it depends on state these actions change, since a relax round can improve the sequence, confirmation can clear stale floors, and a relation acceptance re-enters the loop.
+    /// Work that may follow a cycle. Termination is not an action: it depends on state these actions change, since a relax round can improve the sequence, confirmation can recover smaller failures, and a relation acceptance re-enters the loop.
     enum PostCycleAction: Equatable {
-        /// Probes each converged leaf just below its floor and clears any floor the probe proves stale.
+        /// Probes toward each converged leaf's target and retains the first smaller failing counterexample.
         case confirmConvergence
         /// Reduces pairs of stalled leaves along the rational relation inferred from their current values: holds the ratio fixed and lowers the shared scale, so (6, 9) tries (2, 3) first, for multiplicative couplings that per-leaf, lockstep, and redistribution moves cannot preserve.
         case relationPass
