@@ -68,16 +68,12 @@ struct SwapSearch: ReductionSearch {
         }
     }
 
-    /// Plans the first swap from the scope's first same-shaped group, walking adjacent pairs in position order.
+    /// Plans the first swap from the scope's sibling group, walking adjacent pairs in position order.
     init(scope: PermutationScope, sequence: ChoiceSequence, graph: ChoiceGraph) {
         initialProbe = nil
         extensionState = nil
         let parentNodeID = scope.parentNodeID
-        guard let group = scope.swappableGroups.first,
-              group.count >= 2
-        else {
-            return
-        }
+        let group = scope.siblings
 
         // Collect members sorted by position.
         var slots: [(nodeID: Int, range: ClosedRange<Int>)] = []

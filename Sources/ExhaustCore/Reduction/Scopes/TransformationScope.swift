@@ -370,8 +370,8 @@ struct PermutationScope: Sendable {
     /// The parent node whose children are reordered.
     let parentNodeID: Int
 
-    /// Groups of same-shaped sibling node IDs eligible for pairwise swapping.
-    let swappableGroups: [[Int]]
+    /// Contains at least two live, same-shaped siblings in position order. ``PermutationQuery`` establishes these invariants so each group gets one dispatch.
+    let siblings: [Int]
 }
 
 // MARK: - Migration Scopes

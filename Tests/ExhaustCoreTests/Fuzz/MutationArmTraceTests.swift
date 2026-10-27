@@ -226,7 +226,7 @@ struct ArmEligibilityTests {
 
         // The same tree read through the targeting tables reports nothing: their queries address sequence positions, which an unselected branch has none of.
         let targets = MutationTargets(tree: tree)
-        #expect(targets.hasSwappableGroup(minimumSize: 2) == false)
+        #expect(targets.hasSwappableGroup == false)
         #expect(targets.hasTandemGroup == false)
     }
 
@@ -294,7 +294,7 @@ struct ArmEligibilityTests {
         )
         _ = runner.run()
         let parentIndex = try #require(runner.corpus.parentIndices.first { index in
-            runner.corpus.mutationTargets(forParentAt: index)?.hasSwappableGroup(minimumSize: 2) == true
+            runner.corpus.mutationTargets(forParentAt: index)?.hasSwappableGroup == true
         })
         let parent = runner.corpus.entries[parentIndex]
 

@@ -189,8 +189,7 @@ struct ChoiceGraphScopeQueryTests {
 
         #expect(scopes.count == 1)
         if let scope = scopes.first {
-            #expect(scope.swappableGroups.count == 1)
-            #expect(scope.swappableGroups[0].count == 2)
+            #expect(scope.siblings.count == 2)
         }
     }
 

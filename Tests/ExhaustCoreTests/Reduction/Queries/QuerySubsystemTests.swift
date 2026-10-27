@@ -327,8 +327,7 @@ struct PermutationQueryTests {
 
         #expect(scopes.count == 1, "Zip with two same-type chooseBits children should produce one permutation scope")
         if let scope = scopes.first {
-            #expect(scope.swappableGroups.count == 1)
-            #expect(scope.swappableGroups[0].count == 2)
+            #expect(scope.siblings.count == 2)
         }
     }
 
