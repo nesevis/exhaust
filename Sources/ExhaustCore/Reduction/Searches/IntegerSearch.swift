@@ -159,50 +159,6 @@ struct IntegerSearch: ReductionSearch {
         var convergedIndices: Set<Int>
     }
 
-    /// Directional search stepper for bit-pattern-space search.
-    ///
-    /// Uses interpolation search for large ranges and plain binary search for small ranges. The threshold is ``ReductionTuning/interpolationBinaryThreshold``.
-    ///
-    /// Exactly one of `binary` or `interpolation` is non-nil at any time. The flat-optional layout avoids the overhead of enum associated-value extraction and reconstruction on every call to ``advance(lastAccepted:)``, which sits on the reducer's tightest per-iteration loop.
-    struct DirectionalStepper {
-        private var binary: BinarySearchStepper?
-        private var interpolation: InterpolationSearchStepper?
-
-        var bestAccepted: UInt64 {
-            binary?.bestAccepted ?? interpolation?.bestAccepted ?? 0
-        }
-
-        var resumeBound: UInt64 {
-            binary?.resumeBound ?? interpolation?.resumeBound ?? 0
-        }
-
-        init(binary stepper: BinarySearchStepper) {
-            binary = stepper
-        }
-
-        init(interpolation stepper: InterpolationSearchStepper) {
-            interpolation = stepper
-        }
-
-        mutating func start() -> UInt64? {
-            if binary != nil {
-                return binary!.start()
-            } else if interpolation != nil {
-                return interpolation!.start()
-            }
-            return nil
-        }
-
-        mutating func advance(lastAccepted: Bool) -> UInt64? {
-            if binary != nil {
-                return binary!.advance(lastAccepted: lastAccepted)
-            } else if interpolation != nil {
-                return interpolation!.advance(lastAccepted: lastAccepted)
-            }
-            return nil
-        }
-    }
-
     // MARK: - Search
 
     /// Starts on `scope` over `sequence`, warm-starting from `warmStarts`, keyed by node ID, and reading its scan, bisection, and interpolation limits from `tuning`.

@@ -130,7 +130,8 @@ struct FloatSearchTests {
         var search = FloatSearch(
             scope: FloatMinimizationScope(leaves: leaves.map { LeafEntry(nodeID: $0) }),
             sequence: sequence,
-            graph: graph
+            graph: graph,
+            tuning: .init()
         )
         var buffer = sequence
         _ = try #require(search.nextMaterialized(.initial, from: sequence, into: &buffer))

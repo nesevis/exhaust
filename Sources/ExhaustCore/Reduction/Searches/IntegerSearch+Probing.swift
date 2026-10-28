@@ -454,40 +454,21 @@ extension IntegerSearch {
             }
 
             if currentBitPattern > targetBitPattern {
-                let effectiveLo = validWarmStart?.bound ?? targetBitPattern
-                let range = currentBitPattern - effectiveLo
-                if range < state.interpolationBinaryThreshold {
-                    state.stepper = DirectionalStepper(
-                        binary: BinarySearchStepper(lo: effectiveLo, hi: currentBitPattern)
-                    )
-                } else {
-                    state.stepper = DirectionalStepper(
-                        interpolation: InterpolationSearchStepper(
-                            lo: effectiveLo,
-                            hi: currentBitPattern,
-                            binaryThreshold: state.interpolationBinaryThreshold,
-                            initialDivisor: state.interpolationInitialDivisor
-                        )
-                    )
-                }
+                state.stepper = DirectionalStepper(
+                    lo: validWarmStart?.bound ?? targetBitPattern,
+                    hi: currentBitPattern,
+                    direction: .findSmallest,
+                    binaryThreshold: state.interpolationBinaryThreshold,
+                    initialDivisor: state.interpolationInitialDivisor
+                )
             } else {
-                let effectiveHi = validWarmStart?.bound ?? targetBitPattern
-                let range = effectiveHi - currentBitPattern
-                if range < state.interpolationBinaryThreshold {
-                    state.stepper = DirectionalStepper(
-                        binary: BinarySearchStepper(lo: currentBitPattern, hi: effectiveHi, direction: .findLargest)
-                    )
-                } else {
-                    state.stepper = DirectionalStepper(
-                        interpolation: InterpolationSearchStepper(
-                            lo: currentBitPattern,
-                            hi: effectiveHi,
-                            direction: .findLargest,
-                            binaryThreshold: state.interpolationBinaryThreshold,
-                            initialDivisor: state.interpolationInitialDivisor
-                        )
-                    )
-                }
+                state.stepper = DirectionalStepper(
+                    lo: currentBitPattern,
+                    hi: validWarmStart?.bound ?? targetBitPattern,
+                    direction: .findLargest,
+                    binaryThreshold: state.interpolationBinaryThreshold,
+                    initialDivisor: state.interpolationInitialDivisor
+                )
             }
 
             guard let firstBitPattern = state.stepper?.start() else {

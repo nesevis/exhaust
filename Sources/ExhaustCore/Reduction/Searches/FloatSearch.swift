@@ -79,7 +79,12 @@ struct FloatSearch: ReductionSearch {
         var batchCandidates: [UInt64]
         /// The next batch candidate in the special-values and boundary stages. In the binary search stages, zero until the stepper has started.
         var batchIndex: Int
+        /// Drives the precision walk's grid steps.
         var stepper: FindIntegerStepper
+        /// Drives the integral and ratio stages over step counts from the current value, biased toward the target as ``IntegerSearch`` is.
+        var searchStepper: DirectionalStepper?
+        let interpolationBinaryThreshold: UInt64
+        let interpolationInitialDivisor: UInt64
         var needsFirstProbe: Bool
         // Stage 3/4 binary search context.
         var binarySearchMinDelta: UInt64
@@ -99,9 +104,14 @@ struct FloatSearch: ReductionSearch {
 
     // MARK: - Search
 
-    /// Starts on `scope` over `sequence`.
-    init(scope: FloatMinimizationScope, sequence: ChoiceSequence, graph: ChoiceGraph) {
-        state = Self.initialState(scope: scope, sequence: sequence, graph: graph)
+    /// Starts on `scope` over `sequence`, reading its interpolation limits from `tuning`.
+    init(
+        scope: FloatMinimizationScope,
+        sequence: ChoiceSequence,
+        graph: ChoiceGraph,
+        tuning: ReductionTuning
+    ) {
+        state = Self.initialState(scope: scope, sequence: sequence, graph: graph, tuning: tuning)
     }
 
     mutating func next(_ feedback: SearchFeedback, into _: inout ChoiceSequence) -> ReductionCandidate? {

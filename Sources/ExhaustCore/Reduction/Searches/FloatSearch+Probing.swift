@@ -10,7 +10,8 @@ extension FloatSearch {
     static func initialState(
         scope: FloatMinimizationScope,
         sequence: ChoiceSequence,
-        graph: ChoiceGraph
+        graph: ChoiceGraph,
+        tuning: ReductionTuning
     ) -> State {
         var targets: [Target] = []
 
@@ -45,6 +46,9 @@ extension FloatSearch {
             batchCandidates: [],
             batchIndex: 0,
             stepper: FindIntegerStepper(),
+            searchStepper: nil,
+            interpolationBinaryThreshold: tuning.interpolationBinaryThreshold,
+            interpolationInitialDivisor: tuning.interpolationInitialDivisor,
             needsFirstProbe: true,
             binarySearchMinDelta: 1,
             binarySearchMaxQuantum: 0,
@@ -208,6 +212,7 @@ extension FloatSearch {
         state.binarySearchMaxQuantum = maxQuantum
         state.binarySearchMovesUp = movesUp
         state.binarySearchCurrentInt = currentInt
+        state.searchStepper = towardTarget(distance: maxQuantum, state: state)
     }
 
     /// Sets up binary search over the integer part of the float's rational decomposition, preserving the fractional remainder so the search moves through exact rational multiples.
@@ -239,6 +244,18 @@ extension FloatSearch {
         state.ratioIntegerPart = integerPart
         state.ratioDistance = distance
         state.binarySearchMovesUp = movesUp
+        state.searchStepper = towardTarget(distance: distance, state: state)
+    }
+
+    /// Searches step counts from zero, the current value, up to `distance`, the target, for the largest that still fails. Probing from the target end finds a distant failure that a search anchored at the current value would stop short of after its first pass.
+    private static func towardTarget(distance: UInt64, state: State) -> DirectionalStepper {
+        DirectionalStepper(
+            lo: 0,
+            hi: distance,
+            direction: .findLargest,
+            binaryThreshold: state.interpolationBinaryThreshold,
+            initialDivisor: state.interpolationInitialDivisor
+        )
     }
 
     // MARK: - Candidate Generation
@@ -334,28 +351,28 @@ extension FloatSearch {
         return target.lazyProbe(replacing: candidateEntry, in: sequence)
     }
 
-    /// Generates the next binary search probe for integral reduction, stepping through ULP-aligned quanta via ``FindIntegerStepper`` and recording convergence when the stepper is exhausted.
+    /// Generates the next binary search probe for integral reduction, stepping through ULP-aligned quanta via ``DirectionalStepper`` and recording convergence when the stepper is exhausted.
     static func nextIntegralBinarySearchCandidate(
         state: inout State,
         lastAccepted: Bool
     ) -> ReductionCandidate? {
-        guard state.binarySearchMaxQuantum > 0 else {
+        guard state.searchStepper != nil else {
             return nil
         }
         let target = state.targets[state.currentTargetIndex]
 
         var accepted = lastAccepted
         while true {
-            let quantum: Int?
+            let quantum: UInt64?
             if state.batchIndex == 0 {
                 state.batchIndex = 1
-                quantum = state.stepper.start()
+                quantum = state.searchStepper?.start()
             } else {
-                quantum = state.stepper.advance(lastAccepted: accepted)
+                quantum = state.searchStepper?.advance(lastAccepted: accepted)
             }
 
-            guard let stepCount = quantum else {
-                if state.stepper.bestAccepted > 0 {
+            guard let unsignedStepCount = quantum else {
+                if state.searchStepper?.bestAccepted ?? 0 > 0 {
                     refreshTargetFromBaseline(state: &state)
                 }
                 state.convergenceStore[target.nodeID] = ConvergedOrigin(
@@ -367,7 +384,6 @@ extension FloatSearch {
                 return nil
             }
 
-            let unsignedStepCount = UInt64(stepCount)
             guard unsignedStepCount <= state.binarySearchMaxQuantum else {
                 accepted = false
                 continue
@@ -416,23 +432,23 @@ extension FloatSearch {
         state: inout State,
         lastAccepted: Bool
     ) -> ReductionCandidate? {
-        guard state.ratioDistance > 0 else {
+        guard state.searchStepper != nil else {
             return nil
         }
         let target = state.targets[state.currentTargetIndex]
 
         var accepted = lastAccepted
         while true {
-            let quantum: Int?
+            let quantum: UInt64?
             if state.batchIndex == 0 {
                 state.batchIndex = 1
-                quantum = state.stepper.start()
+                quantum = state.searchStepper?.start()
             } else {
-                quantum = state.stepper.advance(lastAccepted: accepted)
+                quantum = state.searchStepper?.advance(lastAccepted: accepted)
             }
 
-            guard let stepCount = quantum else {
-                if state.stepper.bestAccepted > 0 {
+            guard let unsignedStepCount = quantum else {
+                if state.searchStepper?.bestAccepted ?? 0 > 0 {
                     refreshTargetFromBaseline(state: &state)
                 }
                 state.convergenceStore[target.nodeID] = ConvergedOrigin(
@@ -444,7 +460,6 @@ extension FloatSearch {
                 return nil
             }
 
-            let unsignedStepCount = UInt64(stepCount)
             guard unsignedStepCount <= state.ratioDistance, unsignedStepCount <= UInt64(Int64.max) else {
                 accepted = false
                 continue
@@ -540,6 +555,7 @@ extension FloatSearch {
             state.batchIndex = 0
             state.batchCandidates = []
             state.stepper = FindIntegerStepper()
+            state.searchStepper = nil
             state.needsFirstProbe = true
             return state.currentTargetIndex < state.targets.count
         }
@@ -550,6 +566,7 @@ extension FloatSearch {
         state.batchIndex = 0
         state.batchCandidates = []
         state.stepper = FindIntegerStepper()
+        state.searchStepper = nil
         state.needsFirstProbe = true
         return state.currentTargetIndex < state.targets.count
     }

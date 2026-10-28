@@ -18,7 +18,8 @@ enum FloatSearchEncoder: ReductionEncoder {
             FloatSearch(
                 scope: scope,
                 sequence: input.baseSequence,
-                graph: input.graph
+                graph: input.graph,
+                tuning: input.tuning
             ),
             configuration: .standard
         )

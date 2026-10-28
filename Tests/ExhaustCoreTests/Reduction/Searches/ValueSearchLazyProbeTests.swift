@@ -220,7 +220,8 @@ struct ValueSearchLazyProbeTests {
                 return FloatSearch(
                     scope: FloatMinimizationScope(leaves: leaves),
                     sequence: incumbent.sequence,
-                    graph: graph
+                    graph: graph,
+                    tuning: .init()
                 )
             }
             return IntegerSearch(
