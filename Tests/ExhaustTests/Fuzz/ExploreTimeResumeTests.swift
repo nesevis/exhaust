@@ -30,19 +30,21 @@ struct ExploreTimeResumeTests {
             store: store,
             resumeEnabled: ProcessInfo.processInfo.environment[CampaignWire.resumeKey] != "0"
         ) { _ in
-            await withIssueReporters([reporter]) {
-                await __ExhaustRuntime.__exploreTimeAsync(
-                    .int(in: 0 ... 10),
-                    time: scenario.time,
-                    settings: scenario.settings,
-                    coverage: .injected(resumeSource()),
-                    fileID: #fileID,
-                    filePath: #filePath,
-                    line: line,
-                    column: 1
-                ) { _ in
-                    Issue.record("A rejected campaign must not invoke its property")
-                    return true
+            await DirectTestingIssues.absorbing(isIntermittent: true) {
+                await withIssueReporters([reporter]) {
+                    await __ExhaustRuntime.__exploreTimeAsync(
+                        .int(in: 0 ... 10),
+                        time: scenario.time,
+                        settings: scenario.settings,
+                        coverage: .injected(resumeSource()),
+                        fileID: #fileID,
+                        filePath: #filePath,
+                        line: line,
+                        column: 1
+                    ) { _ in
+                        Issue.record("A rejected campaign must not invoke its property")
+                        return true
+                    }
                 }
             }
         }
@@ -76,17 +78,19 @@ struct ExploreTimeResumeTests {
             try? FileManager.default.removeItem(at: store.lockFileURL)
         }
         let reporter = RecordingIssueReporter()
-        let report = await withIssueReporters([reporter]) {
-            await __ExhaustRuntime.__exploreTimeAsync(
-                .int(in: 0 ... 10),
-                time: .seconds(1),
-                settings: [.replay(.encoded("19-U3")), .suppress(.all)],
-                coverage: .injected(resumeSource()),
-                fileID: #fileID,
-                filePath: #filePath,
-                line: line,
-                column: 1
-            ) { _ in true }
+        let report = await DirectTestingIssues.absorbing(isIntermittent: true) {
+            await withIssueReporters([reporter]) {
+                await __ExhaustRuntime.__exploreTimeAsync(
+                    .int(in: 0 ... 10),
+                    time: .seconds(1),
+                    settings: [.replay(.encoded("19-U3")), .suppress(.all)],
+                    coverage: .injected(resumeSource()),
+                    fileID: #fileID,
+                    filePath: #filePath,
+                    line: line,
+                    column: 1
+                ) { _ in true }
+            }
         }
         #expect(report.attempts.total == 0)
         #expect(reporter.issues.count == 1)

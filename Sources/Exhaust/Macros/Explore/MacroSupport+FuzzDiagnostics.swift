@@ -8,7 +8,23 @@ package extension __ExhaustRuntime {
     /// The hard-failure diagnostic for an instrumented build whose coverage the run cannot observe, naming the two causes in order of likelihood.
     ///
     /// An optimized build inlines small functions from the instrumented library into an uninstrumented caller, and the inlined copies record nothing; that is the common case in a release fuzz target with flags on the library alone. The other cause is executor isolation under `trace-pc-guard`: work on an executor the run did not bind is invisible to the thread-bound context, and `inline-8bit-counters` records it at the cost of requiring the run to have the process to itself.
+    ///
+    /// On Windows the message also names the uninstrumented test target, which is the likeliest cause there: each test target links into its own runner that cannot link the coverage runtime, so a property whose work stays in the test target records nothing.
     static var unreachableCoverageMessage: String {
+        #if os(Windows)
+            return unreachableCoverageCauses + "\n\n" + windowsTestTargetCause
+        #else
+            return unreachableCoverageCauses
+        #endif
+    }
+
+    private static var windowsTestTargetCause: String {
+        """
+        On Windows, check this first: test targets cannot carry coverage instrumentation there. SwiftPM builds a separate runner for each test target, and that runner cannot link the coverage runtime, so the explore command instruments only library and executable targets. Code that lives only in the test target, including the property closure itself, records nothing. Make sure every attempt calls into an instrumented target, for example by moving the logic the property checks into the library under test.
+        """
+    }
+
+    private static var unreachableCoverageCauses: String {
         """
         #explore(time:) evaluated the property and recorded no coverage at all, so the search had no signal to follow. A run that reaches \(FuzzTunables.coverageUnreachableAttemptThreshold) attempts this way stops early rather than spending the budget; a shorter run reports it when it ends.
 

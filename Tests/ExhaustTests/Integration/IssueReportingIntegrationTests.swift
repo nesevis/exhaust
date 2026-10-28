@@ -35,7 +35,7 @@ struct IssueReportingIntegrationTests {
     @Test("Issue routing preserves severity and source location")
     func issueRoutingPreservesSeverityAndSourceLocation() {
         let reporter = RecordingIssueReporter()
-        absorbingDirectTestingIssues {
+        DirectTestingIssues.absorbing {
             withIssueReporters([reporter]) {
                 reportError(
                     "error message",
@@ -140,7 +140,7 @@ struct IssueReportingIntegrationTests {
         report.recordCrashResume()
         let reporter = RecordingIssueReporter()
 
-        absorbingDirectTestingIssues {
+        DirectTestingIssues.absorbing {
             withIssueReporters([reporter]) {
                 __ExhaustRuntime.reportFuzzIssues(
                     report: report,
@@ -165,7 +165,7 @@ struct IssueReportingIntegrationTests {
     func exploreAssertionRerunIsCountedAsDiagnosticInvocation() {
         let reporter = RecordingIssueReporter()
         let directions: [(String, @Sendable (Int) -> Bool)] = [("any", { _ in true })]
-        let report = absorbingDirectTestingIssues {
+        let report = DirectTestingIssues.absorbing {
             withIssueReporters([reporter]) {
                 __ExhaustRuntime.__exploreExpect(
                     ReflectiveGenerator(Gen.just(0), isReflective: true),
@@ -191,7 +191,7 @@ struct IssueReportingIntegrationTests {
     func exploreBoolFailureReportsPhaseCountsAndBareReplaySeed() {
         let reporter = RecordingIssueReporter()
         let directions: [(String, @Sendable (Int) -> Bool)] = [("any", { _ in true })]
-        let report = absorbingDirectTestingIssues {
+        let report = DirectTestingIssues.absorbing {
             withIssueReporters([reporter]) {
                 __ExhaustRuntime.__explore(
                     ReflectiveGenerator(Gen.just(0), isReflective: true),
@@ -221,7 +221,7 @@ struct IssueReportingIntegrationTests {
     func asyncExploreAssertionRerunIsCountedAsDiagnosticInvocation() async {
         let reporter = RecordingIssueReporter()
         let directions: [(String, @Sendable (Int) -> Bool)] = [("any", { _ in true })]
-        let report = await absorbingDirectTestingIssues(isIntermittent: true) {
+        let report = await DirectTestingIssues.absorbing(isIntermittent: true) {
             await withIssueReporters([reporter]) {
                 await __ExhaustRuntime.__exploreExpectAsync(
                     ReflectiveGenerator(Gen.just(0), isReflective: true),
@@ -259,48 +259,6 @@ struct IssueReportingIntegrationTests {
 
             #expect(reporter.issues.count == 1)
         }
-    #endif
-}
-
-/// Runs `body`, absorbing the issues Exhaust's non-Apple reporting shim records directly with swift-testing.
-///
-/// On Apple platforms `withIssueReporters` redirects error reporting away from swift-testing, so `body` runs bare. On non-Apple platforms the shim's direct `Issue.record` delivery cannot be redirected, so this helper absorbs those records as known issues.
-private func absorbingDirectTestingIssues<Value>(
-    isIntermittent: Bool = false,
-    _ body: () -> Value
-) -> Value {
-    #if canImport(ObjectiveC)
-        return body()
-    #else
-        var captured: Value?
-        withKnownIssue(isIntermittent: isIntermittent) {
-            captured = body()
-        }
-        guard let captured else {
-            fatalError("withKnownIssue did not run its body")
-        }
-        return captured
-    #endif
-}
-
-/// Runs async `body`, absorbing the issues Exhaust's non-Apple reporting shim records directly with swift-testing.
-///
-/// The direct record happens on a bridged thread where the swift-testing test association may not propagate, so async callers pass `isIntermittent: true`.
-private func absorbingDirectTestingIssues<Value>(
-    isIntermittent: Bool = false,
-    _ body: () async -> Value
-) async -> Value {
-    #if canImport(ObjectiveC)
-        return await body()
-    #else
-        var captured: Value?
-        await withKnownIssue(isIntermittent: isIntermittent) {
-            captured = await body()
-        }
-        guard let captured else {
-            fatalError("withKnownIssue did not run its body")
-        }
-        return captured
     #endif
 }
 

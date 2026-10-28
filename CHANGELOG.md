@@ -35,7 +35,7 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 ### Added
 
 - The `explore` package command runs coverage-guided fuzzing campaigns: `swift package explore --instrument <target> [--test-target <target>] [--filter <regex>] [--time <seconds>] [--configuration debug|release]`. It builds the selected root targets, and the selected test target, with coverage instrumentation in a separate build directory through an ephemeral manifest overlay, so `Package.swift` is never edited and ordinary builds stay uninstrumented. Campaigns default to release. `--time` overrides the budget of every `#explore(time:)` invocation. The command links the coverage runtime and test-reporting support itself, keeps a crash-recovery directory for each campaign, and prevents overlapping campaigns on the same build. See [Coverage-guided fuzzing](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing).
-- Windows support for the `explore` command is experimental. On Windows, campaigns run in debug only, because SwiftPM's release test runners do not load test targets that contain only Swift Testing tests, and the selected test target is not instrumented.
+- Windows support for the `explore` command is experimental. On Windows, the selected test target is not instrumented, because SwiftPM builds a separate runner for each test target and that runner cannot link the coverage runtime. A property whose attempts never call into an instrumented target records no coverage. Campaigns also run in debug only, because SwiftPM's release test runners do not load test targets that contain only Swift Testing tests.
 
 ### Changed
 

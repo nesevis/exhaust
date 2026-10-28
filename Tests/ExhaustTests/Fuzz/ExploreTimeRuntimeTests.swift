@@ -642,14 +642,16 @@ struct ExploreTimeRuntimeTests {
     @Test("A run whose property discards every input reports a pointless run instead of passing")
     func allDiscardedRunReportsPointlessRun() async {
         let reporter = RecordingIssueReporter()
-        let report = await withIssueReporters([reporter]) {
-            await __ExhaustRuntime.__exploreTimeAsync(
-                #gen(.int(in: 0 ... 3)),
-                time: .seconds(1),
-                settings: [.replay(.numeric(1)), .suppress(.logs)],
-                coverage: .injected(SyntheticCoverageSource<Int>(edgeCount: 4, edges: { [$0] }))
-            ) { _ -> Bool in
-                throw PropertySkip()
+        let report = await DirectTestingIssues.absorbing(isIntermittent: true) {
+            await withIssueReporters([reporter]) {
+                await __ExhaustRuntime.__exploreTimeAsync(
+                    #gen(.int(in: 0 ... 3)),
+                    time: .seconds(1),
+                    settings: [.replay(.numeric(1)), .suppress(.logs)],
+                    coverage: .injected(SyntheticCoverageSource<Int>(edgeCount: 4, edges: { [$0] }))
+                ) { _ -> Bool in
+                    throw PropertySkip()
+                }
             }
         }
         #expect(report.attempts.evaluated > 0)

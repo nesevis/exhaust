@@ -173,7 +173,9 @@ To include short fuzz properties in ordinary test runs instead, configure the ma
 
 The command enables edge coverage, comparison tracing, and assertions for the selected targets in both debug and release. It instruments the calling test target too, so calls into the library cannot be inlined into an uninstrumented test module and disappear from coverage. Dependency code inlined or specialised into a selected module still contributes coverage, because selection works by compiled module rather than by where each function's source lives.
 
-On Windows the command does not instrument the test target, and it runs campaigns in debug only. SwiftPM's release test runners on Windows do not load test targets that contain only Swift Testing tests, so a release campaign would find no tests.
+On Windows the command does not instrument the test target. SwiftPM builds a separate runner for each test target there, and that runner cannot link the coverage runtime. Code that lives only in the test target, including the property closure itself, records no coverage, and the inlining protection described above does not apply. A property whose attempts never reach an instrumented target stops after a fixed number of attempts with a "recorded no coverage at all" error, even when it resumed a crashed run and reported that run's trap. Keep the logic a property checks in the library under test, and have every attempt call into it.
+
+Windows campaigns also run in debug only. SwiftPM's release test runners on Windows do not load test targets that contain only Swift Testing tests, so a release campaign would find no tests.
 
 The overlay preserves relative dependency paths and the manifest's `#filePath`. This first version requires a top-level variable named `package` and a single `Package.swift`. Version-specific manifests such as `Package@swift-6.4.swift` are rejected. You can select root Swift library, executable, and test targets. Dependency targets, C-family targets, macro targets, and binary targets cannot be selected. The command leaves Exhaust's coverage runtime uninstrumented.
 
