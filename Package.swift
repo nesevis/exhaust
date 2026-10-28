@@ -74,8 +74,9 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
     ] + swiftLintDependency,
     targets: [
-        .executableTarget(name: "ExhaustExploreCommand"),
-        .testTarget(name: "ExhaustExploreCommandTests", dependencies: ["ExhaustExploreCommand", "Exhaust"]),
+        .target(name: "ExhaustSupport", swiftSettings: strictConcurrencySettings),
+        .executableTarget(name: "ExhaustExploreCommand", dependencies: ["ExhaustSupport"]),
+        .testTarget(name: "ExhaustExploreCommandTests", dependencies: ["ExhaustExploreCommand", "Exhaust", "ExhaustSupport"]),
         // IssueReporting needs its dynamic test support to report failures in release builds.
         // The manifest overlay attaches this only to test targets, never the instrumented library.
         .target(
@@ -127,6 +128,7 @@ let package = Package(
             name: "Exhaust",
             dependencies: [
                 "ExhaustCore",
+                "ExhaustSupport",
                 "ExhaustGenerators",
                 .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
                 .product(name: "IssueReporting", package: "swift-issue-reporting"),
@@ -156,6 +158,7 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 "ExhaustCore",
+                "ExhaustSupport",
                 "ExhaustTestSupport",
                 .product(name: "IssueReportingTestSupport", package: "swift-issue-reporting"),
             ],

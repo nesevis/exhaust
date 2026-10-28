@@ -12,7 +12,7 @@ public struct FuzzReport: Sendable {
     ///
     /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier: one reduced form observed through more than one coverage signature.
     public struct Cluster: Sendable {
-        /// Stable identifier in discovery order, starting at 0.
+        /// Campaign-local identifier in discovery order, starting at 0.
         public let id: Int
 
         /// A rendered description of the canonical reduced counterexample.
@@ -61,6 +61,12 @@ public struct FuzzReport: Sendable {
 
         /// The reduced choice sequence retained for source-located diagnostic replay. Package code uses this to materialize the counterexample without exposing the generator's internal representation publicly.
         package let reducedSequence: ExhaustCore.ChoiceSequence
+
+        /// Canonical identity from the inventory, excluding path-dependent generator metadata.
+        package let reducedKey: String
+
+        /// The module holding the property closure, whose suspects rank last; nil when the report was built outside a campaign.
+        package let propertyModule: String?
     }
 
     /// One edge that separates a cluster's failures from passing runs.
@@ -123,6 +129,14 @@ public struct FuzzReport: Sendable {
         /// Whether debug info placed the address in a synthesized body (a derived conformance, a property wrapper's backing accessor), which the compiler files under `/<compiler-generated>`. Not a place to look.
         package var isSynthesized: Bool {
             file?.contains("<compiler-generated>") == true
+        }
+
+        /// Whether the symbol belongs to `module`; false when either is unknown.
+        package func isInModule(_ module: String?) -> Bool {
+            guard let module, let symbolModule = self.module else {
+                return false
+            }
+            return symbolModule == module
         }
     }
 
@@ -199,6 +213,9 @@ public struct FuzzReport: Sendable {
     /// Whether this run consumed a crashed predecessor's checkpoint, restoring its corpus and fault inventory. Package-visible so issue reporting can tell "the budget was spent by crashed predecessors" from "the property was never invoked".
     package private(set) var resumedFromCrash = false
 
+    /// Whether the campaign records this report's summary and cluster attachments. Decided once on the test task before the report is rendered, so the rendering points at attachments only when they exist, whichever task renders it. False for a report built outside a campaign.
+    package internal(set) var recordsAttachments = false
+
     /// What the search opened and what became of it, by phase and by producer.
     public let attempts: Attempts
 
@@ -210,6 +227,53 @@ public struct FuzzReport: Sendable {
 
     /// Where the run's wall clock went.
     public let timing: Timing
+
+    /// What a run's result means for the property it searched.
+    ///
+    /// An empty ``clusters`` list is a pass only when the search itself ran to a normal stop and the property judged at least one candidate. A run without instrumentation, with a rejected setting, or whose property discarded every input also has no clusters; ``outcome`` keeps those apart from a pass.
+    public enum Outcome: Sendable, Equatable {
+        /// The search ran to a normal stop, the property passed or failed at least one candidate, and none failed.
+        case passed
+
+        /// The run found a failure, reduced or unreduced, or continued a crashed predecessor whose trap is reported as a finding.
+        case failed
+
+        /// The build lacks coverage instrumentation, so the search did not run and the property was not checked. An ordinary uninstrumented `swift test` ends here.
+        case skipped
+
+        /// The run could not judge the property: a setting was rejected, generation failed, coverage was unreachable, asynchronous work escaped an attempt, or every candidate that reached the property was discarded or stalled without a verdict.
+        case error
+    }
+
+    /// The run's verdict on the property, for setting an exit status or gating a pipeline without combining ``termination``, ``attempts``, and the inventory yourself.
+    ///
+    /// ```swift
+    /// let report = await #explore(inputs, time: .minutes(30)) { input in
+    ///     try Parser.parse(input).isWellFormed
+    /// }
+    /// guard report.outcome == .passed else { exit(EXIT_FAILURE) }
+    /// ```
+    public var outcome: Outcome {
+        switch termination {
+            case .instrumentationMissing:
+                return .skipped
+            case .invalidConfiguration, .generationFailed, .coverageUnreachable, .uncontainedAsyncWork:
+                return .error
+            case .budgetExhausted, .coveragePlateau, .attemptLimitReached, .firstFaultFound:
+                guard resumedFromCrash == false else {
+                    return .failed
+                }
+                guard attempts.judged > 0 else {
+                    return .error
+                }
+                return switch clusters.isEmpty && unreducedFailureCounts.isEmpty {
+                    case true:
+                        .passed
+                    case false:
+                        .failed
+                }
+        }
+    }
 
     /// Search attempts by phase and by producer.
     ///
@@ -273,6 +337,9 @@ public struct FuzzReport: Sendable {
 
         /// Evaluated attempts the property discarded by throwing a skip error (its precondition was not met). Counted inside ``evaluated``: the property ran and its coverage was recorded, and a coverage-novel discard stays in the corpus as a low-weight mutation parent so the search can climb toward valid inputs.
         public let discardedByProperty: Int
+
+        /// Evaluated attempts the property passed or failed: ``evaluated`` less its discards and the inconclusive evaluations that reached no verdict. A run can evaluate many inputs and judge none of them, which is not a pass.
+        package let judged: Int
 
         /// Comparand-substitution energy keys seated over another key because their whole probe window was occupied. A high ratio to ``operandEnergySeatings`` means the retirement table is undersized for the run, so a retired operand is resurrected by collision rather than by yielding.
         package let operandEnergyEvictions: Int
@@ -544,7 +611,7 @@ public struct FuzzReport: Sendable {
         __ExhaustRuntime.renderFuzzSummary(self)
     }
 
-    /// Renders the run's full inventory as the text of the `explore-time-summary.txt` attachment.
+    /// Renders the run's full inventory as the text of its summary attachment, named with the test and seed.
     ///
     /// Where ``renderedSummary()`` keeps to the reader's questions, this rendering carries the search's own figures: throughput, testing overhead, the instrumented and covered edge counts, the reachability estimate, per-cluster membership and discovery phase, and up to three suspects per cluster. Use it when a test asserts on those, or when a tool wants the numbers without parsing the report. The same wording caveat applies: match substrings, not whole lines.
     public func renderedAttachmentSummary() -> String {
@@ -567,8 +634,10 @@ package extension FuzzReport {
 
     /// Builds the public report from the runner's raw result. Cluster timestamps are converted from monotonic clock readings to run-relative durations.
     ///
-    /// - Parameter symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs; a synthetic source's edge indices do not address real program counters.
-    init(result: FuzzRunResult, symbolizeEdges: Bool = false) {
+    /// - Parameters:
+    ///   - symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs; a synthetic source's edge indices do not address real program counters.
+    ///   - propertyModule: The module holding the property closure, whose discriminating edges rank after every other module's.
+    init(result: FuzzRunResult, symbolizeEdges: Bool = false, propertyModule: String? = nil) {
         let runStartNanoseconds = result.startNanoseconds
         let discriminations = Dictionary(
             uniqueKeysWithValues: result.clusterDiscriminations.map { ($0.clusterID, $0) }
@@ -600,7 +669,12 @@ package extension FuzzReport {
                     }
                 )
             }
-            let rankedEdges = __ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: symbolizeEdges, limit: FuzzTunables.discriminatingEdgeLimit)
+            let rankedEdges = __ExhaustRuntime.distinctSuspectEdges(
+                candidates,
+                symbolized: symbolizeEdges,
+                propertyModule: propertyModule,
+                limit: FuzzTunables.discriminatingEdgeLimit
+            )
             return Cluster(
                 id: cluster.id,
                 reducedDescription: cluster.reducedDescription,
@@ -624,7 +698,9 @@ package extension FuzzReport {
                         : 0
                 ),
                 discriminatingEdges: rankedEdges,
-                reducedSequence: cluster.reducedSequence
+                reducedSequence: cluster.reducedSequence,
+                reducedKey: cluster.reducedKey,
+                propertyModule: propertyModule
             )
         }
         unreducedFailureCounts = Dictionary(
@@ -655,6 +731,7 @@ package extension FuzzReport {
             ),
             evaluated: counts.evaluatedSearchCases,
             discardedByProperty: counts.discardedEvaluations,
+            judged: counts.evaluatedSearchCases - counts.discardedEvaluations - counts.inconclusiveAttempts,
             operandEnergyEvictions: result.diagnostics.operandEnergyEvictions,
             operandEnergySeatings: result.diagnostics.operandEnergySeatings,
             operandEnergyRetirements: result.diagnostics.operandEnergyRetirements
@@ -749,6 +826,7 @@ package extension FuzzReport {
                 duplicateSkips: .zero,
                 evaluated: 0,
                 discardedByProperty: 0,
+                judged: 0,
                 operandEnergyEvictions: 0,
                 operandEnergySeatings: 0,
                 operandEnergyRetirements: 0

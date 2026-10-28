@@ -13,12 +13,14 @@ import Testing
             }
             try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
 
-            let probe = try #require(trapProbeURL(), "SpecTrapProbe executable not found next to the test bundle")
+            let probe = try #require(TrapProbe.url(named: "SpecTrapProbe"), "SpecTrapProbe executable not found next to the test bundle")
             let process = Process()
             process.executableURL = probe
             process.arguments = []
             var environment = ProcessInfo.processInfo.environment
             environment["EXHAUST_STATE_DIR"] = stateDirectory.path
+            // The probe traps by design; publishing it to the explore command's report would record a deliberate crash as an interrupted campaign of the run.
+            environment.removeValue(forKey: "EXHAUST_REPORT_DIR")
             process.environment = environment
             process.standardOutput = Pipe()
             process.standardError = Pipe()
@@ -45,26 +47,6 @@ import Testing
         FileManager.default.temporaryDirectory
             .appendingPathComponent("exhaust-spec-trap-tests")
             .appendingPathComponent(UUID().uuidString)
-    }
-
-    private func trapProbeURL(testFilePath: String = #filePath) -> URL? {
-        let fileManager = FileManager.default
-        var root = URL(fileURLWithPath: testFilePath).deletingLastPathComponent()
-        for _ in 0 ..< 8 {
-            if fileManager.fileExists(atPath: root.appendingPathComponent("Package.swift").path) {
-                break
-            }
-            root = root.deletingLastPathComponent()
-        }
-        let buildRoot = root.appendingPathComponent(".build")
-
-        for configuration in ["debug", "release"] {
-            let candidate = buildRoot.appendingPathComponent(configuration).appendingPathComponent("SpecTrapProbe")
-            if fileManager.isExecutableFile(atPath: candidate.path) {
-                return candidate
-            }
-        }
-        return nil
     }
 
     private func findFile(named name: String, under directory: URL) -> URL? {

@@ -22,12 +22,14 @@ struct ExploreTrapTests {
             try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
             let sidecarURL = stateDirectory.appendingPathComponent("trapping-input.json")
 
-            let probe = try #require(trapProbeURL(), "ExploreTrapProbe executable not found next to the test bundle")
+            let probe = try #require(TrapProbe.url(named: "ExploreTrapProbe"), "ExploreTrapProbe executable not found next to the test bundle")
             let process = Process()
             process.executableURL = probe
             process.arguments = [sidecarURL.path]
             var environment = ProcessInfo.processInfo.environment
             environment["EXHAUST_STATE_DIR"] = stateDirectory.path
+            // The probe traps by design; publishing it to the explore command's report would record a deliberate crash as an interrupted campaign of the run.
+            environment.removeValue(forKey: "EXHAUST_REPORT_DIR")
             process.environment = environment
             process.standardOutput = Pipe()
             process.standardError = Pipe()
@@ -113,39 +115,6 @@ private func scratchDirectory() -> URL {
     FileManager.default.temporaryDirectory
         .appendingPathComponent("exhaust-trap-tests")
         .appendingPathComponent(UUID().uuidString)
-}
-
-/// Locates the `ExploreTrapProbe` executable under the package's build products directory.
-///
-/// Discovery starts from the package root (walking up from this test's source path to the manifest) rather than the test runner's path, which under `swift test` is a system helper nowhere near the products.
-private func trapProbeURL(testFilePath: String = #filePath) -> URL? {
-    let fileManager = FileManager.default
-    var root = URL(fileURLWithPath: testFilePath).deletingLastPathComponent()
-    for _ in 0 ..< 8 {
-        if fileManager.fileExists(atPath: root.appendingPathComponent("Package.swift").path) {
-            break
-        }
-        root = root.deletingLastPathComponent()
-    }
-    let buildRoot = root.appendingPathComponent(".build")
-
-    // The conventional debug/release symlinks first, then a bounded search for other build layouts.
-    for configuration in ["debug", "release"] {
-        let candidate = buildRoot.appendingPathComponent(configuration).appendingPathComponent("ExploreTrapProbe")
-        if fileManager.isExecutableFile(atPath: candidate.path) {
-            return candidate
-        }
-    }
-    guard let enumerator = fileManager.enumerator(at: buildRoot, includingPropertiesForKeys: [.isDirectoryKey]) else {
-        return nil
-    }
-    for case let url as URL in enumerator where url.lastPathComponent == "ExploreTrapProbe" {
-        let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-        if isDirectory == false, fileManager.isExecutableFile(atPath: url.path) {
-            return url
-        }
-    }
-    return nil
 }
 
 private func findFile(named name: String, under directory: URL) -> URL? {

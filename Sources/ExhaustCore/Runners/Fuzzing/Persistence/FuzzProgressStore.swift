@@ -17,6 +17,13 @@ package struct FuzzProgressStore: Sendable {
         directory.appendingPathComponent("breadcrumb.bin")
     }
 
+    /// Keeps the ownership file outside the removable checkpoint directory. It remains after release so concurrent openers always lock the same inode.
+    package var lockFileURL: URL {
+        directory.deletingLastPathComponent()
+            .appendingPathComponent(".locks")
+            .appendingPathComponent(directory.lastPathComponent + ".lock")
+    }
+
     /// Creates a store rooted at an explicit directory. Tests use this with a scratch location.
     package init(directory: URL) {
         self.directory = directory

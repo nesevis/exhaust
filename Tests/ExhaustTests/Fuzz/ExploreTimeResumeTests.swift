@@ -1,11 +1,133 @@
 import ExhaustCore
+import ExhaustSupport
 import ExhaustTestSupport
 import Foundation
+import IssueReporting
 import Testing
 @testable import Exhaust
 
 @Suite("#explore(time:) crash resume")
 struct ExploreTimeResumeTests {
+    @Test("Reservation failures report once and never hide invalid settings", arguments: ReservationFailureScenario.allCases)
+    func reservationFailureReporting(scenario: ReservationFailureScenario) async throws {
+        let testIdentity = Test.current.map { String(describing: $0.id) }
+        let line = UInt(100 + scenario.rawValue)
+        let store = FuzzCampaignContext.resolve(
+            fileID: #fileID,
+            filePath: #filePath,
+            line: line,
+            column: 1,
+            seed: nil,
+            kind: .value,
+            time: .seconds(1)
+        ).store
+        defer {
+            store.removeAll()
+            try? FileManager.default.removeItem(at: store.lockFileURL)
+        }
+        let reporter = RecordingIssueReporter()
+        let report = try await __ExhaustRuntime.withReservedFuzzPersistence(
+            store: store,
+            resumeEnabled: ProcessInfo.processInfo.environment[CampaignWire.resumeKey] != "0"
+        ) { _ in
+            await withIssueReporters([reporter]) {
+                await __ExhaustRuntime.__exploreTimeAsync(
+                    .int(in: 0 ... 10),
+                    time: scenario.time,
+                    settings: scenario.settings,
+                    coverage: .injected(resumeSource()),
+                    fileID: #fileID,
+                    filePath: #filePath,
+                    line: line,
+                    column: 1
+                ) { _ in
+                    Issue.record("A rejected campaign must not invoke its property")
+                    return true
+                }
+            }
+        }
+        guard case let .invalidConfiguration(message) = report.termination else {
+            Issue.record("Expected invalidConfiguration, got \(report.termination)")
+            return
+        }
+        #expect(message.contains(scenario.expectedMessage))
+        #expect(report.attempts.total == 0)
+        #expect(reporter.issues.count == 1)
+        #expect(reporter.issues.first?.message == message)
+        #expect(reporter.issues.first?.testID == testIdentity)
+        #expect(reporter.issues.first?.line == line)
+        #expect(FileManager.default.fileExists(atPath: store.progressFileURL.path) == false)
+    }
+
+    @Test("Invalid replay settings create no checkpoint or ownership files")
+    func invalidReplayLeavesNoFiles() async {
+        let line: UInt = 200
+        let store = FuzzCampaignContext.resolve(
+            fileID: #fileID,
+            filePath: #filePath,
+            line: line,
+            column: 1,
+            seed: nil,
+            kind: .value,
+            time: .seconds(1)
+        ).store
+        defer {
+            store.removeAll()
+            try? FileManager.default.removeItem(at: store.lockFileURL)
+        }
+        let reporter = RecordingIssueReporter()
+        let report = await withIssueReporters([reporter]) {
+            await __ExhaustRuntime.__exploreTimeAsync(
+                .int(in: 0 ... 10),
+                time: .seconds(1),
+                settings: [.replay(.encoded("19-U3")), .suppress(.all)],
+                coverage: .injected(resumeSource()),
+                fileID: #fileID,
+                filePath: #filePath,
+                line: line,
+                column: 1
+            ) { _ in true }
+        }
+        #expect(report.attempts.total == 0)
+        #expect(reporter.issues.count == 1)
+        #expect(reporter.issues.first?.message.contains("Invalid replay seed") == true)
+        #expect(FileManager.default.fileExists(atPath: store.directory.path) == false)
+        #expect(FileManager.default.fileExists(atPath: store.lockFileURL.path) == false)
+    }
+
+    @Test("Concurrent campaigns at one value call site keep their explicit seeds")
+    func concurrentSeedCampaigns() async {
+        let rendezvous = CampaignRendezvous()
+        let reports = await withTaskGroup(of: FuzzReport.self, returning: [FuzzReport].self) { group in
+            for seed in UInt64(1) ... 2 {
+                group.addTask {
+                    await __ExhaustRuntime.__exploreTimeAsync(
+                        .int(in: 0 ... 10),
+                        time: .seconds(1),
+                        settings: [.replay(.numeric(seed)), .suppress(.all)],
+                        coverage: .injected(resumeSource())
+                    ) { _ in rendezvous.meet(seed: seed) }
+                }
+            }
+            var reports: [FuzzReport] = []
+            for await report in group {
+                reports.append(report)
+            }
+            return reports
+        }
+        #expect(Set(reports.map { $0.seed }) == [1, 2])
+        for report in reports {
+            #expect(report.attempts.evaluated > 0)
+            #expect(report.clusters.isEmpty)
+            switch report.termination {
+                case .budgetExhausted, .coveragePlateau:
+                    break
+                default:
+                    Issue.record("Unexpected campaign termination: \(report.termination)")
+            }
+        }
+    }
+
     @Test("A crashed predecessor restores: corpus and inventory carry over, phases skip to the mutation phase, the trap reports, and completion removes the log")
     func resumeEndToEnd() throws {
         let directory = scratchDirectory()
@@ -410,4 +532,55 @@ private func resumeSource() -> SyntheticCoverageSource<Int> {
         }
         return edges
     })
+}
+
+/// Forces two GCD-backed searches to overlap; timeout makes a missing second run fail rather than hang.
+private final class CampaignRendezvous: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var seeds: Set<UInt64> = []
+
+    func meet(seed: UInt64) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        seeds.insert(seed)
+        condition.broadcast()
+        let deadline = Date().addingTimeInterval(5)
+        while seeds.count < 2 {
+            guard condition.wait(until: deadline) else {
+                return false
+            }
+        }
+        return true
+    }
+}
+
+/// Exercises settings validation while another invocation owns the otherwise matching unseeded store.
+enum ReservationFailureScenario: Int, CaseIterable {
+    case conflict
+    case screeningReplay
+    case zeroBudget
+
+    var time: TimeSpan {
+        self == .zeroBudget ? .zero : .seconds(1)
+    }
+
+    var settings: [PropertyFuzzSettings] {
+        switch self {
+            case .screeningReplay:
+                [.replay(.encoded("19-U3")), .suppress(.all)]
+            case .conflict, .zeroBudget:
+                [.suppress(.all)]
+        }
+    }
+
+    var expectedMessage: String {
+        switch self {
+            case .conflict:
+                "Another campaign owns this checkpoint store"
+            case .screeningReplay:
+                "Invalid replay seed"
+            case .zeroBudget:
+                "positive time budget"
+        }
+    }
 }

@@ -577,6 +577,25 @@ struct ExploreTimeRuntimeTests {
         #expect(suspects == ["RacyLedger.audit() (RacyLedger.swift:45)"])
     }
 
+    @Test("Terminal suspects rank the property closure's module after line-less library code")
+    func suspectsRankPropertyModuleLast() {
+        // Under the explore command the test target is instrumented, so the property closure itself discriminates: with a resolved line it would otherwise lead the line-less decoder that selected the faulty branch.
+        let edges: [FuzzReport.DiscriminatingEdge] = [
+            makeEdge(index: 1, symbol: makeSymbol("closure #2 in static ParserTests.fuzz()", module: "ParserTests", file: "ParserTests.swift", line: 12)),
+            makeEdge(index: 2, symbol: makeSymbol("static Parser.integrityCheck(mode:)", module: "Parser", file: "Parser.swift", line: 121)),
+            makeEdge(index: 3, symbol: makeSymbol("static Parser.decodeData(_:)", module: "Parser", file: "Parser.swift", line: nil)),
+            makeEdge(index: 4, symbol: makeSymbol("static Parser.decode(_:)", module: "Parser", file: "Parser.swift", line: nil)),
+        ]
+        let suspects = __ExhaustRuntime.terminalSuspects(
+            for: makeCluster(discriminatingEdges: edges, propertyModule: "ParserTests")
+        )
+        #expect(suspects == [
+            "static Parser.integrityCheck(mode:) (Parser.swift:121)",
+            "static Parser.decodeData(_:) (Parser.swift)",
+            "static Parser.decode(_:) (Parser.swift)",
+        ])
+    }
+
     @Test("Terminal suspects drop edges that symbolized into synthesized bodies")
     func suspectsDropCompilerGenerated() {
         // Debug info files a derived conformance's body under a pseudo-path. It names no branch a reader can act on, so it never reaches a suspect line.
@@ -618,6 +637,26 @@ struct ExploreTimeRuntimeTests {
                 column: #column
             )
         }
+    }
+
+    @Test("A run whose property discards every input reports a pointless run instead of passing")
+    func allDiscardedRunReportsPointlessRun() async {
+        let reporter = RecordingIssueReporter()
+        let report = await withIssueReporters([reporter]) {
+            await __ExhaustRuntime.__exploreTimeAsync(
+                #gen(.int(in: 0 ... 3)),
+                time: .seconds(1),
+                settings: [.replay(.numeric(1)), .suppress(.logs)],
+                coverage: .injected(SyntheticCoverageSource<Int>(edgeCount: 4, edges: { [$0] }))
+            ) { _ -> Bool in
+                throw PropertySkip()
+            }
+        }
+        #expect(report.attempts.evaluated > 0)
+        #expect(report.attempts.judged == 0)
+        #expect(report.outcome == .error)
+        #expect(reporter.issues.count == 1)
+        #expect(reporter.issues.first?.message.contains("judged none of the") == true)
     }
 
     @Test("Verdict wrapping distinguishes false, thrown, and skip")
@@ -676,6 +715,31 @@ struct ExploreTimeRuntimeTests {
 
 private struct MarkerError: Error {}
 
+/// One generated suspect candidate: a function from a small pool so locations collide, in the property module or a library module, with no line or one of two lines.
+private struct SuspectDraft {
+    static let propertyModule = "FuzzTests"
+
+    let name: Int
+    let isInPropertyModule: Bool
+    let line: Int
+
+    func edge(index: Int) -> FuzzReport.DiscriminatingEdge {
+        let module = switch isInPropertyModule {
+            case true:
+                Self.propertyModule
+            case false:
+                "Library"
+        }
+        let resolvedLine: Int? = switch line {
+            case 0:
+                nil
+            default:
+                line
+        }
+        return makeEdge(index: index, symbol: makeSymbol("function\(name)()", module: module, file: "File.swift", line: resolvedLine))
+    }
+}
+
 private func makeEdge(index: Int, symbol: FuzzReport.SymbolLocation?) -> FuzzReport.DiscriminatingEdge {
     FuzzReport.DiscriminatingEdge(
         edgeIndex: index,
@@ -689,7 +753,10 @@ private func makeSymbol(_ displayName: String, module: String? = "SpecFixture", 
     FuzzReport.SymbolLocation(module: module, displayName: displayName, fullName: displayName, file: file, line: line)
 }
 
-private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -> FuzzReport.Cluster {
+private func makeCluster(
+    discriminatingEdges: [FuzzReport.DiscriminatingEdge],
+    propertyModule: String? = nil
+) -> FuzzReport.Cluster {
     FuzzReport.Cluster(
         id: 0,
         reducedDescription: "value",
@@ -703,7 +770,9 @@ private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -
         firstSeenAttempt: 1,
         lastSeen: .seconds(1),
         discriminatingEdges: discriminatingEdges,
-        reducedSequence: []
+        reducedSequence: [],
+        reducedKey: "",
+        propertyModule: propertyModule
     )
 }
 
@@ -762,6 +831,35 @@ struct DiscriminatingEdgeFoldingTests {
             makeEdge(index: index, symbol: makeSymbol("function\(index)()", file: "File.swift", line: 10 + index))
         }
         #expect(__ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: 3).map(\.edgeIndex) == [0, 1, 2])
+    }
+
+    @Test("Property-module locations follow every other location and fill only the slots the rest leave free")
+    func propertyModuleLocationsRankLast() {
+        let gen = #gen(.int(in: 0 ... 3), .bool(), .int(in: 0 ... 2)) { name, isInPropertyModule, line in
+            SuspectDraft(name: name, isInPropertyModule: isInPropertyModule, line: line)
+        }
+        #exhaust(#gen(gen.array(length: 0 ... 12), .int(in: 1 ... 6))) { drafts, limit in
+            let candidates = drafts.enumerated().map { $0.element.edge(index: $0.offset) }
+            let folded = __ExhaustRuntime.distinctSuspectEdges(
+                candidates,
+                symbolized: true,
+                propertyModule: SuspectDraft.propertyModule,
+                limit: limit
+            )
+            let isProperty: (FuzzReport.DiscriminatingEdge) -> Bool = {
+                $0.symbol?.isInModule(SuspectDraft.propertyModule) == true
+            }
+            let libraryOnly = __ExhaustRuntime.distinctSuspectEdges(
+                candidates.filter { isProperty($0) == false },
+                symbolized: true,
+                limit: limit
+            )
+            let unranked = __ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: true, limit: candidates.count + 1)
+            // Library locations are exactly the ones folding would keep without the property module, and every property location trails them.
+            return folded.filter { isProperty($0) == false }.map(\.edgeIndex) == libraryOnly.map(\.edgeIndex)
+                && folded.drop(while: { isProperty($0) == false }).allSatisfy { isProperty($0) }
+                && folded.count == min(limit, unranked.count)
+        }
     }
 }
 

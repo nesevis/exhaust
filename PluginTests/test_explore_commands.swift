@@ -34,6 +34,7 @@ func validate() throws {
     let checks: [(String, () throws -> Void)] = [
         ("command help", suite.commandHelp),
         ("consumer workflow", suite.consumerWorkflow),
+        ("serial counter workflow", suite.serialCounterWorkflow),
         ("nonstandard manifest", suite.nonstandardManifest),
         ("versioned manifests", suite.rejectedManifests),
         ("invalid arguments", suite.invalidArguments),
@@ -109,7 +110,7 @@ struct ExploreCommandsTests {
     func commandHelp() throws {
         let help = try plugin(["--help"])
         try require(help.contains("USAGE: swift package explore"), help)
-        for option in ["--instrument", "--test-target", "--filter", "--time", "--configuration", "--help"] {
+        for option in ["--instrument", "--test-target", "--filter", "--time", "--configuration", "--no-parallel", "--output", "--xunit", "--help"] {
             try require(help.contains(option), "Missing \(option) in help:\n\(help)")
         }
         for option in ["--runtime-package", "--workspace-path", "--output-path"] {
@@ -117,6 +118,27 @@ struct ExploreCommandsTests {
         }
         let normalized = help.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         try require(normalized.contains("default: release"), help)
+    }
+
+    func serialCounterWorkflow() throws {
+        let result = try plugin(["--instrument", "MyLibrary", "--test-target", "ParserTests", "--filter", "selected", "--time", "2", "--no-parallel"])
+        try require(result.contains("Coverage: inline-8bit-counters; tests run serially."), result)
+        try require(result.contains("Test selected() started"), result)
+        guard let buildLine = result.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("Build: ") }) else {
+            throw ValidationFailure("Missing build path:\n\(result)")
+        }
+        let scratch = URL(fileURLWithPath: String(buildLine.dropFirst("Build: ".count)))
+        let objects = try files(in: scratch).filter {
+            ["MyLibrary.o", "MyLibrary.swift.o", "MyLibrary.obj", "MyLibrary.swift.obj"].contains($0.lastPathComponent)
+                && $0.deletingLastPathComponent().lastPathComponent != "Modules"
+        }
+        try require(objects.isEmpty == false, "Missing instrumented library object")
+        for object in objects {
+            let symbols = try symbols(object)
+            try require(symbols.contains("sanitizer_cov_8bit_counters_init"), symbols)
+            try require(symbols.contains("sanitizer_cov_trace_pc_guard") == false, symbols)
+            try require(symbols.contains("sanitizer_cov_trace_const_cmp"), symbols)
+        }
     }
 
     func consumerWorkflow() throws {
@@ -140,6 +162,11 @@ struct ExploreCommandsTests {
             throw ValidationFailure("Missing build path:\n\(result)")
         }
         let scratch = URL(fileURLWithPath: String(buildLine.dropFirst("Build: ".count))).resolvingSymlinksInPath()
+        let defaultReport = try ReportFile.json(scratch.appendingPathComponent("report.json"))
+        try require((defaultReport["xunitFiles"] as? [String]) == [], "xUnit should be opt-in")
+        try require(!manager.fileExists(atPath: scratch.appendingPathComponent("xunit-swift-testing.xml").path), "Unexpected default XML")
+        let defaultEvents = try String(contentsOf: scratch.appendingPathComponent("events.jsonl"), encoding: .utf8)
+        try require(defaultEvents.contains("run.started") && defaultEvents.contains("run.finished"), "Missing default JSONL stream")
         let pluginRoot = consumer.appendingPathComponent(".build/plugins").resolvingSymlinksInPath()
         try require(scratch.path.hasPrefix(pluginRoot.path + "/"), "Build escaped plugin workspace: \(scratch.path)")
         try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
@@ -163,12 +190,41 @@ struct ExploreCommandsTests {
             let locked = try helperRun(arguments, outputPath: outputPath, success: false)
             try require(locked.contains("Another explore command"), locked)
         }
-        let nested = try helperRun(arguments + ["--filter", "Nested"], outputPath: outputPath)
+        let nested = try helperRun(arguments + ["--filter", "Nested", "--output", "custom state", "--xunit"], outputPath: outputPath)
         try require(nested.contains("parameterized") && !nested.contains("No matching test cases"), nested)
+        let customOutput = consumer.appendingPathComponent("custom state")
+        for (label, expected) in [
+            ("Attachments: ", customOutput.appendingPathComponent("attachments")),
+            ("Crash recovery state: ", customOutput.appendingPathComponent("state").appendingPathComponent(scratch.lastPathComponent)),
+        ] {
+            guard let line = nested.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix(label) }) else {
+                throw ValidationFailure("Missing \(label) in output:\n\(nested)")
+            }
+            let path = URL(fileURLWithPath: String(line.dropFirst(label.count))).resolvingSymlinksInPath()
+            let actual = label == "Attachments: " ? path.deletingLastPathComponent() : path
+            try require(actual.path == expected.resolvingSymlinksInPath().path, "Unexpected output location: \(actual.path)")
+        }
+        try require(!manager.contentsOfDirectory(atPath: customOutput.appendingPathComponent("attachments").nativePath).isEmpty,
+                    "Missing custom attachments directory")
+        // Campaign aggregation runs against the real runtime in run_real_consumer.swift; this provider has no Exhaust runtime.
+        let aggregate = try ReportFile.json(customOutput.appendingPathComponent("report.json"))
+        try require(aggregate["status"] as? String == "succeeded", "Missing successful aggregate")
+        let xunitFiles = aggregate["xunitFiles"] as? [String] ?? []
+        try require(!xunitFiles.isEmpty, "Missing native xUnit output")
+        let xml = try xunitFiles.map { try String(contentsOf: customOutput.appendingPathComponent($0), encoding: .utf8) }.joined()
+        try require(xml.components(separatedBy: "name=\"parameterized(value:)\"").count == 2,
+                    "Expected one native XML test entry for all parameterized cases:\n\(xml)")
+        try withBuildLock(customOutput.appendingPathComponent("report.lock")) {
+            let locked = try helperRun(arguments + ["--filter", "Nested", "--output", "custom state"], outputPath: outputPath, success: false)
+            try require(locked.contains("Another explore command"), locked)
+        }
         let legacy = try helperRun(arguments + ["--filter", "testLegacy"], outputPath: outputPath)
         try require(legacy.contains("testLegacy") && !legacy.contains("No matching test cases"), legacy)
-        let failed = try plugin(arguments + ["--filter", "deliberateFailure"], success: false)
+        let failed = try plugin(arguments + ["--filter", "deliberateFailure", "--xunit"], success: false)
         try require(failed.contains("EXPECTED_FAILURE_FORWARDING"), failed)
+        let failureReport = try ReportFile.json(scratch.appendingPathComponent("report.json"))
+        try require(failureReport["status"] as? String == "failed", "Failed process lost its JSON report")
+        try require((failureReport["xunitFiles"] as? [String])?.isEmpty == false, "Failed tests lost native xUnit results")
         try require(Data(contentsOf: manifest) == original, "Failed campaign modified Package.swift")
         try require(Data(contentsOf: dependencyManifest) == dependencyOriginal, "Campaign modified dependency manifest")
         let missing = try helperRun(arguments + ["--filter", "doesNotExist"], outputPath: outputPath, success: false)
@@ -264,6 +320,8 @@ struct ExploreCommandsTests {
         try manager.copyItem(at: repository.appendingPathComponent("Plugins"), to: provider.appendingPathComponent("Plugins"))
         try manager.copyItem(at: repository.appendingPathComponent("Sources/ExhaustExploreCommand"),
                              to: provider.appendingPathComponent("Sources/ExhaustExploreCommand"))
+        try manager.copyItem(at: repository.appendingPathComponent("Sources/ExhaustSupport"),
+                             to: provider.appendingPathComponent("Sources/ExhaustSupport"))
         try write(provider, "Package.swift", #"""
         // swift-tools-version: 6.4
         import PackageDescription
@@ -273,8 +331,10 @@ struct ExploreCommandsTests {
             .plugin(name: "Explore", targets: ["Explore"]),
         ], targets: [
             .target(name: "Callbacks"),
+            .target(name: "ExhaustSupport"),
             .executableTarget(
                 name: "ExhaustExploreCommand",
+                dependencies: ["ExhaustSupport"],
                 swiftSettings: [.treatAllWarnings(as: .error)]
             ),
             .plugin(name: "Explore", capability: .command(intent: .custom(verb: "explore", description: "Explore"), permissions: []), dependencies: ["ExhaustExploreCommand"]),
@@ -308,6 +368,7 @@ struct ExploreCommandsTests {
         #include <stdint.h>
         #include <stddef.h>
         void callbacks_link(void) {}
+        void __sanitizer_cov_8bit_counters_init(uint8_t *a, uint8_t *b) {}
         void __sanitizer_cov_trace_pc_guard(uint32_t *g) {}
         void __sanitizer_cov_trace_pc_guard_init(uint32_t *a, uint32_t *b) { while (a < b) *a++ = 1; }
         void __sanitizer_cov_pcs_init(const uintptr_t *a, const uintptr_t *b) {}
@@ -316,6 +377,10 @@ struct ExploreCommandsTests {
         CMP(1, uint8_t) CMP(2, uint16_t) CMP(4, uint32_t) CMP(8, uint64_t)
         void __sanitizer_cov_trace_switch(uint64_t a, uint64_t *b) {}
         #if defined(_WIN32)
+        #pragma section(".SCOV$CA", read, write)
+        __declspec(allocate(".SCOV$CA")) uint64_t __start___sancov_cntrs = 0;
+        #pragma section(".SCOV$CZ", read, write)
+        __declspec(allocate(".SCOV$CZ")) __declspec(align(1)) uint8_t __stop___sancov_cntrs = 0;
         #pragma section(".SCOV$GA", read, write)
         __declspec(allocate(".SCOV$GA")) uint64_t __start___sancov_guards = 0;
         #pragma section(".SCOV$GZ", read, write)
@@ -337,7 +402,14 @@ struct ExploreCommandsTests {
         }
         @Test func deliberateFailure() { Issue.record("EXPECTED_FAILURE_FORWARDING") }
         @Suite struct Nested {
-            @Test(arguments: [1, 2]) func parameterized(value: Int) { #expect(value > 0) }
+            @Test(arguments: [1, 2]) func parameterized(value: Int) throws {
+                #expect(value > 0)
+                let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                let expected = root.appendingPathComponent("custom state")
+                let actual = ProcessInfo.processInfo.environment["EXHAUST_STATE_DIR"].map { URL(fileURLWithPath: $0).resolvingSymlinksInPath() }
+                #expect(actual?.deletingLastPathComponent().lastPathComponent == "state")
+                #expect(actual?.deletingLastPathComponent().deletingLastPathComponent().path == expected.resolvingSymlinksInPath().path)
+            }
         }
         final class Legacy: XCTestCase {
             func testLegacy() { XCTAssertTrue(parse(12345)) }
@@ -494,5 +566,15 @@ struct CommandResult {
 extension URL {
     var nativePath: String {
         withUnsafeFileSystemRepresentation { String(cString: $0!) }
+    }
+}
+
+/// Reads the command's own report.json as plain JSON, so checks follow what the command wrote instead of a copy of its model.
+enum ReportFile {
+    static func json(_ file: URL) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any] else {
+            throw ValidationFailure("Report is not a JSON object: \(file.nativePath)")
+        }
+        return object
     }
 }

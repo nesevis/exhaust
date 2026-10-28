@@ -6,6 +6,15 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+### Added
+
+- Campaign commands write a primary versioned aggregate `report.json` and a live `events.jsonl` stream in the output root; `--xunit` opts into native SwiftPM XML results. Reduced findings have stable, versioned identifiers for correlation across seeds and reruns. JSON preserves each parameterized or repeated `#explore` invocation separately, including partial results after a test-process failure; native XML retains Swift Testing's test-function grouping.
+- `FuzzReport.outcome` classifies a `#explore(time:)` run as passed, failed, skipped (no instrumentation), or error (the run could not judge the property), so a caller outside a test can set its exit status without combining the termination, attempt counts, and inventory. A run that resumed a crashed predecessor is failed. Campaign JSON `outcome` uses the same classification.
+- `swift package explore --output <path>` selects the report and recovery root, resolving relative paths from the package root and overriding `EXHAUST_STATE_DIR`.
+- Campaign summary and cluster attachment filenames include the Swift Testing test name and run seed, making parallel reports identifiable.
+- `swift package explore` runs campaigns in parallel by default with isolated guard coverage. `--no-parallel` runs tests serially with inline 8-bit counters, recording coverage across thread and task boundaries.
+- Campaign checkpoints are isolated by test, macro location, and explicit seed, with an ownership lock preventing overlapping writers. Parameterized campaigns at one call site need distinct explicit seeds. Recorder modes have separate builds and recovery directories, including under `EXHAUST_STATE_DIR`; older call-site-only checkpoints are not resumed.
+
 ## [1.8.0] - 2026-10-26
 
 ### Added

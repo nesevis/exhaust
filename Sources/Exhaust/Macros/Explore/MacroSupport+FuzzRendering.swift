@@ -39,7 +39,9 @@ extension __ExhaustRuntime {
             lines.append("\(percent)% of inputs were skipped by the property (precondition not met); the search used them to find inputs that meet it.")
         }
         lines.append(reproduceLine(report))
-        lines.append("Coverage, throughput, and full suspect lists are in the explore-time-summary.txt attachment.")
+        if report.recordsAttachments {
+            lines.append("Coverage, throughput, and full suspect lists are in this campaign's summary attachment (named with the test and seed).")
+        }
         return lines.joined(separator: "\n")
     }
 
@@ -118,8 +120,8 @@ extension __ExhaustRuntime {
         for (symptom, count) in report.unreducedFailureCounts.sorted(by: { $0.key < $1.key }) {
             lines.append("\(count) unreduced failure\(count == 1 ? "" : "s") with symptom \(symptom) matched no cluster.")
         }
-        if report.clusters.isEmpty == false {
-            lines.append("Full per-cluster detail is in the explore-time-cluster attachments.")
+        if report.clusters.isEmpty == false, report.recordsAttachments {
+            lines.append("Full per-cluster detail is in this campaign's cluster attachments (named with the test and seed).")
         }
         lines.append(reproduceLine(report))
         return lines.joined(separator: "\n")
@@ -245,7 +247,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Clusters
 
-    /// Renders one cluster for the terminal: a numbered symptom line with the time of first sighting, the reduced counterexample, and the single strongest user-code suspect. The number is the cluster's attachment number, so `explore-time-cluster-N.txt` matches.
+    /// Renders one cluster for the terminal: a numbered symptom line with the time of first sighting, the reduced counterexample, and the single strongest user-code suspect. The number matches the campaign attachment's `-cluster-N.txt` suffix.
     private static func renderClusterBrief(
         _ cluster: FuzzReport.Cluster,
         isFrontier: Bool
@@ -376,34 +378,39 @@ extension __ExhaustRuntime {
     /// Folds ranked candidate edges onto distinct source locations and drops the ones in synthesized bodies.
     ///
     /// Candidates arrive strongest first. The first edge for each symbol and line wins, so one function ranked at several offsets takes one slot; two resolved lines in one function stay distinct. An edge with no symbol is kept when the run never symbolized (a synthetic source, a build without a PC table) and dropped when it did, because the symbolizer omits compiler-generated globals and an unresolvable address is not a place to look either.
+    ///
+    /// Locations in `propertyModule` keep their relative order but follow every other location, and fill only the slots the rest leave free. The property closure discriminates its own failures whenever its module is instrumented, as it is under the explore command, and it is never the place to look.
     static func distinctSuspectEdges(
         _ candidates: [FuzzReport.DiscriminatingEdge],
         symbolized: Bool,
+        propertyModule: String? = nil,
         limit: Int
     ) -> [FuzzReport.DiscriminatingEdge] {
         var kept: [FuzzReport.DiscriminatingEdge] = []
+        var deferred: [FuzzReport.DiscriminatingEdge] = []
         var keptSymbols: [FuzzReport.SymbolLocation] = []
         for candidate in candidates {
+            guard kept.count < limit else {
+                break
+            }
             guard let symbol = candidate.symbol else {
-                if symbolized {
-                    continue
-                }
-                kept.append(candidate)
-                if kept.count == limit {
-                    break
+                if symbolized == false {
+                    kept.append(candidate)
                 }
                 continue
             }
             if symbol.isSynthesized || keptSymbols.contains(where: { $0.namesSamePlace(as: symbol) }) {
                 continue
             }
-            kept.append(candidate)
             keptSymbols.append(symbol)
-            if kept.count == limit {
-                break
+            switch symbol.isInModule(propertyModule) {
+                case true:
+                    deferred.append(candidate)
+                case false:
+                    kept.append(candidate)
             }
         }
-        return kept
+        return Array((kept + deferred).prefix(limit))
     }
 
     /// Picks up to three discriminating edges worth a terminal line. Symbols with a resolved line lead (function-entry edges name a specific location; interior edges collapse to the enclosing function and read generic), and symbols that restate the symptom's own error type trail. Symbols naming one place collapse into one, and the line-first ordering makes the line-bearing form the survivor. Empty when nothing symbolized usefully.
@@ -412,15 +419,20 @@ extension __ExhaustRuntime {
     }
 
     private static func terminalSuspectSymbols(for cluster: FuzzReport.Cluster) -> [FuzzReport.SymbolLocation] {
-        let candidates = cluster.discriminatingEdges.compactMap(\.symbol).filter { $0.isSynthesized == false }
+        let symbols = cluster.discriminatingEdges.compactMap(\.symbol).filter { $0.isSynthesized == false }
         let namesSymptom: (FuzzReport.SymbolLocation) -> Bool = { candidate in
             cluster.symptoms.contains { symptom in candidate.displayName.contains(symptom) }
         }
         let hasLine: (FuzzReport.SymbolLocation) -> Bool = { ($0.line ?? 0) > 0 }
-        let ordered = candidates.filter { namesSymptom($0) == false && hasLine($0) }
-            + candidates.filter { namesSymptom($0) == false && hasLine($0) == false }
-            + candidates.filter { namesSymptom($0) && hasLine($0) }
-            + candidates.filter { namesSymptom($0) && hasLine($0) == false }
+        let tiered: ([FuzzReport.SymbolLocation]) -> [FuzzReport.SymbolLocation] = { candidates in
+            candidates.filter { namesSymptom($0) == false && hasLine($0) }
+                + candidates.filter { namesSymptom($0) == false && hasLine($0) == false }
+                + candidates.filter { namesSymptom($0) && hasLine($0) }
+                + candidates.filter { namesSymptom($0) && hasLine($0) == false }
+        }
+        // The property closure's own frames trail every tier: a resolved line there still names the test, not the fault.
+        let ordered = tiered(symbols.filter { $0.isInModule(cluster.propertyModule) == false })
+            + tiered(symbols.filter { $0.isInModule(cluster.propertyModule) })
         var kept: [FuzzReport.SymbolLocation] = []
         for candidate in ordered where kept.contains(where: { $0.namesSamePlace(as: candidate) }) == false {
             kept.append(candidate)

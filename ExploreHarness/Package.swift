@@ -1,20 +1,27 @@
 // swift-tools-version: 6.4
-// Validation harness for `#explore(time:)`. A separate package so the coverage `.unsafeFlags` live in a consumer's manifest — exactly the integration path a real user follows — and never touch Exhaust's own manifest, where they would disqualify it as a tagged dependency.
+// Validation harness for `#explore(time:)`. A separate package so coverage instrumentation never touches Exhaust's own manifest, where `.unsafeFlags` would disqualify it as a tagged dependency. CI builds it through `swift package explore`, the path a real user follows; local runs, Xcode, and ExploreBenchmark use the manifest flags below.
 
 import PackageDescription
 
 /// Coverage instrumentation for the fixture only, debug-only.
 ///
 /// `-sanitize=undefined` is the lightest base sanitizer the frontend requires before it accepts `-sanitize-coverage`; `edge,trace-pc-guard,pc-table` is the `trace-pc-guard` recorder the suite recipe uses, which keeps each run's coverage in its own context so the instrumented suites here can run concurrently without serialization; `trace-cmp` additionally exposes comparison operands for injection. Debug-only keeps release builds clean.
-let coverageFlags: [SwiftSetting] = [
-    .unsafeFlags(
+///
+/// `EXHAUST_HARNESS_COMMAND_COVERAGE=1` removes them so `swift package explore` can supply its own recorder: one build cannot mix two recorders.
+let coverageFlags: [SwiftSetting] = switch Context.environment["EXHAUST_HARNESS_COMMAND_COVERAGE"] {
+    case "1":
+        []
+    default:
         [
-            "-sanitize=undefined",
-            "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp",
-        ],
-        .when(configuration: .debug)
-    ),
-]
+            .unsafeFlags(
+                [
+                    "-sanitize=undefined",
+                    "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp",
+                ],
+                .when(configuration: .debug)
+            ),
+        ]
+}
 
 let package = Package(
     name: "ExploreHarness",
