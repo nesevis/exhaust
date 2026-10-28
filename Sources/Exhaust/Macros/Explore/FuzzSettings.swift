@@ -150,8 +150,6 @@ struct ParsedStateMachineFuzzSettings {
     var commandLimit: Int?
     /// The lane count for `.tasks` specs; nil when unset.
     var parallelize: ConcurrencyLevel?
-    /// The settings to forward to the shared core.
-    var coreSettings: [PropertyFuzzSettings] = []
     /// The shared fields, read through the one parser both forms use.
     let shared: ParsedPropertyFuzzSettings
 
@@ -164,6 +162,7 @@ struct ParsedStateMachineFuzzSettings {
     }
 
     init(_ settings: [StateMachineFuzzSettings]) {
+        var coreSettings: [PropertyFuzzSettings] = []
         for setting in settings {
             switch setting {
                 case let .replay(replaySeed):

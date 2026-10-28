@@ -50,7 +50,11 @@ func validate() throws {
         try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
         if succeeds {
             try require(result.contains("instrumentedProperty() passed"), "Property did not run")
-            try require(result.contains("explore-time-summary.txt"), "Missing report attachment")
+            // Attachment names carry the test name, run seed, and campaign ID: explore-time-<test>-seed-<seed>-<campaign-id>-summary.txt.
+            try require(
+                result.contains("explore-time-instrumentedProperty-seed-") && result.contains("-summary.txt"),
+                "Missing report attachment"
+            )
         } else {
             try require(result.contains("#explore(time:) found at least 1 distinct failure"), "Missing finding")
             try require(result.contains("failingProperty() failed"), "Finding did not fail the test")

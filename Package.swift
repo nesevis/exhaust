@@ -74,6 +74,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", exact: "1.7.3"),
     ] + swiftLintDependency,
     targets: [
+        .target(name: "ExhaustSupport", swiftSettings: strictConcurrencySettings),
         .executableTarget(name: "ExhaustExploreCommand"),
         .testTarget(name: "ExhaustExploreCommandTests", dependencies: ["ExhaustExploreCommand", "Exhaust"]),
         // IssueReporting needs its dynamic test support to report failures in release builds.
@@ -127,6 +128,7 @@ let package = Package(
             name: "Exhaust",
             dependencies: [
                 "ExhaustCore",
+                "ExhaustSupport",
                 "ExhaustGenerators",
                 .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
                 .product(name: "IssueReporting", package: "swift-issue-reporting"),
@@ -156,6 +158,7 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 "ExhaustCore",
+                "ExhaustSupport",
                 "ExhaustTestSupport",
                 .product(name: "IssueReportingTestSupport", package: "swift-issue-reporting"),
             ],

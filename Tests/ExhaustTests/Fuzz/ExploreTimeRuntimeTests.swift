@@ -723,7 +723,8 @@ private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -
         firstSeenAttempt: 1,
         lastSeen: .seconds(1),
         discriminatingEdges: discriminatingEdges,
-        reducedSequence: []
+        reducedSequence: [],
+        reducedKey: ""
     )
 }
 

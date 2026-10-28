@@ -39,7 +39,9 @@ extension __ExhaustRuntime {
             lines.append("\(percent)% of inputs were skipped by the property (precondition not met); the search used them to find inputs that meet it.")
         }
         lines.append(reproduceLine(report))
-        lines.append("Coverage, throughput, and full suspect lists are in the explore-time-summary.txt attachment.")
+        if report.recordsAttachments {
+            lines.append("Coverage, throughput, and full suspect lists are in this campaign's summary attachment (named with the test and seed).")
+        }
         return lines.joined(separator: "\n")
     }
 
@@ -118,8 +120,8 @@ extension __ExhaustRuntime {
         for (symptom, count) in report.unreducedFailureCounts.sorted(by: { $0.key < $1.key }) {
             lines.append("\(count) unreduced failure\(count == 1 ? "" : "s") with symptom \(symptom) matched no cluster.")
         }
-        if report.clusters.isEmpty == false {
-            lines.append("Full per-cluster detail is in the explore-time-cluster attachments.")
+        if report.clusters.isEmpty == false, report.recordsAttachments {
+            lines.append("Full per-cluster detail is in this campaign's cluster attachments (named with the test and seed).")
         }
         lines.append(reproduceLine(report))
         return lines.joined(separator: "\n")
@@ -245,7 +247,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Clusters
 
-    /// Renders one cluster for the terminal: a numbered symptom line with the time of first sighting, the reduced counterexample, and the single strongest user-code suspect. The number is the cluster's attachment number, so `explore-time-cluster-N.txt` matches.
+    /// Renders one cluster for the terminal: a numbered symptom line with the time of first sighting, the reduced counterexample, and the single strongest user-code suspect. The number matches the campaign attachment's `-cluster-N.txt` suffix.
     private static func renderClusterBrief(
         _ cluster: FuzzReport.Cluster,
         isFrontier: Bool

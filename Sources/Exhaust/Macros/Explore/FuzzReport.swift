@@ -12,7 +12,7 @@ public struct FuzzReport: Sendable {
     ///
     /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier: one reduced form observed through more than one coverage signature.
     public struct Cluster: Sendable {
-        /// Stable identifier in discovery order, starting at 0.
+        /// Campaign-local identifier in discovery order, starting at 0.
         public let id: Int
 
         /// A rendered description of the canonical reduced counterexample.
@@ -61,6 +61,9 @@ public struct FuzzReport: Sendable {
 
         /// The reduced choice sequence retained for source-located diagnostic replay. Package code uses this to materialize the counterexample without exposing the generator's internal representation publicly.
         package let reducedSequence: ExhaustCore.ChoiceSequence
+
+        /// Canonical identity from the inventory, excluding path-dependent generator metadata.
+        package let reducedKey: String
     }
 
     /// One edge that separates a cluster's failures from passing runs.
@@ -198,6 +201,9 @@ public struct FuzzReport: Sendable {
 
     /// Whether this run consumed a crashed predecessor's checkpoint, restoring its corpus and fault inventory. Package-visible so issue reporting can tell "the budget was spent by crashed predecessors" from "the property was never invoked".
     package private(set) var resumedFromCrash = false
+
+    /// Whether the campaign records this report's summary and cluster attachments. Decided once on the test task before the report is rendered, so the rendering points at attachments only when they exist, whichever task renders it. False for a report built outside a campaign.
+    package internal(set) var recordsAttachments = false
 
     /// What the search opened and what became of it, by phase and by producer.
     public let attempts: Attempts
@@ -594,7 +600,7 @@ public struct FuzzReport: Sendable {
         __ExhaustRuntime.renderFuzzSummary(self)
     }
 
-    /// Renders the run's full inventory as the text of the `explore-time-summary.txt` attachment.
+    /// Renders the run's full inventory as the text of its summary attachment, named with the test and seed.
     ///
     /// Where ``renderedSummary()`` keeps to the reader's questions, this rendering carries the search's own figures: throughput, testing overhead, the instrumented and covered edge counts, the reachability estimate, per-cluster membership and discovery phase, and up to three suspects per cluster. Use it when a test asserts on those, or when a tool wants the numbers without parsing the report. The same wording caveat applies: match substrings, not whole lines.
     public func renderedAttachmentSummary() -> String {
@@ -674,7 +680,8 @@ package extension FuzzReport {
                         : 0
                 ),
                 discriminatingEdges: rankedEdges,
-                reducedSequence: cluster.reducedSequence
+                reducedSequence: cluster.reducedSequence,
+                reducedKey: cluster.reducedKey
             )
         }
         unreducedFailureCounts = Dictionary(

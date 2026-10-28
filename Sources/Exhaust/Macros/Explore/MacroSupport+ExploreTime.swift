@@ -11,47 +11,46 @@ import IssueReporting
     @preconcurrency import XCTest
 #endif
 
-#if canImport(Testing)
-    #if canImport(ObjectiveC)
-        @_weakLinked import Testing
-    #else
-        import Testing // swiftlint:disable:this duplicate_imports
-    #endif
-#endif
-
 public extension __ExhaustRuntime {
     // MARK: - Entry-Point Driver
 
-    /// Runs one value entry point's full pipeline in the one order the reporting channel tolerates: persistence preparation and resume findings, the run core on the fuzz lane, diagnostic replay, issue reporting, and attachment recording.
+    /// Runs one value entry point through ``FuzzCampaign``: the core on the fuzz lane inside ``FuzzCampaign/search(core:replay:)``, diagnostic replay on the test task while the checkpoint store is still reserved, then reporting and attachments in ``FuzzCampaign/run(_:)``.
     ///
-    /// Everything except the core must run on the test task: issue recording and attachment association resolve the current test from task-locals, and a report recorded anywhere else can silently misroute. The entry points are closure literals over this driver, so the ordering constraint is stated once instead of hand-copied per variant — a copy once put `reportFuzzIssues` inside the GCD closure, and a failing run stopped failing its test. Only the core hops, so the search never holds the caller's thread, which in an async test is one of the cooperative pool's.
-    ///
-    /// Persistence prepares before the hop because ``reportFuzzResumeFindings(context:fileID:filePath:line:column:)`` records the predecessor's trap — the one finding designed to be impossible to lose — and context construction performs no writes, so nothing about it needs the fuzz lane.
+    /// The entry points are closure literals over this driver, so the ordering constraint is stated once instead of hand-copied per variant. Only the core hops, so the search never holds the caller's thread, which in an async test is one of the cooperative pool's.
     private static func runFuzzValueEntryPointAsync(
+        time: TimeSpan,
         settings: [PropertyFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt,
-        runCore: @escaping (FuzzPersistenceContext) -> FuzzReport,
+        runCore: @escaping (FuzzPersistenceContext, ResolvedFuzzRun, ParsedPropertyFuzzSettings) -> FuzzReport,
         replay: ((inout FuzzReport, _ suppressIssueReporting: Bool) async -> Void)? = nil
     ) async -> FuzzReport {
-        let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
-        var report = await dispatchToGCD(reserving: LaneReservation.fuzz) { _ in
-            runCore(persistence)
-        }
         let parsedSettings = ParsedPropertyFuzzSettings(settings)
-        await replay?(&report, parsedSettings.suppress.issueReporting)
-        reportFuzzIssues(
-            report: report,
-            suppressIssueReporting: parsedSettings.suppress.issueReporting,
+        let campaign = FuzzCampaign.resolve(
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column
+            column: column,
+            seed: parsedSettings.seed,
+            kind: .value,
+            time: time,
+            invalidReplayMessage: parsedSettings.invalidReplayMessage,
+            suppress: parsedSettings.suppress
         )
-        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
-        return report
+        return await campaign.run {
+            await campaign.search(
+                core: { persistence, resolved in
+                    runCore(persistence, resolved, parsedSettings)
+                },
+                replay: replay.map { replay in
+                    { report in
+                        await replay(&report, parsedSettings.suppress.issueReporting)
+                    }
+                }
+            )
+        }
     }
 
     /// The fallback for the unreachable case where a known-issue scope returns without assigning the pipeline report: loud on debug builds, and honest in release — a distinct internal-error termination rather than a plausible-looking report with a fabricated termination and seed.
@@ -165,17 +164,18 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) throws -> Bool
     ) async -> FuzzReport {
         await runFuzzValueEntryPointAsync(
+            time: time,
             settings: settings,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column,
-            runCore: { persistence in
+            runCore: { persistence, resolved, parsed in
                 runExploreTimeCore(
                     gen: refGen.gen,
                     generatorIsReflective: refGen.isReflective,
-                    time: time,
-                    settings: settings,
+                    resolved: resolved,
+                    settings: parsed,
                     source: coverage,
                     configure: nil,
                     persistence: persistence,
@@ -207,20 +207,21 @@ public extension __ExhaustRuntime {
         // Resolved on the test task: on the fuzz lane `Test.current` is nil and resolution reports XCTest for a Swift Testing run.
         let framework = ActiveTestFramework.current
         return await runFuzzValueEntryPointAsync(
+            time: time,
             settings: settings,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column,
-            runCore: { persistence in
+            runCore: { persistence, resolved, parsed in
                 nonisolated(unsafe) var pipelineReport: FuzzReport?
                 // No ledger: a fuzz run reports its failures from the fault inventory afterwards, so it acts on nothing the scope absorbs.
                 withAbsorbedIssues(framework: framework) {
                     pipelineReport = runExploreTimeCore(
                         gen: refGen.gen,
                         generatorIsReflective: refGen.isReflective,
-                        time: time,
-                        settings: settings,
+                        resolved: resolved,
+                        settings: parsed,
                         source: coverage,
                         configure: nil,
                         persistence: persistence,
@@ -257,17 +258,18 @@ public extension __ExhaustRuntime {
     ) async -> FuzzReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
         return await runFuzzValueEntryPointAsync(
+            time: time,
             settings: settings,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column,
-            runCore: { persistence in
+            runCore: { persistence, resolved, parsed in
                 runExploreTimeCore(
                     gen: refGen.gen,
                     generatorIsReflective: refGen.isReflective,
-                    time: time,
-                    settings: settings,
+                    resolved: resolved,
+                    settings: parsed,
                     source: coverage,
                     configure: nil,
                     persistence: persistence,
@@ -297,19 +299,20 @@ public extension __ExhaustRuntime {
         // Resolved on the test task: on the fuzz lane `Test.current` is nil and resolution reports XCTest for a Swift Testing run.
         let framework = ActiveTestFramework.current
         return await runFuzzValueEntryPointAsync(
+            time: time,
             settings: settings,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column,
-            runCore: { persistence in
+            runCore: { persistence, resolved, parsed in
                 nonisolated(unsafe) var pipelineReport: FuzzReport?
                 withAbsorbedIssues(framework: framework) {
                     pipelineReport = runExploreTimeCore(
                         gen: refGen.gen,
                         generatorIsReflective: refGen.isReflective,
-                        time: time,
-                        settings: settings,
+                        resolved: resolved,
+                        settings: parsed,
                         source: coverage,
                         configure: nil,
                         persistence: persistence,
@@ -385,34 +388,24 @@ public extension __ExhaustRuntime {
 
     // MARK: - Core
 
-    /// Parses settings, verifies instrumentation, and runs the three-phase ``FuzzRunner``. Records no issues — every entry point calls ``reportFuzzIssues(report:suppressIssueReporting:fileID:filePath:line:column:)`` itself so the expect variants can defer reporting until after their known-issue scope closes.
+    /// Runs an already-resolved campaign through the three-phase ``FuzzRunner`` without revalidating its budget or rereading the environment. Records no issues — ``FuzzCampaign/run(_:)`` calls ``reportFuzzIssues(report:suppressIssueReporting:fileID:filePath:line:column:)`` on the test task, so the expect variants report only after their known-issue scope closes.
     ///
     /// `source` says where coverage comes from; in-package tests pass `.injected` with a synthetic source or `.none` to exercise the uninstrumented path, and `configure` tightens the runner configuration (attempt limits, phase skips) for deterministic termination.
-    package static func runExploreTimeCore<Output>(
+    internal static func runExploreTimeCore<Output>(
         gen: Generator<Output>,
         generatorIsReflective: Bool = true,
-        time: TimeSpan,
-        settings: [PropertyFuzzSettings],
+        resolved: ResolvedFuzzRun,
+        settings parsed: ParsedPropertyFuzzSettings,
         source coverage: CoverageSourceSelection,
         configure: ((inout FuzzRunnerConfiguration) -> Void)?,
         hooks: FuzzHooks<Output>? = nil,
         persistence: FuzzPersistenceContext? = nil,
         property: @escaping @Sendable (Output) -> FuzzVerdict
     ) -> FuzzReport {
-        let parsed = ParsedPropertyFuzzSettings(settings)
-        if let message = parsed.invalidReplayMessage {
-            return .empty(termination: .invalidConfiguration(message), seed: 0)
-        }
-        let seed = parsed.seed ?? UInt64.random(in: UInt64.min ... UInt64.max)
+        let seed = resolved.seed
         let suppressLogs = parsed.suppress.logs
         let logLevel = parsed.logLevel
-
-        let budgetNanoseconds: UInt64
-        do {
-            budgetNanoseconds = try resolvedExploreBudget(declared: time, environment: ProcessInfo.processInfo.environment)
-        } catch {
-            return .empty(termination: .invalidConfiguration(error.message), seed: seed)
-        }
+        let budgetNanoseconds = resolved.budgetNanoseconds
 
         let options = FuzzSession.Options(
             budgetNanoseconds: budgetNanoseconds,
@@ -470,24 +463,6 @@ public extension __ExhaustRuntime {
     }
 
     // MARK: - Crash Recovery
-
-    /// The shared prologue of every `time:` entry point: builds the call site's crash-recovery context and reports any predecessor crash finding before the run starts.
-    package static func prepareFuzzPersistence(
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt
-    ) -> FuzzPersistenceContext {
-        let persistence = makeFuzzPersistenceContext(fileID: fileID, line: line)
-        reportFuzzResumeFindings(
-            context: persistence,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-        return persistence
-    }
 
     /// Records the crash finding from a resumed run — never silent, never suppressed. The trapping candidate itself usually died before corpus admission, so the report names its mutation parent from the snapshot when one exists.
     package static func reportFuzzResumeFindings(
@@ -617,29 +592,6 @@ public extension __ExhaustRuntime {
                 fileID: fileID, filePath: filePath, line: line, column: column
             )
         }
-    }
-
-    // MARK: - Checkpoint Attachments
-
-    /// Records the run's checkpoint attachments: one per discovered cluster plus the final summary.
-    ///
-    /// Eager and outcome-independent — a passing fuzz run still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
-    package static func recordFuzzAttachments(report: FuzzReport, suppressAttachments: Bool) {
-        guard suppressAttachments == false, report.attempts.total > 0 else {
-            return
-        }
-        for cluster in report.clusters {
-            recordAttachment(
-                renderClusterBlock(cluster, isFrontier: false, detail: .full).joined(separator: "\n"),
-                named: "explore-time-cluster-\(cluster.id + 1).txt"
-            )
-        }
-        recordAttachment(renderFuzzAttachmentSummary(report), named: "explore-time-summary.txt")
-    }
-
-    /// Records one plain-text attachment through the current test context. Kept on a passing run, because the default XCTest lifetime silently drops attachments from passing runs and a passing fuzz run's report is still the product.
-    private static func recordAttachment(_ text: String, named name: String) {
-        recordTestAttachment(text, named: name, uniformTypeIdentifier: "public.plain-text", keepsOnPassingRun: true)
     }
 
     // MARK: - Property Wrapping
