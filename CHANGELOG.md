@@ -6,14 +6,29 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-28
+
 ### Added
 
-- Campaign commands write a primary versioned aggregate `report.json` and a live `events.jsonl` stream in the output root; `--xunit` opts into native SwiftPM XML results. Reduced findings have stable, versioned identifiers for correlation across seeds and reruns. JSON preserves each parameterized or repeated `#explore` invocation separately, including partial results after a test-process failure; native XML retains Swift Testing's test-function grouping.
+- Campaign commands write a primary versioned aggregate `report.json` and a live `events.jsonl` stream in the output root; `--xunit` opts into native SwiftPM XML results. Reduced findings have stable, versioned identifiers for correlation across seeds and reruns. JSON preserves each parameterized or repeated `#explore` invocation separately, including partial results after a test-process failure; native XML retains Swift Testing's test-function grouping. A campaign interrupted by a crashed test process, or whose events were not all published, is reported and fails the command.
 - `FuzzReport.outcome` classifies a `#explore(time:)` run as passed, failed, skipped (no instrumentation), or error (the run could not judge the property), so a caller outside a test can set its exit status without combining the termination, attempt counts, and inventory. A run that resumed a crashed predecessor is failed. Campaign JSON `outcome` uses the same classification.
 - `swift package explore --output <path>` selects the report and recovery root, resolving relative paths from the package root and overriding `EXHAUST_STATE_DIR`.
-- Campaign summary and cluster attachment filenames include the Swift Testing test name and run seed, making parallel reports identifiable.
 - `swift package explore` runs campaigns in parallel by default with isolated guard coverage. `--no-parallel` runs tests serially with inline 8-bit counters, recording coverage across thread and task boundaries.
+- The [Explore command reference](https://nesevis.github.io/exhaust/documentation/exhaust/explorecommandreference) documents every option, the output layout, and the report and event formats.
+
+### Changed
+
+- Campaign summary and cluster attachment filenames include the Swift Testing test name and run seed, and under the `explore` command the campaign ID, instead of the fixed `explore-time-summary.txt` and `explore-time-cluster-N.txt`. Parallel and repeated campaigns no longer produce attachments with the same name.
 - Campaign checkpoints are isolated by test, macro location, and explicit seed, with an ownership lock preventing overlapping writers. Parameterized campaigns at one call site need distinct explicit seeds. Recorder modes have separate builds and recovery directories, including under `EXHAUST_STATE_DIR`; older call-site-only checkpoints are not resumed.
+- `#explore(time:)` reports an error when the property judged none of the inputs it received, because each was discarded with a skip error or stalled without a verdict. Such a run previously passed.
+- Fault suspects in the module that calls `#explore(time:)` rank after suspects in every other module. The `explore` command instruments the test target, so the property closure itself could otherwise appear among a fault's top suspects and push out the code that selected the failing branch.
+- Floating-point reduction can reach a simpler failing value far from the current one, where it previously stopped short after its first pass.
+
+### Fixed
+
+- Reduction could discard an improvement found while confirming that a value had converged, and could stop without another value-search pass after an improvement to related values.
+- A candidate rejected by one kind of reduction attempt could be skipped by another kind that would have accepted it, leaving the counterexample larger than necessary.
+- When a value had several groups of same-shaped siblings under one parent, reduction could stop reordering after the first group.
 
 ## [1.8.0] - 2026-10-26
 
@@ -356,7 +371,8 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - Seeds recorded before 1.0.0 are not covered by the guarantee above.
 
-[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/nesevis/exhaust/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/nesevis/exhaust/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/nesevis/exhaust/compare/v1.7.4...v1.8.0
 [1.7.4]: https://github.com/nesevis/exhaust/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/nesevis/exhaust/compare/v1.7.2...v1.7.3
