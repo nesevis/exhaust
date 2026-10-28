@@ -3,18 +3,34 @@ name: Explore Harness
 on:
   push:
     branches: [main]
+  pull_request:
+    paths:
+      - "Sources/ExhaustExploreCommand/**"
+      - "Sources/ExhaustSupport/**"
+      - "Sources/Exhaust/Macros/Explore/**"
+      - "Sources/Exhaust/StateMachine/Shared/StateMachineRunner+Time.swift"
+      - "Sources/ExhaustCore/Runners/Fuzzing/**"
+      - "Sources/ExhaustCoverageRuntime/**"
+      - "Plugins/Explore/**"
+      - "PluginTests/**"
+      - "ExploreHarness/**"
+      - "Package.swift"
+      - ".github/workflows/explore-harness.yml"
   workflow_dispatch:
 
-# The `#explore(time:)` validation harness is a separate package with coverage `.unsafeFlags` on its
-# fixture. It runs on its own lane, macOS only, and is excluded from the default `swift test` run.
+# The `#explore(time:)` validation harness is a separate package. CI builds and runs it through
+# `swift package explore`, the path users follow, so every harness assertion also exercises the
+# command's manifest overlay, recorder selection, campaign reports, and event stream.
+# EXHAUST_HARNESS_COMMAND_COVERAGE=1 removes the harness's own manifest flags so the command's
+# recorder is the only one in the build.
 #
-# The harness runs twice. The serial pass (--no-parallel) is the baseline every assertion was
-# written against. The parallel pass is the suite recipe the documentation recommends: the fixture
-# is instrumented with `trace-pc-guard`, whose per-run context keeps one test's edges out of
-# another's attempt, so the suites should pass unserialized with the same inventories and in less
-# wall-clock time. A parallel failure with a serial pass points at cross-run leakage (an escaped
-# thread, a process-global table) rather than at the search. Both durations land in the job summary
-# so the wall-clock gain, or its absence, is visible per run.
+# The harness runs twice. The serial pass (--no-parallel, inline-8bit-counters) is the baseline every
+# assertion was written against. The parallel pass uses the default trace-pc-guard recorder, whose
+# per-run context keeps one test's edges out of another's attempt, so the suites should pass
+# unserialized with the same inventories and in less wall-clock time. A parallel failure with a
+# serial pass points at cross-run leakage (an escaped thread, a process-global table) rather than at
+# the search. Both durations land in the job summary so the wall-clock gain, or its absence, is
+# visible per run.
 jobs:
   explore-harness:
     runs-on: xcode-27
@@ -31,23 +47,36 @@ jobs:
       - name: Verify real campaigns and failure reporting
         run: swift -warnings-as-errors -swift-version 6 PluginTests/run_real_consumer.swift
 
-      - name: Build harness
-        run: swift build --build-system native --package-path ExploreHarness --build-tests
-
       - name: Run harness serially
         id: serial
+        env:
+          EXHAUST_HARNESS_COMMAND_COVERAGE: "1"
         run: |
           START=$(date +%s)
-          swift test --build-system native --package-path ExploreHarness --skip-build --no-parallel
+          status=0
+          for target in ExploreTests SpecTests; do
+            swift package --package-path ExploreHarness explore \
+              --instrument ExploreFixture --instrument SpecFixture --instrument SpecTrapProbe \
+              --test-target "$target" --configuration debug --no-parallel || status=1
+          done
           echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+          exit $status
 
       - name: Run harness in parallel
         id: parallel
         if: always()
+        env:
+          EXHAUST_HARNESS_COMMAND_COVERAGE: "1"
         run: |
           START=$(date +%s)
-          swift test --build-system native --package-path ExploreHarness --skip-build --parallel
+          status=0
+          for target in ExploreTests SpecTests; do
+            swift package --package-path ExploreHarness explore \
+              --instrument ExploreFixture --instrument SpecFixture --instrument SpecTrapProbe \
+              --test-target "$target" --configuration debug || status=1
+          done
           echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+          exit $status
 
       - name: Report elapsed time
         if: always()
@@ -59,7 +88,7 @@ jobs:
             echo ""
             echo "| pass | outcome | elapsed |"
             echo "|---|---|---|"
-            echo "| serial (\`--no-parallel\`) | ${{ steps.serial.outcome }} | ${SERIAL:-n/a} s |"
+            echo "| serial (\`--no-parallel\`, counters) | ${{ steps.serial.outcome }} | ${SERIAL:-n/a} s |"
             echo "| parallel | ${{ steps.parallel.outcome }} | ${PARALLEL:-n/a} s |"
             if [ -n "$SERIAL" ] && [ -n "$PARALLEL" ] && [ "$PARALLEL" -gt 0 ]; then
               echo ""

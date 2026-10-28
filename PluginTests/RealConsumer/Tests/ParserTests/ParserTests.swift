@@ -1,4 +1,5 @@
 import Exhaust
+import Foundation
 import Parser
 import Testing
 
@@ -35,5 +36,50 @@ import Testing
 @Test func failingProperty() async {
     await #explore(#gen(.int(in: -1000...1000)), time: .seconds(20), .failFast) { value async in
         Parser.accepts(value)
+    }
+}
+
+// Traps only when the e2e script sets EXHAUST_E2E_TRAP, so the command records an interrupted campaign; the script's next run without it resumes the checkpoint and reports the predecessor's trap.
+@Test func trappingProperty() async {
+    let trapEnabled = ProcessInfo.processInfo.environment["EXHAUST_E2E_TRAP"] == "1"
+    await #explore(#gen(.int(in: -1000...1000)), time: .seconds(20)) { value async in
+        if trapEnabled, Parser.accepts(value), value > 500 {
+            fatalError("EXHAUST_E2E_TRAP")
+        }
+        return true
+    }
+}
+
+@Test func stateMachineProperty() async {
+    let report = await #explore(TallySpec.self, mode: .sequential, time: .seconds(20))
+    #expect(report.outcome == .passed)
+}
+
+// MARK: - Specs
+
+@StateMachine
+final class TallySpec {
+    var expected = 0
+    @SystemUnderTest var tally = Tally()
+
+    @Invariant
+    func totalsMatch() -> Bool {
+        tally.total == expected
+    }
+
+    @Command(weight: 3, .int(in: -100...100))
+    func add(value: Int) throws {
+        expected += value
+        tally.add(value)
+    }
+
+    @Command(weight: 1)
+    func reset() throws {
+        expected = 0
+        tally.reset()
+    }
+
+    func failureDescription() -> String? {
+        "expected: \(expected), tally: \(tally.total)"
     }
 }

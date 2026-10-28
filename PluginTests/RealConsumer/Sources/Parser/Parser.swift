@@ -13,3 +13,25 @@ public enum Parser {
         false
     }
 }
+
+/// A running total for the state machine campaign. The negative-value branch gives the spec search an edge of its own to discover.
+public final class Tally {
+    public private(set) var total = 0
+    public private(set) var negativeAdditions = 0
+
+    public init() {}
+
+    @inline(never)
+    public func add(_ value: Int) {
+        if value < 0 {
+            negativeAdditions += 1
+        }
+        total += value
+    }
+
+    @inline(never)
+    public func reset() {
+        total = 0
+        negativeAdditions = 0
+    }
+}

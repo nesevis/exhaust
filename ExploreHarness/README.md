@@ -1,6 +1,16 @@
 # ExploreHarness
 
-The validation harness for `#explore(time:)`. A separate package so the coverage `.unsafeFlags` live in a consumer's manifest — exactly the integration path a real user follows.
+The validation harness for `#explore(time:)`. A separate package so coverage instrumentation never touches Exhaust's own manifest.
+
+CI runs both test targets through `swift package explore`, the path a real user follows, once with `--no-parallel` and once in parallel. `EXHAUST_HARNESS_COMMAND_COVERAGE=1` removes the manifest's own coverage flags so the command's recorder is the only one in the build:
+
+```sh
+EXHAUST_HARNESS_COMMAND_COVERAGE=1 swift package --package-path ExploreHarness explore \
+  --instrument ExploreFixture --instrument SpecFixture --instrument SpecTrapProbe \
+  --test-target ExploreTests --configuration debug --no-parallel
+```
+
+Without the variable, the manifest instruments the fixtures with `trace-pc-guard` in debug builds, so plain `swift test`, Xcode, and `ExploreBenchmark` work as before.
 
 ## The two-fixture rule
 
