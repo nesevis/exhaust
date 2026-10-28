@@ -532,7 +532,10 @@ private func bucketedSource() -> SyntheticCoverageSource<Int> {
             func preBracketGenerationIsNotOffLane() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
                 let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
-                defer { tracePCGuards.deallocate() }
+                defer {
+                    TracePCGuardCoverageSource.resetRegistryForTesting()
+                    tracePCGuards.deallocate()
+                }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                     Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return

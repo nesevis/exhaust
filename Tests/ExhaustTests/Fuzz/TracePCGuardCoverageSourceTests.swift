@@ -20,7 +20,10 @@ import Testing
             func comparisonHarvestIsPerSource() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
                 let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
-                defer { tracePCGuards.deallocate() }
+                defer {
+                    TracePCGuardCoverageSource.resetRegistryForTesting()
+                    tracePCGuards.deallocate()
+                }
                 guard let first = TracePCGuardCoverageSource(harvestsComparisons: true),
                       let second = TracePCGuardCoverageSource(harvestsComparisons: true)
                 else {
@@ -52,7 +55,10 @@ import Testing
             func offLaneHitsAreCounted() async {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
                 let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
-                defer { tracePCGuards.deallocate() }
+                defer {
+                    TracePCGuardCoverageSource.resetRegistryForTesting()
+                    tracePCGuards.deallocate()
+                }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                     Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return
@@ -82,7 +88,10 @@ import Testing
             func claimLaneExcludesPreBracketEdges() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
                 let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 1)
-                defer { tracePCGuards.deallocate() }
+                defer {
+                    TracePCGuardCoverageSource.resetRegistryForTesting()
+                    tracePCGuards.deallocate()
+                }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                     Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return
@@ -101,7 +110,10 @@ import Testing
                 #exhaust(gen) { repeatCount in
                     TracePCGuardCoverageSource.resetRegistryForTesting()
                     let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 1)
-                    defer { tracePCGuards.deallocate() }
+                    defer {
+                        TracePCGuardCoverageSource.resetRegistryForTesting()
+                        tracePCGuards.deallocate()
+                    }
                     guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                         Issue.record("expected a trace-pc-guard source on an instrumented registry")
                         return
