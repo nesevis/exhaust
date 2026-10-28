@@ -30,12 +30,9 @@ package struct FuzzCampaignRecord: Sendable {
         issuesSuppressed: Bool
     ) throws {
         let wireReport = CampaignWireReport(report: report, context: context)
-        // Empty unseeded reports have no generated seed; zero is only the public report's placeholder.
-        let seed: String? = switch context.seed != nil || report.attempts.total > 0 {
-            case true:
-                String(report.seed)
-            case false:
-                nil
+        let seed = switch report.attempts.total > 0 {
+            case true: String(report.seed)
+            case false: context.seed.map(String.init)
         }
         var record = initialRecord
         record.attachments = attachments
@@ -72,7 +69,8 @@ package struct FuzzCampaignRecord: Sendable {
             startedAt: startedAt,
             testID: context.testID,
             testName: context.testName,
-            requestedSeed: context.seed.map(String.init),
+            requestedSeed: context.requestedSeed.map(String.init),
+            seed: context.seed.map(String.init),
             checkpointPath: context.store.directory.path,
             effectiveBudgetSeconds: context.configuration.budgetSeconds
         )

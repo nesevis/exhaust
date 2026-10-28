@@ -2,7 +2,7 @@
 
 Give Exhaust a time budget and let it search for bugs by observing which branches your code takes.
 
-> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behaviour may change in any release.
+> Note: Coverage-guided fuzzing (`#explore(time:)` and the `explore` command) is experimental. Its API, search behaviour, report formats, file layouts, and identifiers may change between releases.
 
 ## Overview
 
@@ -37,7 +37,9 @@ Each input Exhaust runs the property on is an *attempt*. Failures in any phase a
 
 ## Running a fuzzing campaign
 
-Use Swift 6.4 or later and a version of Exhaust that provides the `explore` command. Add Exhaust as a direct dependency of the package you want to test. <doc:GettingStarted> covers adding the dependency. The command runs on macOS and Linux. Windows support is experimental pending native CI verification: on Windows the command runs campaigns in debug only and leaves the test target uninstrumented (see <doc:#Instrumentation-scope-and-current-limits>). The single-line commands below work in a Unix shell or PowerShell.
+Use Swift 6.4 or later. Add Exhaust as a direct dependency of the package you want to test. <doc:GettingStarted> covers adding the dependency.
+
+The command runs on macOS, Linux, and Windows. On Windows, campaigns use debug builds and leave the test target uninstrumented (see <doc:#Instrumentation-scope-and-limits>). The single-line commands below work in a Unix shell or PowerShell.
 
 ### 1. Add a fuzz test target
 
@@ -65,7 +67,7 @@ import MyLibrary
 import Testing
 
 @Test func decoderAcceptsEveryMessage() async {
-    await #explore(messageGenerator, time: .seconds(60), .replay(1)) { message in
+    await #explore(messageGenerator, time: .seconds(60)) { message in
         let decoded = try Parser.decode(message)
         #expect(decoded.byteCount == message.payload.count)
     }
@@ -76,7 +78,7 @@ The generator defines the inputs the search can explore. The property describes 
 
 Call `#explore` with `await` from an `async` test. The property closure can be synchronous or `async`. Exhaust calls a synchronous closure directly on the search's thread. It awaits an `async` closure once per input, which costs throughput, so add `async` only when the property needs to `await` something. Keep the property's work on the search's thread. <doc:#When-the-run-cannot-see-the-code> explains the restrictions on actor and detached-task work.
 
-The optional `.replay(1)` fixes the seed. Change it in the test to try another seed, because the command has no `--seed` option. A seed helps reproduce a search under the same build and budget, but debug and release builds can follow different paths through the search.
+Exhaust generates a seed for each campaign and uses it in reports, attachment names, and checkpoint storage.
 
 ### 3. Run a campaign
 
@@ -86,7 +88,7 @@ From the package directory, run:
 swift package explore --instrument MyLibrary --test-target MyLibraryFuzz --filter decoderAcceptsEveryMessage --time 60
 ```
 
-This builds the package's tests in a separate build directory, instruments `MyLibrary` and `MyLibraryFuzz`, and runs the selected property. Exhaust and other dependency targets keep their own build settings. The command links the coverage runtime and test-reporting support itself, so the test target needs only the dependencies shown above.
+This builds the package's tests in a separate build directory, instruments `MyLibrary`, and runs the selected property. On macOS and Linux, it also instruments `MyLibraryFuzz`. Exhaust and other dependency targets keep their own build settings. The command links the coverage runtime and test-reporting support itself, so the test target needs only the dependencies shown above.
 
 The default build configuration is **release**, except on Windows, where campaigns run in debug only. To run the same property in debug, add `--configuration debug`. Once the property works, give mutation more time with a fifteen-minute campaign by passing `--time 900`.
 
@@ -126,22 +128,7 @@ swift package --allow-writing-to-directory /tmp/my-library-campaigns explore \
 
 Campaigns run in parallel by default, each with its own coverage. Exhaust bounds how much of its own work runs at once (`EXHAUST_LANE_LIMIT`, default 32). That limit does not cover threads created by the system under test.
 
-A parameterised test runs one campaign per argument. Give each case a distinct explicit seed so the cases keep separate recovery state:
-
-```swift
-@Test(arguments: [UInt64(1), 2, 3, 4, 5])
-func integerCampaign(seed: UInt64) async {
-    await #explore(
-        .int(),
-        time: .seconds(60),
-        .replay(.numeric(seed))
-    ) { value in
-        decode(encode(value)) == value
-    }
-}
-```
-
-Swift Testing can run all five cases concurrently. Each case is an independent search with its own seed, budget, corpus, checkpoint, and report, and the cases do not share findings. `--time` overrides each case's budget separately. With enough cores, the five 60-second searches overlap in roughly one minute of elapsed search time. With `--no-parallel` they run one after another. <doc:ExploreCommandReference> covers how their attachments and recovery stores are named.
+Keep each fuzz property in its own test and omit `--filter` to run all tests in the fuzz target. Each campaign has its own budget, corpus, checkpoint, and report. Campaigns do not share findings, and `--time` overrides each invocation's budget separately. With `--no-parallel`, tests run one after another. <doc:ExploreCommandReference> covers how attachments and recovery stores are named.
 
 ### Work that crosses threads or tasks
 
@@ -169,7 +156,7 @@ swift test --skip MyLibraryFuzz
 
 To include short fuzz properties in ordinary test runs instead, configure the manual instrumentation described in <doc:#Setting-up-coverage-instrumentation-manually>.
 
-### Instrumentation scope and current limits
+### Instrumentation scope and limits
 
 The command enables edge coverage, comparison tracing, and assertions for the selected targets in both debug and release. It instruments the calling test target too, so calls into the library cannot be inlined into an uninstrumented test module and disappear from coverage. Dependency code inlined or specialised into a selected module still contributes coverage, because selection works by compiled module rather than by where each function's source lives.
 
@@ -177,7 +164,9 @@ On Windows the command does not instrument the test target. SwiftPM builds a sep
 
 Windows campaigns also run in debug only. SwiftPM's release test runners on Windows do not load test targets that contain only Swift Testing tests, so a release campaign would find no tests.
 
-The overlay preserves relative dependency paths and the manifest's `#filePath`. This first version requires a top-level variable named `package` and a single `Package.swift`. Version-specific manifests such as `Package@swift-6.4.swift` are rejected. You can select root Swift library, executable, and test targets. Dependency targets, C-family targets, macro targets, and binary targets cannot be selected. The command leaves Exhaust's coverage runtime uninstrumented.
+The overlay preserves relative dependency paths and the manifest's `#filePath`. The command requires a single `Package.swift` that declares a top-level variable named `package`. Version-specific manifests such as `Package@swift-6.4.swift` are rejected.
+
+You can select root Swift library, executable, and test targets, subject to the Windows restriction above. Dependency targets, C-family targets, macro targets, and binary targets cannot be selected. The command leaves Exhaust's coverage runtime uninstrumented.
 
 ## Reading the report
 
@@ -246,7 +235,7 @@ A run must judge at least one input. If the property discards every input it rec
 Pass settings as variadic arguments after the time budget:
 
 ```swift
-await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.info)) { input in
+await #explore(myInputGenerator, time: .minutes(15), .log(.info)) { input in
     let result = try MyParser.parse(input)
     #expect(result.isWellFormed)
 }
@@ -358,8 +347,6 @@ Use `trace-pc-guard` here. A whole-graph build with `inline-8bit-counters` spend
 
 ### Adding comparison tracing (optional)
 
-> Experiment: Comparison tracing is experimental and may change or be removed in any release.
-
 Some branches depend on a value the generator will almost never produce by chance: an equality against a wide constant (`token == 0x5F3759DF`), a parsed magic number, a specific string. Every wrong value takes the same branch, so coverage cannot tell the search it is getting closer. With `trace-cmp` in the coverage flags, Exhaust reads the operands of the code's own comparisons and feeds them back into the search in two ways:
 
 - **Direct substitution.** Where a stored input contains an integer choice whose type and declared range can hold the operand, Exhaust writes the operand into that choice and tries the result. It can also write into several matching choices at once, for a precondition that needs many positions to agree.
@@ -454,7 +441,9 @@ Checkpoints are removed when a run completes normally. Where they live depends o
 
 Set `EXHAUST_RESUME=0` to ignore a crashed predecessor's state and start fresh. Exhaust still writes checkpoints for the new run.
 
-A rerun recovers a campaign only when it has the same identity: the enclosing Swift Testing test, the macro's source location, and the explicit seed. Keep the original seed (or leave it unset if the original run did), since changing or adding a seed selects a different checkpoint. Two runs with the same identity cannot run at once, and the second fails with a configuration error. That is why parameterised campaigns at one call site need distinct explicit seeds. <doc:ExploreCommandReference> describes the store layout and locking in detail.
+Each campaign uses its resolved seed for logs, output names, and checkpoint storage. Exhaust generates that seed when you omit `.replay`, so concurrent invocations at the same call site have separate stores.
+
+An unseeded rerun recovers an abandoned checkpoint from the same test and macro source location, skipping stores that active campaigns own. An explicit `.replay(seed)` selects only that seed's checkpoint. Replays of the same seed at the same call site must run serially. <doc:ExploreCommandReference> describes the store layout and locking in detail.
 
 ## Fuzzing a state machine spec
 
@@ -511,7 +500,7 @@ Check ``FuzzReport/outcome`` here too, for the reasons given under <doc:#Asserti
 A few other things change without a test:
 
 - **No attachments.** Exhaust records the summary and cluster text only through a test framework. `renderedAttachmentSummary()` returns the same text.
-- **No test identity.** Checkpoints use `standalone` in place of the test name. Two unseeded campaigns at the same call site therefore share one checkpoint identity, and the second fails with a configuration error while the first holds it. Give each a distinct explicit seed.
+- **No test identity.** Checkpoints use `standalone` in place of the test name. Generated seeds keep concurrent campaigns at the same call site separate. An unseeded rerun can recover an abandoned campaign from that call site.
 - **No JSON report.** `report.json` and `events.jsonl` come from the `explore` command.
 
 Crash recovery works as it does in a test.

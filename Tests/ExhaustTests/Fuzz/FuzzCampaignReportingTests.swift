@@ -16,6 +16,7 @@ struct FuzzCampaignReportingTests {
         let started = try read(first, in: directory)
         #expect(started.status == .running)
         #expect(started.requestedSeed == String(seed))
+        #expect(started.seed == String(seed))
         #expect(started.effectiveBudgetSeconds == 2)
         #expect(started.declaredBudgetSeconds == 60)
         #expect(started.checkpointPath == first.context.store.directory.path)
@@ -136,6 +137,24 @@ struct FuzzCampaignReportingTests {
         #expect(snapshot.declaredBudgetSeconds == 60)
         #expect(snapshot.effectiveBudgetSeconds == 2)
         #expect(snapshot.requestedSeed == nil)
+        #expect(snapshot.seed == String(resolved.seed))
+        #expect(snapshot.checkpointPath.hasSuffix("-seed-\(resolved.seed)"))
+        let startEvent = try JSONDecoder().decode(
+            CampaignEvent.self,
+            from: Data(contentsOf: CampaignWire.jsonURL(
+                in: directory.appendingPathComponent("events"),
+                id: CampaignWire.eventID(campaignID: record.id, sequence: 0)
+            ))
+        )
+        guard case let .campaignStarted(started) = startEvent.payload else {
+            Issue.record("Expected a campaign start event")
+            return
+        }
+        #expect(started.seed == String(resolved.seed))
+        var interrupted = snapshot
+        interrupted.state = .interrupted
+        let decoded = try JSONDecoder().decode(CampaignRecord.self, from: JSONEncoder().encode(interrupted))
+        #expect(decoded.seed == String(resolved.seed))
     }
 
     @Test("Invalid captured settings are rejected before checkpoint reservation", arguments: [true, false])
@@ -192,7 +211,7 @@ struct FuzzCampaignReportingTests {
                 Issue.record("Expected a completed campaign, got \(result.status)")
                 continue
             }
-            #expect(completion.seed == nil)
+            #expect(try completion.seed == String(#require(record.context.configuration.seed)))
         }
     }
 

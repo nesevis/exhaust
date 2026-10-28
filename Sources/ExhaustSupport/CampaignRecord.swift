@@ -16,6 +16,16 @@ package struct CampaignRecord: Sendable {
     package let testID: String?
     package let testName: String?
     package let requestedSeed: String?
+    /// The seed resolved before searching, retained when a campaign is interrupted.
+    private let resolvedSeed: String?
+    /// The actual seed in a completed report, or the seed chosen when the campaign started.
+    package var seed: String? {
+        switch state {
+            case let .completed(completion): completion.seed ?? resolvedSeed
+            case .running, .interrupted: resolvedSeed
+        }
+    }
+
     package let checkpointPath: String
     /// The budget the search actually received after the `--time` override; nil when the campaign's settings were rejected.
     package let effectiveBudgetSeconds: Double?
@@ -32,6 +42,7 @@ package struct CampaignRecord: Sendable {
         testID: String? = nil,
         testName: String? = nil,
         requestedSeed: String? = nil,
+        seed: String? = nil,
         checkpointPath: String,
         effectiveBudgetSeconds: Double? = nil,
         recordPath: String? = nil
@@ -46,6 +57,7 @@ package struct CampaignRecord: Sendable {
         self.testID = testID
         self.testName = testName
         self.requestedSeed = requestedSeed
+        resolvedSeed = seed
         self.checkpointPath = checkpointPath
         self.effectiveBudgetSeconds = effectiveBudgetSeconds
         self.recordPath = recordPath
@@ -145,6 +157,7 @@ extension CampaignRecord: Codable {
         testID = try container.decodeIfPresent(String.self, forKey: .testID)
         testName = try container.decodeIfPresent(String.self, forKey: .testName)
         requestedSeed = try container.decodeIfPresent(String.self, forKey: .requestedSeed)
+        resolvedSeed = try container.decodeIfPresent(String.self, forKey: .seed)
         checkpointPath = try container.decode(String.self, forKey: .checkpointPath)
         effectiveBudgetSeconds = try container.decodeIfPresent(Double.self, forKey: .effectiveBudgetSeconds)
         recordPath = try container.decodeIfPresent(String.self, forKey: .recordPath)
@@ -177,6 +190,7 @@ extension CampaignRecord: Codable {
         try container.encodeIfPresent(testID, forKey: .testID)
         try container.encodeIfPresent(testName, forKey: .testName)
         try container.encodeIfPresent(requestedSeed, forKey: .requestedSeed)
+        try container.encodeIfPresent(seed, forKey: .seed)
         try container.encode(checkpointPath, forKey: .checkpointPath)
         try container.encodeIfPresent(effectiveBudgetSeconds, forKey: .effectiveBudgetSeconds)
         try container.encodeIfPresent(recordPath, forKey: .recordPath)
@@ -185,7 +199,6 @@ extension CampaignRecord: Codable {
                 break
             case let .completed(completion):
                 try container.encode(completion.finishedAt, forKey: .finishedAt)
-                try container.encodeIfPresent(completion.seed, forKey: .seed)
                 try container.encode(completion.issuesSuppressed, forKey: .issuesSuppressed)
                 try container.encode(completion.outcome, forKey: .outcome)
                 try container.encode(completion.report, forKey: .report)

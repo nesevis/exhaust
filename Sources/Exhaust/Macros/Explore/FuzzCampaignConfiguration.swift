@@ -35,6 +35,11 @@ package struct FuzzCampaignConfiguration: Sendable {
         }
         return Double(resolved.budgetNanoseconds) / 1_000_000_000
     }
+
+    /// The single seed chosen for a valid campaign, whether supplied by the caller or generated.
+    package var seed: UInt64? {
+        try? resolution.get().seed
+    }
 }
 
 /// Supplies the core with validated values without another environment read or random seed draw.

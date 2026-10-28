@@ -492,9 +492,8 @@ func run(_ tool: URL, _ arguments: [String], environment: [String: String],
     // Drain before waiting: compiler output can exceed the pipe's capacity.
     let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
-    guard let output = String(bytes: outputData, encoding: .utf8) else {
-        throw ValidationFailure("Command returned invalid UTF-8 output: \(tool.nativePath)")
-    }
+    // Lossy: a trapping test's backtrace dumps raw memory, which need not be valid UTF-8.
+    let output = String(decoding: outputData, as: UTF8.self)
     let succeeded = process.terminationReason == .exit && process.terminationStatus == 0
     try require(succeeded == success,
                 "Unexpected exit \(process.terminationStatus): \(tool.nativePath) \(arguments.joined(separator: " "))\n\(output)")

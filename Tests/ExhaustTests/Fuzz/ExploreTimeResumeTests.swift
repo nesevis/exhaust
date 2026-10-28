@@ -17,7 +17,7 @@ struct ExploreTimeResumeTests {
             filePath: #filePath,
             line: line,
             column: 1,
-            seed: nil,
+            seed: 73,
             kind: .value,
             time: .seconds(1)
         ).store
@@ -71,7 +71,8 @@ struct ExploreTimeResumeTests {
             column: 1,
             seed: nil,
             kind: .value,
-            time: .seconds(1)
+            time: .seconds(1),
+            invalidReplayMessage: "Invalid replay seed"
         ).store
         defer {
             store.removeAll()
@@ -120,6 +121,40 @@ struct ExploreTimeResumeTests {
             return reports
         }
         #expect(Set(reports.map { $0.seed }) == [1, 2])
+        for report in reports {
+            #expect(report.attempts.evaluated > 0)
+            #expect(report.clusters.isEmpty)
+            switch report.termination {
+                case .budgetExhausted, .coveragePlateau:
+                    break
+                default:
+                    Issue.record("Unexpected campaign termination: \(report.termination)")
+            }
+        }
+    }
+
+    @Test("Concurrent campaigns at one call site generate independent seeds without replay settings")
+    func concurrentGeneratedSeedCampaigns() async {
+        let rendezvous = CampaignRendezvous()
+        let reports = await withTaskGroup(of: FuzzReport.self, returning: [FuzzReport].self) { group in
+            for seed in UInt64(1) ... 2 {
+                group.addTask {
+                    await __ExhaustRuntime.__exploreTimeAsync(
+                        .int(in: 0 ... 10),
+                        time: .seconds(1),
+                        settings: [.suppress(.all)],
+                        coverage: .injected(resumeSource())
+                    ) { _ in rendezvous.meet(seed: seed) }
+                }
+            }
+            var reports: [FuzzReport] = []
+            for await report in group {
+                reports.append(report)
+            }
+            return reports
+        }
+        #expect(reports.count == 2)
+        #expect(Set(reports.map { $0.seed }).count == 2)
         for report in reports {
             #expect(report.attempts.evaluated > 0)
             #expect(report.clusters.isEmpty)
@@ -558,7 +593,7 @@ private final class CampaignRendezvous: @unchecked Sendable {
     }
 }
 
-/// Exercises settings validation while another invocation owns the otherwise matching unseeded store.
+/// Exercises settings validation while another invocation owns the otherwise matching seeded store.
 enum ReservationFailureScenario: Int, CaseIterable {
     case conflict
     case screeningReplay
@@ -573,7 +608,7 @@ enum ReservationFailureScenario: Int, CaseIterable {
             case .screeningReplay:
                 [.replay(.encoded("19-U3")), .suppress(.all)]
             case .conflict, .zeroBudget:
-                [.suppress(.all)]
+                [.replay(73), .suppress(.all)]
         }
     }
 

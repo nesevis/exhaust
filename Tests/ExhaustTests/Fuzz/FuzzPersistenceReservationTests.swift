@@ -88,16 +88,93 @@ struct FuzzPersistenceReservationTests {
         }
     }
 
-    @Test("Overlapping unseeded campaigns cannot share a recovery store")
-    func unseededOwnership() async throws {
+    @Test("Overlapping owners cannot share one resolved seed's recovery store")
+    func seedOwnership() async throws {
         let base = ReservationFixture.scratchDirectory()
         defer { try? FileManager.default.removeItem(at: base) }
-        let store = ReservationFixture.store(base: base, seed: nil)
+        let store = ReservationFixture.store(base: base, seed: 1)
         try await ReservationFixture.withReservedPersistence(store: store) { _ in
             let error = await #expect(throws: FuzzPersistenceError.self) {
                 try await ReservationFixture.withReservedPersistence(store: store) { _ in }
             }
             #expect(error?.description.contains("Another campaign owns this checkpoint store") == true)
+        }
+    }
+
+    @Test("Generated seeds isolate overlapping campaigns and recover abandoned state exactly once")
+    func generatedSeedRecovery() async throws {
+        let base = ReservationFixture.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let first = ReservationFixture.campaign(base: base)
+        let second = ReservationFixture.campaign(base: base)
+        let firstSeed = try first.configuration.resolution.get().seed
+        let secondSeed = try second.configuration.resolution.get().seed
+        #expect(firstSeed != secondSeed)
+        #expect(first.store.directory.lastPathComponent.hasSuffix("-seed-\(firstSeed)"))
+        #expect(second.store.directory.lastPathComponent.hasSuffix("-seed-\(secondSeed)"))
+
+        try await ReservationFixture.withReservedPersistence(store: first.store) { persistence in
+            try persistence.store.write(ReservationFixture.document(consumedNanoseconds: 100, clusterCount: 1))
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: persistence.store.breadcrumbFileURL, recordsCandidateSequence: false))
+            breadcrumb.record(candidateHash: 101, parentHash: 0, kind: .search)
+            try await __ExhaustRuntime.withReservedFuzzPersistence(
+                store: second.store, resumeEnabled: true, recoverUnseeded: true
+            ) { concurrent in
+                #expect(concurrent.resumeDocument == nil)
+                #expect(first.store.load(maxAgeSeconds: 60)?.clusters.count == 1)
+            }
+        }
+
+        try await __ExhaustRuntime.withReservedFuzzPersistence(
+            store: second.store, resumeEnabled: true, recoverUnseeded: true
+        ) { recovered in
+            #expect(recovered.resumeDocument?.metadata.consumedNanoseconds == 100)
+            #expect(recovered.resumeDocument?.clusters.count == 1)
+            #expect(recovered.survivor?.candidateHash == 101)
+            #expect(recovered.store.directory == second.store.directory)
+            #expect(FileManager.default.fileExists(atPath: first.store.directory.path) == false)
+            #expect(FileManager.default.fileExists(atPath: first.store.lockFileURL.path))
+            let third = ReservationFixture.campaign(base: base)
+            // A second newcomer cannot claim the predecessor while its new owner is active.
+            await #expect(throws: Never.self) {
+                try await __ExhaustRuntime.withReservedFuzzPersistence(
+                    store: third.store, resumeEnabled: true, recoverUnseeded: true
+                ) { other in
+                    #expect(other.resumeDocument == nil)
+                    #expect(other.survivor == nil)
+                }
+            }
+        }
+    }
+
+    @Test("Explicit replay and disabled recovery leave other seeds' checkpoints alone", arguments: [true, false])
+    func recoverySelection(replay: Bool) async throws {
+        let base = ReservationFixture.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let predecessor = ReservationFixture.campaign(base: base)
+        try predecessor.store.write(ReservationFixture.document(consumedNanoseconds: 100, clusterCount: 1))
+        let next = ReservationFixture.campaign(base: base)
+        try await __ExhaustRuntime.withReservedFuzzPersistence(
+            store: next.store, resumeEnabled: replay, recoverUnseeded: !replay
+        ) { persistence in
+            #expect(persistence.resumeDocument == nil)
+            #expect(predecessor.store.load(maxAgeSeconds: 60)?.clusters.count == 1)
+            #expect(FileManager.default.fileExists(atPath: next.store.directory.path) == false)
+        }
+    }
+
+    @Test("Recovery never adopts a different test's checkpoint")
+    func recoveryTestIsolation() async throws {
+        let base = ReservationFixture.scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let predecessor = ReservationFixture.campaign(base: base, testID: "other")
+        try predecessor.store.write(ReservationFixture.document(consumedNanoseconds: 100, clusterCount: 1))
+        let next = ReservationFixture.campaign(base: base)
+        try await __ExhaustRuntime.withReservedFuzzPersistence(
+            store: next.store, resumeEnabled: true, recoverUnseeded: true
+        ) { persistence in
+            #expect(persistence.resumeDocument == nil)
+            #expect(predecessor.store.load(maxAgeSeconds: 60)?.clusters.count == 1)
         }
     }
 
@@ -125,6 +202,21 @@ private struct PersistenceScopeFailure: Error {}
 
 /// Builds call-site stores and checkpoint documents, and runs throwing fixture code inside the production reservation scope.
 private enum ReservationFixture {
+    static func campaign(base: URL, testID: String = "Campaigns.seeds") -> FuzzCampaignContext {
+        FuzzCampaignContext(
+            fileID: "Campaigns/Seeds.swift",
+            filePath: "/tests/Seeds.swift",
+            line: 10,
+            column: 5,
+            testID: testID,
+            testName: "seeds",
+            seed: nil,
+            kind: .value,
+            time: .seconds(60),
+            environment: [CampaignWire.stateDirectoryKey: base.path]
+        )
+    }
+
     static var resumeEnabled: Bool {
         ProcessInfo.processInfo.environment[CampaignWire.resumeKey] != "0"
     }

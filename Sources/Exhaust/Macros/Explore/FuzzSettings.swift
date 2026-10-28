@@ -8,8 +8,6 @@ import ExhaustCore
 /// The `time:` mode takes a distinct settings type from ``ExploreSettings`` because most of its knobs (replay of a whole fuzz run, budget-relative stopping) have no meaning under `directions:` mode, and the two modes are mutually exclusive at the type level.
 ///
 /// Searching a `@StateMachine` spec takes ``StateMachineFuzzSettings`` instead, which adds the two settings that need command sequences to mean anything.
-///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 public enum PropertyFuzzSettings: Sendable {
     /// A fixed seed for replaying a prior run (reproduction, benchmarking, regression).
     ///
@@ -49,8 +47,6 @@ public enum PropertyFuzzSettings: Sendable {
 /// Controls test behavior for `#explore(Spec.self, mode:, time:)` coverage-guided runs, passed as variadic arguments.
 ///
 /// Carries the same replay, suppression, log, and fail-fast settings as ``PropertyFuzzSettings``, plus the two that describe command sequences. Those two are absent from the generator form because a generator produces one value rather than a sequence of commands, so writing them there is a compile error.
-///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release.
 public enum StateMachineFuzzSettings: Sendable {
     /// A fixed seed for replaying a prior run (reproduction, benchmarking, regression).
     ///

@@ -32,4 +32,4 @@ For the full guide, see <doc:StateMachineTesting>.
 }
 ```
 
-That mode is experimental, requires coverage instrumentation on the target under test, and returns a ``FuzzReport`` instead of a ``ExhaustCore/StateMachineResult``. See <doc:MacroExplore> for the parameters and <doc:CoverageGuidedFuzzing> for the full guide.
+That mode requires coverage instrumentation on the target under test and returns a ``FuzzReport`` instead of a ``ExhaustCore/StateMachineResult``. See <doc:MacroExplore> for the parameters and <doc:CoverageGuidedFuzzing> for the full guide.

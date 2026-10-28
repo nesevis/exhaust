@@ -100,7 +100,8 @@ struct FuzzCampaign: Sendable {
         do {
             return try await __ExhaustRuntime.withReservedFuzzPersistence(
                 store: context.store,
-                resumeEnabled: context.resumeEnabled
+                resumeEnabled: context.resumeEnabled,
+                recoverUnseeded: context.requestedSeed == nil
             ) { persistence in
                 __ExhaustRuntime.reportFuzzResumeFindings(
                     context: persistence,

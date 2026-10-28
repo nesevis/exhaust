@@ -18,7 +18,12 @@ package struct FuzzCampaignContext: Sendable {
     let column: UInt
     let testID: String?
     let testName: String?
-    let seed: UInt64?
+    let requestedSeed: UInt64?
+    /// The resolved search seed, retaining a requested seed only when validation failed.
+    var seed: UInt64? {
+        configuration.seed ?? requestedSeed
+    }
+
     let kind: FuzzCampaignKind
     /// Where the explore command collects campaign records; nil outside a command run.
     let reportDirectory: URL?
@@ -46,17 +51,18 @@ package struct FuzzCampaignContext: Sendable {
         self.column = column
         self.testID = testID
         self.testName = testName
-        self.seed = seed
+        requestedSeed = seed
         self.kind = kind
         reportDirectory = environment[CampaignWire.reportDirectoryKey].map { URL(fileURLWithPath: $0) }
         resumeEnabled = environment[CampaignWire.resumeKey] != "0"
-        configuration = FuzzCampaignConfiguration(
+        let configuration = FuzzCampaignConfiguration(
             time: time,
             seed: seed,
             propertyModule: "\(fileID)".split(separator: "/").first.map(String.init) ?? "",
             invalidReplayMessage: invalidReplayMessage,
             environment: environment
         )
+        self.configuration = configuration
         let baseDirectory = environment[CampaignWire.stateDirectoryKey].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.temporaryDirectory
         store = FuzzProgressStore(
@@ -64,7 +70,7 @@ package struct FuzzCampaignContext: Sendable {
             line: line,
             column: column,
             testIdentity: testID,
-            seed: seed,
+            seed: configuration.seed ?? seed,
             baseDirectory: baseDirectory
         )
     }
@@ -105,7 +111,7 @@ package struct FuzzCampaignContext: Sendable {
         CampaignSource(fileID: String(describing: fileID), line: line, column: column)
     }
 
-    /// The report for a campaign that ends before searching, carrying the requested seed or zero when none was given.
+    /// The report for a campaign that ends before searching, carrying its resolved seed, the rejected request's seed, or zero if neither exists.
     func emptyReport(_ termination: FuzzReport.Termination) -> FuzzReport {
         .empty(termination: termination, seed: seed ?? 0)
     }

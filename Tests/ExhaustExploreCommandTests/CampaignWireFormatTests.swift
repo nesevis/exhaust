@@ -54,7 +54,9 @@ struct CampaignWireFormatTests {
         let record = FuzzCampaignRecord(directory: directory, context: context)
         let file = CampaignWire.jsonURL(in: directory, id: record.id)
         try record.start()
-        #expect(try WireGolden.keys(Data(contentsOf: file)) == WireGolden.keys(Data(WireGolden.runningRecord.utf8)))
+        // The resolved seed is now published before completion; older records without it still round-trip above.
+        let runningKeys = try WireGolden.keys(Data(WireGolden.runningRecord.utf8)).union(["seed"])
+        #expect(try WireGolden.keys(Data(contentsOf: file)) == runningKeys)
         try record.finish(
             report: .empty(termination: .instrumentationMissing, seed: 7),
             attachments: ["summary.txt"],

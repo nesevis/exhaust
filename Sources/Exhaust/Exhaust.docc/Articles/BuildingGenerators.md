@@ -276,7 +276,7 @@ let small = #gen(.int().filter(.rejectionSampling) { $0 < 10 })
 
 | Strategy | Behaviour |
 |---|---|
-| `.auto` | Default. Currently selects `.choiceGradientSampling`. |
+| `.auto` | Default. Selects `.choiceGradientSampling`. |
 | `.rejectionSampling` | Generate-and-discard. Simple and predictable, but slow when valid values are sparse. |
 | `.probeSampling` | Probes each branching point to measure how often each choice satisfies the predicate, then biases weights before generation begins. One-shot analysis. |
 | `.choiceGradientSampling` | Online derivative sampling that conditions branch weights on upstream choices, with fitness sharing to maintain output diversity. Best for recursive generators. |

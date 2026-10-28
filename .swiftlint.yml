@@ -25,6 +25,7 @@ disabled_rules:
   - opening_brace
   - sorted_imports
   - function_parameter_count
+  - optional_data_string_conversion
 
 switch_case_alignment:
   indented_cases: true

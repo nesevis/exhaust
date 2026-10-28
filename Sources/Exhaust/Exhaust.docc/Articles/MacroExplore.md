@@ -32,8 +32,6 @@ For the full guide, see <doc:DirectedExploration>.
 
 **Coverage-guided fuzzing** (`time:`) gives Exhaust a wall-clock time budget. It watches which branches your code takes, uses that feedback to generate inputs that reach new branches, and catalogues the distinct counterexamples it finds rather than stopping at the first.
 
-> Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
-
 ```swift
 @Test func parserHandlesAdversarialInput() async {
     await #explore(myInputGenerator, time: .minutes(15)) { input in
@@ -53,8 +51,6 @@ For the full guide, see <doc:DirectedExploration>.
 Requires coverage instrumentation on the target under test. Returns a ``FuzzReport`` with the clustered fault inventory, attempt counts, throughput, and coverage summary.
 
 **Coverage-guided fuzzing over command sequences** (`time:` with a spec) points the same search at a `@StateMachine` spec instead of a generator. Exhaust mutates command sequences where it would otherwise mutate values, deleting, duplicating, and replacing commands as it searches, and reduces every fault it finds to a minimal sequence.
-
-> Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
