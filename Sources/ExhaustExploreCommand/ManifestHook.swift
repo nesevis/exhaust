@@ -1,3 +1,4 @@
+import ExhaustSupport
 import Foundation
 #if canImport(Darwin)
     import Darwin
@@ -7,21 +8,21 @@ import Foundation
 
 /// Appended only to the root manifest consumed through the compiler overlay.
 enum ManifestHook {
-    static let compilerFlags = [
-        "-sanitize=fuzzer-no-link",
-        "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp",
-        "-assert-config", "Debug",
-    ]
-
     /// Appends the campaign hook: instrumented targets gain the coverage runtime and flags, and the test target gains the test-reporting support whether or not it is instrumented.
-    static func augment(_ source: String, targets: [String], testTarget: String, runtimePackage: String?) -> String {
+    static func augment(
+        _ source: String,
+        targets: [String],
+        testTarget: String,
+        runtimePackage: String?,
+        recorder: CoverageRecorder
+    ) -> String {
         let runtimeDependency = dependency(target: "ExhaustCore", product: "ExhaustFuzzRuntime", package: runtimePackage)
         let testDependency = dependency(target: "ExhaustFuzzTestSupport", product: "ExhaustFuzzTestSupport", package: runtimePackage)
         return source + "\n\n" + """
         for target in package.targets where [\(targets.map { String(reflecting: $0) }.joined(separator: ", "))].contains(target.name) {
             target.dependencies.append(\(runtimeDependency))
             target.swiftSettings = (target.swiftSettings ?? []) + [
-                .unsafeFlags([\(compilerFlags.map { String(reflecting: $0) }.joined(separator: ", "))]),
+                .unsafeFlags([\(recorder.compilerFlags.map { String(reflecting: $0) }.joined(separator: ", "))]),
             ]
         }
         for target in package.targets where target.name == \(String(reflecting: testTarget)) {
@@ -40,7 +41,7 @@ enum ManifestHook {
 
     static func writeOverlay(for manifest: URL, source: String, in scratch: URL) throws -> URL {
         // Put the content fingerprint in the compiler flags so SwiftPM's manifest cache cannot reuse a manifest compiled with an earlier generated hook.
-        let fingerprint = StableFingerprint.hex(source)
+        let fingerprint = StableHash.hex(source)
         let directory = scratch.appendingPathComponent("manifests/\(fingerprint)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let augmented = directory.appendingPathComponent("Package.swift")

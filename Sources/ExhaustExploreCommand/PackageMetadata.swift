@@ -53,14 +53,14 @@ struct PackageManifest: Decodable {
         return dependency.nameForTargetDependencyResolutionOnly ?? identity
     }
 
-    func verifyInstrumentation(targets names: [String]) throws {
+    func verifyInstrumentation(targets names: [String], recorder: CoverageRecorder) throws {
         for name in names {
             guard let target = targets.first(where: { $0.name == name }) else {
                 throw CommandError("The ephemeral manifest did not enable coverage for \(name).")
             }
             let flags = target.settings.filter { $0.tool == "swift" && $0.condition == nil }
                 .flatMap { $0.kind.unsafeFlags?.flags ?? [] }
-            guard ManifestHook.compilerFlags.allSatisfy(flags.contains) else {
+            guard recorder.compilerFlags.allSatisfy(flags.contains) else {
                 throw CommandError("The ephemeral manifest did not enable coverage for \(name).")
             }
         }

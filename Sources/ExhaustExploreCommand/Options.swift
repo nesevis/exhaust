@@ -5,7 +5,10 @@ struct Options: Equatable {
     var testTarget: String?
     var filter: String?
     var seconds: UInt64?
+    var outputPath: String?
+    var xunit = false
     var configuration: BuildConfiguration = TestLinkage.host.defaultConfiguration
+    var coverageRecorder: CoverageRecorder = .guards
 
     // MARK: - Parsing
 
@@ -49,6 +52,18 @@ struct Options: Equatable {
                     options.filter = try value()
                 case "--time":
                     options.seconds = try parseSeconds(value())
+                case "--output":
+                    options.outputPath = try value()
+                case "--xunit":
+                    guard parts.count == 1 else {
+                        throw CommandError("\(name) does not accept a value.")
+                    }
+                    options.xunit = true
+                case "--no-parallel":
+                    guard parts.count == 1 else {
+                        throw CommandError("\(name) does not accept a value.")
+                    }
+                    options.coverageRecorder = .counters
                 case "--configuration":
                     guard let configuration = try BuildConfiguration(rawValue: value()) else {
                         throw CommandError("--configuration must be debug or release.")
@@ -90,18 +105,25 @@ struct Options: Equatable {
     Build selected root targets with coverage instrumentation and run tests.
     Instrumentation uses an ephemeral manifest overlay; Package.swift is never edited.
     The selected test target is instrumented too, except on Windows. Dependencies retain their own settings.
-    Builds and attachments stay in the plugin work directory. Tests' own time limits still apply.
+    Tests run in parallel with trace-pc-guard by default. --no-parallel uses inline-8bit-counters.
+    Builds stay in the plugin work directory; reports and recovery state default there. Tests' own time limits still apply.
 
     OPTIONS:
       --instrument <target>       Root Swift target to instrument; repeat for additional targets.
       --test-target <target>      Root Swift test target; inferred when there is only one.
       --filter <regex>            Run matching tests in the selected target; no matches fails.
       --time <seconds>            Positive whole seconds per #explore(time:) invocation.
+      --output <path>             Report and recovery root; relative to the package root. Overrides EXHAUST_STATE_DIR.
+      --xunit                    Also write SwiftPM native xUnit XML for CI test-result import.
       --configuration <mode>      debug or release (default: release; debug only on Windows).
+      --no-parallel               Run tests serially with coverage across threads and tasks.
       -h, --help                  Show this help.
+
+    The output root contains report.json and events.jsonl; --xunit adds SwiftPM xunit*.xml; per-run details live under attachments/.
 
     Options accept --name=value or --name value. Repeated scalar options use the last value.
     SwiftPM options such as --package-path and --scratch-path go before explore.
+    For output paths outside the plugin workspace, pass --allow-writing-to-directory <path> before explore.
     """
 }
 
@@ -113,3 +135,37 @@ enum BuildConfiguration: String {
 }
 
 struct HelpRequested: Error {}
+
+/// Selects one recorder for the entire campaign build; mixing them is unsupported.
+enum CoverageRecorder: String, CaseIterable {
+    /// Attributes edges to independent synchronous campaign lanes.
+    case guards = "trace-pc-guard"
+    /// Collects edges across task and thread hops when campaigns run serially.
+    case counters = "inline-8bit-counters"
+
+    var testArguments: [String] {
+        switch self {
+            case .guards:
+                []
+            case .counters:
+                ["--no-parallel"]
+        }
+    }
+
+    var schedulingDescription: String {
+        switch self {
+            case .guards:
+                "in parallel"
+            case .counters:
+                "serially"
+        }
+    }
+
+    var compilerFlags: [String] {
+        [
+            "-sanitize=fuzzer-no-link",
+            "-sanitize-coverage=edge,\(rawValue),pc-table,trace-cmp",
+            "-assert-config", "Debug",
+        ]
+    }
+}

@@ -75,8 +75,8 @@ let package = Package(
     ] + swiftLintDependency,
     targets: [
         .target(name: "ExhaustSupport", swiftSettings: strictConcurrencySettings),
-        .executableTarget(name: "ExhaustExploreCommand"),
-        .testTarget(name: "ExhaustExploreCommandTests", dependencies: ["ExhaustExploreCommand", "Exhaust"]),
+        .executableTarget(name: "ExhaustExploreCommand", dependencies: ["ExhaustSupport"]),
+        .testTarget(name: "ExhaustExploreCommandTests", dependencies: ["ExhaustExploreCommand", "Exhaust", "ExhaustSupport"]),
         // IssueReporting needs its dynamic test support to report failures in release builds.
         // The manifest overlay attaches this only to test targets, never the instrumented library.
         .target(

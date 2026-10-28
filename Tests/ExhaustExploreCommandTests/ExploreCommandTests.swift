@@ -10,11 +10,26 @@ struct ExploreCommandTests {
         let options = try Options.parse([
             "explore", "--instrument=Library", "--instrument", "Tests",
             "--filter=[", "--filter=valid", "--time", "60", "--configuration", "debug",
+            "--output=old", "--output", "recovery state",
         ])
         #expect(options.instruments == ["Library", "Tests"])
         #expect(options.filter == "valid")
         #expect(options.seconds == 60)
         #expect(options.configuration == .debug)
+        #expect(options.coverageRecorder == .guards)
+        #expect(options.outputPath == "recovery state")
+        #expect(options.xunit == false)
+        #expect(try Options.parse(["explore", "--instrument", "Library", "--xunit"]).xunit)
+    }
+
+    @Test("Tests run in parallel with guards unless --no-parallel selects counters")
+    func parallelism() throws {
+        let serial = try Options.parse(["explore", "--instrument", "Library", "--no-parallel"])
+        let parallel = try Options.parse(["explore", "--instrument", "Library"])
+        #expect(serial.coverageRecorder.testArguments == ["--no-parallel"])
+        #expect(parallel.coverageRecorder == .guards)
+        #expect(serial.coverageRecorder == .counters)
+        #expect(parallel.coverageRecorder.testArguments.isEmpty)
     }
 
     @Test("Plugin context precedes explore, and user arguments cannot override it", arguments: [
@@ -34,7 +49,8 @@ struct ExploreCommandTests {
     @Test("Invalid options fail before any process starts", arguments: [
         ["--time", "0"], ["--time", "-1"], ["--time", "1.5"], ["--time", "18446744074"],
         ["--filter", "["], ["--configuration", "profile"], ["--unknown", "value"],
-        ["--test-target"], ["--instrument", ""], ["--test-target="],
+        ["--test-target"], ["--instrument", ""], ["--test-target="], ["--no-parallel=true"], ["--parallel"],
+        ["--output"], ["--output="], ["--xunit=true"], ["--xunit=false"],
     ])
     func invalidOptions(arguments: [String]) {
         #expect(throws: CommandError.self) {
@@ -86,7 +102,7 @@ struct ExploreCommandTests {
         )
         #expect(plan.test.name == "Tests")
         #expect(plan.targets == ["Library", "Tests"])
-        #expect(plan.statePath == "/tmp/custom-state")
+        #expect(plan.statePath == "/tmp/custom-state/" + plan.scratch.lastPathComponent)
         #expect(plan.environment["EXHAUST_EXPLORE_TIME_NS"] == "2000000000")
         let repeated = try CampaignPlan(
             options: options,
@@ -98,6 +114,47 @@ struct ExploreCommandTests {
         )
         #expect(plan.scratch == repeated.scratch)
         #expect(repeated.statePath == repeated.scratch.appendingPathComponent("state").nativePath)
+    }
+
+    @Test("Recorder modes have independent stable builds and recovery directories", arguments: [
+        [:], ["EXHAUST_STATE_DIR": "/tmp/custom-state"],
+    ])
+    func recorderIsolation(environment: [String: String]) throws {
+        let parallel = try Options.parse(["explore", "--instrument", "Library"])
+        let serial = try Options.parse(["explore", "--instrument", "Library", "--no-parallel"])
+        let plans = try [parallel, serial, parallel, serial].map { options in
+            try CampaignPlan(
+                options: options,
+                invocation: Invocation(),
+                package: package,
+                outputDirectory: URL(fileURLWithPath: "/tmp/explore"),
+                environment: environment,
+                linkage: .sharedProduct
+            )
+        }
+        #expect(plans[0].scratch != plans[1].scratch)
+        #expect(plans[0].statePath != plans[1].statePath)
+        #expect(plans[0].scratch == plans[2].scratch)
+        #expect(plans[1].statePath == plans[3].statePath)
+    }
+
+    @Test("Explicit output paths relocate reports and recovery without moving builds", arguments: [
+        "recovery state", "../shared-state", "/tmp/absolute-state",
+    ])
+    func explicitOutputPath(path: String) throws {
+        let root = URL(fileURLWithPath: "/tmp/consumer", isDirectory: true)
+        let plan = try CampaignPlan(
+            options: Options.parse(["explore", "--instrument", "Library", "--output", path]),
+            invocation: Invocation(packagePath: root.nativePath),
+            package: package,
+            outputDirectory: root.appendingPathComponent(".build/exhaust"),
+            environment: ["EXHAUST_STATE_DIR": "/tmp/ignored-state"]
+        )
+        let expected = URL(fileURLWithPath: path, relativeTo: root).standardizedFileURL
+        #expect(plan.output == expected)
+        #expect(plan.statePath == expected.appendingPathComponent("state").appendingPathComponent(plan.scratch.lastPathComponent).nativePath)
+        #expect(plan.environment["EXHAUST_STATE_DIR"] == plan.statePath)
+        #expect(plan.scratch.deletingLastPathComponent().path == root.appendingPathComponent(".build/exhaust").path)
     }
 
     @Test("Different spellings of the same compiler path share one build directory")
@@ -233,36 +290,62 @@ struct ExploreCommandTests {
         #expect(throws: CommandError.self) { try manifest.runtimePackageName(for: .dependency(identity: "absent")) }
     }
 
-    @Test("Verification requires exact unconditional Swift instrumentation flags")
-    func instrumentationVerification() throws {
-        let flags = ManifestHook.compilerFlags
+    @Test("Verification requires exact unconditional Swift instrumentation flags", arguments: CoverageRecorder.allCases)
+    func instrumentationVerification(recorder: CoverageRecorder) throws {
+        let flags = recorder.compilerFlags
         let setting = ManifestSetting(tool: "swift", kind: ManifestSettingKind(unsafeFlags: ManifestUnsafeFlags(flags: flags)), condition: nil)
         let valid = PackageManifest(dependencies: [], targets: [ManifestTarget(name: "Library", settings: [setting])])
-        try valid.verifyInstrumentation(targets: ["Library"])
+        try valid.verifyInstrumentation(targets: ["Library"], recorder: recorder)
+        let other: CoverageRecorder = recorder == .guards ? .counters : .guards
+        #expect(throws: CommandError.self) {
+            try valid.verifyInstrumentation(targets: ["Library"], recorder: other)
+        }
         for invalid in [
             ManifestSetting(tool: "c", kind: setting.kind, condition: nil),
             ManifestSetting(tool: "swift", kind: setting.kind, condition: ManifestCondition()),
             ManifestSetting(tool: "swift", kind: ManifestSettingKind(unsafeFlags: ManifestUnsafeFlags(flags: flags.map { $0 + "suffix" })), condition: nil),
         ] {
             let manifest = PackageManifest(dependencies: [], targets: [ManifestTarget(name: "Library", settings: [invalid])])
-            #expect(throws: CommandError.self) { try manifest.verifyInstrumentation(targets: ["Library"]) }
+            #expect(throws: CommandError.self) { try manifest.verifyInstrumentation(targets: ["Library"], recorder: recorder) }
         }
     }
 
-    @Test("Manifest augmentation scopes selection and escapes dependency aliases")
-    func manifestAugmentation() {
+    @Test("Manifest augmentation scopes selection and escapes dependency aliases", arguments: CoverageRecorder.allCases)
+    func manifestAugmentation(recorder: CoverageRecorder) {
         let source = "let package = Package(name: \"Example\")"
-        let augmented = ManifestHook.augment(source, targets: ["Library", "Tests"], testTarget: "Tests", runtimePackage: "Tool\"ing")
+        let augmented = ManifestHook.augment(
+            source,
+            targets: ["Library", "Tests"],
+            testTarget: "Tests",
+            runtimePackage: "Tool\"ing",
+            recorder: recorder
+        )
         #expect(augmented.hasPrefix(source))
+        #expect(augmented.contains("edge,\(recorder.rawValue),pc-table,trace-cmp"))
+        let otherRecorder = recorder == .guards ? "inline-8bit-counters" : "trace-pc-guard"
+        #expect(augmented.contains(otherRecorder) == false)
         #expect(augmented.contains("[\"Library\", \"Tests\"].contains(target.name)"))
         #expect(augmented.contains("package: \"Tool\\\"ing\""))
         #expect(augmented.contains("EXHAUST_INSTRUMENT") == false)
-        #expect(ManifestHook.augment(source, targets: ["Library"], testTarget: "Tests", runtimePackage: nil).contains(".target(name: \"ExhaustCore\")"))
+        let rootAugmented = ManifestHook.augment(
+            source,
+            targets: ["Library"],
+            testTarget: "Tests",
+            runtimePackage: nil,
+            recorder: .guards
+        )
+        #expect(rootAugmented.contains(".target(name: \"ExhaustCore\")"))
     }
 
     @Test("The test target gains test-reporting support even when it is not instrumented")
     func uninstrumentedTestTargetSupport() {
-        let augmented = ManifestHook.augment("let package = Package(name: \"Example\")", targets: ["Library"], testTarget: "Tests", runtimePackage: nil)
+        let augmented = ManifestHook.augment(
+            "let package = Package(name: \"Example\")",
+            targets: ["Library"],
+            testTarget: "Tests",
+            runtimePackage: nil,
+            recorder: .guards
+        )
         #expect(augmented.contains("[\"Library\"].contains(target.name)"))
         #expect(augmented.contains("where target.name == \"Tests\" {\n    target.dependencies.append(.target(name: \"ExhaustFuzzTestSupport\"))"))
     }
@@ -397,15 +480,21 @@ private enum CommandGenerators {
             value.optional(),
             value.optional(),
             .uint64(in: 1 ... UInt64.max / 1_000_000_000).optional(),
-            .element(from: [BuildConfiguration.debug, .release])
+            value.optional(),
+            .bool(),
+            .element(from: [BuildConfiguration.debug, .release]),
+            .element(from: CoverageRecorder.allCases)
         )
-        .map { instruments, testTarget, filter, seconds, configuration in
+        .map { instruments, testTarget, filter, seconds, outputPath, xunit, configuration, coverageRecorder in
             Options(
                 instruments: instruments,
                 testTarget: testTarget,
                 filter: filter.map(NSRegularExpression.escapedPattern(for:)),
                 seconds: seconds,
-                configuration: configuration
+                outputPath: outputPath,
+                xunit: xunit,
+                configuration: configuration,
+                coverageRecorder: coverageRecorder
             )
         }
     }
@@ -504,8 +593,10 @@ enum ArgumentSyntax: CaseIterable {
             ("--test-target", options.testTarget),
             ("--filter", options.filter),
             ("--time", options.seconds.map(String.init)),
+            ("--output", options.outputPath),
             ("--configuration", options.configuration.rawValue),
         ]
+        let flags = options.coverageRecorder.testArguments + (options.xunit ? ["--xunit"] : [])
         return ["explore"] + values.flatMap { name, value -> [String] in
             guard let value else {
                 return []
@@ -516,7 +607,7 @@ enum ArgumentSyntax: CaseIterable {
                 case .equals:
                     return [name + "=" + value]
             }
-        }
+        } + flags
     }
 
     /// The plugin always passes its context as separated pairs, so it has one syntax.
