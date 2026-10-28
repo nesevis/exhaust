@@ -16,6 +16,9 @@ struct CampaignReportsTests: CampaignReportsFixtures {
             var record = fixtureRecord(id: id, state: state)
             record.attachments = ["\(id).txt"]
             try JSONEncoder().encode(record).write(to: reports.records.appendingPathComponent("\(id).json"))
+            if record.status == .completed {
+                try publishEvents(for: record, in: reports)
+            }
         }
         try Data("<testsuites/>".utf8).write(to: directory.appendingPathComponent("xunit-swift-testing.xml"))
         try reports.finish(error: ChildFailure(status: 1))
@@ -132,6 +135,7 @@ struct CampaignReportsTests: CampaignReportsFixtures {
         for (id, outcome) in [("first", ExhaustSupport.CampaignOutcome.passed), ("second", .failed)] {
             let record = fixtureRecord(id: id, state: .completed(fixtureCompletion(outcome: outcome)))
             try JSONEncoder().encode(record).write(to: reports.records.appendingPathComponent("\(id).json"))
+            try publishEvents(for: record, in: reports)
         }
         try Data("<testsuites/>".utf8).write(to: reports.xunit)
         try reports.finish(error: ChildFailure(status: 1))

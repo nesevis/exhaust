@@ -22,6 +22,16 @@ import Testing
     #expect(report.timing.elapsed < .seconds(10))
 }
 
+// Two cases at one call site, each running two campaigns, so the command must keep all four apart rather than merging them by test or source location.
+@Test(arguments: [UInt64(1), 2]) func parameterizedProperty(seed: UInt64) async {
+    for _ in 0 ..< 2 {
+        let report = await #explore(#gen(.int(in: -1000...1000)), time: .seconds(20), .replay(.numeric(seed))) { value async in
+            Parser.accepts(value) == (value >= 10)
+        }
+        #expect(report.outcome == .passed)
+    }
+}
+
 @Test func failingProperty() async {
     await #explore(#gen(.int(in: -1000...1000)), time: .seconds(20), .failFast) { value async in
         Parser.accepts(value)

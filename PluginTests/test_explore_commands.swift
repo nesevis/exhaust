@@ -162,8 +162,8 @@ struct ExploreCommandsTests {
             throw ValidationFailure("Missing build path:\n\(result)")
         }
         let scratch = URL(fileURLWithPath: String(buildLine.dropFirst("Build: ".count))).resolvingSymlinksInPath()
-        let defaultReport = try JSONDecoder().decode(CampaignAggregate.self, from: Data(contentsOf: scratch.appendingPathComponent("report.json")))
-        try require(defaultReport.xunitFiles == [], "xUnit should be opt-in")
+        let defaultReport = try ReportFile.json(scratch.appendingPathComponent("report.json"))
+        try require((defaultReport["xunitFiles"] as? [String]) == [], "xUnit should be opt-in")
         try require(!manager.fileExists(atPath: scratch.appendingPathComponent("xunit-swift-testing.xml").path), "Unexpected default XML")
         let defaultEvents = try String(contentsOf: scratch.appendingPathComponent("events.jsonl"), encoding: .utf8)
         try require(defaultEvents.contains("run.started") && defaultEvents.contains("run.finished"), "Missing default JSONL stream")
@@ -206,15 +206,10 @@ struct ExploreCommandsTests {
         }
         try require(!manager.contentsOfDirectory(atPath: customOutput.appendingPathComponent("attachments").nativePath).isEmpty,
                     "Missing custom attachments directory")
-        let aggregate = try JSONDecoder().decode(CampaignAggregate.self, from: Data(contentsOf: customOutput.appendingPathComponent("report.json")))
-        let campaigns = aggregate.campaigns
-        try require(aggregate.status == .succeeded, "Missing successful aggregate")
-        try require(campaigns.count == 4, "Parameterized calls were lost or merged")
-        try require(campaigns.map(\.seed).sorted() == ["1", "1", "2", "2"], "Lost seeds")
-        let eventLines = try String(contentsOf: customOutput.appendingPathComponent("events.jsonl"), encoding: .utf8).split(separator: "\n")
-        let events = try eventLines.map { try JSONDecoder().decode(StreamEvent.self, from: Data($0.utf8)) }
-        try require(events.filter { $0.type == .campaignStarted }.count == 4, "Lost parallel campaign events")
-        let xunitFiles = aggregate.xunitFiles
+        // Campaign aggregation runs against the real runtime in run_real_consumer.swift; this provider has no Exhaust runtime.
+        let aggregate = try ReportFile.json(customOutput.appendingPathComponent("report.json"))
+        try require(aggregate["status"] as? String == "succeeded", "Missing successful aggregate")
+        let xunitFiles = aggregate["xunitFiles"] as? [String] ?? []
         try require(!xunitFiles.isEmpty, "Missing native xUnit output")
         let xml = try xunitFiles.map { try String(contentsOf: customOutput.appendingPathComponent($0), encoding: .utf8) }.joined()
         try require(xml.components(separatedBy: "name=\"parameterized(value:)\"").count == 2,
@@ -227,9 +222,9 @@ struct ExploreCommandsTests {
         try require(legacy.contains("testLegacy") && !legacy.contains("No matching test cases"), legacy)
         let failed = try plugin(arguments + ["--filter", "deliberateFailure", "--xunit"], success: false)
         try require(failed.contains("EXPECTED_FAILURE_FORWARDING"), failed)
-        let failureReport = try JSONDecoder().decode(CampaignAggregate.self, from: Data(contentsOf: scratch.appendingPathComponent("report.json")))
-        try require(failureReport.status == .failed, "Failed process lost its JSON report")
-        try require(failureReport.xunitFiles.isEmpty == false, "Failed tests lost native xUnit results")
+        let failureReport = try ReportFile.json(scratch.appendingPathComponent("report.json"))
+        try require(failureReport["status"] as? String == "failed", "Failed process lost its JSON report")
+        try require((failureReport["xunitFiles"] as? [String])?.isEmpty == false, "Failed tests lost native xUnit results")
         try require(Data(contentsOf: manifest) == original, "Failed campaign modified Package.swift")
         try require(Data(contentsOf: dependencyManifest) == dependencyOriginal, "Campaign modified dependency manifest")
         let missing = try helperRun(arguments + ["--filter", "doesNotExist"], outputPath: outputPath, success: false)
@@ -401,34 +396,6 @@ struct ExploreCommandsTests {
         import XCTest
         import Foundation
         import MyLibrary
-        struct FixtureSource: Encodable {
-            let fileID = "ParserTests/ParserTests.swift"
-            let line = 1
-            let column = 1
-        }
-        struct FixtureCampaignRecord: Encodable {
-            let source = FixtureSource()
-            let kind = "value"
-            let declaredBudgetSeconds = 2
-            let startedAt = Date().timeIntervalSince1970
-            let attachments: [String] = []
-            let checkpointPath = "state/fixture"
-            let schemaVersion = 1
-            let id: String
-            let status: String
-            let seed: String
-        }
-        // The smallest report the command's decoder accepts: a campaign that used its budget without evaluating anything.
-        let fixtureReport = "{\"attempts\":{\"discardedByMaterializer\":0,\"discardedByProperty\":0,\"duplicatesSkipped\":0,\"evaluated\":0,\"mutation\":0,\"mutationArmAttempts\":{},\"mutationArmDiscarded\":{},\"mutationArmFailed\":{},\"mutationArmPassed\":{},\"rejected\":0,\"sampling\":0,\"screening\":0,\"total\":0},\"clusters\":[],\"coverage\":{\"corpusEntryCount\":0,\"coveredEdges\":0,\"estimatedNextEdgeProbability\":0,\"estimatedReachableEdges\":0,\"incidenceSamples\":0,\"incidenceTotal\":0,\"instrumentedEdges\":0,\"offLaneHits\":0,\"parentCount\":0,\"parentRootPhases\":{}},\"invocations\":{\"classification\":0,\"normalization\":0,\"prune\":0,\"recovery\":0,\"reduction\":0,\"search\":0,\"total\":0},\"resumedFromCrash\":false,\"termination\":{\"reason\":\"budgetExhausted\"},\"timing\":{\"attemptsPerSecond\":0,\"elapsedSeconds\":0,\"lastDiscoverySeconds\":0,\"mutationOverheadSeconds\":0,\"otherSeconds\":0,\"propertySeconds\":0,\"reductionSeconds\":0,\"samplingOverheadSeconds\":0,\"screeningOverheadSeconds\":0,\"testingOverheadFraction\":0},\"unreducedFailureCounts\":{}}"
-        struct FixtureEvent: Encodable {
-            let schemaVersion = 1
-            let eventID: String
-            let campaignID: String
-            let campaignSequence = 0
-            let type = "campaign.started"
-            let timestamp = Date().timeIntervalSince1970
-            let payload: FixtureCampaignRecord
-        }
         @Test func selected() {
             #expect(parse(12345))
             #expect(ProcessInfo.processInfo.environment["EXHAUST_EXPLORE_TIME_NS"] == "2000000000")
@@ -437,30 +404,6 @@ struct ExploreCommandsTests {
         @Suite struct Nested {
             @Test(arguments: [1, 2]) func parameterized(value: Int) throws {
                 #expect(value > 0)
-                // Minimal provider fixture for the runtime/command file protocol. The full runtime has separate tests.
-                let directory = try #require(ProcessInfo.processInfo.environment["EXHAUST_REPORT_DIR"])
-                for _ in 0 ..< 2 {
-                    let id = UUID().uuidString
-                    let spool = URL(fileURLWithPath: directory).appendingPathComponent("events")
-                    let eventID = id + "-00000000"
-                    let started = FixtureCampaignRecord(id: id, status: "running", seed: String(value))
-                    let event = FixtureEvent(eventID: eventID, campaignID: id, payload: started)
-                    try JSONEncoder().encode(event).write(to: spool.appendingPathComponent(eventID + ".json"), options: .atomic)
-                    // This can only pass if the command collects while its test process is still alive.
-                    let stream = URL(fileURLWithPath: directory).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("events.jsonl")
-                    let deadline = Date().addingTimeInterval(5)
-                    while !(try String(contentsOf: stream, encoding: .utf8)).contains(eventID) && Date() < deadline {
-                        Thread.sleep(forTimeInterval: 0.02)
-                    }
-                    #expect(try String(contentsOf: stream, encoding: .utf8).contains(eventID))
-                    let record = FixtureCampaignRecord(id: id, status: "completed", seed: String(value))
-                    var completed = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
-                    completed["finishedAt"] = Date().timeIntervalSince1970
-                    completed["issuesSuppressed"] = false
-                    completed["outcome"] = "passed"
-                    completed["report"] = try JSONSerialization.jsonObject(with: Data(fixtureReport.utf8))
-                    try JSONSerialization.data(withJSONObject: completed).write(to: URL(fileURLWithPath: directory).appendingPathComponent(id + ".json"), options: .atomic)
-                }
                 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
                 let expected = root.appendingPathComponent("custom state")
                 let actual = ProcessInfo.processInfo.environment["EXHAUST_STATE_DIR"].map { URL(fileURLWithPath: $0).resolvingSymlinksInPath() }
@@ -626,32 +569,12 @@ extension URL {
     }
 }
 
-/// Decodes the consumer-facing reporting contract independently of the command's internal models.
-private struct CampaignAggregate: Decodable {
-    enum Status: String, Decodable {
-        case running
-        case succeeded
-        case failed
+/// Reads the command's own report.json as plain JSON, so checks follow what the command wrote instead of a copy of its model.
+enum ReportFile {
+    static func json(_ file: URL) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any] else {
+            throw ValidationFailure("Report is not a JSON object: \(file.nativePath)")
+        }
+        return object
     }
-    struct Campaign: Decodable {
-        let id: String
-        let seed: String
-    }
-    let status: Status
-    let campaigns: [Campaign]
-    let xunitFiles: [String]
-}
-
-/// Checks the event vocabulary while allowing payloads to evolve independently.
-private struct StreamEvent: Decodable {
-    enum Kind: String, Decodable {
-        case runStarted = "run.started"
-        case phaseChanged = "run.phaseChanged"
-        case campaignStarted = "campaign.started"
-        case findingReported = "finding.reported"
-        case campaignFinished = "campaign.finished"
-        case campaignInterrupted = "campaign.interrupted"
-        case runFinished = "run.finished"
-    }
-    let type: Kind
 }

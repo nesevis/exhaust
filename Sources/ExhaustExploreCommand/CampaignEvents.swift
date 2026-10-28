@@ -11,6 +11,8 @@ final class CampaignEvents: @unchecked Sendable {
     private var sequence = 0
     private var collected: Set<String> = []
     private var nextCampaignSequence: [String: Int] = [:]
+    private var finishedCampaigns: Set<String> = []
+    private var gappedCampaigns: Set<String> = []
     private var collectionErrors: [String] = []
 
     var errors: [String] {
@@ -66,23 +68,37 @@ final class CampaignEvents: @unchecked Sendable {
     /// Collects for the last time after the test process exits, so an event still waiting for its predecessor marks a permanent gap.
     func collectFinal() {
         lock.withLock {
-            for name in collectPublished() {
-                collected.insert(name)
-                collectionErrors.append("\(name): Missing or out-of-order campaign event: \(name)")
+            for waiting in collectPublished() {
+                collected.insert(waiting.name)
+                gappedCampaigns.insert(waiting.campaignID)
+                collectionErrors.append("\(waiting.name): Missing or out-of-order campaign event: \(waiting.name)")
             }
         }
     }
 
-    /// Appends every listed event that is next in its campaign's order and returns the names of valid events still waiting for a predecessor.
-    private func collectPublished() -> [String] {
-        var waiting: [String] = []
+    /// Names each completed campaign whose stream never reached `campaign.finished`.
+    ///
+    /// The runtime persists its completed snapshot before publishing findings and the terminal event, so a process that dies or fails a write between them leaves a completed record whose stream simply stops. No later event waits behind the missing tail, so ``collectFinal()`` cannot see the gap. A campaign ``collectFinal()`` already reported for a gap is not reported again.
+    func unfinishedStreamErrors(completedCampaignIDs: [String]) -> [String] {
+        lock.withLock {
+            completedCampaignIDs
+                .filter { finishedCampaigns.contains($0) == false && gappedCampaigns.contains($0) == false }
+                .map { campaignID in
+                    "\(campaignID): Campaign completed, but its event stream ended after \(nextCampaignSequence[campaignID, default: 0]) event(s) without campaign.finished."
+                }
+        }
+    }
+
+    /// Appends every listed event that is next in its campaign's order and returns the valid events still waiting for a predecessor.
+    private func collectPublished() -> [(name: String, campaignID: String)] {
+        var waiting: [(name: String, campaignID: String)] = []
         do {
             let files = try FileManager.default.contentsOfDirectory(at: spool, includingPropertiesForKeys: nil)
             for file in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
                 where file.pathExtension == "json" && collected.contains(file.lastPathComponent) == false
             {
-                if collect(file) == false {
-                    waiting.append(file.lastPathComponent)
+                if let campaignID = collect(file) {
+                    waiting.append((file.lastPathComponent, campaignID))
                 }
             }
         } catch {
@@ -94,8 +110,8 @@ final class CampaignEvents: @unchecked Sendable {
         return waiting
     }
 
-    /// Checks publication identity and order after Codable validates the envelope and the payload for its event type. Returns false only for a valid event whose predecessor is not collected yet; a directory listing concurrent with publication may miss an earlier file.
-    private func collect(_ file: URL) -> Bool {
+    /// Checks publication identity and order after Codable validates the envelope and the payload for its event type. Returns a campaign ID only for a valid event whose predecessor is not collected yet; a directory listing concurrent with publication may miss an earlier file.
+    private func collect(_ file: URL) -> String? {
         do {
             var event = try JSONDecoder().decode(CampaignEvent.self, from: Data(contentsOf: file))
             guard event.schemaVersion == 1,
@@ -113,7 +129,7 @@ final class CampaignEvents: @unchecked Sendable {
                     throw CommandError("Unexpected runtime event: \(event.type.rawValue)")
             }
             guard index == nextCampaignSequence[campaignID, default: 0] else {
-                return false
+                return campaignID
             }
             let records = spool.deletingLastPathComponent()
             try event.payload.relocate(
@@ -125,11 +141,14 @@ final class CampaignEvents: @unchecked Sendable {
             collected.insert(file.lastPathComponent)
             try appendUnlocked(event)
             nextCampaignSequence[campaignID] = index + 1
+            if case .campaignFinished = event.payload {
+                finishedCampaigns.insert(campaignID)
+            }
         } catch {
             collected.insert(file.lastPathComponent)
             collectionErrors.append("\(file.lastPathComponent): \(error)")
         }
-        return true
+        return nil
     }
 
     private func appendUnlocked(_ event: CampaignEvent) throws {

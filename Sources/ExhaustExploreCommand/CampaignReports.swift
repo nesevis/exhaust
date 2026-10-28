@@ -88,7 +88,9 @@ final class CampaignReports {
         for index in snapshot.records.indices where snapshot.records[index].status == .running {
             snapshot.records[index].state = .interrupted
         }
-        var document = try document(phase: phase, campaigns: snapshot.records, errors: snapshot.errors)
+        let completedCampaignIDs = snapshot.records.filter { $0.status == .completed }.map(\.id)
+        let errors = snapshot.errors + events.unfinishedStreamErrors(completedCampaignIDs: completedCampaignIDs)
+        var document = try document(phase: phase, campaigns: snapshot.records, errors: errors)
         let isIncomplete = document.totals.interrupted > 0 || document.reportingErrors.isEmpty == false
         document.status = switch error == nil && isIncomplete == false {
             case true:

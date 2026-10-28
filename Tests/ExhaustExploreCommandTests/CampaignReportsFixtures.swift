@@ -38,6 +38,22 @@ extension CampaignReportsFixtures {
         )
     }
 
+    /// Publishes the started and finished spool events the runtime writes around a completed record, so a hand-built record passes stream reconciliation.
+    func publishEvents(for record: CampaignRecord, in reports: CampaignReports) throws {
+        let payloads: [CampaignEventPayload] = [.campaignStarted(record), .campaignFinished(record)]
+        for (index, payload) in payloads.enumerated() {
+            let eventID = CampaignWire.eventID(campaignID: record.id, sequence: index)
+            let event = CampaignEvent(
+                eventID: eventID,
+                campaignID: record.id,
+                campaignSequence: index,
+                timestamp: 0,
+                payload: payload
+            )
+            try JSONEncoder().encode(event).write(to: CampaignWire.jsonURL(in: reports.events.spool, id: eventID))
+        }
+    }
+
     /// Decodes every stream line with its run correlation, requiring the stream to end on a complete line.
     func readStream(_ reports: CampaignReports) throws -> [CampaignStreamEvent] {
         let text = try String(contentsOf: reports.events.path, encoding: .utf8)

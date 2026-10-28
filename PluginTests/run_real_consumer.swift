@@ -48,6 +48,16 @@ func validate() throws {
                                     "--filter", name, "--time", "1"], environment: environment, success: succeeds).output
         log(result)
         try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
+        let (expectedOutcome, expectedStatus) = switch succeeds {
+            case true:
+                ("passed", "succeeded")
+            case false:
+                ("failed", "failed")
+        }
+        let report = try ReportFile.json(named: "JSON report: ", in: result)
+        let outcomes = (report["campaigns"] as? [[String: Any]] ?? []).map { $0["outcome"] as? String }
+        try require(outcomes == [expectedOutcome], "Unexpected campaign outcomes: \(outcomes)")
+        try require(report["status"] as? String == expectedStatus, "Unexpected report status")
         if succeeds {
             try require(result.contains("instrumentedProperty() passed"), "Property did not run")
             // Attachment names carry the test name, run seed, and campaign ID: explore-time-<test>-seed-<seed>-<campaign-id>-summary.txt.
@@ -60,7 +70,23 @@ func validate() throws {
             try require(result.contains("failingProperty() failed"), "Finding did not fail the test")
         }
     }
-    log("Uninstrumented warning and passing/failing campaigns verified; Package.swift unchanged.")
+
+    log("Checking parameterizedProperty…")
+    let parameterized = try run(swift, ["package", "--package-path", consumer.nativePath, "explore",
+                                       "--instrument", "Parser", "--test-target", "ParserTests",
+                                       "--filter", "parameterizedProperty", "--time", "1"], environment: environment).output
+    log(parameterized)
+    let report = try ReportFile.json(named: "JSON report: ", in: parameterized)
+    try require(report["status"] as? String == "succeeded", "Parameterized campaigns did not succeed")
+    let seeds = (report["campaigns"] as? [[String: Any]] ?? []).compactMap { $0["seed"] as? String }
+    try require(seeds.sorted() == ["1", "1", "2", "2"], "Parameterized campaigns were lost or merged: \(seeds)")
+    let events = try ReportFile.lines(named: "JSONL events: ", in: parameterized)
+    for type in ["campaign.started", "campaign.finished"] {
+        let count = events.count { $0["type"] as? String == type }
+        try require(count == 4, "Expected 4 \(type) events, got \(count)")
+    }
+    try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
+    log("Uninstrumented warning, passing/failing and parameterized campaigns, and their reports verified; Package.swift unchanged.")
 }
 
 // MARK: - Process Execution
@@ -112,6 +138,35 @@ func require(_ condition: @autoclosure () throws -> Bool, _ message: String) thr
 
 func log(_ message: String) {
     FileHandle.standardOutput.write(Data((message + "\n").utf8))
+}
+
+// MARK: - Report Files
+
+/// Reads the files the command names in its output as plain JSON, so checks follow what the command and runtime wrote instead of a copy of their models.
+enum ReportFile {
+    static func json(named label: String, in output: String) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: path(named: label, in: output))) as? [String: Any] else {
+            throw ValidationFailure("\(label)is not a JSON object")
+        }
+        return object
+    }
+
+    static func lines(named label: String, in output: String) throws -> [[String: Any]] {
+        let text = try String(contentsOf: path(named: label, in: output), encoding: .utf8)
+        return try text.split(separator: "\n").map { line in
+            guard let object = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
+                throw ValidationFailure("\(label)line is not a JSON object: \(line)")
+            }
+            return object
+        }
+    }
+
+    private static func path(named label: String, in output: String) throws -> URL {
+        guard let line = output.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix(label) }) else {
+            throw ValidationFailure("Missing \(label)in output:\n\(output)")
+        }
+        return URL(fileURLWithPath: String(line.dropFirst(label.count)))
+    }
 }
 
 // MARK: - Supporting Types

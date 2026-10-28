@@ -219,6 +219,31 @@ struct CampaignCollectionTests: CampaignReportsFixtures {
         #expect(try readEvents(reports).suffix(2).map(\.type) == [.campaignFinished, .runFinished])
     }
 
+    @Test("A completed snapshot whose event stream stops before campaign.finished fails reporting", arguments: [1, 0])
+    func unfinishedStream(survivingEvents: Int) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let reports = try makeReports(directory)
+        try reports.prepare()
+        let record = try recording(directory: reports.records, seed: 1)
+        try record.finish(
+            report: .empty(termination: .instrumentationMissing, seed: 1),
+            attachments: [],
+            issuesSuppressed: true
+        )
+        // Removing the tail reproduces a runtime that persisted its completed snapshot and then died before publishing the rest.
+        for sequence in survivingEvents ..< 2 {
+            let eventID = CampaignWire.eventID(campaignID: record.id, sequence: sequence)
+            try FileManager.default.removeItem(at: CampaignWire.jsonURL(in: reports.events.spool, id: eventID))
+        }
+        #expect(throws: CommandError.self) { try reports.finish() }
+        let aggregate = try read(reports.report)
+        #expect(aggregate.status == .failed)
+        #expect(aggregate.totals.completed == 1)
+        #expect(aggregate.reportingErrors.count == 1)
+        #expect(aggregate.reportingErrors.first?.hasPrefix(record.id) == true)
+    }
+
     // MARK: - Helpers
 
     private func recording(directory: URL, seed: UInt64?) throws -> FuzzCampaignRecord {
