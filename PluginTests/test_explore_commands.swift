@@ -34,6 +34,7 @@ func validate() throws {
     let checks: [(String, () throws -> Void)] = [
         ("command help", suite.commandHelp),
         ("consumer workflow", suite.consumerWorkflow),
+        ("serial counter workflow", suite.serialCounterWorkflow),
         ("nonstandard manifest", suite.nonstandardManifest),
         ("versioned manifests", suite.rejectedManifests),
         ("invalid arguments", suite.invalidArguments),
@@ -109,7 +110,7 @@ struct ExploreCommandsTests {
     func commandHelp() throws {
         let help = try plugin(["--help"])
         try require(help.contains("USAGE: swift package explore"), help)
-        for option in ["--instrument", "--test-target", "--filter", "--time", "--configuration", "--help"] {
+        for option in ["--instrument", "--test-target", "--filter", "--time", "--configuration", "--no-parallel", "--output", "--xunit", "--help"] {
             try require(help.contains(option), "Missing \(option) in help:\n\(help)")
         }
         for option in ["--runtime-package", "--workspace-path", "--output-path"] {
@@ -117,6 +118,27 @@ struct ExploreCommandsTests {
         }
         let normalized = help.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         try require(normalized.contains("default: release"), help)
+    }
+
+    func serialCounterWorkflow() throws {
+        let result = try plugin(["--instrument", "MyLibrary", "--test-target", "ParserTests", "--filter", "selected", "--time", "2", "--no-parallel"])
+        try require(result.contains("Coverage: inline-8bit-counters; tests run serially."), result)
+        try require(result.contains("Test selected() started"), result)
+        guard let buildLine = result.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("Build: ") }) else {
+            throw ValidationFailure("Missing build path:\n\(result)")
+        }
+        let scratch = URL(fileURLWithPath: String(buildLine.dropFirst("Build: ".count)))
+        let objects = try files(in: scratch).filter {
+            ["MyLibrary.o", "MyLibrary.swift.o", "MyLibrary.obj", "MyLibrary.swift.obj"].contains($0.lastPathComponent)
+                && $0.deletingLastPathComponent().lastPathComponent != "Modules"
+        }
+        try require(objects.isEmpty == false, "Missing instrumented library object")
+        for object in objects {
+            let symbols = try symbols(object)
+            try require(symbols.contains("sanitizer_cov_8bit_counters_init"), symbols)
+            try require(symbols.contains("sanitizer_cov_trace_pc_guard") == false, symbols)
+            try require(symbols.contains("sanitizer_cov_trace_const_cmp"), symbols)
+        }
     }
 
     func consumerWorkflow() throws {
@@ -140,6 +162,11 @@ struct ExploreCommandsTests {
             throw ValidationFailure("Missing build path:\n\(result)")
         }
         let scratch = URL(fileURLWithPath: String(buildLine.dropFirst("Build: ".count))).resolvingSymlinksInPath()
+        let defaultReport = try JSONDecoder().decode(CampaignAggregate.self, from: Data(contentsOf: scratch.appendingPathComponent("report.json")))
+        try require(defaultReport.xunitFiles == [], "xUnit should be opt-in")
+        try require(!manager.fileExists(atPath: scratch.appendingPathComponent("xunit-swift-testing.xml").path), "Unexpected default XML")
+        let defaultEvents = try String(contentsOf: scratch.appendingPathComponent("events.jsonl"), encoding: .utf8)
+        try require(defaultEvents.contains("run.started") && defaultEvents.contains("run.finished"), "Missing default JSONL stream")
         let pluginRoot = consumer.appendingPathComponent(".build/plugins").resolvingSymlinksInPath()
         try require(scratch.path.hasPrefix(pluginRoot.path + "/"), "Build escaped plugin workspace: \(scratch.path)")
         try require(Data(contentsOf: manifest) == original, "Campaign modified Package.swift")
@@ -163,12 +190,46 @@ struct ExploreCommandsTests {
             let locked = try helperRun(arguments, outputPath: outputPath, success: false)
             try require(locked.contains("Another explore command"), locked)
         }
-        let nested = try helperRun(arguments + ["--filter", "Nested"], outputPath: outputPath)
+        let nested = try helperRun(arguments + ["--filter", "Nested", "--output", "custom state", "--xunit"], outputPath: outputPath)
         try require(nested.contains("parameterized") && !nested.contains("No matching test cases"), nested)
+        let customOutput = consumer.appendingPathComponent("custom state")
+        for (label, expected) in [
+            ("Attachments: ", customOutput.appendingPathComponent("attachments")),
+            ("Crash recovery state: ", customOutput.appendingPathComponent("state").appendingPathComponent(scratch.lastPathComponent)),
+        ] {
+            guard let line = nested.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix(label) }) else {
+                throw ValidationFailure("Missing \(label) in output:\n\(nested)")
+            }
+            let path = URL(fileURLWithPath: String(line.dropFirst(label.count))).resolvingSymlinksInPath()
+            let actual = label == "Attachments: " ? path.deletingLastPathComponent() : path
+            try require(actual.path == expected.resolvingSymlinksInPath().path, "Unexpected output location: \(actual.path)")
+        }
+        try require(!manager.contentsOfDirectory(atPath: customOutput.appendingPathComponent("attachments").nativePath).isEmpty,
+                    "Missing custom attachments directory")
+        let aggregate = try JSONDecoder().decode(CampaignAggregate.self, from: Data(contentsOf: customOutput.appendingPathComponent("report.json")))
+        let campaigns = aggregate.campaigns
+        try require(aggregate.status == .succeeded, "Missing successful aggregate")
+        try require(campaigns.count == 4, "Parameterized calls were lost or merged")
+        try require(campaigns.map(\.seed).sorted() == ["1", "1", "2", "2"], "Lost seeds")
+        let eventLines = try String(contentsOf: customOutput.appendingPathComponent("events.jsonl"), encoding: .utf8).split(separator: "\n")
+        let events = try eventLines.map { try JSONDecoder().decode(StreamEvent.self, from: Data($0.utf8)) }
+        try require(events.filter { $0.type == .campaignStarted }.count == 4, "Lost parallel campaign events")
+        let xunitFiles = aggregate.xunitFiles
+        try require(!xunitFiles.isEmpty, "Missing native xUnit output")
+        let xml = try xunitFiles.map { try String(contentsOf: customOutput.appendingPathComponent($0), encoding: .utf8) }.joined()
+        try require(xml.components(separatedBy: "name=\"parameterized(value:)\"").count == 2,
+                    "Expected one native XML test entry for all parameterized cases:\n\(xml)")
+        try withBuildLock(customOutput.appendingPathComponent("report.lock")) {
+            let locked = try helperRun(arguments + ["--filter", "Nested", "--output", "custom state"], outputPath: outputPath, success: false)
+            try require(locked.contains("Another explore command"), locked)
+        }
         let legacy = try helperRun(arguments + ["--filter", "testLegacy"], outputPath: outputPath)
         try require(legacy.contains("testLegacy") && !legacy.contains("No matching test cases"), legacy)
-        let failed = try plugin(arguments + ["--filter", "deliberateFailure"], success: false)
+        let failed = try plugin(arguments + ["--filter", "deliberateFailure", "--xunit"], success: false)
         try require(failed.contains("EXPECTED_FAILURE_FORWARDING"), failed)
+        let failureReport = try JSONDecoder().decode(CampaignAggregate.self, from: Data(contentsOf: scratch.appendingPathComponent("report.json")))
+        try require(failureReport.status == .failed, "Failed process lost its JSON report")
+        try require(failureReport.xunitFiles.isEmpty == false, "Failed tests lost native xUnit results")
         try require(Data(contentsOf: manifest) == original, "Failed campaign modified Package.swift")
         try require(Data(contentsOf: dependencyManifest) == dependencyOriginal, "Campaign modified dependency manifest")
         let missing = try helperRun(arguments + ["--filter", "doesNotExist"], outputPath: outputPath, success: false)
@@ -264,6 +325,8 @@ struct ExploreCommandsTests {
         try manager.copyItem(at: repository.appendingPathComponent("Plugins"), to: provider.appendingPathComponent("Plugins"))
         try manager.copyItem(at: repository.appendingPathComponent("Sources/ExhaustExploreCommand"),
                              to: provider.appendingPathComponent("Sources/ExhaustExploreCommand"))
+        try manager.copyItem(at: repository.appendingPathComponent("Sources/ExhaustSupport"),
+                             to: provider.appendingPathComponent("Sources/ExhaustSupport"))
         try write(provider, "Package.swift", #"""
         // swift-tools-version: 6.4
         import PackageDescription
@@ -273,8 +336,10 @@ struct ExploreCommandsTests {
             .plugin(name: "Explore", targets: ["Explore"]),
         ], targets: [
             .target(name: "Callbacks"),
+            .target(name: "ExhaustSupport"),
             .executableTarget(
                 name: "ExhaustExploreCommand",
+                dependencies: ["ExhaustSupport"],
                 swiftSettings: [.treatAllWarnings(as: .error)]
             ),
             .plugin(name: "Explore", capability: .command(intent: .custom(verb: "explore", description: "Explore"), permissions: []), dependencies: ["ExhaustExploreCommand"]),
@@ -308,6 +373,7 @@ struct ExploreCommandsTests {
         #include <stdint.h>
         #include <stddef.h>
         void callbacks_link(void) {}
+        void __sanitizer_cov_8bit_counters_init(uint8_t *a, uint8_t *b) {}
         void __sanitizer_cov_trace_pc_guard(uint32_t *g) {}
         void __sanitizer_cov_trace_pc_guard_init(uint32_t *a, uint32_t *b) { while (a < b) *a++ = 1; }
         void __sanitizer_cov_pcs_init(const uintptr_t *a, const uintptr_t *b) {}
@@ -316,6 +382,10 @@ struct ExploreCommandsTests {
         CMP(1, uint8_t) CMP(2, uint16_t) CMP(4, uint32_t) CMP(8, uint64_t)
         void __sanitizer_cov_trace_switch(uint64_t a, uint64_t *b) {}
         #if defined(_WIN32)
+        #pragma section(".SCOV$CA", read, write)
+        __declspec(allocate(".SCOV$CA")) uint64_t __start___sancov_cntrs = 0;
+        #pragma section(".SCOV$CZ", read, write)
+        __declspec(allocate(".SCOV$CZ")) __declspec(align(1)) uint8_t __stop___sancov_cntrs = 0;
         #pragma section(".SCOV$GA", read, write)
         __declspec(allocate(".SCOV$GA")) uint64_t __start___sancov_guards = 0;
         #pragma section(".SCOV$GZ", read, write)
@@ -331,13 +401,72 @@ struct ExploreCommandsTests {
         import XCTest
         import Foundation
         import MyLibrary
+        struct FixtureSource: Encodable {
+            let fileID = "ParserTests/ParserTests.swift"
+            let line = 1
+            let column = 1
+        }
+        struct FixtureCampaignRecord: Encodable {
+            let source = FixtureSource()
+            let kind = "value"
+            let declaredBudgetSeconds = 2
+            let startedAt = Date().timeIntervalSince1970
+            let attachments: [String] = []
+            let checkpointPath = "state/fixture"
+            let schemaVersion = 1
+            let id: String
+            let status: String
+            let seed: String
+        }
+        // The smallest report the command's decoder accepts: a campaign that used its budget without evaluating anything.
+        let fixtureReport = "{\"attempts\":{\"discardedByMaterializer\":0,\"discardedByProperty\":0,\"duplicatesSkipped\":0,\"evaluated\":0,\"mutation\":0,\"mutationArmAttempts\":{},\"mutationArmDiscarded\":{},\"mutationArmFailed\":{},\"mutationArmPassed\":{},\"rejected\":0,\"sampling\":0,\"screening\":0,\"total\":0},\"clusters\":[],\"coverage\":{\"corpusEntryCount\":0,\"coveredEdges\":0,\"estimatedNextEdgeProbability\":0,\"estimatedReachableEdges\":0,\"incidenceSamples\":0,\"incidenceTotal\":0,\"instrumentedEdges\":0,\"offLaneHits\":0,\"parentCount\":0,\"parentRootPhases\":{}},\"invocations\":{\"classification\":0,\"normalization\":0,\"prune\":0,\"recovery\":0,\"reduction\":0,\"search\":0,\"total\":0},\"resumedFromCrash\":false,\"termination\":{\"reason\":\"budgetExhausted\"},\"timing\":{\"attemptsPerSecond\":0,\"elapsedSeconds\":0,\"lastDiscoverySeconds\":0,\"mutationOverheadSeconds\":0,\"otherSeconds\":0,\"propertySeconds\":0,\"reductionSeconds\":0,\"samplingOverheadSeconds\":0,\"screeningOverheadSeconds\":0,\"testingOverheadFraction\":0},\"unreducedFailureCounts\":{}}"
+        struct FixtureEvent: Encodable {
+            let schemaVersion = 1
+            let eventID: String
+            let campaignID: String
+            let campaignSequence = 0
+            let type = "campaign.started"
+            let timestamp = Date().timeIntervalSince1970
+            let payload: FixtureCampaignRecord
+        }
         @Test func selected() {
             #expect(parse(12345))
             #expect(ProcessInfo.processInfo.environment["EXHAUST_EXPLORE_TIME_NS"] == "2000000000")
         }
         @Test func deliberateFailure() { Issue.record("EXPECTED_FAILURE_FORWARDING") }
         @Suite struct Nested {
-            @Test(arguments: [1, 2]) func parameterized(value: Int) { #expect(value > 0) }
+            @Test(arguments: [1, 2]) func parameterized(value: Int) throws {
+                #expect(value > 0)
+                // Minimal provider fixture for the runtime/command file protocol. The full runtime has separate tests.
+                let directory = try #require(ProcessInfo.processInfo.environment["EXHAUST_REPORT_DIR"])
+                for _ in 0 ..< 2 {
+                    let id = UUID().uuidString
+                    let spool = URL(fileURLWithPath: directory).appendingPathComponent("events")
+                    let eventID = id + "-00000000"
+                    let started = FixtureCampaignRecord(id: id, status: "running", seed: String(value))
+                    let event = FixtureEvent(eventID: eventID, campaignID: id, payload: started)
+                    try JSONEncoder().encode(event).write(to: spool.appendingPathComponent(eventID + ".json"), options: .atomic)
+                    // This can only pass if the command collects while its test process is still alive.
+                    let stream = URL(fileURLWithPath: directory).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("events.jsonl")
+                    let deadline = Date().addingTimeInterval(5)
+                    while !(try String(contentsOf: stream, encoding: .utf8)).contains(eventID) && Date() < deadline {
+                        Thread.sleep(forTimeInterval: 0.02)
+                    }
+                    #expect(try String(contentsOf: stream, encoding: .utf8).contains(eventID))
+                    let record = FixtureCampaignRecord(id: id, status: "completed", seed: String(value))
+                    var completed = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(record)) as? [String: Any])
+                    completed["finishedAt"] = Date().timeIntervalSince1970
+                    completed["issuesSuppressed"] = false
+                    completed["outcome"] = "passed"
+                    completed["report"] = try JSONSerialization.jsonObject(with: Data(fixtureReport.utf8))
+                    try JSONSerialization.data(withJSONObject: completed).write(to: URL(fileURLWithPath: directory).appendingPathComponent(id + ".json"), options: .atomic)
+                }
+                let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                let expected = root.appendingPathComponent("custom state")
+                let actual = ProcessInfo.processInfo.environment["EXHAUST_STATE_DIR"].map { URL(fileURLWithPath: $0).resolvingSymlinksInPath() }
+                #expect(actual?.deletingLastPathComponent().lastPathComponent == "state")
+                #expect(actual?.deletingLastPathComponent().deletingLastPathComponent().path == expected.resolvingSymlinksInPath().path)
+            }
         }
         final class Legacy: XCTestCase {
             func testLegacy() { XCTAssertTrue(parse(12345)) }
@@ -495,4 +624,34 @@ extension URL {
     var nativePath: String {
         withUnsafeFileSystemRepresentation { String(cString: $0!) }
     }
+}
+
+/// Decodes the consumer-facing reporting contract independently of the command's internal models.
+private struct CampaignAggregate: Decodable {
+    enum Status: String, Decodable {
+        case running
+        case succeeded
+        case failed
+    }
+    struct Campaign: Decodable {
+        let id: String
+        let seed: String
+    }
+    let status: Status
+    let campaigns: [Campaign]
+    let xunitFiles: [String]
+}
+
+/// Checks the event vocabulary while allowing payloads to evolve independently.
+private struct StreamEvent: Decodable {
+    enum Kind: String, Decodable {
+        case runStarted = "run.started"
+        case phaseChanged = "run.phaseChanged"
+        case campaignStarted = "campaign.started"
+        case findingReported = "finding.reported"
+        case campaignFinished = "campaign.finished"
+        case campaignInterrupted = "campaign.interrupted"
+        case runFinished = "run.finished"
+    }
+    let type: Kind
 }
