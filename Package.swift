@@ -13,7 +13,7 @@ let isDarwinHost: Bool = {
     #endif
 }()
 
-let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
+let usePrecompiled = isDarwinHost && ProcessInfo.processInfo.environment["EXHAUST_FORCE_SOURCE"] == nil
 
 let swiftLintPlugins: [Target.PluginUsage] = []
 let swiftLintDependency: [Package.Dependency] = []
@@ -26,7 +26,7 @@ let strictConcurrencySettings: [SwiftSetting] = [
 ]
 
 let coreTarget: Target = usePrecompiled
-    ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
+    ? .binaryTarget(name: "ExhaustCore", url: "https://github.com/nesevis/exhaust/releases/download/v1.9.0/ExhaustCore.xcframework.zip", checksum: "6949e4ef8d807bd650f296e8c53e894586a32625dde68f2ebca6daaa146d4646")
     : .target(
         name: "ExhaustCore",
         dependencies: [
@@ -66,7 +66,7 @@ let package = Package(
         .library(name: "ExhaustMetaFuzz", targets: ["ExhaustMetaFuzz"]),
     ],
     dependencies: [
-        .package(path: "Packages/exhaust-macros"),
+        .package(url: "https://github.com/nesevis/exhaust-macros.git", exact: "1.9.0"),
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
