@@ -64,6 +64,9 @@ public struct FuzzReport: Sendable {
 
         /// Canonical identity from the inventory, excluding path-dependent generator metadata.
         package let reducedKey: String
+
+        /// The module holding the property closure, whose suspects rank last; nil when the report was built outside a campaign.
+        package let propertyModule: String?
     }
 
     /// One edge that separates a cluster's failures from passing runs.
@@ -126,6 +129,14 @@ public struct FuzzReport: Sendable {
         /// Whether debug info placed the address in a synthesized body (a derived conformance, a property wrapper's backing accessor), which the compiler files under `/<compiler-generated>`. Not a place to look.
         package var isSynthesized: Bool {
             file?.contains("<compiler-generated>") == true
+        }
+
+        /// Whether the symbol belongs to `module`; false when either is unknown.
+        package func isInModule(_ module: String?) -> Bool {
+            guard let module, let symbolModule = self.module else {
+                return false
+            }
+            return symbolModule == module
         }
     }
 
@@ -623,8 +634,10 @@ package extension FuzzReport {
 
     /// Builds the public report from the runner's raw result. Cluster timestamps are converted from monotonic clock readings to run-relative durations.
     ///
-    /// - Parameter symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs; a synthetic source's edge indices do not address real program counters.
-    init(result: FuzzRunResult, symbolizeEdges: Bool = false) {
+    /// - Parameters:
+    ///   - symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs; a synthetic source's edge indices do not address real program counters.
+    ///   - propertyModule: The module holding the property closure, whose discriminating edges rank after every other module's.
+    init(result: FuzzRunResult, symbolizeEdges: Bool = false, propertyModule: String? = nil) {
         let runStartNanoseconds = result.startNanoseconds
         let discriminations = Dictionary(
             uniqueKeysWithValues: result.clusterDiscriminations.map { ($0.clusterID, $0) }
@@ -656,7 +669,12 @@ package extension FuzzReport {
                     }
                 )
             }
-            let rankedEdges = __ExhaustRuntime.distinctSuspectEdges(candidates, symbolized: symbolizeEdges, limit: FuzzTunables.discriminatingEdgeLimit)
+            let rankedEdges = __ExhaustRuntime.distinctSuspectEdges(
+                candidates,
+                symbolized: symbolizeEdges,
+                propertyModule: propertyModule,
+                limit: FuzzTunables.discriminatingEdgeLimit
+            )
             return Cluster(
                 id: cluster.id,
                 reducedDescription: cluster.reducedDescription,
@@ -681,7 +699,8 @@ package extension FuzzReport {
                 ),
                 discriminatingEdges: rankedEdges,
                 reducedSequence: cluster.reducedSequence,
-                reducedKey: cluster.reducedKey
+                reducedKey: cluster.reducedKey,
+                propertyModule: propertyModule
             )
         }
         unreducedFailureCounts = Dictionary(

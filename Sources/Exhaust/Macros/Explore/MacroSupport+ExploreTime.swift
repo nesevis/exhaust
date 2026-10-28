@@ -436,7 +436,11 @@ public extension __ExhaustRuntime {
         )
         switch outcome {
             case let .completed(result, resumed):
-                var report = FuzzReport(result: result, symbolizeEdges: coverage.isProduction)
+                var report = FuzzReport(
+                    result: result,
+                    symbolizeEdges: coverage.isProduction,
+                    propertyModule: resolved.propertyModule
+                )
                 if resumed {
                     report.recordCrashResume()
                 }

@@ -53,6 +53,7 @@ package struct FuzzCampaignContext: Sendable {
         configuration = FuzzCampaignConfiguration(
             time: time,
             seed: seed,
+            propertyModule: "\(fileID)".split(separator: "/").first.map(String.init) ?? "",
             invalidReplayMessage: invalidReplayMessage,
             environment: environment
         )

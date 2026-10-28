@@ -8,6 +8,7 @@ package struct FuzzCampaignConfiguration: Sendable {
     package init(
         time: TimeSpan,
         seed: UInt64?,
+        propertyModule: String,
         invalidReplayMessage: String? = nil,
         environment: [String: String]
     ) {
@@ -20,7 +21,8 @@ package struct FuzzCampaignConfiguration: Sendable {
             let budget = try __ExhaustRuntime.resolvedExploreBudget(declared: time, environment: environment)
             resolution = .success(ResolvedFuzzRun(
                 seed: seed ?? UInt64.random(in: .min ... .max),
-                budgetNanoseconds: budget
+                budgetNanoseconds: budget,
+                propertyModule: propertyModule
             ))
         } catch {
             resolution = .failure(InvalidFuzzConfiguration(message: error.message))
@@ -39,6 +41,8 @@ package struct FuzzCampaignConfiguration: Sendable {
 package struct ResolvedFuzzRun: Sendable {
     package let seed: UInt64
     package let budgetNanoseconds: UInt64
+    /// The module of the `#explore` call site, which holds the property closure. The explore command instruments the test target, so the closure's own edges discriminate failures; the report ranks them after every other suspect.
+    package let propertyModule: String
 }
 
 /// Describes any rejected campaign setting, including replay seeds and time budgets.
