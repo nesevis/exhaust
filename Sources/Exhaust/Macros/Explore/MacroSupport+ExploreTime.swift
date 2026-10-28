@@ -597,6 +597,20 @@ public extension __ExhaustRuntime {
             }
         }
 
+        // Evaluations without a verdict pass the inventory as surely as no evaluations at all, so a run that judged nothing is pointless too. A resumed run is excluded for the same reason as above: its restored inventory still reports.
+        if report.attempts.evaluated > 0,
+           report.attempts.judged == 0,
+           report.termination != .uncontainedAsyncWork,
+           report.resumedFromCrash == false
+        {
+            let stalled = report.attempts.evaluated - report.attempts.discardedByProperty
+            reportError(
+                "The property judged none of the \(report.attempts.evaluated) inputs it received (\(report.attempts.discardedByProperty) discarded by a skip error, \(stalled) stalled without a verdict), so this test asserts nothing. Construct inputs that meet the property's precondition, or check why its work does not finish.",
+                fileID: fileID, filePath: filePath, line: line, column: column
+            )
+            return
+        }
+
         if report.clusters.isEmpty == false, suppressIssueReporting == false {
             reportError(
                 renderFuzzSummary(report),

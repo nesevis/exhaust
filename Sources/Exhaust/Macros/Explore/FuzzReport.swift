@@ -211,6 +211,53 @@ public struct FuzzReport: Sendable {
     /// Where the run's wall clock went.
     public let timing: Timing
 
+    /// What a run's result means for the property it searched.
+    ///
+    /// An empty ``clusters`` list is a pass only when the search itself ran to a normal stop and the property judged at least one candidate. A run without instrumentation, with a rejected setting, or whose property discarded every input also has no clusters; ``outcome`` keeps those apart from a pass.
+    public enum Outcome: Sendable, Equatable {
+        /// The search ran to a normal stop, the property passed or failed at least one candidate, and none failed.
+        case passed
+
+        /// The run found a failure, reduced or unreduced, or continued a crashed predecessor whose trap is reported as a finding.
+        case failed
+
+        /// The build lacks coverage instrumentation, so the search did not run and the property was not checked. An ordinary uninstrumented `swift test` ends here.
+        case skipped
+
+        /// The run could not judge the property: a setting was rejected, generation failed, coverage was unreachable, asynchronous work escaped an attempt, or every candidate that reached the property was discarded or stalled without a verdict.
+        case error
+    }
+
+    /// The run's verdict on the property, for setting an exit status or gating a pipeline without combining ``termination``, ``attempts``, and the inventory yourself.
+    ///
+    /// ```swift
+    /// let report = await #explore(inputs, time: .minutes(30)) { input in
+    ///     try Parser.parse(input).isWellFormed
+    /// }
+    /// guard report.outcome == .passed else { exit(EXIT_FAILURE) }
+    /// ```
+    public var outcome: Outcome {
+        switch termination {
+            case .instrumentationMissing:
+                return .skipped
+            case .invalidConfiguration, .generationFailed, .coverageUnreachable, .uncontainedAsyncWork:
+                return .error
+            case .budgetExhausted, .coveragePlateau, .attemptLimitReached, .firstFaultFound:
+                guard resumedFromCrash == false else {
+                    return .failed
+                }
+                guard attempts.judged > 0 else {
+                    return .error
+                }
+                return switch clusters.isEmpty && unreducedFailureCounts.isEmpty {
+                    case true:
+                        .passed
+                    case false:
+                        .failed
+                }
+        }
+    }
+
     /// Search attempts by phase and by producer.
     ///
     /// An attempt is a candidate opportunity: a screening row built, a sample drawn, a mutation child produced. Not every attempt reaches the property: the materializer discards some, the duplicate table skips some, and screening rejects rows it cannot build. ``evaluated`` counts the ones that did reach it; ``total`` counts every opportunity.
@@ -273,6 +320,9 @@ public struct FuzzReport: Sendable {
 
         /// Evaluated attempts the property discarded by throwing a skip error (its precondition was not met). Counted inside ``evaluated``: the property ran and its coverage was recorded, and a coverage-novel discard stays in the corpus as a low-weight mutation parent so the search can climb toward valid inputs.
         public let discardedByProperty: Int
+
+        /// Evaluated attempts the property passed or failed: ``evaluated`` less its discards and the inconclusive evaluations that reached no verdict. A run can evaluate many inputs and judge none of them, which is not a pass.
+        package let judged: Int
 
         /// Comparand-substitution energy keys seated over another key because their whole probe window was occupied. A high ratio to ``operandEnergySeatings`` means the retirement table is undersized for the run, so a retired operand is resurrected by collision rather than by yielding.
         package let operandEnergyEvictions: Int
@@ -655,6 +705,7 @@ package extension FuzzReport {
             ),
             evaluated: counts.evaluatedSearchCases,
             discardedByProperty: counts.discardedEvaluations,
+            judged: counts.evaluatedSearchCases - counts.discardedEvaluations - counts.inconclusiveAttempts,
             operandEnergyEvictions: result.diagnostics.operandEnergyEvictions,
             operandEnergySeatings: result.diagnostics.operandEnergySeatings,
             operandEnergyRetirements: result.diagnostics.operandEnergyRetirements
@@ -749,6 +800,7 @@ package extension FuzzReport {
                 duplicateSkips: .zero,
                 evaluated: 0,
                 discardedByProperty: 0,
+                judged: 0,
                 operandEnergyEvictions: 0,
                 operandEnergySeatings: 0,
                 operandEnergyRetirements: 0
